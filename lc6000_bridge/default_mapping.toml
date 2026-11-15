@@ -35,7 +35,7 @@ require_touch = false         # true = jog only acts while the platter is touche
 msb_cc = 8
 lsb_cc = 40
 invert = false        # PROVISIONAL: flip if pushing the fader away from you slows down
-dead_zone = 0.005     # snap to native tempo near the centre
+dead_zone = 0.005     # snap to native tempo near the center
 
 [needle]
 cc = 64               # Needle Drop strip, absolute 0-127 -> WaveformSeek
@@ -79,10 +79,10 @@ param_forward = 69
 
 [leds]
 # PROVISIONAL: the spec's LED table lists the same note numbers as the buttons
-# (plus 41-43 for the pitch arrows/centre), so each button's LED is assumed to be
+# (plus 41-43 for the pitch arrows/center), so each button's LED is assumed to be
 # on its own note. Velocities: 0 off, 1 dim, 2-127 full.
 pitch_center = 42
-ring = 40             # platter LED ring, colour velocity
+ring = 40             # platter LED ring, color velocity
 ring_color = [0, 128, 255]
 roll_pad_color = [255, 140, 0]
 loop_pad_color = [0, 255, 0]

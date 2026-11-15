@@ -33,9 +33,9 @@ def pitch_to_tempo_slider(value14: int, invert: bool = False, dead_zone: float =
 
 
 def rgb_to_velocity(r: int, g: int, b: int) -> int:
-    """Quantise an 8-bit RGB colour to an LC6000 pad/ring colour velocity.
+    """Quantize an 8-bit RGB color to an LC6000 pad/ring color velocity.
 
-    ASSUMPTION (verify with `lc6000-bridge led-sweep`): the 64-entry colour
+    ASSUMPTION (verify with `lc6000-bridge led-sweep`): the 64-entry color
     table (velocities 0x00-0x3F) is 2 bits per channel, laid out 0b00RRGGBB.
     """
     def q(c: int) -> int:
@@ -43,7 +43,7 @@ def rgb_to_velocity(r: int, g: int, b: int) -> int:
 
     vel = (q(r) << 4) | (q(g) << 2) | q(b)
     if vel == 0 and (r or g or b):
-        # A dim-but-not-black colour should still light up.
+        # A dim-but-not-black color should still light up.
         brightest = max((r, 2), (g, 1), (b, 0))[1]
         vel = 1 << (brightest * 2)
     return vel
