@@ -1,5 +1,10 @@
 # lc6000-osc-bridge
 
+## Working rules
+
+- Implement every feature and bug fix test-first with the `/tdd` skill (`mattpocock-skills:tdd`): red, green, refactor.
+- Always use the `/caveman` skill (`caveman:caveman`) for replies.
+
 ## Agent skills
 
 ### Issue tracker
