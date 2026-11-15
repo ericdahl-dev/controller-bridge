@@ -13,7 +13,7 @@ from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
 from pythonosc.udp_client import SimpleUDPClient
 
-from .bridge import Bridge
+from .coordinator import Coordinator, PortNotFound
 from .config import load_config
 
 
@@ -82,63 +82,49 @@ def cmd_led_sweep(args, cfg) -> None:
 def cmd_run(args, cfg) -> None:
     oc = cfg["osc"]
     client = SimpleUDPClient(oc["host"], int(oc["port"]))
-    in_name = _find_port(mido.get_input_names(), cfg["midi"]["input"], "input")
-    out_names = mido.get_output_names()
-    out_port = None
-    if not args.no_leds:
-        try:
-            out_port = mido.open_output(_find_port(out_names, cfg["midi"]["output"], "output"))
-        except SystemExit as e:
-            print(f"LEDs disabled: {e}", file=sys.stderr)
 
     def send_osc(address, *a):
         if args.verbose:
             print("OSC ->", address, *a)
         client.send_message(address, list(a) if len(a) != 1 else a[0])
 
-    lock = threading.Lock()
-    bridge = Bridge(cfg, send_osc, out_port.send if out_port else None)
+    coord = Coordinator(
+        cfg,
+        list_inputs=mido.get_input_names,
+        list_outputs=(lambda: []) if args.no_leds else mido.get_output_names,
+        open_input=mido.open_input,
+        open_output=mido.open_output,
+        send_osc=send_osc,
+    )
+    try:
+        coord.start()
+    except PortNotFound as e:
+        sys.exit(str(e))
+    if coord.out is None and not args.no_leds:
+        print(f"LEDs disabled: no MIDI output port matching {cfg['midi']['output']!r}.", file=sys.stderr)
 
-    dispatcher = Dispatcher()
     def on_feedback(address, *a):
         if args.verbose:
             print("OSC <-", address, *a)
-        with lock:
-            bridge.handle_osc(address, *a)
+        coord.feedback(address, *a)
+    dispatcher = Dispatcher()
     dispatcher.set_default_handler(on_feedback)
     server = ThreadingOSCUDPServer((oc["feedback_host"], int(oc["feedback_port"])), dispatcher)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
     stop = threading.Event()
-    def ticker():
-        while not stop.is_set():
-            with lock:
-                bridge.tick()
-            time.sleep(0.01)
-    threading.Thread(target=ticker, daemon=True).start()
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
 
-    def shutdown(*_):
-        stop.set()
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
-
-    print(f"LC6000 '{in_name}' -> Syndicate deck {bridge.deck} at {oc['host']}:{oc['port']}; "
+    print(f"LC6000 -> Syndicate deck {cfg['deck']['number']} at {oc['host']}:{oc['port']}; "
           f"feedback on :{oc['feedback_port']}. Ctrl-C to stop.")
-    with mido.open_input(in_name) as inp:
-        with lock:
-            bridge.start()
-        try:
-            while not stop.is_set():
-                for msg in inp.iter_pending():
-                    with lock:
-                        bridge.handle_midi(msg)
-                time.sleep(0.001)
-        finally:
-            with lock:
-                bridge.release_all()
-            server.shutdown()
-            if out_port:
-                out_port.close()
+    try:
+        while not stop.is_set():
+            coord.poll()
+            time.sleep(0.001)
+    finally:
+        coord.stop()
+        server.shutdown()
 
 
 def main(argv: list[str] | None = None) -> None:
