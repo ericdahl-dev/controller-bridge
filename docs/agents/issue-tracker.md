@@ -11,6 +11,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
+- **Milestones**: every issue belongs to a milestone. Create one with `gh api repos/{owner}/{repo}/milestones -f title="..." -f description="..."`, then pass `--milestone "<title>"` to `gh issue create` or `gh issue edit`. A spec and its tickets share one milestone.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
