@@ -32,10 +32,10 @@ LC6000 ◀──MIDI LEDs──  lc6000-bridge  ◀──OSC feedback :9096─�
 **LEDs:**
 - Play, Cue, Sync and Master follow Syndicate's state.
 - Key Lock, Slip, Shift and the pad-mode buttons follow the bridge's own state.
-- Pads show your hot cues in Syndicate's cue colours, quantised to the LC6000's 64-colour table.
+- Pads show your hot cues in Syndicate's cue colors, quantized to the LC6000's 64-color table.
 - The platter ring lights when a track is loaded.
 
-**Not possible:** scratching, because Syndicate has no scratch/scrub OSC route. The platter's centre display needs SysEx that Denon doesn't document. Slicer mode is unmapped.
+**Not possible:** scratching, because Syndicate has no scratch/scrub OSC route. The platter's center display needs SysEx that Denon doesn't document. Slicer mode is unmapped.
 
 ## Install
 
@@ -66,12 +66,12 @@ The numbers come from Denon's *LC6000 PRIME MIDI Specification v1.0*. A few of t
 
 ```sh
 .venv/bin/lc6000-bridge monitor     # move every control; anything showing UNMAPPED needs a mapping entry
-.venv/bin/lc6000-bridge led-sweep   # steps through all 64 pad colours, then lights each button note
+.venv/bin/lc6000-bridge led-sweep   # steps through all 64 pad colors, then lights each button note
 ```
 
 - **Jog CCs:** the spec lists CC 55 and 54. If one turn shows up on both, keep only one in `[jog].ccs`.
 - **Pitch direction:** set `[pitch].invert = true` if the fader works the wrong way.
-- **Colours:** the bridge assumes the colour velocity is 2 bits each of red, green and blue (`0b00RRGGBB`). `led-sweep` prints the value it expects for each colour.
+- **Colors:** the bridge assumes the color velocity is 2 bits each of red, green and blue (`0b00RRGGBB`). `led-sweep` prints the value it expects for each color.
 - **Channel:** the spec only documents channel 1. Change `[midi].channel` if your unit uses another.
 
 Copy `default_mapping.toml`, edit it, and run with `--config my_mapping.toml`. Only the keys you change need to be in the copy.

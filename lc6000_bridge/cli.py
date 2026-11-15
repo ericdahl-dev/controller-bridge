@@ -55,12 +55,12 @@ def cmd_monitor(args, cfg) -> None:
 
 
 def cmd_led_sweep(args, cfg) -> None:
-    """Step pads + ring through all 64 colour velocities, then every button note."""
+    """Step pads + ring through all 64 color velocities, then every button note."""
     port = _find_port(mido.get_output_names(), cfg["midi"]["output"], "output")
     ch = int(cfg["midi"]["channel"]) - 1
     pads = cfg["notes"]["pads"] + [cfg["leds"]["ring"]]
     with mido.open_output(port) as out:
-        print("Colour sweep: velocity shown on every pad and the ring. Note what each looks like.")
+        print("Color sweep: velocity shown on every pad and the ring. Note what each looks like.")
         for vel in range(64):
             for n in pads:
                 out.send(mido.Message("note_on", channel=ch, note=n, velocity=vel))
@@ -155,7 +155,7 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--no-leds", action="store_true")
     r.add_argument("-v", "--verbose", action="store_true", help="print OSC traffic")
     sub.add_parser("monitor", help="print incoming LC6000 MIDI with mapping names")
-    s = sub.add_parser("led-sweep", help="cycle LED colours/notes to verify the LED map")
+    s = sub.add_parser("led-sweep", help="cycle LED colors/notes to verify the LED map")
     s.add_argument("--delay", type=float, default=0.6)
     sub.add_parser("ports", help="list MIDI ports")
     args = p.parse_args(argv)

@@ -35,7 +35,7 @@ def test_rgb_to_velocity():
     assert rgb_to_velocity(255, 0, 0) == 0b110000
     assert rgb_to_velocity(0, 255, 0) == 0b001100
     assert rgb_to_velocity(255, 255, 255) == 0x3F
-    assert rgb_to_velocity(20, 0, 0) != 0  # dim colours still light
+    assert rgb_to_velocity(20, 0, 0) != 0  # dim colors still light
 
 
 # ---------------------------------------------------------------- bridge

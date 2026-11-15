@@ -20,7 +20,7 @@ MidiSend = Callable[[mido.Message], None]
 ROLL_SIZES = ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]
 MODES = ("hotcue", "roll", "loop", "slicer")
 
-# Syndicate's default cue colours until ColorPalette feedback arrives.
+# Syndicate's default cue colors until ColorPalette feedback arrives.
 DEFAULT_PALETTE = {
     1: (255, 0, 0), 2: (255, 128, 0), 3: (255, 255, 0), 4: (0, 255, 0),
     5: (0, 255, 255), 6: (0, 0, 255), 7: (128, 0, 255), 8: (255, 0, 255),
@@ -80,7 +80,7 @@ class Bridge:
         self.loop_on = False
         self.progress: float | None = None
         self.duration: float | None = None
-        self.cues: list[int] = [0] * 8          # colour slot 1-8 per cue, 0 = empty
+        self.cues: list[int] = [0] * 8          # color slot 1-8 per cue, 0 = empty
         self.palette = dict(DEFAULT_PALETTE)
         self.led_cache: dict[int, int] = {}
 
@@ -391,8 +391,8 @@ class Bridge:
         elif key == "loop":
             self.loop_on = bool(v)
         elif key == "cues":
-            colours = [int(a) for a in args[0::2]][:8]
-            self.cues = colours + [0] * (8 - len(colours))
+            colors = [int(a) for a in args[0::2]][:8]
+            self.cues = colors + [0] * (8 - len(colors))
         else:
             return
         self.refresh_leds()
@@ -411,7 +411,7 @@ class Bridge:
         idle = DIM if self.cfg["leds"]["dim_unlit_buttons"] else OFF
         self._led(note, FULL if on else idle)
 
-    def pad_colours(self) -> list[int]:
+    def pad_colors(self) -> list[int]:
         leds = self.cfg["leds"]
         if self.mode == "hotcue":
             return [rgb_to_velocity(*self.palette.get(c, (255, 255, 255))) if c else OFF for c in self.cues]
@@ -437,7 +437,7 @@ class Bridge:
         for m in MODES:
             self._button_led(f"mode_{m}", self.mode == m)
         self._led(self.cfg["leds"]["pitch_center"], FULL if self.last_tempo == 0.0 else OFF)
-        for note, vel in zip(self.pad_notes, self.pad_colours()):
+        for note, vel in zip(self.pad_notes, self.pad_colors()):
             self._led(note, vel)
         ring = rgb_to_velocity(*self.cfg["leds"]["ring_color"]) if self.loaded else OFF
         self._led(self.cfg["leds"]["ring"], ring)
