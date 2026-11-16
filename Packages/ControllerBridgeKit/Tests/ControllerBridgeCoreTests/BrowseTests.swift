@@ -1,5 +1,5 @@
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// Browse, loop and jump controls (#16). Expected OSC is from the Python bridge (lc6000_bridge/bridge.py), note and

@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   kit:
-    name: LC6000Kit tests
+    name: Kit tests
     # Standard GitHub-hosted runner: free for public repositories. Avoid -large/-xlarge (always billed).
     runs-on: macos-26
     timeout-minutes: 20
@@ -25,5 +25,5 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Package tests
-        working-directory: Packages/LC6000Kit
+        working-directory: Packages/ControllerBridgeKit
         run: swift test

@@ -1,20 +1,20 @@
-# LC6000Kit
+# ControllerBridgeKit
 
 All the bridge logic for the native macOS app, as a Swift package that builds and tests from the terminal:
 
 ```sh
-cd Packages/LC6000Kit
+cd Packages/ControllerBridgeKit
 swift test
 ```
 
 ## Modules
 
-- **LC6000Core**: the Coordinator, the Bridge, the mapping and the OSC codec. Pure Swift with Foundation only: no
+- **ControllerBridgeCore**: the Coordinator, the Bridge, the mapping and the OSC codec. Pure Swift with Foundation only: no
   CoreMIDI, no Network framework, no UI.
 
 ## The default mapping
 
-`Sources/LC6000Core/Resources/default_mapping.json` is ported value for value from the Python bridge's
+`Sources/ControllerBridgeCore/Resources/default_mapping.json` is ported value for value from the Python bridge's
 `lc6000_bridge/default_mapping.toml`, with the same section and key names. A user mapping file merges over it the same
 way the Python config merge does: objects merge key by key, and anything else replaces the default whole.
 

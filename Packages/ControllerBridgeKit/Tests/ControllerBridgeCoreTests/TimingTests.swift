@@ -1,5 +1,5 @@
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// Timing LEDs (#23). Time comes from the fake clock: set `rig.clock.now`, then `tick()`. The Play LED is note 1.

@@ -1,5 +1,5 @@
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// Pitch fader, jog and Needle Drop. Expected values come from the Python bridge's tests and codec.
@@ -184,5 +184,16 @@ struct ContinuousTests {
         #expect(rig.leds[42] == 127)
         Self.cc(rig, 8, 0x50)
         #expect(rig.leds[42] == 0)
+    }
+
+    @Test("Loaded 0 forgets the track's progress and length: a paused jog then falls back to BeatSkip")
+    func unloadForgetsTrack() throws {
+        let rig = try Self.started()
+        Self.feedback(rig, "Loaded", [.int(1)])
+        Self.feedback(rig, "TrackInfo", [.string("t"), .string("a"), .string("8A"), .float(120), .float(200), .int(100), .int(400), .string("track")])
+        Self.feedback(rig, "Progress", [.float(0.5)])
+        Self.feedback(rig, "Loaded", [.int(0)])
+        for _ in 0..<4 { Self.cc(rig, 55, 0x08) }
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(1)])])
     }
 }

@@ -1,4 +1,4 @@
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// Expected bytes are worked out by hand from the OSC 1.0 spec, never produced by the encoder.
