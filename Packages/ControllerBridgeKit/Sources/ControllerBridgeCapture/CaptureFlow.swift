@@ -36,9 +36,14 @@ public struct CaptureFlow: Sendable {
     private var idleReadyStep: Int?
     private var announcedIdleReady: Int?
 
-    public init(prompts: [CapturePrompt] = CapturePrompts.djController, appVersion: String) {
+    /// Whether the LED test (#187) is offered. Off by default: it sends to the controller, and stays off until it has
+    /// been checked at a real unit.
+    public let ledTest: Bool
+
+    public init(prompts: [CapturePrompt] = CapturePrompts.djController, appVersion: String, ledTest: Bool = false) {
         self.prompts = prompts
         self.appVersion = appVersion
+        self.ledTest = ledTest
     }
 
     /// Starts the steps on the chosen device and ports, at host time `time` in seconds.
@@ -231,7 +236,7 @@ public struct CaptureFlow: Sendable {
     public static let ledColors = ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink", "white", "other"]
 
     /// Whether the LED test can start: from the done page, once (a second run would double the answers).
-    public var canStartLEDs: Bool { phase == .done && !ledsTested && file != nil }
+    public var canStartLEDs: Bool { ledTest && phase == .done && !ledsTested && file != nil }
     /// Whether the current probe has lit: its message has gone out. Answers before that are ignored.
     public var canAnswerLED: Bool { ledProbe != nil && !sender.hasPending }
     /// "Same as last" needs an earlier color answer.

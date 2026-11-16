@@ -6,8 +6,8 @@ import Testing
 @Suite("Demo capture")
 struct DemoCaptureTests {
     /// Walks the whole standard list on demo traffic, a step every 10 seconds.
-    static func walked() -> (flow: CaptureFlow, detectedEachStep: [Bool]) {
-        var flow = CaptureFlow(appVersion: "1.2.0")
+    static func walked(ledTest: Bool = false) -> (flow: CaptureFlow, detectedEachStep: [Bool]) {
+        var flow = CaptureFlow(appVersion: "1.2.0", ledTest: ledTest)
         flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: 0)
         var detectedEachStep: [Bool] = []
         var now = 0.0
@@ -73,7 +73,7 @@ struct DemoCaptureTests {
 
     @Test("Demo end to end with the LED test (#187): every probe is answered, sent as note or CC, and all off at the end")
     func ledTest() throws {
-        var flow = Self.walked().flow
+        var flow = Self.walked(ledTest: true).flow
         flow.startLEDs(scope: .full, at: 1000)
         var sent: [[UInt8]] = []
         var now = 1000.0

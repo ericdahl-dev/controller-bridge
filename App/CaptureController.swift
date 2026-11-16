@@ -17,7 +17,11 @@ final class CaptureController {
         var id: String { endpoint.map { "\($0.id)" } ?? "demo" }
     }
 
-    private(set) var flow = CaptureFlow(appVersion: CaptureController.appVersion)
+    private(set) var flow = CaptureFlow(appVersion: CaptureController.appVersion, ledTest: CaptureController.ledTestEnabled)
+
+    /// The LED test (#187) stays off until it has been checked at a real unit. For that check:
+    /// `defaults write dev.ericdahl.ControllerBridge CaptureLEDTest -bool YES`.
+    static var ledTestEnabled: Bool { UserDefaults.standard.bool(forKey: "CaptureLEDTest") }
     /// The host time, refreshed every second for the idle countdown.
     private(set) var now = ProcessInfo.processInfo.systemUptime
     var picked: Choice?

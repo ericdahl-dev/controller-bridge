@@ -9,7 +9,7 @@ struct LEDPhaseTests {
         var flow = CaptureFlow(prompts: [
             CapturePrompt(id: "deck1.play", text: "Play.", gesture: .press),
             CapturePrompt(id: "deck1.hotcue1", text: "Pad 1.", gesture: .press),
-        ], appVersion: "1.2.0")
+        ], appVersion: "1.2.0", ledTest: true)
         flow.start(device: "Test", ports: CapturePorts(input: [], output: []), at: 0)
         flow.receive([0x90, 1, 0x7F], at: 1)
         flow.next(at: 2)
@@ -138,5 +138,18 @@ struct LEDPhaseTests {
         flow.answerLED(.lit(true), at: 11)  // queues Play off, then Play at 1
         flow.skipLEDs(at: 11)
         #expect(Self.drain(&flow, from: 11) == [[0x90, 1, 0]])
+    }
+
+    @Test("Off by default until the supervised check at a unit: no offer, and starting does nothing")
+    func offByDefault() {
+        var flow = CaptureFlow(prompts: [CapturePrompt(id: "deck1.play", text: "Play.", gesture: .press)], appVersion: "1.2.0")
+        flow.start(device: "Test", ports: CapturePorts(input: [], output: []), at: 0)
+        flow.receive([0x90, 1, 0x7F], at: 1)
+        flow.next(at: 2)
+        #expect(flow.phase == .done)
+        #expect(!flow.canStartLEDs)
+        flow.startLEDs(scope: .full, at: 3)
+        #expect(flow.phase == .done)
+        #expect(!flow.hasPendingSends)
     }
 }

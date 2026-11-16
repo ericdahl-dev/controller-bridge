@@ -72,7 +72,11 @@ private struct CapturePortsPage: View {
 
     var body: some View {
         CaptureHeading(eyebrow: "Help add a controller", title: "Capture your controller")
-        Text("DeckBridge listens while you press, move and turn each control, and records what it sends. Nothing is sent to your controller unless you choose the LED test at the end, and nothing leaves this Mac unless you save or email the file. It takes about five minutes.")
+        Text("DeckBridge listens while you press, move and turn each control, and records what it sends. "
+            + (controller.flow.ledTest
+                ? "Nothing is sent to your controller unless you choose the LED test at the end, and nothing"
+                : "Nothing is sent to your controller, and nothing")
+            + " leaves this Mac unless you save or email the file. It takes about five minutes.")
             .font(Theme.ui(13)).foregroundStyle(Theme.caption)
             .fixedSize(horizontal: false, vertical: true)
         Picker("Controller", selection: $controller.picked) {
