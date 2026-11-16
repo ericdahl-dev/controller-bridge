@@ -80,7 +80,16 @@ public final class Coordinator {
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
     /// connected is not an error: it connects when it appears.
-    public func start() {
+    ///
+    /// With the saved `controllers` and LEDs switch (#105), every controller is set up first and only then connected,
+    /// so it never touches a device, deck or LED the user didn't choose. Nil keeps what's set: the automatic start at
+    /// launch, and the current controllers and LEDs switch on a restart (after the demo).
+    public func start(controllers entries: [ControllerSettings]? = nil, ledsEnabled: Bool? = nil) {
+        if let ledsEnabled { self.ledsEnabled = ledsEnabled }
+        if let entries, !entries.isEmpty {
+            for (index, entry) in entries.enumerated() { configure(index, as: entry) }
+        }
+        for bridge in bridges { bridge.setLEDsEnabled(self.ledsEnabled) }
         refreshDevices()
         for index in controllers.indices {
             if !connect(index) {
@@ -390,6 +399,26 @@ public final class Coordinator {
         disconnect(last, reason: .removed)
         controllers.removeLast()
         status.controllers.removeLast()
+    }
+
+    /// Sets controller `index` up as `entry` says, adding it if it's new, without connecting anything: start (#105)
+    /// connects them all afterwards.
+    private func configure(_ index: Int, as entry: ControllerSettings) {
+        let profile = profiles[0]
+        if index == controllers.count {
+            controllers.append(Controller(bridge: Bridge(mapping: profile.mapping, osc: osc, clock: clock), profile: profile))
+            status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
+        }
+        status.controllers[index].deck = entry.deck
+        controllers[index].channel = entry.channel
+        controllers[index].followsLayers = entry.followLayers == true
+        status.controllers[index].followsLayers = controllers[index].followsLayers
+        controllers[index].chosenInput = entry.input?.id
+        controllers[index].chosenOutput = entry.output?.id
+        controllers[index].knownSourceID = entry.input?.id
+        controllers[index].bridge = makeBridge(controllers[index].profile, for: index)
+        // A device chosen in Settings: until it connects, the panel says WAITING for it (#91), as after a change.
+        if entry.input != nil { status.controllers[index].lastDisconnect = .deviceChanged }
     }
 
     private func addController(_ entry: ControllerSettings) {

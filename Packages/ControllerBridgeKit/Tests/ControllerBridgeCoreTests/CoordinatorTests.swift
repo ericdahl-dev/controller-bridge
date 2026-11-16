@@ -22,6 +22,8 @@ final class Rig {
         var sources: [MIDIEndpoint]
         var destinations: [MIDIEndpoint]
         var connected: [MIDIEndpoint.ID] = []
+        /// Every source ever connected, in order, even if disconnected since: proves a device was never touched (#105).
+        var everConnected: [MIDIEndpoint.ID] = []
         var outputs: [MIDIEndpoint.ID: FakeOutput] = [:]
 
         init(sources: [MIDIEndpoint], destinations: [MIDIEndpoint]) {
@@ -29,7 +31,10 @@ final class Rig {
             self.destinations = destinations
         }
 
-        func connect(source: MIDIEndpoint) throws { connected.append(source.id) }
+        func connect(source: MIDIEndpoint) throws {
+            connected.append(source.id)
+            everConnected.append(source.id)
+        }
         func disconnect(source: MIDIEndpoint) { connected.removeAll { $0 == source.id } }
         func openOutput(destination: MIDIEndpoint) throws -> any MIDIOutput {
             // Like CoreMIDI's one output port: controllers sharing a destination share what it was sent.
