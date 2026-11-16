@@ -34,7 +34,7 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
     }
 
     /// The deck values it sends, the last part of each address, lowercased. Any one of them proves it's on: a load
-    /// sends TempoSlider without TempoSliderEnabled.
+    /// sends TempoSlider without TempoSliderEnabled, and a real Resend sends Position, never Progress (#211 capture).
     public var values: [String] {
         switch self {
         case .playing: ["playing"]
@@ -43,7 +43,7 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .progress: ["position", "progress"]
         case .tempoSlider: ["temposlider", "temposliderenabled"]
         case .cues: ["cues"]
-        case .sync: ["sync"]
+        case .sync: ["sync", "bpm"]
         case .loop: ["loop"]
         }
     }
@@ -71,9 +71,10 @@ struct SubscriptionCheck: Equatable {
             values[deck, default: []].insert(value)
             if value == "loaded", message.arguments.first?.wholeNumber == 1 { loaded.insert(deck) }
         }
-        // The LED subscriptions #150 judged; #211 widens this next.
-        missing = [Subscription.playing, .cues, .sync, .loop].filter { subscription in
-            loaded.contains { deck in !subscription.values.contains { (values[deck] ?? []).contains($0) } }
+        missing = Subscription.allCases.filter { subscription in
+            // Loaded is what marks a deck loaded, so it can't be judged on one (#211's next slice judges it).
+            guard subscription != .loaded else { return false }
+            return loaded.contains { deck in !subscription.values.contains { (values[deck] ?? []).contains($0) } }
         }
     }
 

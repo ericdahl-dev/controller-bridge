@@ -24,6 +24,55 @@ struct SubscriptionListTests {
     func values() {
         #expect(Subscription.tempoSlider.values == ["temposlider", "temposliderenabled"])
         #expect(Subscription.loaded.values == ["loaded", "trackinfo"])
-        #expect(Subscription.sync.values == ["sync"])
+        #expect(Subscription.sync.values == ["sync", "bpm"])
+        #expect(Subscription.progress.values == ["position", "progress"])
+    }
+}
+
+/// Each subscription judged from a Resend's answer (#211), at the Coordinator seam. The answer is the real capture's
+/// for a loaded, paused deck 1 (2026-11-16, on #211): every value it sent, with one subscription's values left out.
+@Suite("Every subscription judged")
+struct EverySubscriptionTests {
+    static let deck1: [(Subscription, OSCMessage)] = [
+        (.tempoSlider, OSCMessage("/Syndicate/Deck/1/TempoSlider", [.float(0)])),
+        (.tempoSlider, OSCMessage("/Syndicate/Deck/1/TempoSliderEnabled", [.int(0)])),
+        (.sync, OSCMessage("/Syndicate/Deck/1/BPM", [.float(128)])),
+        (.sync, OSCMessage("/Syndicate/Deck/1/Sync", [.int(0)])),
+        (.loaded, OSCMessage("/Syndicate/Deck/1/TrackInfo", [.string("t"), .string("a"), .string("8A"), .float(128), .float(200),
+                                                              .int(229), .int(914), .string("track")])),
+        (.cues, OSCMessage("/Syndicate/Deck/1/Cues", [.int(1), .string("Intro")] + Array(repeating: [OSCArgument.int(0), .string("")], count: 7).flatMap { $0 })),
+        (.playing, OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)])),
+        (.playPending, OSCMessage("/Syndicate/Deck/1/PlayPending", [.int(0)])),
+        (.loaded, OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)])),
+        (.progress, OSCMessage("/Syndicate/Deck/1/Position", [.float(0.25)])),
+        (.loop, OSCMessage("/Syndicate/Deck/1/Loop", [.int(0)])),
+    ]
+
+    static func missing(leaving out: Subscription) throws -> [Subscription] {
+        try SubscriptionsTests.answered(deck1.filter { $0.0 != out }.map(\.1)).coordinator.status.missingSubscriptions
+    }
+
+    @Test("The whole capture: nothing is missing")
+    func complete() throws {
+        #expect(try SubscriptionsTests.answered(Self.deck1.map(\.1)).coordinator.status.missingSubscriptions == [])
+    }
+
+    @Test("Leaving out one subscription's values flags exactly it",
+          arguments: [Subscription.playing, .playPending, .progress, .tempoSlider, .cues, .sync, .loop])
+    func each(subscription: Subscription) throws {
+        #expect(try Self.missing(leaving: subscription) == [subscription])
+    }
+
+    @Test("TempoSlider without TempoSliderEnabled is on: a load sends just TempoSlider")
+    func tempoSliderAlone() throws {
+        let answer = Self.deck1.map(\.1).filter { $0.address != "/Syndicate/Deck/1/TempoSliderEnabled" }
+        #expect(try SubscriptionsTests.answered(answer).coordinator.status.missingSubscriptions == [])
+    }
+
+    @Test("Empty decks send zeros and Loaded 0: they count for nothing")
+    func emptyDeck() throws {
+        let empty = ["Loaded", "Playing", "PlayPending"].map { OSCMessage("/Syndicate/Deck/2/\($0)", [.int(0)]) }
+            + [OSCMessage("/Syndicate/Deck/2/Position", [.float(0)]), OSCMessage("/Syndicate/Deck/2/PlayerType", [.string("empty")])]
+        #expect(try SubscriptionsTests.answered(Self.deck1.map(\.1) + empty).coordinator.status.missingSubscriptions == [])
     }
 }
