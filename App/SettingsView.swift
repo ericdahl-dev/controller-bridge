@@ -22,6 +22,8 @@ struct SettingsView: View {
     /// The settings the draft started from, to tell the DJ's edits from changes made elsewhere (#90).
     @State private var base: BridgeSettings?
     @State private var sources: [MIDIEndpoint] = []
+    /// Bumped after Controller not found?, which chooses nothing, so the Controller menu redraws (#200).
+    @State private var profileMenuRedraw = 0
     @State private var destinations: [MIDIEndpoint] = []
     /// Problems from the last Apply, shown under their fields; the rest (such as the bridge not running) below.
     @State private var fieldProblems: [SettingsProblem] = []
@@ -384,6 +386,8 @@ struct SettingsView: View {
                 if id == Self.notFoundTag {
                     model.captureDevice = picker.device
                     openWindow(id: CaptureWindow.id)
+                    // Nothing was chosen: redraw the menu so it shows the saved choice again, not this item.
+                    profileMenuRedraw += 1
                 } else if let device = picker.device {
                     settings.wrappedValue.profileChoices[device] = id
                 }
@@ -397,6 +401,7 @@ struct SettingsView: View {
             }
             .labelsHidden()
             .fixedSize()
+            .id(profileMenuRedraw)
             .disabled(!picker.enabled)
         }
     }
