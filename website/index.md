@@ -84,7 +84,7 @@ Yes. Turn on the demo controller in the panel. A scripted controller plays again
 
 ### Does DeckBridge collect any data?
 
-No. DeckBridge collects no data: no account, no analytics, no tracking.
+No. The DeckBridge app collects no data: no account, no analytics, no tracking. This website counts visits with PostHog, without cookies.
 <!-- FAQ:END -->
 
 ## Status and availability
@@ -95,7 +95,7 @@ No. DeckBridge collects no data: no account, no analytics, no tracking.
 
 ## Privacy
 
-DeckBridge collects no data. There is no account, no analytics and no tracking. It sends OSC messages only to Syndicate, on this Mac by default or on your local network if you set it up that way. This website uses no cookies, no analytics and no third-party fonts or scripts. Details: https://getdeckbridge.app/privacy/
+DeckBridge collects no data. There is no account, no analytics and no tracking. It sends OSC messages only to Syndicate, on this Mac by default or on your local network if you set it up that way. This website counts visits with PostHog, without cookies: an anonymous hash that changes every day, and it does not keep your IP address. Details: https://getdeckbridge.app/privacy/
 
 ## Contact
 

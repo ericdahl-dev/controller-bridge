@@ -17,4 +17,4 @@
 - [DeckBridge in Markdown](https://getdeckbridge.app/index.md): what it is, features, requirements, setup, FAQ, status and contact in one clean file
 - [Home](https://getdeckbridge.app/): the product page
 - [Support](https://getdeckbridge.app/support/): setting up Syndicate step by step, FAQ and contact
-- [Privacy](https://getdeckbridge.app/privacy/): the app collects no data; the site uses no cookies, analytics or third-party scripts
+- [Privacy](https://getdeckbridge.app/privacy/): the app collects no data; the site counts visits with PostHog, without cookies
