@@ -47,8 +47,9 @@ extension Mapping {
         case let (.object(pairs), .object):
             return .object(pairs.compactMap { pair in
                 let childPath = path.isEmpty ? pair.key : "\(path).\(pair.key)"
-                guard let expected = schema[pair.key] ?? optionalKeys[childPath],
-                      kindProblem(pair.value, expected: expected) == nil else { return nil }
+                guard let given = schema[pair.key] ?? optionalKeys[childPath] else { return nil }
+                let expected = alternative(pair.value, at: childPath) ?? given
+                guard kindProblem(pair.value, expected: expected) == nil else { return nil }
                 return (pair.key, known(pair.value, schema: expected, path: childPath))
             })
         case let (.array(items), .array(schemaItems)):
@@ -140,7 +141,8 @@ extension Mapping {
     /// The default mapping body, the schema every import is checked against.
     public static func defaultMappingJSON() throws -> Data { try defaultJSON() }
 
-    private static func walk(_ value: OrderedJSON, schema: OrderedJSON, path: String, into out: inout [String]) {
+    private static func walk(_ value: OrderedJSON, schema given: OrderedJSON, path: String, into out: inout [String]) {
+        let schema = alternative(value, at: path) ?? given
         if let problem = kindProblem(value, expected: schema) {
             out.append("\(path): \(problem)")
             return
@@ -187,6 +189,18 @@ extension Mapping {
         case .null: "nothing"
         }
         return "expected \(wanted), got \(describe(value))"
+    }
+
+    /// Keys that take another kind than the default's too, with an example of it: the color table is "rgb222" or a
+    /// list of entries (#197).
+    private static let alternatives: [String: OrderedJSON] = [
+        "leds.color_table": .array([.object([("rgb", .array([.number(0, isInteger: true)])), ("value", .number(0, isInteger: true))])]),
+    ]
+
+    /// The alternative schema at `path` when the value is of its kind.
+    private static func alternative(_ value: OrderedJSON, at path: String) -> OrderedJSON? {
+        guard let other = alternatives[path], kindProblem(value, expected: other) == nil else { return nil }
+        return other
     }
 
     /// Keys a profile may add that the LC6000's default leaves out (#204), with an example of each one's kind.

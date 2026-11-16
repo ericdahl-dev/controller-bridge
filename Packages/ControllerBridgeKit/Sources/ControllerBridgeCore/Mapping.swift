@@ -402,6 +402,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var staleIdle: StaleIdle
         /// The velocities a button LED takes for full, dim and off (#194).
         public var levels: LEDLevels
+        /// How a pad or ring color becomes a velocity (#197): the LC6000's rgb222 unless a profile lists its own.
+        public var colorTable: ColorTable
 
         public enum BeatPulse: String, Equatable, Sendable, Codable, CaseIterable {
             case off, beat, downbeat
@@ -423,13 +425,16 @@ public struct Mapping: Equatable, Sendable, Codable {
             case pulseMs = "pulse_ms"
             case staleIdle = "stale_idle"
             case levels
+            case colorTable = "color_table"
         }
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
-            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000
+            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000,
+            colorTable: ColorTable = .rgb222
         ) {
             self.levels = levels
+            self.colorTable = colorTable
             self.ringFollowsDeck = ringFollowsDeck
             self.pitchCenter = pitchCenter
             self.ring = ring
@@ -454,7 +459,8 @@ public struct Mapping: Equatable, Sendable, Codable {
                 beatPulse: try c.decode(BeatPulse.self, forKey: .beatPulse), pulseMs: try c.decode(Int.self, forKey: .pulseMs),
                 staleIdle: try c.decode(StaleIdle.self, forKey: .staleIdle),
                 ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true,
-                levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000
+                levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000,
+                colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? .rgb222
             )
         }
     }

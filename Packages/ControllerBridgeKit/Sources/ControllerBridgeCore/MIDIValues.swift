@@ -81,7 +81,7 @@ public enum EncoderFormat: String, CaseIterable, Equatable, Sendable, Codable {
 }
 
 /// How a controller turns a color into a pad or ring velocity (#197).
-public enum ColorTable: Equatable, Sendable {
+public enum ColorTable: Equatable, Sendable, Codable {
     /// The LC6000's 64 colors: 2 bits per channel, 0b00RRGGBB.
     case rgb222
     /// Explicit entries; a color takes the nearest entry's value.
@@ -116,6 +116,27 @@ public enum ColorTable: Equatable, Sendable {
         case .list(let entries):
             let v = vividVelocity(rgb[0], rgb[1], rgb[2])
             return Self.nearest([Int(v) >> 4 & 3, Int(v) >> 2 & 3, Int(v) & 3].map { $0 * 85 }, in: entries)
+        }
+    }
+
+    /// In a profile: the name "rgb222", or the list of entries.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let name = try? container.decode(String.self) {
+            guard name == "rgb222" else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown color table \"\(name)\"")
+            }
+            self = .rgb222
+        } else {
+            self = .list(try container.decode([Entry].self))
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .rgb222: try container.encode("rgb222")
+        case .list(let entries): try container.encode(entries)
         }
     }
 
