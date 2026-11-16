@@ -207,7 +207,9 @@ final class Bridge {
                 duration = nil
             }
         case "sync": synced = value
-        case "temposliderenabled": sliderEnabled = value
+        case "temposliderenabled":
+            if value != sliderEnabled { rearmPickup() }
+            sliderEnabled = value
         case "loop": looping = value
         case "cues": cues = Self.cueSlots(message.arguments)
         case "trackinfo":

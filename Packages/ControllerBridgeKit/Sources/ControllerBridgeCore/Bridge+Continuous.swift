@@ -17,7 +17,8 @@ extension Bridge {
             invert: mapping.pitch.invert, deadZone: mapping.pitch.deadZone
         )
         let rounded = (t * 100_000).rounded() / 100_000
-        guard pickedUp(at: rounded) else { return }
+        // Moving the fader while Syndicate has the slider disabled would queue up a jump.
+        guard sliderEnabled, pickedUp(at: rounded) else { return }
         guard rounded != lastTempo else { return }
         lastTempo = rounded
         recentTempoSends.removeAll { clock.now - $0.time > Self.echoWindow }
@@ -44,6 +45,8 @@ extension Bridge {
     func rearmPickup() {
         pickupArmed = true
         faderPosition = nil
+        // Syndicate's slider may be anywhere now, so the pickup send goes out even if it repeats the last value.
+        lastTempo = nil
     }
 
     /// Whether the fader at `position` drives the tempo. While armed it doesn't, until it comes within tolerance of

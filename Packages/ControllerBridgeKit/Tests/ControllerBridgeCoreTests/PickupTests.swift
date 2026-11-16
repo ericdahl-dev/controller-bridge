@@ -89,4 +89,18 @@ struct PickupTests {
         Self.fader(rig, 0x5D)
         #expect(rig.osc.sent == [Self.tempo(0.40634), Self.tempo(0.42196), Self.tempo(0.43759), Self.tempo(0.45321)])
     }
+
+    @Test("While Syndicate reports the slider disabled, the fader is ignored; enabling it again re-arms pickup")
+    func sliderDisabledIgnoresAndRearms() throws {
+        let rig = try Self.pickedUp()
+        Self.report(rig, "TempoSliderEnabled", .int(0))
+        Self.fader(rig, 0x70)
+        #expect(rig.osc.sent == [])
+
+        Self.report(rig, "TempoSliderEnabled", .int(1))
+        Self.fader(rig, 0x70)
+        #expect(rig.osc.sent == [])
+        Self.fader(rig, 0x60)
+        #expect(rig.osc.sent == [Self.tempo(0.50009)])
+    }
 }
