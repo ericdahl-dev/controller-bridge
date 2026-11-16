@@ -276,8 +276,32 @@ public final class Coordinator {
 
     /// Starts the LED sweep on the first controller, `delay` seconds per color (0.6, as the Python led-sweep).
     public func startLEDSweep(delay: Double = 0.6) {
-        sweep = (clock.now, LEDSweep.steps(for: controllers[0].bridge.mapping, delay: delay), 0)
+        let bridge = controllers[0].bridge
+        guard bridge.output != nil else {
+            diagnostics?(.sweep("No controller output is open, so there is nothing to sweep."))
+            return
+        }
+        bridge.ledsHeld = true
+        sweep = (clock.now, LEDSweep.steps(for: bridge.mapping, delay: delay), 0)
         runSweep()
+    }
+
+    /// Whether an LED sweep is running.
+    public var isSweeping: Bool { sweep != nil }
+
+    /// Stops the sweep part-way. Its remaining steps are dropped, and the LEDs repaint.
+    public func cancelLEDSweep() {
+        guard sweep != nil else { return }
+        sweep = nil
+        diagnostics?(.sweep("LED sweep stopped."))
+        endSweep()
+    }
+
+    /// Gives the LEDs back to the bridge, painted from its current state.
+    private func endSweep() {
+        let bridge = controllers[0].bridge
+        bridge.ledsHeld = false
+        bridge.repaintLEDs()
     }
 
     /// Sends every sweep step that is due.
@@ -290,6 +314,11 @@ public final class Coordinator {
             for caption in step.captions { diagnostics?(.sweep(caption)) }
             current.next += 1
         }
-        sweep = current.next < current.steps.count ? current : nil
+        if current.next < current.steps.count {
+            sweep = current
+        } else {
+            sweep = nil
+            endSweep()
+        }
     }
 }

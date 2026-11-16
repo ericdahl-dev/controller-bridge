@@ -115,6 +115,8 @@ final class Bridge {
     var looping = false
     /// Syndicate's feedback has stopped (#21): its LEDs show `leds.stale_idle`.
     var feedbackStale = false
+    /// An LED sweep (#26) owns the controller's LEDs.
+    var ledsHeld = false
     /// Each hot cue's color slot, 0 for an empty cue.
     var cues = [Int](repeating: 0, count: 8)
     /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
@@ -253,7 +255,15 @@ final class Bridge {
         do { try output.send(.noteOn(channel: channel, note: UInt8(note), velocity: velocity)) } catch { outputFailed = true }
     }
 
+    /// Clears the LED cache and repaints every LED from the current state, as after an LED sweep.
+    func repaintLEDs() {
+        ledCache.removeAll()
+        refreshLEDs()
+    }
+
     func led(_ note: Int, _ velocity: UInt8) {
+        // During an LED sweep the bridge's own writes wait; the sweep ends with a repaint.
+        guard !ledsHeld else { return }
         guard ledCache[note] != velocity else { return }
         ledCache[note] = velocity
         guard let output else { return }

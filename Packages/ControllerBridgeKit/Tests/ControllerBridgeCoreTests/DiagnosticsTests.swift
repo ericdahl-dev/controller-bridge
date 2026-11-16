@@ -150,9 +150,73 @@ struct DiagnosticsTests {
         Self.tick(rig, at: 1000)
         let rest = Self.takeSent(rig)
         let expectedNotes = (UInt8(1)...127).filter { !Self.padsAndRing.contains($0) }
-        #expect(rest.map { [$0.0, $0.1] } == expectedNotes.flatMap { [[$0, 127], [$0, 1], [$0, 0]] })
+        let expected: [[UInt8]] = expectedNotes.flatMap { [[$0, 127], [$0, 1], [$0, 0]] }
+        // After the sweep's own sends, the bridge repaints its LEDs (sweepHoldsThenRepaints).
+        #expect(rest.prefix(expected.count).map { [$0.0, $0.1] } == expected)
         #expect(events.sweep.last == "LED sweep done.")
         Self.tick(rig, at: 2000)
         #expect(Self.takeSent(rig).isEmpty)
+    }
+
+    @Test("During a sweep the bridge's own LED writes wait; when the sweep ends, every LED repaints from the current state")
+    func sweepHoldsThenRepaints() throws {
+        let (rig, _) = try Self.openRig()
+        rig.clock.now = 100
+        rig.coordinator.startLEDSweep()
+        _ = Self.takeSent(rig)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        #expect(Self.takeSent(rig).isEmpty)
+        #expect(rig.coordinator.isSweeping)
+
+        Self.tick(rig, at: 1000)
+        #expect(!rig.coordinator.isSweeping)
+        #expect(rig.leds[1] == 127)     // Play, from the Playing 1 that arrived mid-sweep
+        #expect(rig.leds[2] == 1)       // Cue: dim, no track loaded
+        #expect(rig.leds[32] == 0)      // pad 1: no cue
+    }
+
+    @Test("Stopping a sweep part-way sends nothing more on later ticks, and repaints the LEDs")
+    func cancelSweep() throws {
+        let (rig, events) = try Self.openRig()
+        rig.clock.now = 100
+        rig.coordinator.startLEDSweep()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        Self.tick(rig, at: 101.3)
+        _ = Self.takeSent(rig)
+
+        rig.coordinator.cancelLEDSweep()
+        #expect(events.sweep.last == "LED sweep stopped.")
+        #expect(rig.leds[1] == 127)
+        #expect(rig.leds[32] == 0)
+        _ = Self.takeSent(rig)
+        Self.tick(rig, at: 200)
+        #expect(Self.takeSent(rig).isEmpty)
+        #expect(!rig.coordinator.isSweeping)
+    }
+
+    @Test("With no controller output open, the sweep says so and sends nothing")
+    func sweepNeedsOutput() throws {
+        let rig = try Rig()
+        rig.midi.destinations = []
+        rig.coordinator.start()
+        let events = Events()
+        rig.coordinator.diagnostics = { events.all.append($0) }
+        rig.coordinator.startLEDSweep()
+        #expect(events.sweep == ["No controller output is open, so there is nothing to sweep."])
+        #expect(!rig.coordinator.isSweeping)
+    }
+
+    @Test("The sweep's pad and ring notes come from the active profile, not the LC6000's")
+    func sweepUsesProfileNotes() throws {
+        let mapping = try Mapping.bundledDefault(overriddenBy: Data(#"""
+            { "notes": { "pads": [50, 51, 52, 53, 54, 55, 56, 57] }, "leds": { "ring": 60 } }
+            """#.utf8))
+        let midi = Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out])
+        let coordinator = Coordinator(mapping: mapping, midi: midi, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: Rig.FakeLog())
+        coordinator.start()
+        midi.outputs[Rig.lc6000Out.id]?.sent.removeAll()
+        coordinator.startLEDSweep()
+        let notes = (midi.outputs[Rig.lc6000Out.id]?.sent ?? []).compactMap { if case let .noteOn(_, note, _) = $0 { note } else { nil } }
+        #expect(notes == [50, 51, 52, 53, 54, 55, 56, 57, 60])
     }
 }
