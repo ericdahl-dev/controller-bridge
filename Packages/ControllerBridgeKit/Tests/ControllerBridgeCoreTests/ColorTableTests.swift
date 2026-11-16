@@ -65,3 +65,47 @@ struct ColorTableKeyTests {
         #expect(throws: (any Error).self) { try Self.leds(#""color_table": "rgb565""#) }
     }
 }
+
+/// The import check (#197): a color table's problems in plain words.
+@Suite("Color table in the import check")
+struct ColorTableImportTests {
+    static func importing(_ table: String) throws -> ControllerProfile {
+        try ControllerProfile.importing(Data(#"{"mapping": {"leds": {"color_table": \#(table)}}}"#.utf8),
+                                        bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+    }
+
+    @Test("An unknown name lists the one there is")
+    func unknownName() {
+        #expect(throws: MappingError.invalid(["mapping.leds.color_table: \"rgb565\" isn't one of rgb222"])) {
+            try Self.importing(#""rgb565""#)
+        }
+    }
+
+    @Test("Neither text nor a list says it wants either")
+    func wrongKind() {
+        #expect(throws: MappingError.invalid(["mapping.leds.color_table: expected text, got 7"])) {
+            try Self.importing("7")
+        }
+    }
+
+    @Test("An entry's color out of 0-255 or not three values, its value out of 0-127, an unknown member, an empty list")
+    func entries() {
+        #expect(throws: MappingError.invalid([
+            "mapping.leds.color_table[0].rgb[0]: 300 is out of range, expected 0-255",
+            "mapping.leds.color_table[0].value: 200 is out of range, expected 0-127",
+            "mapping.leds.color_table[1].rgb: expected 3 values, got 2",
+            "mapping.leds.color_table[1].name: unknown key",
+        ])) {
+            try Self.importing(#"[{"rgb": [300, 0, 0], "value": 200}, {"rgb": [1, 2], "value": 3, "name": "x"}]"#)
+        }
+        #expect(throws: MappingError.invalid(["mapping.leds.color_table: expected at least one entry"])) {
+            try Self.importing("[]")
+        }
+    }
+
+    @Test("A good list imports, in order")
+    func good() throws {
+        let profile = try Self.importing(#"[{"rgb": [255, 0, 0], "value": 5}, {"rgb": [0, 0, 255], "value": 9}]"#)
+        #expect(profile.mapping.leds.colorTable == .list([.init(rgb: [255, 0, 0], value: 5), .init(rgb: [0, 0, 255], value: 9)]))
+    }
+}

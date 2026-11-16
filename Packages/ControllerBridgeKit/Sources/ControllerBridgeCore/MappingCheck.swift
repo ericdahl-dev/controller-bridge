@@ -225,6 +225,7 @@ extension Mapping {
             "browse.select_turn_cc": 0...127, "browse.auto_loop_size_cc": 0...127,
             "leds.pitch_center": 0...127, "leds.ring": 0...127,
             "leds.levels.full": 0...127, "leds.levels.dim": 0...127, "leds.levels.off": 0...127,
+            "leds.color_table[].rgb[]": 0...255, "leds.color_table[].value": 0...127,
             "jog.counts_per_rev": 1...16384, "jog.beats_per_rev": 1...16, "jog.seek_seconds_per_rev": 0...60,
             // Every other number, so no imported value can be absurd (#92).
             "osc.port": 1...65535, "osc.feedback_port": 1...65535,
@@ -236,7 +237,7 @@ extension Mapping {
         return table
     }()
 
-    private static let colors: Set<String> = ["leds.ring_color", "leds.roll_pad_color", "leds.loop_pad_color"]
+    private static let colors: Set<String> = ["leds.ring_color", "leds.roll_pad_color", "leds.loop_pad_color", "leds.color_table[].rgb"]
 
     /// Numbers that are one of a few values, not a range (#195).
     private static let numberChoices: [String: [Double]] = [
@@ -248,6 +249,7 @@ extension Mapping {
         "leds.stale_idle": LEDs.StaleIdle.allRawValues,
         "pads.roll_sizes[]": Pads.RollSize.allRawValues,
         "midi.encoder_format": EncoderFormat.allRawValues,
+        "leds.color_table": ["rgb222"],
     ]
 
     /// A range, count or choice problem with a value of the right kind; nil when it's fine.
@@ -265,6 +267,8 @@ extension Mapping {
             }
         case .array(let items) where colors.contains(pattern) && items.count != 3:
             return "expected 3 values, got \(items.count)"
+        case .array(let items) where pattern == "leds.color_table" && items.isEmpty:
+            return "expected at least one entry"
         case .array(let items) where pattern == "notes.pads" && !(1...16).contains(items.count):
             // 4, 8 or 16 pads, or anything between (#196).
             return "expected 1-16 pads, got \(items.count)"
