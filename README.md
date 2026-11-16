@@ -145,7 +145,7 @@ xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configu
 scripts/smoke.sh   # a virtual LC6000 and a fake Syndicate check Play out and the Play LED back; CI requires it too
 ```
 
-Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. Quit Syndicate and the app itself first, because the smoke check needs UDP 9090 and 9096. A real controller can stay plugged in: the check pins the app to its own virtual device and puts your saved settings back afterwards.
+Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. Quit Syndicate and the app itself first, because the smoke check needs UDP 9090 and 9096. With no real LC6000 attached, the check runs the app on automatic devices beside a virtual "… WD" port, as on a real unit (#143). A real controller can stay plugged in: then the check pins the app to its own virtual device instead and says the automatic case was skipped. It puts your saved settings back afterwards. CI always runs the automatic case.
 
 **CI uses an older Xcode than you may have locally.** GitHub's standard macOS runner builds with Xcode 26.x (Swift 6.2), while development has been on Xcode 27.2. The two compilers can disagree. Once, Xcode 26.6's Release optimizer crashed on code that 27.2 built fine (#65). If **App build** fails with a `swift-frontend` stack dump, find the function named in `gh run view <id> --log-failed`, then simplify or split it.
 
@@ -153,7 +153,7 @@ Releases are a version tag on `main`. See [`docs/DEVELOPING.md`](docs/DEVELOPING
 
 ### Look and fonts
 
-The app follows Syndicate's dark, flat style (#34). The colors were sampled from its public screenshots, and `ControllerBridgePresentation` tests every text color against WCAG AA. The app bundles two fonts under the [SIL Open Font License 1.1](https://openfontlicense.org): [Inter](https://github.com/rsms/inter) 4.1 for UI text and [IBM Plex Mono](https://github.com/IBM/plex) 2.5.0 for numbers. Their license files ship in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo).
+The app follows Syndicate's flat style (#34) in its dark and light themes. The colors are Syndicate's own tokens, from its user guide's CSS (#127), and `ControllerBridgePresentation` tests every text color against WCAG AA in both themes. **Settings › Appearance** picks Match macOS, Dark or Light. The app bundles two fonts under the [SIL Open Font License 1.1](https://openfontlicense.org): [Inter](https://github.com/rsms/inter) 4.1 for UI text and [IBM Plex Mono](https://github.com/IBM/plex) 2.5.0 for numbers. Their license files ship in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo).
 
 For PR screenshots, a Debug build can render the panel without a screen: `ControllerBridge.app/Contents/MacOS/ControllerBridge --render-snapshots snaps`. It prints where the PNGs went (inside the sandbox container). Release builds leave this out.
 
