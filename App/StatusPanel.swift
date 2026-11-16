@@ -93,7 +93,8 @@ struct StatusPanel: View {
     /// The deck picker (#66): a deck for the controller at an index.
     var setDeck: (_ deck: Int, _ controller: Int) -> Void = { _, _ in }
     @Environment(\.openWindow) private var openWindow
-    @State private var confirmingQuit = false
+    /// Quit asks inside the panel while feedback is live (#131): a dialog on a menu-bar window may never show.
+    @State var quitFlow = QuitFlow()
 
     var body: some View {
         let presentation = status.presentation
@@ -160,6 +161,18 @@ struct StatusPanel: View {
                     .keyboardShortcut("d")
                 }
                 // Quiet controls: the guide, the demo, and Quit kept apart from the main buttons (#66).
+                if quitFlow.confirming {
+                    // The question in the panel itself: Return quits, Esc cancels (#131).
+                    HStack(spacing: Theme.Space.m) {
+                        Text(QuitFlow.question).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        Button("Cancel") { quitFlow.cancel() }
+                            .buttonStyle(FlatButtonStyle()).keyboardShortcut(.cancelAction).frame(width: 90)
+                        Button("Quit") { if quitFlow.confirm() == .quitNow { NSApplication.shared.terminate(nil) } }
+                            .buttonStyle(FlatButtonStyle()).keyboardShortcut(.defaultAction).frame(width: 90)
+                    }
+                } else {
                 HStack(spacing: Theme.Space.l) {
                     quietButton("Setup guide") { SetupGuideWindow.open(openWindow) }
                     // Not while stopped: there's no pipe to switch the demo on with (#88).
@@ -170,9 +183,9 @@ struct StatusPanel: View {
                     }
                     Spacer(minLength: 0)
                     quietButton("Quit") {
-                        if presentation.quitAsks { confirmingQuit = true } else { NSApplication.shared.terminate(nil) }
+                        if quitFlow.pressQuit(asks: presentation.quitAsks) == .quitNow { NSApplication.shared.terminate(nil) }
                     }
-                    .keyboardShortcut("q")
+                }
                 }
             }
             .padding(Theme.Space.l)
@@ -183,10 +196,12 @@ struct StatusPanel: View {
         .frame(width: 360)
         .background(Theme.background)
         .environment(\.colorScheme, .dark)
-        .confirmationDialog("Quit? The controller stops sending to Syndicate.", isPresented: $confirmingQuit) {
-            Button("Quit", role: .destructive) { NSApplication.shared.terminate(nil) }
-            Button("Cancel", role: .cancel) {}
+        // ⌘Q quits without asking: a DJ pressing it means it (#131).
+        .background {
+            Button("Quit now") { NSApplication.shared.terminate(nil) }
+                .keyboardShortcut("q").opacity(0).accessibilityHidden(true)
         }
+        .onDisappear { quitFlow.panelClosed() }
     }
 
     /// A small caption-style text button, with no fill and no underline.
