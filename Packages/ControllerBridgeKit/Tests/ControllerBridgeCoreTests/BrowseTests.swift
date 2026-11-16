@@ -2,7 +2,7 @@ import Foundation
 import ControllerBridgeCore
 import Testing
 
-/// Browse, loop and jump controls (#16). Expected OSC is from the Python bridge (lc6000_bridge/bridge.py), note and
+/// Browse, loop and jump controls (#16). Expected OSC is from the Python bridge (lc6000_bridge/bridge.py (removed in #30)), note and
 /// CC numbers are from the default mapping (Play 1 … Param ▶ 69, select turn CC 6, auto loop size CC 3).
 @Suite("Browse, loops and jumps")
 struct BrowseTests {

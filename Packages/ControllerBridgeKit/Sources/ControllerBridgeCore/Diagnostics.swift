@@ -16,11 +16,11 @@ public enum DiagnosticEvent: Equatable, Sendable {
     public var text: String {
         switch self {
         case .midiIn(let event, let label, let time):
-            // lc6000_bridge/cli.py: f"{time.monotonic():12.3f}  ch{ch:<2} {str(msg):<50} {label}"
+            // lc6000_bridge/cli.py (removed in #30): f"{time.monotonic():12.3f}  ch{ch:<2} {str(msg):<50} {label}"
             let channel = String(event.channel + 1).padding(toLength: 2, withPad: " ", startingAt: 0)
             let message = event.midoText.padding(toLength: max(50, event.midoText.count), withPad: " ", startingAt: 0)
             return String(format: "%12.3f", time) + "  ch" + channel + " " + message + " " + label
-        // lc6000_bridge/cli.py --verbose: print("OSC ->", address, *args)
+        // lc6000_bridge/cli.py (removed in #30) --verbose: print("OSC ->", address, *args)
         case .oscOut(let message): return (["OSC ->", message.address] + message.arguments.map(\.pythonText)).joined(separator: " ")
         case .oscIn(let message): return (["OSC <-", message.address] + message.arguments.map(\.pythonText)).joined(separator: " ")
         case .sweep(let line): return line

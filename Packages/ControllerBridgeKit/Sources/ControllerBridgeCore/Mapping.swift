@@ -2,7 +2,7 @@ import Foundation
 
 /// The LC6000 mapping: note and CC numbers, OSC settings and LED colors.
 ///
-/// The bundled default is ported value for value from the Python bridge's default_mapping.toml, with the same
+/// The bundled default is ported value for value from the Python bridge's default_mapping.toml (removed in #30), with the same
 /// section and key names. Note and CC numbers come from Denon's "LC6000 PRIME MIDI Specification v1.0"; the values
 /// marked PROVISIONAL there (jog CCs, pitch direction, the color table layout and the LED notes) still need checking
 /// on hardware.
