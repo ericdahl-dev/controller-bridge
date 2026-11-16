@@ -90,5 +90,21 @@ def set_what_to_test(http, build, text, locale="en-US"):
     print(f"What to Test set ({locale}, {len(text)} characters).")
 
 
+def add_to_group(http, app, build, name):
+    """Adds the build to the beta group with exactly this name. Already in it (409) is fine: reruns are safe."""
+    groups = get(http, "/betaGroups", {"filter[app]": app, "filter[name]": name})["data"]
+    group = next((g for g in groups if g["attributes"]["name"] == name), None)
+    if group is None:
+        raise DistributeError(f'No beta group named "{name}" for this app in App Store Connect.')
+    status, response = http("POST", f"/betaGroups/{group['id']}/relationships/builds",
+                             {"data": [{"type": "builds", "id": build}]}, None)
+    if status == 409:
+        print(f'Already in "{name}".')
+    elif status >= 400:
+        raise DistributeError(f'Couldn\'t add the build to "{name}": {status} {detail(response)}')
+    else:
+        print(f'Added to "{name}".')
+
+
 if __name__ == "__main__":
     sys.exit("run from the release workflow")
