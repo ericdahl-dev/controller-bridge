@@ -13,6 +13,8 @@ final class BridgeStatus {
     }
 
     var controllers: [String] = []
+    /// The Syndicate deck this controller drives.
+    var deck = 1
     /// Each controller's deck, connection and last disconnect or reconnect, from the Coordinator (#20).
     var bridges: [ControllerStatus] = []
     /// Every MIDI source and the controller profile it matched (#43); one with no profile is listed, not bridged.
@@ -82,6 +84,7 @@ final class BridgeModel {
             return
         }
         let mapping = profiles[0].mapping
+        status.deck = mapping.deck.number
         let pipe = EventPipe()
         let status = status
 
