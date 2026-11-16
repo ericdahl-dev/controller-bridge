@@ -88,19 +88,38 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var lsbCC: Int
         public var invert: Bool
         public var deadZone: Double
+        /// After a load or an outside tempo change, ignore the fader until it meets Syndicate's slider (#22).
+        public var pickup: Bool
+        /// How close, on the -1...+1 range, counts as meeting it.
+        public var pickupTolerance: Double
 
         enum CodingKeys: String, CodingKey {
             case msbCC = "msb_cc"
             case lsbCC = "lsb_cc"
             case invert
             case deadZone = "dead_zone"
+            case pickup
+            case pickupTolerance = "pickup_tolerance"
         }
 
-        public init(msbCC: Int, lsbCC: Int, invert: Bool, deadZone: Double) {
+        public init(msbCC: Int, lsbCC: Int, invert: Bool, deadZone: Double, pickup: Bool, pickupTolerance: Double) {
             self.msbCC = msbCC
             self.lsbCC = lsbCC
             self.invert = invert
             self.deadZone = deadZone
+            self.pickup = pickup
+            self.pickupTolerance = pickupTolerance
+        }
+
+        /// `pickup` and `pickup_tolerance` may be left out of a profile or mapping file: they default to on and 0.02.
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            msbCC = try container.decode(Int.self, forKey: .msbCC)
+            lsbCC = try container.decode(Int.self, forKey: .lsbCC)
+            invert = try container.decode(Bool.self, forKey: .invert)
+            deadZone = try container.decode(Double.self, forKey: .deadZone)
+            pickup = try container.decodeIfPresent(Bool.self, forKey: .pickup) ?? true
+            pickupTolerance = try container.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? 0.02
         }
     }
 

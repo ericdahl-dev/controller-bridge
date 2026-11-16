@@ -125,4 +125,23 @@ struct PickupTests {
         Self.fader(rig, 0x60)
         #expect(rig.leds[42] == 0)
     }
+
+    @Test("pitch.pickup false: the fader drives the tempo at once, as before")
+    func pickupOff() throws {
+        let rig = try Self.started(#"{ "pitch": { "pickup": false } }"#)
+        Self.report(rig, "Loaded", .int(1))
+        Self.report(rig, "TempoSlider", .float(0.5))
+        Self.fader(rig, 0x00)
+        #expect(rig.osc.sent == [Self.tempo(-1.0)])
+        #expect(rig.leds[42] == 0)
+    }
+
+    @Test("pitch.pickup_tolerance sets how close counts as met: with 0.1, 0.406 meets a reported 0.5")
+    func pickupTolerance() throws {
+        let rig = try Self.started(#"{ "pitch": { "pickup_tolerance": 0.1 } }"#)
+        Self.report(rig, "Loaded", .int(1))
+        Self.report(rig, "TempoSlider", .float(0.5))
+        Self.fader(rig, 0x5A)
+        #expect(rig.osc.sent == [Self.tempo(0.40634)])
+    }
 }

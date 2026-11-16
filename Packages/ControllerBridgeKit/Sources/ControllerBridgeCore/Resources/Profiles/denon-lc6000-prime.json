@@ -33,7 +33,9 @@
       "msb_cc": 8,
       "lsb_cc": 40,
       "invert": false,
-      "dead_zone": 0.005
+      "dead_zone": 0.005,
+      "pickup": true,
+      "pickup_tolerance": 0.02
     },
     "needle": {
       "cc": 64,

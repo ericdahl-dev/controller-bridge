@@ -15,7 +15,8 @@ struct MappingTests {
         #expect(mapping.osc == .init(host: "127.0.0.1", port: 9090, root: "/Syndicate/", feedbackHost: "127.0.0.1", feedbackPort: 9096))
         #expect(mapping.deck.number == 1)
         #expect(mapping.jog == .init(ccs: [55], bendReleaseMs: 80, seekSecondsPerTick: 0.02, seekFallbackTicksPerBeat: 32, requireTouch: false))
-        #expect(mapping.pitch == .init(msbCC: 8, lsbCC: 40, invert: false, deadZone: 0.005))
+        // pickup and pickup_tolerance are new in the app (#22): Python had no pickup.
+        #expect(mapping.pitch == .init(msbCC: 8, lsbCC: 40, invert: false, deadZone: 0.005, pickup: true, pickupTolerance: 0.02))
         #expect(mapping.needle == .init(cc: 64, touchNote: 70, requireTouch: true))
         #expect(mapping.browse == .init(selectTurnCC: 6, autoLoopSizeCC: 3))
         #expect(mapping.notes.buttons == [
