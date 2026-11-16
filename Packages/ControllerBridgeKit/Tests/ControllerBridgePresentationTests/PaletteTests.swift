@@ -21,6 +21,14 @@ struct PaletteTests {
             ("error red on background", p.error, p.background),
             ("error red on panel", p.error, p.panel),
             ("key blue on panel", p.key, p.panel),
+            // #171: grouped cards on the surface, tonal pills on the raised button, dark ink on the green pill
+            ("text on surface", p.text, p.surface),
+            ("caption on surface", p.caption, p.surface),
+            ("caption on raised button", p.caption, p.buttonRaised),
+            ("live green on surface", p.live, p.surface),
+            ("attention orange on surface", p.attention, p.surface),
+            ("error red on surface", p.error, p.surface),
+            ("ink on the accent pill", p.onAccent, p.accent),
         ]
     }
 
@@ -43,6 +51,7 @@ struct PaletteTests {
             ("button edge on button", p.buttonEdge, p.button),
             ("selected bar on button", p.selectedBar, p.button),
             ("selected bar on raised button", p.selectedBar, p.buttonRaised),
+            ("text-field edge on surface", p.buttonEdge, p.surface),
         ]
     }
 
@@ -72,6 +81,7 @@ struct PaletteTests {
         #expect(p.live == RGB(hex: 0x00FF48))         // --signal-text
         #expect(p.accent == RGB(hex: 0x00FF48))       // --signal
         #expect(p.onAccent == RGB(hex: 0x111111))     // --on-signal
+        #expect(p.surface == RGB(hex: 0x20201F))      // the site's --p-surface (#171): cards on the window
     }
 
     @Test("Light is Syndicate's LIGHT MODE; live text is its --signal-text darkened 8%, the least that reaches AA on the window")
@@ -89,5 +99,6 @@ struct PaletteTests {
         #expect(p.live == RGB(hex: 0x007026))         // --signal-text #007a29 is 4.01:1 on the window
         #expect(p.accent == RGB(hex: 0x00FF48))       // --signal
         #expect(p.onAccent == RGB(hex: 0x111111))     // --on-signal
+        #expect(p.surface == RGB(hex: 0xE6E6E4))      // lighter than the window, as the site's cards (#171)
     }
 }
