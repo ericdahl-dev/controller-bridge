@@ -32,6 +32,12 @@ final class CaptureController {
     private var clockTask: Task<Void, Never>?
     private let setCapture: (MIDIEndpoint.ID?) -> Void
     private var destinations: [MIDIEndpoint] = []
+    /// The controller's main output, for the LED test (#187).
+    private var ledDestination: MIDIEndpoint?
+    private var ledOutput: CaptureMIDIOutput?
+    private var sendTask: Task<Void, Never>?
+    /// Quick (transport and pads) or Full, chosen on the done page.
+    var ledScope: LEDProbe.Scope = .full
 
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
 
@@ -72,6 +78,7 @@ final class CaptureController {
             watched = endpoint
             setCapture(endpoint.id)
             listen(to: listened)
+            ledDestination = ports.output.first.flatMap { name in destinations.first { $0.name == name } }
             flow.start(device: picked.name, ports: ports, at: time)
         } else {
             flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: time)
@@ -103,8 +110,65 @@ final class CaptureController {
         }
     }
 
-    /// Ends the capture: the bridge gets the controller back, and nothing more is heard. Safe to call twice.
+    // MARK: The LED test (#187)
+
+    /// Starts the LED test: opens the controller's main output (the demo controller has none: its sends go nowhere)
+    /// and lets ProbeSender's messages out every 50 ms.
+    func startLEDs() {
+        if ledOutput == nil, let ledDestination { ledOutput = CaptureMIDIOutput(destination: ledDestination) }
+        flow.startLEDs(scope: ledScope, at: ProcessInfo.processInfo.systemUptime)
+        announce()
+        guard sendTask == nil else { return }
+        sendTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(50))
+                self?.sendDue()
+            }
+        }
+    }
+
+    func answerLED(_ choice: CaptureFlow.LEDChoice) {
+        flow.answerLED(choice, at: ProcessInfo.processInfo.systemUptime)
+        announce()
+    }
+
+    func skipLEDs() {
+        flow.skipLEDs(at: ProcessInfo.processInfo.systemUptime)
+        announce()
+    }
+
+    private func sendDue() {
+        for message in flow.dueSends(at: ProcessInfo.processInfo.systemUptime) { ledOutput?.send(message) }
+    }
+
+    /// Before the output closes: ends the LED test, and sends what's still queued (its off messages), keeping the gap.
+    private func flushLEDs() {
+        flow.skipLEDs(at: ProcessInfo.processInfo.systemUptime)
+        var left = 64
+        while flow.hasPendingSends, left > 0 {
+            sendDue()
+            if flow.hasPendingSends { Thread.sleep(forTimeInterval: ProbeSender.interval) }
+            left -= 1
+        }
+    }
+
+    /// The steps are done: nothing more is heard. The bridge keeps the controller paused, with its LEDs held, until the
+    /// window closes, so the LED test can follow (#187).
+    private func endListening() {
+        input?.stop()
+        input = nil
+        listenTask?.cancel()
+        demoTask?.cancel()
+    }
+
+    /// Ends the capture: the LED test turns off what it lit, the bridge gets the controller back, and nothing more is
+    /// heard. Safe to call twice.
     func end() {
+        sendTask?.cancel()
+        sendTask = nil
+        if ledOutput != nil { flushLEDs() }
+        ledOutput?.close()
+        ledOutput = nil
         input?.stop()
         input = nil
         listenTask?.cancel()
@@ -119,7 +183,7 @@ final class CaptureController {
         now = time
         change(time)
         stepChanged()
-        if flow.phase == .done { end() }
+        if flow.phase == .done { endListening() }
     }
 
     private func receive(_ bytes: [UInt8], at time: Double, port: Int) {

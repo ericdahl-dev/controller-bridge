@@ -413,6 +413,19 @@ enum Snapshots {
                 return CaptureController(flow: flow, now: 1e6)
             }()),
             ("done", CaptureController(flow: captureFlow(at: nil, fed: true), now: 1e6)),
+            // The LED test (#187): a lit question, and a pad color question.
+            ("led-lit", {
+                var flow = captureFlow(at: nil, fed: true)
+                flow.startLEDs(scope: .full, at: 1e6)
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
+            ("led-color", {
+                var flow = captureFlow(at: nil, fed: true)
+                flow.startLEDs(scope: .full, at: 1e6)
+                while flow.ledProbe?.question != .color { flow.answerLED(.lit(true), at: 1e6) }
+                flow.answerLED(.color("red"), at: 1e6)
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
             ("done-note", {
                 var flow = captureFlow(at: nil, fed: true)
                 flow.note = "Firmware 1.3"
