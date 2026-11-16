@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 /// Diagnostics (#26): the MIDI monitor, the OSC log and the LED sweep, replacing the Python `monitor` and `led-sweep`
-/// commands. Expected text is copied from what lc6000_bridge/cli.py prints, so hardware checks read the same.
+/// commands. Expected text is copied from what lc6000_bridge/cli.py (removed in #30) prints, so hardware checks read the same.
 @Suite("Diagnostics")
 struct DiagnosticsTests {
     final class Events {
