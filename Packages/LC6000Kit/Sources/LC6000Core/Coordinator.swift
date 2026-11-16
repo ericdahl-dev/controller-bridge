@@ -33,6 +33,11 @@ public final class Coordinator {
         }
     }
 
+    /// Releases everything held in Syndicate. Safe to call again: a second call sends nothing.
+    public func stop() {
+        for bridge in bridges { bridge.releaseAll() }
+    }
+
     /// The first endpoint whose name contains `wanted`, ignoring case.
     private static func match(_ endpoints: [MIDIEndpoint], _ wanted: String) -> MIDIEndpoint? {
         endpoints.first { $0.name.lowercased().contains(wanted.lowercased()) }
