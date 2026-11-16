@@ -4,6 +4,7 @@
 import AppKit
 import ControllerBridgeCapture
 import ControllerBridgeCore
+import ControllerBridgeRender
 import ControllerBridgePresentation
 import SwiftUI
 
@@ -270,6 +271,25 @@ enum Snapshots {
             )
             writeAppKit(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png", width: 720)
         }
+        // The Jog display tab (#221): deck 1 playing on beat 2 with its upload accepted, deck 2 paused and refused.
+        let jog = JogSimulatorLog()
+        let at = Date(timeIntervalSinceReferenceDate: 784_000_000)
+        jog.apply(.connected, at: at)
+        jog.apply(.uploadStarted(slot: 2, content: JogDisplayContent(deck: 2, color: [255, 255, 0], title: "Night Drive",
+                                                                    artist: "Coastal", key: "Fm", bpm: 124, playerType: "track"),
+                                 bytes: 9_406), at: at)
+        jog.apply(.failed(refusal: 3), at: at)
+        jog.apply(.uploadStarted(slot: 1, content: JogDisplayContent(deck: 1, color: [255, 0, 0], title: "Daybreak",
+                                                                    artist: "Untitled", key: "A#m", bpm: 128, playerType: "track"),
+                                 bytes: 14_812), at: at)
+        jog.apply(.shown(slot: 1), at: at)
+        jog.apply(.playLight(true), at: at)
+        jog.apply(.marker(pitchBend: 6_000), at: at)
+        let jogWindow = DiagnosticsWindow(
+            log: log, status: connected, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            jogSimulator: jog, tab: .jog, scrolls: false
+        )
+        writeAppKit(jogWindow.frame(width: 720, height: 460), to: "\(directory)/diagnostics-jog-display-live.png", width: 720)
         // The OSC log filtered to deck 1, received only, and paused (#218).
         log.deck = 1
         log.direction = .received

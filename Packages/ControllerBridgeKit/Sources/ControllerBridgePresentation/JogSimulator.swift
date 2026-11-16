@@ -1,0 +1,184 @@
+import Foundation
+
+/// The jog display simulator's words (#221): Diagnostics › Jog display draws each deck's display from the same
+/// renderer as the hardware upload (#165); these are the parts around the picture.
+
+/// What one deck's display shows, as VoiceOver reads it: the picture itself says nothing to a screen reader.
+public struct JogDeckSummary: Equatable, Sendable {
+    public var deck: Int
+    public var title: String?
+    public var key: String?
+    public var bpm: Double?
+    public var beat: Int?
+
+    public init(deck: Int, title: String?, key: String?, bpm: Double?, beat: Int?) {
+        self.deck = deck
+        self.title = title
+        self.key = key
+        self.bpm = bpm
+        self.beat = beat
+    }
+
+    /// "Deck 1, Daybreak, A#m, 128 BPM, beat 2", leaving out what isn't known. An empty title is an empty deck, as
+    /// Syndicate's TrackInfo sends it (#209).
+    public var spoken: String {
+        guard let title, !title.isEmpty else { return "Deck \(deck), no track loaded" }
+        var parts = ["Deck \(deck)", title]
+        if let key, !key.isEmpty { parts.append(key) }
+        if let bpm, bpm > 0 {
+            parts.append((bpm.rounded() == bpm ? String(Int(bpm)) : String(bpm)) + " BPM")
+        }
+        if let beat { parts.append("beat \(beat)") }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// The last upload to one deck's display, for the readout under its preview (#221), so the simulator doubles as a
+/// display debugger.
+public enum JogUploadStatus: Equatable, Sendable {
+    /// No LC6000 is connected: the preview is drawn, nothing is sent.
+    case notConnected
+    /// Connected, but no image has been sent yet.
+    case notUploaded
+    /// An image went to `slot`, `bytes` long, and the unit accepted or refused it (JogDisplay.Reply).
+    case uploaded(slot: Int, bytes: Int, at: Date, accepted: Bool)
+
+    /// "Slot 2 · 14,812 bytes · 12:04:31 · Accepted". The time is local; tests pass a time zone.
+    public func readout(timeZone: TimeZone = .current) -> String {
+        switch self {
+        case .notConnected: return "No LC6000 connected: preview only"
+        case .notUploaded: return "Nothing uploaded yet"
+        case .uploaded(let slot, let bytes, let at, let accepted):
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = timeZone
+            let time = calendar.dateComponents([.hour, .minute, .second], from: at)
+            let clock = [time.hour, time.minute, time.second].map { String(format: "%02d", $0 ?? 0) }.joined(separator: ":")
+            return "Slot \(slot) · \(Self.grouped(bytes)) bytes · \(clock) · \(accepted ? "Accepted" : "Refused")"
+        }
+    }
+
+    /// 14812 as "14,812", the same on every Mac whatever its region.
+    private static func grouped(_ n: Int) -> String {
+        let digits = Array(String(n))
+        var out = ""
+        for (index, digit) in digits.enumerated() {
+            if index > 0, (digits.count - index) % 3 == 0 { out += "," }
+            out.append(digit)
+        }
+        return out
+    }
+}
+
+/// Holds a fast stream (the marker's angle, ~100 updates a second while playing) to at most one redraw per `interval`
+/// (#221: ~30 Hz), always ending on the newest value. The view offers each value as it arrives and ticks on its
+/// display timer; whatever either returns is drawn.
+public struct RedrawLimiter<Value: Sendable>: Sendable {
+    public let interval: Double
+    private var lastDraw: Double?
+    private var waiting: Value?
+
+    public init(interval: Double) {
+        self.interval = interval
+    }
+
+    /// A new value at time `now` (seconds): returned to draw now, or held until the interval has passed.
+    public mutating func offer(_ value: Value, at now: Double) -> Value? {
+        if let lastDraw, now - lastDraw < interval {
+            waiting = value
+            return nil
+        }
+        lastDraw = now
+        waiting = nil
+        return value
+    }
+
+    /// The held value, once the interval since the last draw has passed; nil otherwise.
+    public mutating func tick(at now: Double) -> Value? {
+        guard let value = waiting, let lastDraw, now - lastDraw >= interval else { return nil }
+        self.lastDraw = now
+        waiting = nil
+        return value
+    }
+}
+
+/// Where the simulator draws the marker (#221), from the pitch bend the Coordinator sends to the display (#165).
+public enum JogMarkerAngle {
+    /// The hand's angle in degrees, clockwise from 12 o'clock: pitchBend / 16384 of a turn (0…16383). A quarter turn
+    /// is one beat, from 0 on beat 1. PROVISIONAL: the #165 hardware spike confirms where the unit puts zero and which
+    /// way it turns; flip it here, the one place the simulator reads it.
+    public static func degrees(pitchBend: Int) -> Double {
+        Double(pitchBend) / 16_384 * 360
+    }
+}
+
+/// The simulator's view of the jog display (#221), built from the display driver's events. The App maps each
+/// `JogDisplayEvent` (ControllerBridgeCore) to one `Input`, timestamping uploads, so this target stays free of Core.
+public struct JogSimulator: Equatable, Sendable {
+    public enum Input: Equatable, Sendable {
+        case connected
+        case disconnected
+        /// An image for `deck` started into `slot`; that deck is now the one in front.
+        case uploadStarted(slot: Int, deck: Int, bytes: Int, at: Date)
+        /// The unit shows `slot`.
+        case shown(slot: Int)
+        /// The upload in progress was refused, or got no answer.
+        case failed
+        case marker(pitchBend: Int)
+        case playing(Bool)
+    }
+
+    private struct Upload: Equatable, Sendable {
+        var slot: Int, bytes: Int, at: Date
+        var accepted: Bool?
+    }
+
+    private var connected = false
+    /// The deck the unit is showing: the last one an upload started for.
+    public private(set) var front: Int?
+    private var uploads: [Int: Upload] = [:]
+    private var markers: [Int: Int] = [:]
+    private var plays: [Int: Bool] = [:]
+
+    public init() {}
+
+    public mutating func apply(_ input: Input) {
+        switch input {
+        case .connected: connected = true
+        case .disconnected: connected = false
+        case .uploadStarted(let slot, let deck, let bytes, let at):
+            front = deck
+            uploads[deck] = Upload(slot: slot, bytes: bytes, at: at, accepted: nil)
+        case .shown(let slot):
+            if let front, uploads[front]?.slot == slot { uploads[front]?.accepted = true }
+        case .failed:
+            if let front { uploads[front]?.accepted = false }
+        case .marker(let pitchBend):
+            if let front { markers[front] = pitchBend }
+        case .playing(let on):
+            if let front { plays[front] = on }
+        }
+    }
+
+    /// The readout's status for one deck. An upload still waiting for the unit's answer reads as not yet uploaded.
+    public func status(deck: Int) -> JogUploadStatus {
+        guard connected else { return .notConnected }
+        guard let upload = uploads[deck], let accepted = upload.accepted else { return .notUploaded }
+        return .uploaded(slot: upload.slot, bytes: upload.bytes, at: upload.at, accepted: accepted)
+    }
+
+    /// The deck's last marker pitch bend (0 until one arrives), for `JogMarkerAngle.degrees(pitchBend:)`.
+    public func marker(deck: Int) -> Int { markers[deck] ?? 0 }
+
+    /// Whether the deck's play light is on.
+    public func playing(deck: Int) -> Bool { plays[deck] ?? false }
+
+    /// The marker as the renderer takes it (#238): turns clockwise from 12 o'clock.
+    public func markerTurns(deck: Int) -> Double { Double(marker(deck: deck)) / 16_384 }
+
+    /// The beat section to light (1-4) while the deck plays: the hand's quarter of the turn, so the two always agree
+    /// (the marker is the master clock hand while playing, #165). Paused, none.
+    public func litBeat(deck: Int) -> Int? {
+        guard playing(deck: deck) else { return nil }
+        return Int(markerTurns(deck: deck) * 4) % 4 + 1
+    }
+}

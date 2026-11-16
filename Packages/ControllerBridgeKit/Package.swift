@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "ControllerBridgeCore", targets: ["ControllerBridgeCore"]),
         .library(name: "ControllerBridgePresentation", targets: ["ControllerBridgePresentation"]),
         .library(name: "ControllerBridgeCapture", targets: ["ControllerBridgeCapture"]),
+        .library(name: "ControllerBridgeRender", targets: ["ControllerBridgeRender"]),
     ],
     targets: [
         // All bridge logic: the Coordinator, the Bridge, the mapping and the OSC codec.
@@ -24,5 +25,10 @@ let package = Package(
         // of Core, so the web capture (#190) can share the format without the bridge.
         .target(name: "ControllerBridgeCapture"),
         .testTarget(name: "ControllerBridgeCaptureTests", dependencies: ["ControllerBridgeCapture"]),
+        // The LC6000 jog display's image (#165), shared by the upload and the Diagnostics simulator (#221): CoreGraphics
+        // and CoreText, with the Geist faces it draws in (SIL OFL 1.1, Fonts/Geist-OFL.txt), so it renders the same
+        // under swift test as in the app.
+        .target(name: "ControllerBridgeRender", dependencies: ["ControllerBridgeCore"], resources: [.copy("Fonts")]),
+        .testTarget(name: "ControllerBridgeRenderTests", dependencies: ["ControllerBridgeRender", "ControllerBridgeCore"]),
     ]
 )

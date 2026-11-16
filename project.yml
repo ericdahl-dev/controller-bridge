@@ -35,6 +35,8 @@ targets:
         product: ControllerBridgePresentation
       - package: ControllerBridgeKit
         product: ControllerBridgeCapture
+      - package: ControllerBridgeKit
+        product: ControllerBridgeRender
     entitlements:
       path: App/ControllerBridge.entitlements
       properties:
