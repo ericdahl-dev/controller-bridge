@@ -13,8 +13,8 @@ final class DiagnosticsLog {
     private(set) var lines = DiagnosticsLines()
 
     /// Kept apart from `lines`, so the checkbox doesn't redraw the window on every new line (#162).
-    var hideProgressAndTime = true {
-        didSet { lines.hideProgressAndTime = hideProgressAndTime }
+    var hideStreaming = true {
+        didSet { lines.hideStreaming = hideStreaming }
     }
 
     func append(_ event: DiagnosticEvent) {
@@ -180,8 +180,8 @@ struct DiagnosticsWindow: View {
             explain("Pads and ring through all 64 colors, then every other note at full, dim and off.")
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         case .osc:
-            Toggle(isOn: Bindable(log).hideProgressAndTime) {
-                Text("Hide Progress and Time messages").font(Theme.ui(12)).foregroundStyle(Theme.text)
+            Toggle(isOn: Bindable(log).hideStreaming) {
+                Text("Hide streaming values").font(Theme.ui(12)).foregroundStyle(Theme.text)
             }
             .toggleStyle(.checkbox)
             // Syndicate subscriptions that are off, each with what it breaks, as the panel says (#211).

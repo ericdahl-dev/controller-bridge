@@ -61,11 +61,11 @@ public struct DiagnosticsLines: Equatable, Sendable {
         public var text: String { message + label }
     }
 
-    /// Progress and Time feedback arrive many times a second while playing; hidden by default.
-    public var hideProgressAndTime = true
+    /// Syndicate's streaming feedback (#218), many lines a second each while playing; hidden by default.
+    public var hideStreaming = true
     private var lists: [DiagnosticsTab: Ring] = [:]
-    /// The OSC tab's Progress and Time lines, kept apart so their flood can't push the other lines out (#97).
-    private var progressAndTime = Ring()
+    /// The OSC tab's streaming lines, kept apart so their flood can't push the other lines out (#97).
+    private var streaming = Ring()
     private var nextID = 0
 
     public init() {}
@@ -73,8 +73,8 @@ public struct DiagnosticsLines: Equatable, Sendable {
     public mutating func append(to tab: DiagnosticsTab, message: String, label: String = "", isUnmapped: Bool = false) {
         nextID += 1
         let line = Line(id: nextID, message: message, label: label, isUnmapped: isUnmapped)
-        if tab == .osc, Self.isProgressOrTime(line.text) {
-            progressAndTime.append(line)
+        if tab == .osc, Self.isStreaming(line.text) {
+            streaming.append(line)
             return
         }
         lists[tab, default: Ring()].append(line)
@@ -83,15 +83,15 @@ public struct DiagnosticsLines: Equatable, Sendable {
     /// Empties one tab's list; the others stay.
     public mutating func clear(_ tab: DiagnosticsTab) {
         lists[tab] = Ring()
-        if tab == .osc { progressAndTime = Ring() }
+        if tab == .osc { streaming = Ring() }
     }
 
     /// What a tab shows, oldest first.
     public func shown(_ tab: DiagnosticsTab) -> [Line] {
         let list = lists[tab, default: Ring()].lines
-        guard tab == .osc, !hideProgressAndTime else { return list }
+        guard tab == .osc, !hideStreaming else { return list }
         // Both kept lists, back in arrival order, and still no more than the limit.
-        return Array(Self.merged(list, progressAndTime.lines).suffix(Self.limit))
+        return Array(Self.merged(list, streaming.lines).suffix(Self.limit))
     }
 
     /// Two lists already in arrival order, merged into one in arrival order, in one pass.
@@ -133,11 +133,15 @@ public struct DiagnosticsLines: Equatable, Sendable {
         shown(tab).map { $0.text + "\n" }.joined()
     }
 
-    /// "OSC <- /Syndicate/Deck/1/Progress 0.25" or ".../Time 61": the address's last part, before the arguments.
-    private static func isProgressOrTime(_ text: String) -> Bool {
+    /// The feedback Syndicate streams while playing, by the address's last part (#218): Position ~100/s per deck,
+    /// BarRamp ~200/s, Meter ~100/s per channel (captures on #209), and the clocks and progress values like them.
+    static let streamingNames: Set<String> = ["position", "barramp", "meter", "clock", "currentstep", "sampleprogress", "progress", "time"]
+
+    /// "OSC <- /Syndicate/Deck/3/Position 48.91": feedback whose address ends in a streaming name. Only feedback: what
+    /// DeckBridge sends is never a flood.
+    private static func isStreaming(_ text: String) -> Bool {
         guard text.hasPrefix("OSC <- ") else { return false }
         let address = text.dropFirst(7).split(separator: " ").first ?? ""
-        let last = address.split(separator: "/").last?.lowercased()
-        return last == "progress" || last == "time"
+        return address.split(separator: "/").last.map { streamingNames.contains($0.lowercased()) } ?? false
     }
 }
