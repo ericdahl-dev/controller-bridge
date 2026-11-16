@@ -121,15 +121,23 @@ public struct CapturePrompt: Codable, Equatable, Sendable {
     public var gesture: CaptureGesture
     /// The prompt this one repeats with Shift held.
     public var shiftedOf: String?
+    /// The deck layer this step is about (#217): the layer a select step switches to, or a layered control's layer.
+    public var layer: Int?
+    /// The prompt this one repeats on `layer`, such as deck2.play for deck1.play.
+    public var layerOf: String?
 
-    public init(id: String, text: String, gesture: CaptureGesture, shiftedOf: String? = nil) {
+    public init(
+        id: String, text: String, gesture: CaptureGesture, shiftedOf: String? = nil, layer: Int? = nil, layerOf: String? = nil
+    ) {
         self.id = id
         self.text = text
         self.gesture = gesture
         self.shiftedOf = shiftedOf
+        self.layer = layer
+        self.layerOf = layerOf
     }
 
-    enum CodingKeys: String, CodingKey { case id, text, gesture, shiftedOf = "shifted_of" }
+    enum CodingKeys: String, CodingKey { case id, text, gesture, shiftedOf = "shifted_of", layer, layerOf = "layer_of" }
 }
 
 /// What the owner did with a step.
