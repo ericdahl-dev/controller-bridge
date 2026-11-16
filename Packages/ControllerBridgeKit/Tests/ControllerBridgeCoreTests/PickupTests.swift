@@ -113,4 +113,16 @@ struct PickupTests {
         Self.fader(rig, 0x70)
         #expect(rig.osc.sent == [])
     }
+
+    @Test("The pitch center LED is dim while the fader isn't picked up, then follows the usual rule")
+    func centerLEDDimUntilPickedUp() throws {
+        let rig = try Self.started()
+        Self.report(rig, "Loaded", .int(1))
+        Self.report(rig, "TempoSlider", .float(0.0))
+        #expect(rig.leds[42] == 1)
+        Self.fader(rig, 0x40)          // 0.0: picked up at the center
+        #expect(rig.leds[42] == 127)
+        Self.fader(rig, 0x60)
+        #expect(rig.leds[42] == 0)
+    }
 }

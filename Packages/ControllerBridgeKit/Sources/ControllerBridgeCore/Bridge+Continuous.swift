@@ -42,6 +42,12 @@ extension Bridge {
         if !isEcho { rearmPickup() }
     }
 
+    /// Dim while the fader waits to be picked up, so it can be caught by feel; otherwise full at the center.
+    var pitchCenterVelocity: UInt8 {
+        if pickupArmed, reportedTempo != nil { return Self.dim }
+        return lastTempo == 0 ? Self.full : Self.off
+    }
+
     func rearmPickup() {
         pickupArmed = true
         faderPosition = nil

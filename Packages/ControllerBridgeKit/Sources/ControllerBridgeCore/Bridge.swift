@@ -233,7 +233,7 @@ final class Bridge {
         refreshTransportLEDs()
         loopLEDs()
         padLEDs()
-        led(mapping.leds.pitchCenter, lastTempo == 0 ? Self.full : Self.off)
+        led(mapping.leds.pitchCenter, pitchCenterVelocity)
     }
 
     func buttonLED(_ name: String, on: Bool) {
