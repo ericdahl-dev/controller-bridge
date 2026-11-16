@@ -37,4 +37,26 @@ struct ProfileMatchingTests {
         ])
         #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
     }
+
+    static let other = MIDIEndpoint(id: 1002, name: "Some Other Controller")
+
+    @Test("With no matching device nothing is bridged: the device is listed with a plain message, and logged")
+    func noMatch() throws {
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.other])
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+
+        #expect(rig.midi.connected == [])
+        #expect(rig.coordinator.status.devices == [
+            DeviceStatus(name: "Some Other Controller", profile: nil, note: "No controller profile matches Some Other Controller, so it isn't bridged."),
+        ])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == [nil])
+        #expect(rig.log.lines.contains("No controller profile matches Some Other Controller, so it isn't bridged."))
+
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Self.other.id)
+        #expect(rig.osc.sent == [])
+        // A later device-list change lists it again but doesn't log it twice.
+        rig.coordinator.devicesChanged()
+        #expect(rig.log.lines.filter { $0.hasPrefix("No controller profile matches") }.count == 1)
+    }
 }

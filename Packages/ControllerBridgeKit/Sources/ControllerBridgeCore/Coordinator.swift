@@ -10,6 +10,8 @@ public final class Coordinator {
     private var controllers: [Controller]
     /// The controller profiles a device can match.
     private let profiles: [ControllerProfile]
+    /// Unmatched devices already logged, so a device-list change doesn't log them again.
+    private var loggedUnmatched: Set<MIDIEndpoint.ID> = []
     private var bridges: [Bridge] { controllers.map(\.bridge) }
 
     /// What the menu shows. The app copies it after each call.
@@ -127,7 +129,9 @@ public final class Coordinator {
             if let profile = ControllerProfile.matching(source.name, in: profiles) {
                 return DeviceStatus(name: source.name, profile: profile.name, note: nil)
             }
-            return DeviceStatus(name: source.name, profile: nil, note: "No controller profile matches \(source.name), so it isn't bridged.")
+            let note = "No controller profile matches \(source.name), so it isn't bridged."
+            if loggedUnmatched.insert(source.id).inserted { log.log(note) }
+            return DeviceStatus(name: source.name, profile: nil, note: note)
         }
     }
 
