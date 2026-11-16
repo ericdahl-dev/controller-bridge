@@ -1,0 +1,56 @@
+import Foundation
+import LC6000Core
+import Testing
+
+/// Expected values are typed from lc6000_bridge/default_mapping.toml, the Python default mapping.
+@Suite("Mapping")
+struct MappingTests {
+    @Test("The bundled default mapping carries the Python default values")
+    func defaultMapping() throws {
+        let mapping = try Mapping.bundledDefault()
+
+        #expect(mapping.midi == .init(input: "LC6000", output: "LC6000", channel: 1))
+        #expect(mapping.osc == .init(host: "127.0.0.1", port: 9090, root: "/Syndicate/", feedbackHost: "0.0.0.0", feedbackPort: 9096))
+        #expect(mapping.deck.number == 1)
+        #expect(mapping.jog == .init(ccs: [55], bendReleaseMs: 80, seekSecondsPerTick: 0.02, seekFallbackTicksPerBeat: 32, requireTouch: false))
+        #expect(mapping.pitch == .init(msbCC: 8, lsbCC: 40, invert: false, deadZone: 0.005))
+        #expect(mapping.needle == .init(cc: 64, touchNote: 70, requireTouch: true))
+        #expect(mapping.browse == .init(selectTurnCC: 6, autoLoopSizeCC: 3))
+        #expect(mapping.notes.buttons == [
+            "play": 1, "cue": 2, "beat_jump_back": 3, "beat_jump_forward": 4, "track_prev": 5, "track_next": 6,
+            "censor": 7, "loop_in": 8, "loop_out": 9, "auto_loop": 10, "back": 16, "forward": 17,
+            "select_press": 18, "vinyl": 19, "sync": 20, "master": 21, "key_lock": 22, "slip": 23,
+            "pitch_minus": 24, "pitch_plus": 25, "shift": 26, "mode_hotcue": 27, "mode_roll": 28,
+            "mode_slicer": 29, "mode_loop": 30, "platter_touch": 40, "param_back": 68, "param_forward": 69,
+        ])
+        #expect(mapping.notes.pads == [32, 33, 34, 35, 36, 37, 38, 39])
+        #expect(mapping.leds == .init(
+            pitchCenter: 42, ring: 40, ringColor: [0, 128, 255], rollPadColor: [255, 140, 0],
+            loopPadColor: [0, 255, 0], dimUnlitButtons: true
+        ))
+    }
+
+    @Test("A user override merges over the default like the Python config merge: tables deep, lists and values whole")
+    func overrideMerges() throws {
+        let override = Data("""
+            {
+              "deck": { "number": 2 },
+              "notes": { "play": 11, "pads": [50, 51, 52, 53, 54, 55, 56, 57] },
+              "jog": { "ccs": [55, 54] },
+              "leds": { "ring_color": [255, 0, 0] }
+            }
+            """.utf8)
+
+        let mapping = try Mapping.bundledDefault(overriddenBy: override)
+
+        #expect(mapping.deck.number == 2)
+        #expect(mapping.notes.buttons["play"] == 11)
+        #expect(mapping.notes.buttons["cue"] == 2)
+        #expect(mapping.notes.pads == [50, 51, 52, 53, 54, 55, 56, 57])
+        #expect(mapping.jog.ccs == [55, 54])
+        #expect(mapping.jog.bendReleaseMs == 80)
+        #expect(mapping.leds.ringColor == [255, 0, 0])
+        #expect(mapping.leds.ring == 40)
+        #expect(mapping.osc.port == 9090)
+    }
+}
