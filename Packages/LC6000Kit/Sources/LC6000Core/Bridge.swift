@@ -173,7 +173,13 @@ final class Bridge {
         case "playing":
             playing = value
             if !playing, bendDirection != 0 { endBend() }
-        case "loaded": loaded = value
+        case "loaded":
+            loaded = value
+            if !loaded {
+                // The track is gone: forget where it was and how long it was.
+                progress = nil
+                duration = nil
+            }
         case "sync": synced = value
         case "temposliderenabled": sliderEnabled = value
         case "loop": looping = value
