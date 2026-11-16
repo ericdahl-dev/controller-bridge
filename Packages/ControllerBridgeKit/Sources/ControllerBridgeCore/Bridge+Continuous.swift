@@ -76,38 +76,62 @@ extension Bridge {
 
     // MARK: Needle Drop
 
-    /// The strip's absolute position, 0...127, as a seek across the whole track.
-    func needle(_ value: UInt8) {
+    func needleMSB(_ value: UInt8) {
+        needleMSBValue = value
+    }
+
+    /// The strip's 14-bit position (#103), as a seek across the whole track. Sent when the LSB arrives, so an MSB on
+    /// its own never seeks to a half-updated place.
+    func needleLSB(_ value: UInt8) {
         guard needleTouched || !mapping.needle.requireTouch else { return }
-        sendDeck("WaveformSeek", .float(Float(value) / 127))
+        let position = join14Bit(msb: needleMSBValue, lsb: value)
+        sendDeck("WaveformSeek", .float(Float(Double(position) / 16383)))
     }
 
     // MARK: Jog
 
-    func jog(_ value: UInt8) {
-        let ticks = relativeTicks(value)
-        guard ticks != 0, platterTouched || !mapping.jog.requireTouch else { return }
+    func jogMSB(_ value: UInt8) {
+        jogMSBValue = value
+    }
+
+    /// The platter's 14-bit position (#103). Movement is the change since the last position, taking the shorter way
+    /// around the wrap at 16384, so 16376 → 3 is 11 forward. Read when the LSB arrives, so an MSB carry never jumps.
+    func jogLSB(_ value: UInt8) {
+        let position = join14Bit(msb: jogMSBValue, lsb: value)
+        defer { jogPosition = position }
+        guard let previous = jogPosition else { return }
+        var counts = (position - previous) % 16384
+        if counts > 8192 { counts -= 16384 } else if counts < -8192 { counts += 16384 }
+        jog(counts: counts)
+    }
+
+    private func jog(counts: Int) {
+        guard counts != 0, platterTouched || !mapping.jog.requireTouch else { return }
         lastJogTime = clock.now
         if playing {
-            let direction = ticks > 0 ? 1 : -1
+            let direction = counts > 0 ? 1 : -1
             guard direction != bendDirection else { return }
             bendDirection = direction
             hold(.bend, "PhaseBend", press: [.int(Int32(direction))], release: [.int(0)])
             return
         }
+        // The check keeps these positive; a hand-built mapping with 0 mustn't trap (#92).
+        let countsPerRev = Double(mapping.jog.countsPerRev)
+        guard countsPerRev > 0 else { return }
+        let revolutions = Double(counts) / countsPerRev
         // Paused: move the playhead.
         if let duration, let position = progress {
-            let moved = min(1, max(0, position + Double(ticks) * mapping.jog.seekSecondsPerTick / duration))
+            let moved = min(1, max(0, position + revolutions * mapping.jog.seekSecondsPerRev / duration))
             progress = moved
             sendDeck("WaveformSeek", .float(Float(moved)))
         } else {
             // No track length: skip whole beats, keeping the remainder for the next turn.
-            // The check requires at least 1; a hand-built mapping with 0 mustn't trap (#92).
-            guard mapping.jog.seekFallbackTicksPerBeat > 0 else { return }
-            seekTickRemainder += ticks
-            let beats = seekTickRemainder / mapping.jog.seekFallbackTicksPerBeat
+            let countsPerBeat = Int((countsPerRev / mapping.jog.beatsPerRev).rounded())
+            guard countsPerBeat > 0 else { return }
+            seekCountRemainder += counts
+            let beats = seekCountRemainder / countsPerBeat
             guard beats != 0 else { return }
-            seekTickRemainder -= beats * mapping.jog.seekFallbackTicksPerBeat
+            seekCountRemainder -= beats * countsPerBeat
             sendDeck("BeatSkip", .int(Int32(beats)))
         }
     }

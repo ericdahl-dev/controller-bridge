@@ -40,12 +40,23 @@ feedback before asking Syndicate to resend, `osc.feedback_answer_ms` (default 20
 unanswered before feedback counts as stopped, and `leds.stale_idle` (`"dim"` or `"off"`, default `"dim"`) is what
 Syndicate's LEDs show then.
 
-JSON has no comments, so the PROVISIONAL notes from the TOML file live here. Check these on hardware before relying on
-them:
+JSON has no comments, so the notes on the LC6000 profile live here.
+
+Checked on hardware (2026-11-15, see #12 and #103):
+
+- `jog`: the platter sends its 14-bit position on CC 17 (MSB) and CC 49 (LSB), counting up going forward and wrapping
+  at 16384. Movement is the change in position, read when the LSB arrives. One slow full turn measured about 3552
+  counts, so `counts_per_rev` is 3600.
+  - The platter also sends a 14-bit two's-complement speed on CC 55 (MSB) and CC 54 (LSB): forward 0/2…0/8, back
+    127/120…127/127 (−8…−1). It isn't used yet: the position change is enough.
+- `needle`: the Needle Drop strip is 14-bit on CC 64 (MSB) and CC 65 (LSB), with touch on note 70.
+- `midi.ignore_notes`: the unit sends note 52 about every 0.3 s while idle, a heartbeat. It's dropped, and the
+  Diagnostics monitor says so.
+- `pitch`: 14-bit on CC 8/40, with the fader's top at 0, so `invert` stays false.
+- `leds`: the button LED notes and the `0b00RRGGBB` color table are confirmed.
+
+Still PROVISIONAL:
 
 - `midi.channel`: the spec only documents channel 1.
-- `jog.ccs`: the spec lists 55 (upper) and 54 (lower); community reports also mention 31 and 17. A turn that shows up
-  on several CCs would double the speed.
-- `pitch.invert`: flip it if pushing the fader away from you slows down.
-- `leds`: each button's LED is assumed to be on its own note (plus 41-43 for the pitch arrows and center), and the
-  64-entry pad and ring color table is assumed to be 2 bits per channel, laid out `0b00RRGGBB`.
+- `jog.seek_seconds_per_rev` (2.0) and `jog.beats_per_rev` (4): how far a turn seeks or skips while paused. Tune them by
+  feel.

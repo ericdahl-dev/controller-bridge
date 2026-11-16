@@ -30,7 +30,8 @@ struct DiagnosticsTests {
             .noteOn(channel: 0, note: 1, velocity: 127),
             .noteOff(channel: 0, note: 1, velocity: 0),
             .noteOn(channel: 0, note: 32, velocity: 127),
-            .controlChange(channel: 0, controller: 55, value: 1),
+            .controlChange(channel: 0, controller: 17, value: 10),
+            .controlChange(channel: 0, controller: 49, value: 62),
             .controlChange(channel: 0, controller: 6, value: 127),
             .noteOn(channel: 0, note: 99, velocity: 127),
             .controlChange(channel: 0, controller: 99, value: 64),
@@ -43,7 +44,9 @@ struct DiagnosticsTests {
             "      12.346  ch1  " + pad("note_on channel=0 note=1 velocity=127 time=0") + " play",
             "      12.346  ch1  " + pad("note_off channel=0 note=1 velocity=0 time=0") + " play",
             "      12.346  ch1  " + pad("note_on channel=0 note=32 velocity=127 time=0") + " pad1",
-            "      12.346  ch1  " + pad("control_change channel=0 control=55 value=1 time=0") + " jog",
+            // The jog's 14-bit pair (#103) names each half.
+            "      12.346  ch1  " + pad("control_change channel=0 control=17 value=10 time=0") + " jog_msb",
+            "      12.346  ch1  " + pad("control_change channel=0 control=49 value=62 time=0") + " jog_lsb",
             "      12.346  ch1  " + pad("control_change channel=0 control=6 value=127 time=0") + " select_turn",
             "      12.346  ch1  " + pad("note_on channel=0 note=99 velocity=127 time=0") + " UNMAPPED",
             "      12.346  ch1  " + pad("control_change channel=0 control=99 value=64 time=0") + " UNMAPPED",
@@ -240,5 +243,18 @@ struct DiagnosticsTests {
         let osc = DiagnosticEvent.oscOut(OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
         #expect(osc.lineParts.message == osc.text)
         #expect(osc.lineParts.label == "")
+    }
+
+    @Test("The LC6000's idle heartbeat (note 52, about every 0.3 s) is dropped: no OSC, no monitor line (#103)")
+    func heartbeatIgnored() throws {
+        let (rig, events) = try Self.openRig()
+        rig.osc.sent.removeAll()
+        for _ in 0..<3 {
+            rig.coordinator.midi(.noteOn(channel: 0, note: 52, velocity: 127), source: Rig.lc6000.id)
+            rig.coordinator.midi(.noteOff(channel: 0, note: 52, velocity: 0), source: Rig.lc6000.id)
+        }
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        #expect(events.monitor.count == 1)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
     }
 }

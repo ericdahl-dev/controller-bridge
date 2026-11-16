@@ -32,7 +32,8 @@ struct ControllerBridgeApp: App {
         Window("Diagnostics", id: "diagnostics") {
             DiagnosticsWindow(
                 log: model.diagnostics, status: model.status, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
-                startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep
+                startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep,
+                hiddenNotes: model.profiles.first?.mapping.midi.ignoreNotes ?? []
             )
         }
         .defaultSize(width: 720, height: 480)
