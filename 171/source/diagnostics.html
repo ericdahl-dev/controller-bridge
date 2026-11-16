@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Diagnostics</title><link rel="stylesheet" href="mock.css">
+<script>if (location.search.includes("light")) document.documentElement.dataset.theme = "light";</script>
+<style>
+  body { width: 720px; height: 460px; }
+  .p { padding: 16px 20px 0; display: grid; gap: 12px; height: 420px; grid-template-rows: auto auto auto 1fr; }
+  .head { display: flex; align-items: center; gap: 12px; }
+  .head .deck { width: 28px; height: 28px; font-size: 13px; }
+  .head .lights { margin-left: auto; display: flex; gap: 22px; }
+  .head .light b { font-size: 13px; }
+  .bar { display: flex; align-items: center; gap: 4px; }
+  .bar .seg { margin-right: auto; }
+  .hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .table { overflow: hidden; display: flex; flex-direction: column; }
+  .tr { display: grid; grid-template-columns: 70px 28px 1fr 104px; gap: 10px; padding: 0 12px; height: 27px; align-items: center;
+    font: 400 11.5px/1 "Geist Mono", monospace; white-space: nowrap; }
+  .th { color: var(--muted); font-size: 10.5px; height: 28px; }
+  .tr .t { text-align: right; color: var(--muted); }
+  .tr + .tr { border-top: 1px solid var(--line); }
+  .tr .chip { height: 18px; font-size: 10.5px; padding: 0 7px; }
+  .line { height: 40px; display: flex; align-items: center; padding: 0 20px; font: 500 11px/1 "Geist", sans-serif; color: var(--muted); }
+  .line .live { color: var(--signal); }
+</style></head>
+<body class="win">
+  <div class="p">
+    <div class="head">
+      <div class="deck on" style="background:#ff0000">1</div>
+      <h1 class="title">Denon LC6000 PRIME</h1>
+      <div class="lights">
+        <div class="light"><span class="eyebrow">Controller</span><b class="live"><span class="dot"></span>Connected</b></div>
+        <div class="light"><span class="eyebrow">Feedback</span><b class="live"><span class="dot"></span>Live</b></div>
+      </div>
+    </div>
+    <div class="bar">
+      <div class="seg" role="tablist"><span class="on">MIDI Monitor</span><span>LED Sweep</span><span>OSC Log</span></div>
+      <span class="btn btn--quiet btn--sm">Copy log</span><span class="btn btn--quiet btn--sm">Save…</span><span class="btn btn--sm">Clear log</span>
+    </div>
+    <p class="hint">Every MIDI message from the controller, with its mapping name or UNMAPPED.<br>Note 52, the controller's idle heartbeat, is hidden.</p>
+    <div class="card table">
+      <div class="tr th"><span class="t">Time</span><span>Ch</span><span>Message</span><span>Mapping</span></div>
+      <div class="tr"><span class="t">1234.500</span><span>ch1</span><span>note_on channel=0 note=1 velocity=127 time=0</span><span>play</span></div>
+      <div class="tr"><span class="t">1234.600</span><span>ch1</span><span>note_off channel=0 note=1 velocity=0 time=0</span><span>play</span></div>
+      <div class="tr"><span class="t">1234.700</span><span>ch1</span><span>note_on channel=0 note=32 velocity=127 time=0</span><span>pad1</span></div>
+      <div class="tr"><span class="t">1234.800</span><span>ch1</span><span>control_change channel=0 control=17 value=10 time=0</span><span>jog_msb</span></div>
+      <div class="tr"><span class="t">1234.900</span><span>ch1</span><span>control_change channel=0 control=99 value=64 time=0</span><span><span class="chip attn"><span class="dot"></span>UNMAPPED</span></span></div>
+    </div>
+  </div>
+  <div class="line">Controller&nbsp;<span class="live">● Connected</span>&nbsp;· Feedback&nbsp;<span class="live">● Live</span>&nbsp;· Deck [1]</div>
+</body></html>

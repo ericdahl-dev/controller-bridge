@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Settings</title><link rel="stylesheet" href="mock.css">
+<script>if (location.search.includes("light")) document.documentElement.dataset.theme = "light";</script>
+<style>
+  body { width: 440px; }
+  /* The tab bar is drawn by macOS (TabView in the Settings scene); this approximates the system toolbar. */
+  .tabs { display: flex; justify-content: center; gap: 2px; padding: 8px 12px 6px; border-bottom: 1px solid var(--line); }
+  .tab { width: 78px; height: 48px; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    font: 400 11px/1 -apple-system, system-ui, sans-serif; color: var(--muted); }
+  .tab svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .tab.on { background: var(--tonal); color: var(--ink); }
+  .p { padding: 16px 18px 4px; }
+  .pane { display: none; } .pane.on { display: grid; gap: 16px; }
+  .decks { gap: 6px; }
+  .decks .deck { width: 28px; height: 28px; font-size: 13px; }
+  .deckrow { display: flex; align-items: center; gap: 10px; }
+  .deckrow .deck { width: 24px; height: 24px; font-size: 12px; }
+  .ring { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px 14px; margin-top: 12px; border-top: 1px solid var(--line); }
+  .foot .note { font-size: 11.5px; color: var(--muted); margin-right: auto; }
+  .seg span { height: 22px; padding: 0 12px; font-size: 12px; }
+  .frow .help { max-width: 230px; }
+</style>
+<script>addEventListener("DOMContentLoaded", () => { const t = location.hash.slice(1) || "decks";
+  document.querySelectorAll("[data-tab]").forEach(e => e.classList.toggle("on", e.dataset.tab === t)); });</script>
+</head>
+<body class="win">
+  <nav class="tabs" role="tablist" aria-label="Settings">
+    <div class="tab" data-tab="controller" role="tab"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M15 10h3M15 14h3"/></svg>Controller</div>
+    <div class="tab" data-tab="decks" role="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg>Decks</div>
+    <div class="tab" data-tab="syndicate" role="tab"><svg viewBox="0 0 24 24"><path d="M4 9h12l-3-3M20 15H8l3 3"/></svg>Syndicate</div>
+    <div class="tab" data-tab="general" role="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>General</div>
+  </nav>
+  <div class="p">
+    <div class="pane" data-tab="controller">
+      <section>
+        <div class="eyebrow section-h">Controller</div>
+        <div class="card rows">
+          <div class="frow"><label>Follow controller layers<span class="help">Shift + deck select on the controller picks Deck 1-4</span></label><span class="toggle on"></span></div>
+          <div class="frow"><label>MIDI input</label><span class="pop">Automatic</span></div>
+          <div class="frow"><label>MIDI output</label><span class="pop">Automatic</span></div>
+          <div class="frow"><label>Channel</label><span class="pop">From the profile</span></div>
+          <div class="frow"><label>Controller LEDs</label><span class="toggle on"></span></div>
+        </div>
+        <div style="padding:8px 2px 0"><span class="btn btn--sm">Add controller</span></div>
+      </section>
+      <section>
+        <div class="eyebrow section-h">Mapping</div>
+        <div class="card rows">
+          <div class="frow"><label>In use</label><span class="sub">Bundled default</span></div>
+          <div class="frow" style="justify-content:flex-end;gap:6px"><span class="btn btn--sm">Import…</span><span class="btn btn--sm">Export…</span><span class="btn btn--sm">Reset</span></div>
+        </div>
+      </section>
+    </div>
+    <div class="pane" data-tab="decks">
+      <section>
+        <div class="eyebrow section-h">Decks</div>
+        <div class="card rows">
+          <div class="frow"><label>Use Syndicate's deck colors<span class="help">Cue palette slots 1, 3, 5 and 7 in Syndicate's CUE COLORS, as they change</span></label><span class="toggle on"></span></div>
+          <div class="frow"><label>Ring colors<span class="help">Strong colors on the ring and a held pad, keeping each hue</span></label><span class="seg"><span class="on">Vivid</span><span>Exact</span></span></div>
+          <div class="frow"><div class="deckrow"><span>Deck 1</span><div class="deck on" style="background:#ff0000">1</div></div><span class="ring"><span class="swatch" style="background:#ff0000"></span>On the LC6000</span></div>
+          <div class="frow"><div class="deckrow"><span>Deck 2</span><div class="deck on" style="background:#ffff00">2</div></div><span class="ring"><span class="swatch" style="background:#ffff00"></span>On the LC6000</span></div>
+          <div class="frow"><div class="deckrow"><span>Deck 3</span><div class="deck on" style="background:#22ffff">3</div></div><span class="ring"><span class="swatch" style="background:#22ffff"></span>On the LC6000</span></div>
+          <div class="frow"><div class="deckrow"><span>Deck 4</span><div class="deck on" style="background:#7a1fff;color:#fff">4</div></div><span class="ring"><span class="swatch" style="background:#8a00ff"></span>On the LC6000</span></div>
+        </div>
+      </section>
+    </div>
+    <div class="pane" data-tab="syndicate">
+      <section>
+        <div class="eyebrow section-h">Syndicate OSC input</div>
+        <div class="card rows">
+          <div class="frow"><label>Host</label><span class="field" style="width:160px">127.0.0.1</span></div>
+          <div class="frow"><label>Port<span class="help">Syndicate's OSC listen port</span></label><span class="field" style="width:72px">9090</span></div>
+        </div>
+      </section>
+      <section>
+        <div class="eyebrow section-h">OSC feedback</div>
+        <div class="card rows">
+          <div class="frow"><label>Port<span class="help">Syndicate's DEST IP is 127.0.0.1, PORT this number</span></label><span class="field" style="width:72px">9096</span></div>
+          <div class="frow"><label>Listen on</label><span class="pop">This Mac only</span></div>
+        </div>
+      </section>
+    </div>
+    <div class="pane" data-tab="general">
+      <section>
+        <div class="eyebrow section-h">Login</div>
+        <div class="card rows">
+          <div class="frow"><label>Appearance</label><span class="pop">Match macOS</span></div>
+          <div class="frow"><label>Start at login</label><span class="toggle"></span></div>
+        </div>
+      </section>
+      <div style="margin-left:-6px"><span class="btn btn--quiet btn--sm">Setup Guide…</span></div>
+    </div>
+  </div>
+  <div class="foot"><span class="note">Changes apply when you press Apply.</span><span class="btn btn--disabled">Revert</span><span class="btn btn--primary btn--disabled">Apply</span></div>
+</body></html>

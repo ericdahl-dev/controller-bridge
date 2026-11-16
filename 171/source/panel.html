@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Panel</title><link rel="stylesheet" href="mock.css">
+<script>const q = new URLSearchParams(location.search); if (q.has("light")) document.documentElement.dataset.theme = "light";</script>
+<style>
+  body { width: 360px; }
+  .p { padding: 18px 18px 14px; display: grid; gap: 16px; }
+  .layer { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .status { display: grid; grid-template-columns: 1fr 1fr; }
+  .status .light { padding: 12px 14px; }
+  .status .light:nth-child(even) { border-left: 1px solid var(--line); }
+  .status .light:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .ports { grid-column: 1 / -1; padding: 9px 14px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+  .help { display: grid; gap: 6px; }
+  .help p { margin: 0; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .actions .btn { height: 32px; }
+  .links { display: flex; align-items: center; margin: -4px -8px 0; }
+  .links .spacer { flex: 1; }
+  .line { padding: 8px 18px 10px; border-top: 1px solid var(--line); font: 500 11px/1 "Geist", sans-serif; color: var(--muted); white-space: nowrap; }
+  .line .live { color: var(--signal); } .line .err { color: var(--error); } .line .attn { color: var(--attention); }
+  .hide { display: none !important; }
+</style>
+<script>addEventListener("DOMContentLoaded", () => { const s = q.get("state") || "layers";
+  document.querySelectorAll("[data-state]").forEach(e => e.classList.toggle("hide", !e.dataset.state.split(" ").includes(s))); });</script>
+</head>
+<body class="win">
+  <div class="p">
+    <!-- The LC6000's default: the controller picks the deck (#79), so no picker. Three lights: the grid wraps. -->
+    <div data-state="layers">
+      <h1 class="title">Denon LC6000 PRIME</h1>
+      <div class="layer"><div class="deck on" style="background:#ffff00">2</div><span class="sub">Following controller layers</span></div>
+    </div>
+    <div class="card status" data-state="layers">
+      <div class="light"><span class="eyebrow">Controller</span><b class="live"><span class="dot"></span>Connected</b></div>
+      <div class="light"><span class="eyebrow">Feedback</span><b class="live"><span class="dot"></span>Live</b></div>
+      <div class="light"><span class="eyebrow">Tempo</span><b class="attn"><span class="dot"></span>Master</b></div>
+      <div class="ports mono">OSC → 9090 · Feedback ← 9096</div>
+    </div>
+    <!-- A stopped bridge with its help (#27, #66): the longest panel -->
+    <div data-state="stopped">
+      <h1 class="title">Bridge stopped</h1>
+      <div class="sub" style="margin-top:3px">Couldn't reach Syndicate</div>
+    </div>
+    <div class="card status" data-state="stopped">
+      <div class="light" style="grid-column:1/-1"><span class="eyebrow">Bridge</span><b class="err"><span class="dot"></span>Stopped</b></div>
+      <div class="ports mono">OSC → 9090 · Feedback ← 9096</div>
+    </div>
+    <div class="help" data-state="stopped">
+      <span class="eyebrow">Why no LEDs?</span>
+      <p>The bridge couldn't reach Syndicate's address. Check the Syndicate host in Settings and click Apply; the bridge uses it right away.</p>
+      <div style="margin-left:-8px"><span class="btn btn--quiet btn--sm">Copy details</span></div>
+    </div>
+    <div class="actions"><span class="btn">Settings…</span><span class="btn">Diagnostics…</span></div>
+    <div class="links" data-state="layers"><span class="btn btn--quiet btn--sm">Setup guide</span><span class="btn btn--quiet btn--sm">Demo controller: Off</span><span class="spacer"></span><span class="btn btn--quiet btn--sm">Quit</span></div>
+    <div class="links" data-state="stopped"><span class="btn btn--quiet btn--sm">Setup guide</span><span class="spacer"></span><span class="btn btn--quiet btn--sm">Quit</span></div>
+  </div>
+  <div class="line" data-state="layers">Controller <span class="live">● Connected</span> · Feedback <span class="live">● Live</span> · Deck [2] · <span class="attn">Master</span></div>
+  <div class="line" data-state="stopped">Bridge <span class="err">● Stopped</span> · Deck [2]</div>
+</body></html>
