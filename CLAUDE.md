@@ -1,4 +1,4 @@
-# controller-bridge
+# deckbridge
 
 ## Working rules
 
@@ -10,7 +10,7 @@
 
 ### Issue tracker
 
-GitHub Issues on ericdahl-dev/controller-bridge, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+GitHub Issues on ericdahl-dev/deckbridge, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
