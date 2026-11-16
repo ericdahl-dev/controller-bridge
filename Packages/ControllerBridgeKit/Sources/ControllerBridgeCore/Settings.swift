@@ -166,7 +166,7 @@ extension BridgeSettings {
         return valid && !labels.allSatisfy { $0.allSatisfy(\.isNumber) }
     }
 
-    static func isIPv4(_ host: String) -> Bool {
+    public static func isIPv4(_ host: String) -> Bool {
         let parts = host.split(separator: ".", omittingEmptySubsequences: false)
         return parts.count == 4 && parts.allSatisfy { part in
             !part.isEmpty && part.count <= 3 && part.allSatisfy(\.isASCII) && part.allSatisfy(\.isNumber) && (Int(part) ?? 256) <= 255
@@ -177,6 +177,8 @@ extension BridgeSettings {
 /// Settings that can't be saved, with a plain message for each problem.
 public enum SettingsError: Error, Equatable {
     case invalid([String])
+    /// Problems that belong under a field, found while putting settings into effect (#84: a host that can't be found).
+    case fields([SettingsProblem])
 }
 
 /// Where settings are kept: user defaults in the app.
