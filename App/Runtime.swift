@@ -11,9 +11,16 @@ import os
 enum BridgeHost {
     static func run(
         profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, log: any LogSink, status: BridgeStatus,
-        diagnostics: DiagnosticsLog, controllers: [ControllerSettings], ledsEnabled: Bool, events: AsyncStream<PipeEvent>
+        diagnostics: DiagnosticsLog, controllers: [ControllerSettings], ledsEnabled: Bool, jogDisplay: (any JogDisplayPort)?,
+        events: AsyncStream<PipeEvent>
     ) async {
         let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
+        // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe.
+        if let jogDisplay {
+            coordinator.attachJogDisplay(JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log) { content in
+                JogDisplayRenderer.render(content)
+            })
+        }
         // Straight onto the saved devices, decks, layers and LEDs switch: nothing unchosen, even for a moment (#105).
         coordinator.start(controllers: controllers, ledsEnabled: ledsEnabled)
         // The demo controller (#64) runs the profile running now (an imported mapping too, #98) against an in-process

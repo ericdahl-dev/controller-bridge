@@ -119,6 +119,8 @@ final class Bridge {
     /// The jog's and the Needle Drop's last MSB, and the platter's last position, for 14-bit pairs (#103).
     var jogMSBValue: UInt8 = 0
     var jogPosition: Int?
+    /// The loaded track's TrackInfo, for the jog display (#165): nil when nothing is loaded.
+    var track: (title: String, artist: String, key: String, bpm: Double, playerType: String)?
     /// Platter counts moved since the Coordinator last read them, for the jog display's marker (#165).
     var jogCountsPending = 0
     var needleMSBValue: UInt8 = 0
@@ -277,6 +279,7 @@ final class Bridge {
                 cues = [Int](repeating: 0, count: mapping.notes.pads.count)
                 progress = nil
                 duration = nil
+                track = nil
             }
         case "sync": synced = value
         case "temposliderenabled":
@@ -289,6 +292,13 @@ final class Bridge {
             guard message.arguments.count >= 5 else { return }
             let length = message.arguments[4].number ?? 0
             duration = length > 0 ? length : nil
+            // <title> <artist> <key> <bpm> <length> <bars> <beats> <player_type> (the #165 capture): by argument,
+            // never by splitting text, since titles and artists hold spaces and commas.
+            func text(_ index: Int) -> String {
+                if message.arguments.indices.contains(index), case .string(let value) = message.arguments[index] { return value }
+                return ""
+            }
+            track = (text(0), text(1), text(2), message.arguments[3].number ?? 0, text(7))
             return
         case "progress":
             progress = message.arguments.first?.number
