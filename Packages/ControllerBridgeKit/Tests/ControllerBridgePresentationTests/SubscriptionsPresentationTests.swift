@@ -30,25 +30,40 @@ struct SubscriptionsPresentationTests {
         ))
     }
 
-    @Test("TempoSlider missing (the user's own Syndicate, #211): the light stays LIVE, and help names it and what it breaks")
+    @Test("TempoSlider missing (the user's own Syndicate, #211): the light stays LIVE; help is a one-row list (#261)")
     func tempoSliderMissing() {
         let state = BridgeState(controller: Self.connected, feedback: .live(port: 9096), deck: 1,
                                 missingSubscriptions: Self.missing(.tempoSlider))
         #expect(StatusPresentation(state).lights.contains(StatusLight(label: "Feedback", word: "Live", tone: .live, kind: .feedback)))
         #expect(HelpMessage(state) == HelpMessage(
-            text: "TempoSlider/TempoSliderEnabled is off: the pitch fader can jump. Turn it on in Syndicate › Settings › OSC FEEDBACK.",
-            showsGuide: true
+            text: "Turn this on in Syndicate › OSC Feedback, then Save and Close:",
+            showsGuide: true,
+            subscriptions: [SubscriptionRow(name: "TempoSlider/TempoSliderEnabled", consequence: "The pitch fader can jump")]
         ))
     }
 
-    @Test("Several missing: each is named with what it breaks, in the guide's order")
+    @Test("The user's case, TempoSlider and Cues missing: a row each, in the guide's order, under the header")
     func severalMissing() {
         let state = BridgeState(controller: Self.connected, feedback: .live(port: 9096), deck: 1,
-                                missingSubscriptions: Self.missing(.cues, .loop))
+                                missingSubscriptions: Self.missing(.tempoSlider, .cues))
         #expect(HelpMessage(state) == HelpMessage(
-            text: "Cues is off: hot cue pads stay dark. Loop is off: the loop LEDs don't follow the deck. Turn them on in Syndicate › Settings › OSC FEEDBACK.",
-            showsGuide: true
+            text: "Turn these on in Syndicate › OSC Feedback, then Save and Close:",
+            showsGuide: true,
+            subscriptions: [
+                SubscriptionRow(name: "TempoSlider/TempoSliderEnabled", consequence: "The pitch fader can jump"),
+                SubscriptionRow(name: "Cues", consequence: "Hot cue pads stay dark"),
+            ]
         ))
+    }
+
+    @Test("VoiceOver hears the list as a list: the header and count, then each row as name and what it breaks")
+    func voiceOver() {
+        let state = BridgeState(controller: Self.connected, feedback: .live(port: 9096), deck: 1,
+                                missingSubscriptions: Self.missing(.tempoSlider, .cues))
+        let help = HelpMessage(state)
+        #expect(help?.subscriptionsLabel == "2 subscriptions off. Turn these on in Syndicate › OSC Feedback, then Save and Close.")
+        #expect(help?.subscriptions.map(\.spoken) == ["TempoSlider/TempoSliderEnabled: the pitch fader can jump",
+                                                       "Cues: hot cue pads stay dark"])
     }
 
     @Test("A controller that needs a hand comes first: its LEDs can't show anything until it's connected")
