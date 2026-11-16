@@ -250,6 +250,16 @@ public final class Coordinator {
         for bridge in bridges { bridge.clearSyndicateState() }
     }
 
+    /// Settings (#19): the controller drives another deck from now on. Held controls are released on the old one,
+    /// then the controller resyncs.
+    public func setDeck(_ deck: Int, controller index: Int) {
+        guard controllers.indices.contains(index), controllers[index].bridge.mapping.deck.number != deck else { return }
+        controllers[index].bridge.switchDeck(to: deck)
+        status.controllers[index].deck = deck
+        requestResend()
+        disconnectFailedOutputs()
+    }
+
     /// The one place a Resend is sent. One already waiting for its answer isn't sent again.
     private func requestResend() {
         guard resendSentAt == nil else { return }

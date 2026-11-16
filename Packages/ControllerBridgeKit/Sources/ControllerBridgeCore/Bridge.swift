@@ -55,7 +55,7 @@ final class Bridge {
         ]
     }
 
-    let mapping: Mapping
+    var mapping: Mapping
     var output: (any MIDIOutput)? {
         didSet { outputFailed = false }
     }
