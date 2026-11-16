@@ -1,5 +1,5 @@
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// Pads, pad modes and cue colors (#18). Expected OSC is from the Python bridge (lc6000_bridge/bridge.py). Pads are

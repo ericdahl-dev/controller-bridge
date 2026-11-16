@@ -1,4 +1,4 @@
-# lc6000-osc-bridge
+# controller-bridge
 
 Use a **Denon LC6000 PRIME** with **[Untitled Audio Syndicate](https://untitledaudiosyndicate.com)** through Syndicate's OSC API, with LED feedback.
 
