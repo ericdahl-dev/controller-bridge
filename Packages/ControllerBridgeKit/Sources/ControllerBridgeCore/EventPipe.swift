@@ -9,6 +9,10 @@ public enum PipeEvent: Equatable, Sendable {
     /// The Mac is about to sleep, or just woke.
     case sleep
     case wake
+    /// Settings changes (#19), in order with the MIDI already queued.
+    case setDeck(Int, controller: Int)
+    case setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int)
+    case setLEDs(enabled: Bool)
     /// Quit: release everything and end the loop. Always the last event.
     case stop
 }
@@ -37,6 +41,11 @@ public struct EventPipe: Sendable {
         public func devicesChanged() { continuation.yield(.devicesChanged) }
         public func sleep() { continuation.yield(.sleep) }
         public func wake() { continuation.yield(.wake) }
+        public func setDeck(_ deck: Int, controller: Int) { continuation.yield(.setDeck(deck, controller: controller)) }
+        public func setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int) {
+            continuation.yield(.setDevices(input: input, output: output, controller: controller))
+        }
+        public func setLEDs(enabled: Bool) { continuation.yield(.setLEDs(enabled: enabled)) }
         /// Quit. Queues the stop behind everything already sent, then closes the pipe, so nothing after it is handled.
         public func stop() {
             continuation.yield(.stop)

@@ -24,5 +24,7 @@
 	<string>public.app-category.music</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Controller Bridge listens for OSC feedback from Syndicate running on another Mac on your network.</string>
 </dict>
 </plist>
