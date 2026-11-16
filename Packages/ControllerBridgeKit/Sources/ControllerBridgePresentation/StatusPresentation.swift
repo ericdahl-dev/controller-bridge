@@ -45,16 +45,24 @@ public struct BridgeState: Equatable, Sendable {
         public var controller: Controller
         public var deck: Int
         public var lastEvent: String?
+        /// The controller follows its own deck layers (#79), so `deck` is its active layer's.
+        public var followsLayers: Bool
 
-        public init(controller: Controller, deck: Int, lastEvent: String? = nil) {
+        public init(controller: Controller, deck: Int, lastEvent: String? = nil, followsLayers: Bool = false) {
             self.controller = controller
             self.deck = deck
             self.lastEvent = lastEvent
+            self.followsLayers = followsLayers
         }
     }
 
+    /// The first controller follows its own deck layers (#79).
+    public var followsLayers = false
+
     public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil,
-                master: Bool = false, demo: Bool = false, lastEvent: String? = nil, others: [ControllerEntry] = []) {
+                master: Bool = false, demo: Bool = false, lastEvent: String? = nil, others: [ControllerEntry] = [],
+                followsLayers: Bool = false) {
+        self.followsLayers = followsLayers
         self.demo = demo
         self.lastEvent = lastEvent
         self.others = others
@@ -126,12 +134,18 @@ public struct ControllerBlock: Equatable, Sendable {
     public var header: StatusHeader
     public var light: StatusLight
     public var deck: Int
+    /// The controller picks the deck itself, through its own layers (#79): the panel shows it, not a picker.
+    public var followsLayers: Bool
 
-    public init(header: StatusHeader, light: StatusLight, deck: Int) {
+    public init(header: StatusHeader, light: StatusLight, deck: Int, followsLayers: Bool = false) {
         self.header = header
         self.light = light
         self.deck = deck
+        self.followsLayers = followsLayers
     }
+
+    /// Said beside the deck when the controller's layers pick it.
+    public var deckNote: String? { followsLayers ? "Following controller layers" : nil }
 }
 
 /// A small caption over a value, such as LAST DROPOUT over 21:14. The caption is natural case; the view uppercases it.
@@ -175,8 +189,12 @@ public struct StatusPresentation: Equatable, Sendable {
 
     public init(_ state: BridgeState, lineBudget: Int = StatusPresentation.lineBudget) {
         let controller = Self.light(for: state.controller)
-        blocks = ([BridgeState.ControllerEntry(controller: state.controller, deck: state.deck, lastEvent: state.lastEvent)] + state.others)
-            .map { ControllerBlock(header: Self.header(for: $0.controller, lastEvent: $0.lastEvent), light: Self.light(for: $0.controller), deck: $0.deck) }
+        blocks = ([BridgeState.ControllerEntry(controller: state.controller, deck: state.deck, lastEvent: state.lastEvent,
+                                               followsLayers: state.followsLayers)] + state.others)
+            .map {
+                ControllerBlock(header: Self.header(for: $0.controller, lastEvent: $0.lastEvent), light: Self.light(for: $0.controller),
+                                deck: $0.deck, followsLayers: $0.followsLayers)
+            }
         header = blocks[0].header
         let feedback: StatusLight = switch state.feedback {
         case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)
