@@ -33,13 +33,18 @@ public struct ControllerStatus: Equatable, Sendable {
     public var profile: String?
     /// The deck is Syndicate's tempo master: the same rule as the Master LED (#53).
     public var master: Bool
+    /// The controller's LED output is open, so the LED sweep can run (#70).
+    public var outputOpen: Bool
 
-    public init(deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false) {
+    public init(
+        deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false, outputOpen: Bool = false
+    ) {
         self.deck = deck
         self.connected = connected
         self.lastEvent = lastEvent
         self.profile = profile
         self.master = master
+        self.outputOpen = outputOpen
     }
 }
 

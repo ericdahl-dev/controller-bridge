@@ -97,7 +97,7 @@ struct RecoveryTests {
         #expect(repainted.contains(.noteOn(channel: 0, note: 42, velocity: 0)))    // pitch center
         #expect(rig.osc.sent == [Self.resend])
         #expect(rig.midi.connected == [Rig.lc6000.id])
-        #expect(rig.coordinator.status.controllers == [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping")])
+        #expect(rig.coordinator.status.controllers == [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true)])
 
         rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
@@ -175,5 +175,20 @@ struct RecoveryTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
         #expect(rig.midi.connected == [])
         #expect(rig.midi.outputs[Rig.lc6000Out.id]?.closed == true)
+    }
+
+    @Test("The status says whether the controller's LED output is open: not with no output device, not after an unplug")
+    func statusShowsOutput() throws {
+        let rig = try Rig()
+        rig.midi.destinations = []
+        rig.coordinator.start()
+        #expect(rig.coordinator.status.controllers.map(\.outputOpen) == [false])
+
+        Self.unplug(rig)
+        Self.replug(rig)
+        #expect(rig.coordinator.status.controllers.map(\.outputOpen) == [true])
+
+        Self.unplug(rig)
+        #expect(rig.coordinator.status.controllers.map(\.outputOpen) == [false])
     }
 }
