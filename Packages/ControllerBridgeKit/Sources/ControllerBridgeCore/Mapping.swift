@@ -201,6 +201,12 @@ public struct Mapping: Equatable, Sendable, Codable {
     }
 
     /// A jog that can't tell how the platter reports movement (#204), in plain words.
+    /// A profile body whose shape the decoder can't use (#195), in the words the DJ sees.
+    public struct ShapeError: Error, Equatable, CustomStringConvertible {
+        public let description: String
+        public init(_ description: String) { self.description = description }
+    }
+
     public enum JogError: Error, Equatable, CustomStringConvertible {
         case needsPairOrRelative
         case missing(String)
@@ -259,6 +265,7 @@ public struct Mapping: Equatable, Sendable, Codable {
             deadZone = try container.decode(Double.self, forKey: .deadZone)
             pickup = try container.decodeIfPresent(Bool.self, forKey: .pickup) ?? true
             pickupTolerance = try container.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? 0.02
+            if bits == 14, lsbCC == nil { throw ShapeError("pitch: lsb_cc is missing (or set bits to 7)") }
         }
     }
 
@@ -444,6 +451,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         do {
             return try JSONDecoder().decode(Mapping.self, from: json)
         } catch let error as JogError {
+            throw MappingError.invalid([error.description])
+        } catch let error as ShapeError {
             throw MappingError.invalid([error.description])
         } catch let error as DecodingError {
             // The check runs first, so this shouldn't happen; if it does, the DJ still gets words, not a dump (#92).

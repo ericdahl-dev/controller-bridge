@@ -75,3 +75,26 @@ struct SevenBitFaderCoordinatorTests {
         #expect(rig.osc.sent == [PickupTests.tempo(0.50009)])
     }
 }
+
+/// The import check and decoder (#195), in plain words.
+@Suite("7-bit fader in the import check")
+struct SevenBitFaderImportTests {
+    @Test("bits is 7 or 14")
+    func bitsChoice() {
+        #expect(throws: MappingError.invalid(["mapping.pitch.bits: 10 isn't one of 7, 14"])) {
+            try ControllerProfile.importing(Data(#"{"mapping": {"pitch": {"bits": 10}}}"#.utf8),
+                                            bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+        }
+    }
+
+    @Test("A 14-bit fader without lsb_cc says what's missing, for a whole profile body")
+    func missingLSB() throws {
+        var body = try #require(try JSONSerialization.jsonObject(with: Mapping.defaultMappingJSON()) as? [String: Any])
+        var pitch = try #require(body["pitch"] as? [String: Any])
+        pitch["lsb_cc"] = nil
+        body["pitch"] = pitch
+        #expect(throws: MappingError.invalid(["pitch: lsb_cc is missing (or set bits to 7)"])) {
+            try Mapping.checked(try JSONSerialization.data(withJSONObject: body))
+        }
+    }
+}

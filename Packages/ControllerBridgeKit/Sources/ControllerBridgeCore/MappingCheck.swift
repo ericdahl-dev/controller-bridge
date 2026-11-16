@@ -224,6 +224,11 @@ extension Mapping {
 
     private static let colors: Set<String> = ["leds.ring_color", "leds.roll_pad_color", "leds.loop_pad_color"]
 
+    /// Numbers that are one of a few values, not a range (#195).
+    private static let numberChoices: [String: [Double]] = [
+        "pitch.bits": [7, 14],
+    ]
+
     private static let choices: [String: [String]] = [
         "leds.beat_pulse": LEDs.BeatPulse.allRawValues,
         "leds.stale_idle": LEDs.StaleIdle.allRawValues,
@@ -236,6 +241,9 @@ extension Mapping {
         switch value {
         case .number(let n, _):
             // Every note is 0–127, whatever its button is called.
+            if let allowed = numberChoices[pattern], !allowed.contains(n) {
+                return "\(describe(value)) isn't one of \(allowed.map { String(Int($0)) }.joined(separator: ", "))"
+            }
             let range = ranges[pattern] ?? (pattern.hasPrefix("notes.") ? 0...127 : nil)
             if let range, !range.contains(n) {
                 return "\(describe(value)) is out of range, expected \(Int(range.lowerBound))-\(Int(range.upperBound))"
