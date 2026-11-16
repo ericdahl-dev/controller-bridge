@@ -85,7 +85,8 @@ extension Bridge {
                 guard slot != 0 else { return Self.off }
                 let color = palette[slot] ?? [255, 255, 255]
                 // A held hot cue shows the brightest version of its color, so you can see which one is sounding.
-                return Self.velocity(held.contains(.pad(index)) ? Self.brightest(color) : color)
+                // Held, it's vivid too (#151), so the sounding cue stands out in its hue, not whiter.
+                return held.contains(.pad(index)) ? Self.vividVelocity(Self.brightest(color)) : Self.velocity(color)
             }
         case .loop: return cues.map { $0 == 0 ? Self.off : Self.velocity(leds.loopPadColor) }
         case .roll: return Array(repeating: Self.velocity(leds.rollPadColor), count: cues.count)
