@@ -4,7 +4,7 @@ import Testing
 
 /// Pads, pad modes and cue colors (#18). Expected OSC is from the Python bridge (lc6000_bridge/bridge.py (removed in #30)). Pads are
 /// notes 32-39 and the mode buttons 27-30 in the default mapping. Pad and ring velocities are worked out by hand
-/// from the PROVISIONAL 64-color table: 2 bits per channel, 0b00RRGGBB, each channel round(c / 255 * 3).
+/// from the 64-color table, confirmed on hardware (#12): 2 bits per channel, 0b00RRGGBB, each channel round(c / 255 * 3).
 @Suite("Pads")
 struct PadsTests {
     static let pad1: UInt8 = 32

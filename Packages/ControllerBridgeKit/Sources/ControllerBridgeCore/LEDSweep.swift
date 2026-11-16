@@ -1,7 +1,8 @@
 import Foundation
 
 /// The LED sweep (#26), as the Python `led-sweep` command ran it: the pads and ring through all 64 color velocities,
-/// then every other note at full, dim and off, so the PROVISIONAL color table and LED notes can be checked by eye.
+/// then every other note at full, dim and off, so the color table and LED notes can be checked by eye on any unit
+/// (confirmed on a real LC6000, 2026-11-15, #12).
 struct LEDSweep {
     struct Step {
         /// Seconds after the sweep starts.

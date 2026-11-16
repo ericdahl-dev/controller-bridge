@@ -3,9 +3,8 @@ import Foundation
 /// The LC6000 mapping: note and CC numbers, OSC settings and LED colors.
 ///
 /// The bundled default is ported value for value from the Python bridge's default_mapping.toml (removed in #30), with the same
-/// section and key names. Note and CC numbers come from Denon's "LC6000 PRIME MIDI Specification v1.0"; the values
-/// marked PROVISIONAL there (jog CCs, pitch direction, the color table layout and the LED notes) still need checking
-/// on hardware.
+/// section and key names. Note and CC numbers come from Denon's "LC6000 PRIME MIDI Specification v1.0" and were
+/// checked on a real unit (2026-11-15, #12, #103). What's still PROVISIONAL is listed in the Kit README.
 public struct Mapping: Equatable, Sendable, Codable {
     public var midi: MIDI
     public var osc: OSC
@@ -94,7 +93,7 @@ public struct Mapping: Equatable, Sendable, Codable {
     public struct Jog: Equatable, Sendable, Codable {
         public var msbCC: Int
         public var lsbCC: Int
-        /// Position counts in one full platter turn. PROVISIONAL until measured on hardware.
+        /// Position counts in one full platter turn: about 3552 measured on the LC6000 (#103), so 3600.
         public var countsPerRev: Int
         public var bendReleaseMs: Int
         /// While paused, how far one platter turn moves the playhead.

@@ -76,7 +76,7 @@ Settings are checked before they're saved. A bad port, an empty host, or two con
 
 ## Check the mapping on your unit (do this first)
 
-The numbers come from Denon's *LC6000 PRIME MIDI Specification v1.0*. A few couldn't be confirmed from the spec text: they're listed as PROVISIONAL in [`Packages/ControllerBridgeKit/README.md`](Packages/ControllerBridgeKit/README.md#the-default-mapping). Open **Diagnostics…** from the menu to check them:
+The numbers come from Denon's *LC6000 PRIME MIDI Specification v1.0* and were checked on a real unit. A few are still PROVISIONAL: they're listed in [`Packages/ControllerBridgeKit/README.md`](Packages/ControllerBridgeKit/README.md#the-default-mapping). Open **Diagnostics…** from the menu to check them:
 
 - **MIDI Monitor** shows every incoming message with its mapping name, or `UNMAPPED`. Move every control. Anything UNMAPPED needs a mapping entry.
 - **LED Sweep** steps the pads and ring through all 64 color values, then lights each button note in turn.
@@ -84,7 +84,7 @@ The numbers come from Denon's *LC6000 PRIME MIDI Specification v1.0*. A few coul
 
 Things to look for:
 - **Jog feel:** `jog.seek_seconds_per_rev` and `jog.beats_per_rev` set how far one platter turn seeks or skips while paused.
-- **Pitch direction:** set `pitch.invert` to `true` if the fader works the wrong way.
+- **Pitch direction:** the fader's top is slower, as on a real unit. If yours works the wrong way, set `pitch.invert` to `true`.
 - **Colors:** the color velocity is 2 bits each of red, green and blue (`0b00RRGGBB`), confirmed on a unit. LED Sweep shows it on yours.
 - **Channel:** the spec only documents channel 1. Pick another in Settings if your unit uses one.
 
