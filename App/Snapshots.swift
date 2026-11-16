@@ -157,6 +157,15 @@ enum Snapshots {
         }
         write(buttonStates, to: "\(directory)/buttons.png")
         write(siteStyles, to: "\(directory)/site-styles.png")
+        // The jog display's image (#165), upright, 198×198, for review before any hardware send.
+        let daybreak = JogDisplayContent(deck: 1, color: [255, 0, 0], title: "Daybreak", artist: "Bill Hamel, Jeremus", key: "A#m",
+                                         bpm: 128, playerType: "track")
+        let long = JogDisplayContent(deck: 3, color: [34, 255, 255], title: "Ten (Original Club Mix) Extended Edit",
+                                     artist: "Mark Knight, Underworld, Sander Van Doorn", key: "Fm", bpm: 126, playerType: "clip")
+        for (name, content) in [("track", daybreak), ("long", long), ("empty", JogDisplayContent(deck: 2, color: [255, 255, 0]))] {
+            let png = JogImage.png(rgba: JogDisplayRenderer.render(content), width: JogImage.size, height: JogImage.size)
+            do { try Data(png).write(to: URL(fileURLWithPath: "\(directory)/jog-display-\(name).png")) } catch { print("Couldn't write: \(error)") }
+        }
         write(siteStyles.environment(\.forcesIncreasedContrast, true), to: "\(directory)/site-styles-increased-contrast.png")
         for (name, configure) in states {
             let status = BridgeStatus()
