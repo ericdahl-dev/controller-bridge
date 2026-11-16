@@ -65,7 +65,7 @@ struct LivenessTests {
         rig.coordinator.midi(.noteOn(channel: 0, note: 22, velocity: 127), source: Rig.lc6000.id)   // Key Lock on
         // Play, Sync, Master, Loop In, pad 1 (red, 48), ring (11) and Key Lock are lit.
         #expect([rig.leds[1], rig.leds[20], rig.leds[21], rig.leds[8], rig.leds[32], rig.leds[40], rig.leds[22]]
-            == [127, 127, 127, 127, 48, 11, 127])
+            == [127, 127, 127, 127, 48, 21, 127])
 
         Self.tick(rig, at: 10.5)
         Self.tick(rig, at: 12.4)

@@ -141,20 +141,20 @@ struct TimingTests {
         }
     }
 
-    // The ring color (0, 128, 255) is 0b00_10_11 = 11. Pulses last pulse_ms, 100 ms by default.
+    // The ring shows deck 1's badge color (#6C7277), 0b00_01_01_01 = 21 (#122). Pulses last pulse_ms, 100 ms by default.
 
     @Test("With beat pulse on, the ring is solid until a clock arrives, then lit for 100 ms after each beat")
     func ringPulsesOnBeat() throws {
         let rig = try PulseRig(beatPulse: "beat")
-        #expect(rig.ring(at: 9.0) == 11)
+        #expect(rig.ring(at: 9.0) == 21)
 
         rig.clockBeat(2, at: 10.0)
-        #expect(rig.ring(at: 10.0) == 11)
-        #expect(rig.ring(at: 10.09) == 11)
+        #expect(rig.ring(at: 10.0) == 21)
+        #expect(rig.ring(at: 10.09) == 21)
         #expect(rig.ring(at: 10.11) == 0)
 
         rig.clockBeat(3, at: 10.5)
-        #expect(rig.ring(at: 10.5) == 11)
+        #expect(rig.ring(at: 10.5) == 21)
         #expect(rig.ring(at: 10.61) == 0)
     }
 
@@ -162,7 +162,7 @@ struct TimingTests {
     func ringPulsesOnDownbeat() throws {
         let rig = try PulseRig(beatPulse: "downbeat")
         rig.clockBeat(1, at: 20.0)
-        #expect(rig.ring(at: 20.05) == 11)
+        #expect(rig.ring(at: 20.05) == 21)
         #expect(rig.ring(at: 20.2) == 0)
 
         rig.clockBeat(2, at: 20.5)
@@ -171,7 +171,7 @@ struct TimingTests {
         #expect(rig.ring(at: 21.55) == 0)
 
         rig.clockBeat(1, at: 22.0)
-        #expect(rig.ring(at: 22.05) == 11)
+        #expect(rig.ring(at: 22.05) == 21)
     }
 
     @Test("When the master clock stops for more than 2 s, the ring goes back to solid")
@@ -180,7 +180,7 @@ struct TimingTests {
         rig.clockBeat(1, at: 30.0)
         #expect(rig.ring(at: 30.5) == 0)
         #expect(rig.ring(at: 31.9) == 0)
-        #expect(rig.ring(at: 32.1) == 11)
+        #expect(rig.ring(at: 32.1) == 21)
     }
 
     @Test("A downbeat pulse at a slow tempo stays pulsing: beats 2-4 count as the clock arriving")
@@ -199,9 +199,9 @@ struct TimingTests {
     func pulseOffKeepsRingSolid() throws {
         let rig = try PulseRig(beatPulse: "off")
         rig.clockBeat(1, at: 50.0)
-        #expect(rig.ring(at: 50.5) == 11)
+        #expect(rig.ring(at: 50.5) == 21)
         rig.clockBeat(2, at: 51.0)
-        #expect(rig.ring(at: 51.5) == 11)
+        #expect(rig.ring(at: 51.5) == 21)
     }
 
     @Test("With no track loaded the ring stays off, even on a pulsed beat")

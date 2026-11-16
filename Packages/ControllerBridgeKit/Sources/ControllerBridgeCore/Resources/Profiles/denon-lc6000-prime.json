@@ -110,6 +110,7 @@
         128,
         255
       ],
+      "ring_follows_deck": true,
       "roll_pad_color": [
         255,
         140,

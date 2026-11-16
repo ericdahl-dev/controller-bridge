@@ -325,4 +325,28 @@ struct LayersTests {
         #expect(Self.channelsWritten(output) == [2])
         #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [2])
     }
+
+    // #122: the ring shows the deck the layer drives, so a layer change visibly changes it. Deck 2's badge #ECCF65 is
+    // rgb222 3,2,1 = 57.
+
+    @Test("Normal mode: switching to layer 2 with deck 2 loaded repaints the ring on ch1 in deck 2's color, 57")
+    func normalModeRingInDeckColor() throws {
+        let rig = try Self.layered()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        output.sent.removeAll()
+        Self.note(rig, channel: 2, 51, 127)
+        #expect(output.sent.last { if case .noteOn(0, 40, _) = $0 { true } else { false } } == .noteOn(channel: 0, note: 40, velocity: 57))
+    }
+
+    @Test("Multi-channel mode: with layer 2 in front, deck 2's ring goes out on ch2 in deck 2's color, 57")
+    func multiChannelRingInDeckColor() throws {
+        let rig = try Self.layered()
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 2, 51, 127)
+        Self.note(rig, channel: 2, 1, 127)       // Play on ch2: controls on ch2
+        output.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        #expect(output.sent.contains(.noteOn(channel: 1, note: 40, velocity: 57)))
+    }
 }
