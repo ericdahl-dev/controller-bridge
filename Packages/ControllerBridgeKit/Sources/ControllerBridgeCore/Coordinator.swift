@@ -563,6 +563,13 @@ public final class Coordinator {
         return true
     }
 
+    /// Asks Syndicate to resend its state (#84): the OSC destination opened late, so what was sent before was dropped.
+    public func resync() {
+        // A Resend still "waiting" went out before there was anywhere to send it.
+        resendSentAt = nil
+        requestResend()
+    }
+
     /// Settings (#19): the LEDs switch, for every controller.
     public func setLEDs(enabled: Bool) {
         ledsEnabled = enabled

@@ -181,4 +181,26 @@ struct OSCDestinationTests {
         destination.send(Self.play)
         #expect(sinks.sink("192.168.1.31:9090")?.sent == [Self.play.encoded()])
     }
+
+    @Test("When the destination opens late, a resync through the pipe asks Syndicate for its state once")
+    func resyncThroughThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))   // the start Resend was answered
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+        pipe.producer.resync()
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Feedback/Resend", [.int(1)])])
+    }
+
+    @Test("A resync sends a Resend even if the start-up one is still waiting: that one went out before the destination opened")
+    func resyncAfterADroppedResend() throws {
+        let rig = try Rig()
+        rig.coordinator.start()                          // its Resend was dropped: no destination yet
+        rig.osc.sent.removeAll()
+        rig.coordinator.resync()
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Feedback/Resend", [.int(1)])])
+    }
 }
