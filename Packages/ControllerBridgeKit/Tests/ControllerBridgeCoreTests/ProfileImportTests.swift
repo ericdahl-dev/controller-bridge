@@ -35,9 +35,9 @@ struct ProfileImportTests {
             "name: expected text, got 5",
             "mapping.notes.paly: unknown key",
             "mapping.midi.channel: 0 is out of range, expected 1-16",
-            "colour: unknown key",
+            "theme: unknown key",
         ])) {
-            try Self.importing(#"{"name": 5, "mapping": {"notes": {"paly": 1}, "midi": {"channel": 0}}, "colour": "red"}"#)
+            try Self.importing(#"{"name": 5, "mapping": {"notes": {"paly": 1}, "midi": {"channel": 0}}, "theme": "dark"}"#)
         }
     }
 
