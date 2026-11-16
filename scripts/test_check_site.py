@@ -18,12 +18,16 @@ def sitemap(*locs):
     return f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
 
 
+WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no cookies. PostHog turns your IP address'
+           ' into an anonymous hash that changes every day, and does not keep the address. It counts clicks on a few links.'
+           ' To have your visits removed, email us.</p>')
+
 GOOD = {
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">',
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
-    "privacy/index.html": page(body='<h2 id="network">Network</h2><p>DeckBridge collects no data.</p>'),
+    "privacy/index.html": page(body='<h2 id="network">Network</h2><p>DeckBridge collects no data.</p>' + WEBSITE),
     "style.css": '@font-face { font-family: Inter; src: url("fonts/Inter-Regular.ttf"); } body { color: #EDEDEA; }',
     "fonts/Inter-Regular.ttf": "font",
     "img/icon.png": "png",
@@ -174,8 +178,18 @@ class CheckSiteTests(unittest.TestCase):
                                                      "support/index.html: no meta description"])
 
     def test_the_privacy_page_must_say_no_data_is_collected(self):
-        root = self.site({"privacy/index.html": page(body="<p>We care about your privacy.</p>")})
+        root = self.site({"privacy/index.html": page(body="<p>We care about your privacy.</p>" + WEBSITE)})
         self.assertEqual(check_site.problems(root), ['privacy/index.html: doesn\'t say "collects no data"'])
+
+    def test_the_privacy_page_must_disclose_the_website_analytics(self):
+        root = self.site({"privacy/index.html": page(body="<p>DeckBridge collects no data. This site uses no cookies.</p>")})
+        self.assertEqual(check_site.problems(root), [
+            'privacy/index.html: doesn\'t say "posthog"',
+            'privacy/index.html: doesn\'t say "anonymous hash that changes every day"',
+            'privacy/index.html: doesn\'t say "does not keep the address"',
+            'privacy/index.html: doesn\'t say "counts clicks on a few links"',
+            'privacy/index.html: doesn\'t say "to have your visits removed, email"',
+        ])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
@@ -186,7 +200,7 @@ class CheckSiteTests(unittest.TestCase):
     def test_titles_and_headings_dont_use_other_companies_names(self):
         root = self.site({
             "support/index.html": page(title="Syndicate Bridge Support", body='<h1>Denon <em>Controller</em> Help</h1><a href="../">Home</a>'),
-            "privacy/index.html": page(body="<h1>Privacy</h1><p>Works with Syndicate. DeckBridge collects no data.</p>"),
+            "privacy/index.html": page(body="<h1>Privacy</h1><p>Works with Syndicate. DeckBridge collects no data.</p>" + WEBSITE),
         })
         self.assertEqual(check_site.problems(root), ['support/index.html: the <title> names Syndicate',
                                                      'support/index.html: the <h1> names Denon'])

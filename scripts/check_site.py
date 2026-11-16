@@ -10,7 +10,8 @@
 - every <img> has an alt attribute (alt="" for a decorative one)
 - every <script type="application/ld+json"> block parses as JSON
 - no page title or main heading uses another company's name as the product's
-- the privacy page says the app collects no data
+- the privacy page says the app collects no data, and discloses the website's PostHog visit counts as
+  showrecorder.app's does (PRIVACY_STATEMENTS)
 - no other company's logo is in the site
 - the whole site stays under 2 MB
 Standard library only. Run: python3 -I scripts/check_site.py [website]   (exits 1 on any problem)
@@ -25,7 +26,12 @@ ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt"]
 SITE = "https://getdeckbridge.app/"
 LLMS_HEADING = "# DeckBridge"
 PRIVACY = "privacy/index.html"
-PRIVACY_STATEMENT = "collects no data"
+PRIVACY_STATEMENTS = [
+    "collects no data",  # the app
+    # the website: cookieless PostHog (persistence memory, cookieless_mode always), worded as showrecorder.app's
+    "posthog", "no cookies", "anonymous hash that changes every day", "does not keep the address",
+    "counts clicks on a few links", "to have your visits removed, email",
+]
 OTHER_COMPANIES = ["Syndicate", "Denon"]
 MAX_BYTES = 2_000_000
 POSTHOG_LOADER = "https://us-assets.i.posthog.com/static/array.js"  # allowed only as a <script src>
@@ -142,8 +148,9 @@ def check_page(root, file, text):
         except ValueError as e:
             out.append(f"{file}: JSON-LD block {n} doesn't parse: {e}")
     out += check_refs(root, file, page.refs)
-    if file == PRIVACY and PRIVACY_STATEMENT not in " ".join(" ".join(page.text).split()).lower():
-        out.append(f'{file}: doesn\'t say "{PRIVACY_STATEMENT}"')
+    if file == PRIVACY:
+        said = " ".join(" ".join(page.text).split()).lower()
+        out += [f'{file}: doesn\'t say "{words}"' for words in PRIVACY_STATEMENTS if words not in said]
     return out
 
 
