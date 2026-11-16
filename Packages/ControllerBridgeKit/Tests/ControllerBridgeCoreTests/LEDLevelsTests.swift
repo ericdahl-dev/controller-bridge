@@ -96,3 +96,27 @@ struct LEDLevelsSweepTests {
         #expect(try Self.note0(nil) == [127, 1, 0])
     }
 }
+
+/// The import check (#194): each level is a velocity, 0-127, in plain words.
+@Suite("LED levels in the import check")
+struct LEDLevelsImportTests {
+    static func importing(_ json: String) throws -> ControllerProfile {
+        try ControllerProfile.importing(Data(json.utf8), bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+    }
+
+    @Test("A level out of 0-127, the wrong kind, or an unknown member is named")
+    func problems() {
+        #expect(throws: MappingError.invalid([
+            "mapping.leds.levels.dim: 300 is out of range, expected 0-127",
+            "mapping.leds.levels.full: expected a whole number, got \"max\"",
+            "mapping.leds.levels.bright: unknown key",
+        ])) {
+            try Self.importing(#"{"mapping": {"leds": {"levels": {"dim": 300, "full": "max", "bright": 64}}}}"#)
+        }
+    }
+
+    @Test("A partial override imports and keeps the other levels")
+    func partial() throws {
+        #expect(try Self.importing(#"{"mapping": {"leds": {"levels": {"dim": 20}}}}"#).mapping.leds.levels == .init(full: 127, dim: 20, off: 0))
+    }
+}
