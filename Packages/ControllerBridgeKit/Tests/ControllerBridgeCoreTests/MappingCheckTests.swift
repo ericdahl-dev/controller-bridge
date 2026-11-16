@@ -107,4 +107,20 @@ struct MappingCheckTests {
         // platter_touch = 40 (note), pitch.lsb_cc = 40 (CC) and leds.ring = 40 (LED) all ship in the default.
         #expect(Self.problems(#"{"notes": {"platter_touch": 40}, "pitch": {"lsb_cc": 40}, "leds": {"ring": 40}}"#) == [])
     }
+
+    @Test("Every problem is listed at once, in the order the user wrote them")
+    func allAtOnceInOrder() {
+        #expect(Self.problems(#"{"notes": {"play": 2, "paly": 1}, "midi": {"channel": 20}, "leds": {"beat_pulse": "bar"}}"#) == [
+            "notes.play: note 2 is also notes.cue",
+            "notes.paly: unknown key",
+            "midi.channel: 20 is out of range, expected 1-16",
+            "leds.beat_pulse: \"bar\" isn't one of off, beat, downbeat",
+        ])
+    }
+
+    @Test("A file that isn't JSON, or isn't an object, is one plain problem")
+    func notAMapping() {
+        #expect(Self.problems(#"{"notes": {"play": 1"#) == ["The file isn't valid JSON (near byte 21)."])
+        #expect(Self.problems(#"[1, 2]"#) == ["mapping: expected an object, got a list"])
+    }
 }

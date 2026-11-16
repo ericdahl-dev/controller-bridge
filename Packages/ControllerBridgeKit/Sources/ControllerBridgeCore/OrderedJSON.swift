@@ -30,7 +30,7 @@ indirect enum OrderedJSON: Equatable {
 
     struct ParseError: Error, CustomStringConvertible {
         var offset: Int
-        var description: String { "not valid JSON near byte \(offset)" }
+        var description: String { "The file isn't valid JSON (near byte \(offset))." }
     }
 
     init(parsing data: Data) throws {

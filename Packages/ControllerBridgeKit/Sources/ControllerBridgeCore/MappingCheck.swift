@@ -12,6 +12,7 @@ extension Mapping {
         } catch {
             return ["\(error)"]
         }
+        if let problem = kindProblem(document, expected: schema) { return ["mapping: \(problem)"] }
         var out: [String] = []
         walk(document, schema: schema, path: "", into: &out)
         out += duplicates(in: merge(schema, known(document, schema: schema)), written: Set(leafPaths(document)))
