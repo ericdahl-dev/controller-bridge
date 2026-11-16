@@ -4,6 +4,9 @@
 /// Noise, such as the LC6000's note 52 heartbeat in host mode, isn't credited to a step. The prompt list starts with
 /// an `idle` prompt (hands off), and what arrives then is noise from that point on. A capture without one falls back,
 /// when it ends, to calling noise what came in every one of three or more confirmed steps.
+///
+/// Tails aren't credited either (#186): a release whose press came before the step, and, for half a second after
+/// the step starts, anything from the controls of the take before it (a jog still spinning).
 public struct CaptureSession: Sendable {
     public let appVersion: String
     public let device: String
@@ -19,6 +22,15 @@ public struct CaptureSession: Sendable {
     /// The current take: each message with the host time it arrived, in seconds.
     private var take: Take = []
     private var leds: [LEDAnswer] = []
+    /// When the current step started, if the app said (confirm, redo and skip take a time).
+    private var stepStart: Double?
+    /// The controls of the take before this one, whose tails are dropped just after the step starts.
+    private var tailKeys: Set<[UInt8]> = []
+    /// Notes pressed in this take, so a release without its press is known for a tail.
+    private var pressed: Set<[UInt8]> = []
+
+    /// How long after a step starts the previous take's controls are taken for tails, in seconds.
+    static let tailWindow = 0.5
 
     public init(appVersion: String, device: String, ports: CapturePorts, prompts: [CapturePrompt]) {
         self.appVersion = appVersion
@@ -40,6 +52,15 @@ public struct CaptureSession: Sendable {
     /// once the list is done.
     public mutating func receive(_ bytes: [UInt8], at time: Double, port: Int = 0) {
         guard current != nil else { return }
+        if let key = Inference.noiseKey(bytes), !Inference.isRealtime(bytes) {
+            let portKey = [UInt8(truncatingIfNeeded: port)] + key
+            if key[0] & 0xF0 == 0x90 {
+                let release = bytes[0] & 0xF0 == 0x80 || bytes[2] == 0
+                if release, !pressed.contains(portKey) { return }
+                if !release { pressed.insert(portKey) }
+            }
+            if let stepStart, time - stepStart < Self.tailWindow, tailKeys.contains(portKey) { return }
+        }
         take.append((time, port, bytes))
     }
 
@@ -50,20 +71,36 @@ public struct CaptureSession: Sendable {
         leds.append(answer)
     }
 
-    /// Keeps the current take and moves to the next prompt.
-    public mutating func confirm() { finish(.confirmed) }
+    /// Keeps the current take and moves to the next prompt, which starts at `time` (host seconds) when given.
+    public mutating func confirm(at time: Double? = nil) {
+        let kept = take
+        finish(.confirmed)
+        startStep(at: time, after: kept)
+    }
 
-    /// Throws the current take away and listens again.
-    public mutating func redo() {
+    /// Throws the current take away and listens again, from `time` when given.
+    public mutating func redo(at time: Double? = nil) {
+        let discarded = take
         take = []
         leds = []
+        startStep(at: time, after: discarded)
     }
 
     /// Records the prompt as skipped, with nothing captured, and moves on.
-    public mutating func skip() {
+    public mutating func skip(at time: Double? = nil) {
+        let discarded = take
         take = []
         leds = []
         finish(.skipped)
+        startStep(at: time, after: discarded)
+    }
+
+    private mutating func startStep(at time: Double?, after previous: Take) {
+        stepStart = time
+        tailKeys = Set(previous.compactMap { message in
+            Inference.noiseKey(message.bytes).map { [UInt8(truncatingIfNeeded: message.port)] + $0 }
+        })
+        pressed = []
     }
 
     /// The capture so far.
