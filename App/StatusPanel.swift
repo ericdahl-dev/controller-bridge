@@ -75,10 +75,11 @@ struct StatusPanel: View {
                     }
                     Spacer(minLength: 0)
                 }
-                HStack(alignment: .top, spacing: Theme.Space.xl) {
+                // Two or three lights sit on one row; more (BRIDGE STOPPED, DEMO, MASTER) fold into a second.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: Theme.Space.xl, alignment: .topLeading)],
+                          alignment: .leading, spacing: Theme.Space.m) {
                     ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }
                     if let master = presentation.master { StatusLightView(light: master) }
-                    Spacer(minLength: 0)
                 }
                 let others = status.otherDevices
                 if let highlighted = others.highlighted {
