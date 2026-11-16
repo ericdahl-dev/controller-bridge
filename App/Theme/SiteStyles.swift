@@ -160,11 +160,12 @@ struct ToneChip: View {
     var body: some View {
         HStack(spacing: 5) {
             Circle().fill(Color(tone: tone)).frame(width: 6, height: 6)
-            Text(word).font(Theme.data(10.5, .medium)).foregroundStyle(Color(tone: tone))
+            // The text color: a tone's color on its own tint misses AA (#174). PaletteTests check the pair.
+            Text(word).font(Theme.data(10.5, .medium)).foregroundStyle(Theme.text)
         }
         .padding(.horizontal, 7)
         .frame(minHeight: 18)
-        .background(Color(tone: tone).opacity(0.14), in: Capsule())
+        .background(Color(tone: tone).opacity(Palette.chipTint), in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken ?? word)
     }

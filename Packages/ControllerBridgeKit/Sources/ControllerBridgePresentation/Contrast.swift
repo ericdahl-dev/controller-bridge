@@ -30,3 +30,19 @@ public enum Contrast {
         return 0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722 * linear(color.blue)
     }
 }
+
+extension RGB {
+    /// This color at an opacity over a base, as the screen composites it, rounded per channel.
+    public func over(_ base: RGB, opacity: Double) -> RGB {
+        func mix(_ top: UInt8, _ bottom: UInt8) -> UInt8 {
+            UInt8((Double(top) * opacity + Double(bottom) * (1 - opacity)).rounded())
+        }
+        return RGB(red: mix(red, base.red), green: mix(green, base.green), blue: mix(blue, base.blue))
+    }
+
+    init(red: UInt8, green: UInt8, blue: UInt8) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+}
