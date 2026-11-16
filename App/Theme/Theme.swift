@@ -104,12 +104,14 @@ struct StatusLightView: View {
     }
 }
 
-/// The bottom bar: small uppercase text, as in Syndicate's "NETWORK: MASTER | 124.00".
+/// The bottom bar: small uppercase text, as in Syndicate's "NETWORK: MASTER | 124.00". Each light's dot and word take
+/// its state color, as in the big lights; labels stay gray. Reads the same as `StatusPresentation.line`.
 struct StatusLineView: View {
-    let line: String
+    let presentation: StatusPresentation
+    let deck: Int
 
     var body: some View {
-        Text(line)
+        styledLine
             .font(Theme.ui(10, .semibold))
             .foregroundStyle(Theme.caption)
             .lineLimit(1)
@@ -118,6 +120,16 @@ struct StatusLineView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Theme.background)
+    }
+
+    private var styledLine: Text {
+        let separator = Text(" · ").foregroundStyle(Theme.caption)
+        var line = Text("")
+        for light in presentation.lights {
+            line = line + Text("\(light.label) ").foregroundStyle(Theme.caption)
+                + Text("● \(light.word)").foregroundStyle(Color(light.tone.color)) + separator
+        }
+        return line + Text("DECK [\(deck)]").foregroundStyle(Theme.caption)
     }
 }
 

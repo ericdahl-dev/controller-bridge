@@ -16,6 +16,11 @@ extension BridgeStatus {
     }
 }
 
+enum AppInfo {
+    /// Placeholder until the display name is picked (#29). Every window reads it from here.
+    static let displayName = "Controller Bridge"
+}
+
 struct StatusPanel: View {
     let status: BridgeStatus
 
@@ -26,7 +31,7 @@ struct StatusPanel: View {
                 HStack(spacing: 10) {
                     DeckBadgeView(deck: status.deck)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Controller Bridge").font(Theme.ui(14, .bold)).foregroundStyle(Theme.text)
+                        Text(AppInfo.displayName).font(Theme.ui(14, .bold)).foregroundStyle(Theme.text)
                         Text(status.controllers.first ?? "No controller").font(Theme.ui(11)).foregroundStyle(Theme.caption)
                             .lineLimit(1)
                     }
@@ -56,7 +61,7 @@ struct StatusPanel: View {
             .padding(12)
             .background(Theme.panel)
             Rectangle().fill(Theme.hairline).frame(height: 1)
-            StatusLineView(line: presentation.line)
+            StatusLineView(presentation: presentation, deck: status.deck)
         }
         .frame(width: 320)
         .background(Theme.background)
