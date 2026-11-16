@@ -53,8 +53,10 @@ let controlsName = "Smoke LC6000 PRIME Controller", wdName = "Smoke LC6000 PRIME
 var client = MIDIClientRef()
 guard MIDIClientCreateWithBlock("LC6000 smoke" as CFString, &client, nil) == noErr else { fail("MIDI client") }
 
-// The app runs with automatic devices, as on a real unit, so a real LC6000 on this Mac would be picked too (and get the
-// smoke's LEDs). Refuse to run while one is there.
+// With no real LC6000 here, the app runs with automatic devices, as on a real unit, so it must pick the controls ports
+// over the WD ones itself (#143). With one attached, automatic devices could pick it, so the script pins the app to
+// the helper's controls ports instead (#86) and the automatic case is skipped. CI has no controller: it always runs
+// the automatic case.
 func endpointName(_ endpoint: MIDIEndpointRef) -> String {
     var name: Unmanaged<CFString>?
     MIDIObjectGetStringProperty(endpoint, kMIDIPropertyDisplayName, &name)
@@ -62,9 +64,9 @@ func endpointName(_ endpoint: MIDIEndpointRef) -> String {
 }
 let present = (0..<MIDIGetNumberOfSources()).map { endpointName(MIDIGetSource($0)) }
     + (0..<MIDIGetNumberOfDestinations()).map { endpointName(MIDIGetDestination($0)) }
-if let real = present.first(where: { $0.localizedCaseInsensitiveContains("LC6000") }) {
-    say("An LC6000 is connected (\(real)). Unplug it: the smoke check runs with automatic devices."); exit(2)
-}
+let realController = present.first(where: { $0.localizedCaseInsensitiveContains("LC6000") })
+let mode = realController == nil ? "automatic" : "pinned"
+if let realController { say("WD/automatic case skipped: real controller attached (\(realController))") }
 
 var wdDestination = MIDIEndpointRef()
 guard MIDIDestinationCreateWithProtocol(client, wdName as CFString, ._1_0, &wdDestination, { list, _ in
@@ -120,7 +122,7 @@ func uniqueID(_ endpoint: MIDIEndpointRef) -> Int32 {
     return id
 }
 let outbound = socket(AF_INET, SOCK_DGRAM, 0)
-say("READY input=\(uniqueID(source)) output=\(uniqueID(destination)) name=\(controlsName)")
+say("READY mode=\(mode) input=\(uniqueID(source)) output=\(uniqueID(destination)) name=\(controlsName)")
 
 // 1. The app starts: it asks Syndicate to resend its state.
 let launchTimeout = Double(CommandLine.arguments.dropFirst().first ?? "20")!
