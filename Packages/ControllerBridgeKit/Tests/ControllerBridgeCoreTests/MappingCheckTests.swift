@@ -120,7 +120,8 @@ struct MappingCheckTests {
 
     @Test("A file that isn't JSON, or isn't an object, is one plain problem")
     func notAMapping() {
-        #expect(Self.problems(#"{"notes": {"play": 1"#) == ["The file isn't valid JSON (near byte 21)."])
+        // 20 bytes, cut off mid-object: the reader runs out at byte 20.
+        #expect(Self.problems(#"{"notes": {"play": 1"#) == ["The file isn't valid JSON (near byte 20)."])
         #expect(Self.problems(#"[1, 2]"#) == ["mapping: expected an object, got a list"])
     }
 }
