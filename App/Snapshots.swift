@@ -226,13 +226,23 @@ enum Snapshots {
                 log: log, status: connected, sweeping: tab == .sweep, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
                 hiddenNotes: [52], tab: tab, scrolls: false
             )
-            write(window.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name).png")
+            // Through AppKit: the filter field and the pickers (#218) are AppKit controls.
+            writeAppKit(window.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name).png", width: 720)
             let blank = DiagnosticsWindow(
                 log: empty, status: BridgeStatus(), sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
                 tab: tab, scrolls: false
             )
-            write(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png")
+            writeAppKit(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png", width: 720)
         }
+        // The OSC log filtered to deck 1, received only, and paused (#218).
+        log.deck = 1
+        log.direction = .received
+        log.togglePause()
+        let filtered = DiagnosticsWindow(
+            log: log, status: connected, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            tab: .osc, scrolls: false
+        )
+        writeAppKit(filtered.frame(width: 720, height: 460), to: "\(directory)/diagnostics-osc-log-filtered.png", width: 720)
     }
 
     /// The shared button styles (#67): normal, selected (bar + heavier text) and keyboard focus (ring).
@@ -290,13 +300,14 @@ enum Snapshots {
     }
 
     /// Renders through a hosting view's display cache, which draws AppKit-backed controls (pickers, text fields).
-    private static func writeAppKit(_ view: some View, to path: String) {
+    /// Through AppKit, so AppKit-backed controls (a text field, a menu picker) draw, which ImageRenderer can't.
+    private static func writeAppKit(_ view: some View, to path: String, width: CGFloat = 440) {
         let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme))
         host.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         // Lay out tall first, so the fitting height is the whole form, then shrink to it.
-        host.frame = NSRect(x: 0, y: 0, width: 440, height: 2000)
+        host.frame = NSRect(x: 0, y: 0, width: width, height: 2000)
         host.layoutSubtreeIfNeeded()
-        host.frame = NSRect(origin: .zero, size: NSSize(width: 440, height: host.fittingSize.height))
+        host.frame = NSRect(origin: .zero, size: NSSize(width: width, height: host.fittingSize.height))
         host.layoutSubtreeIfNeeded()
         guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { print("Couldn't render \(path)"); return }
         host.cacheDisplay(in: host.bounds, to: rep)
