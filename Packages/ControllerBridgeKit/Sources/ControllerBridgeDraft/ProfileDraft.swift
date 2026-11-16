@@ -26,6 +26,7 @@ public struct ProfileDraft: Sendable {
         draft.pitch(capture)
         draft.needle(capture)
         draft.browse(capture)
+        draft.shifted(capture)
         return draft
     }
 
@@ -119,6 +120,23 @@ public struct ProfileDraft: Sendable {
         }
         todo("mapping.pads.mode_notes", "Only if the pads send other notes in Roll, Loop and Slicer modes (#225): press pad 1–8 in each mode and list them. The capture only records Hot Cue mode.")
         todo("mapping.pads.mode_select", "Four mode buttons (\"buttons\") or one that cycles (\"cycle\", #198)? From the manual, or by pressing the mode buttons in MIDI Monitor.")
+    }
+
+    /// Steps repeated with Shift held. The shifted control is the step's first (the held Shift note is already left out).
+    /// The same note and channel as unshifted means the app does Shift; anything else is Shift in hardware (#226), a
+    /// TODO naming what it sent until notes.shifted is in every profile's schema.
+    private mutating func shifted(_ capture: CaptureFile) {
+        for step in capture.steps where step.status == .confirmed {
+            guard let base = capture.prompts.first(where: { $0.id == step.prompt })?.shiftedOf,
+                  let shifted = step.controls.first,
+                  let unshifted = capture.steps.first(where: { $0.prompt == base && $0.status == .confirmed })?.controls.first
+            else { continue }
+            guard shifted.kind != unshifted.kind || shifted.number != unshifted.number || shifted.channel != unshifted.channel
+            else { continue }
+            let name = Self.buttons.first { $0.prompt == base }?.name ?? (base.hasPrefix("deck1.hotcue") ? "pads" : base)
+            let sends = "\(shifted.kind == .note ? "note" : "CC") \(shifted.number ?? 0) on channel \(shifted.channel)"
+            todo("mapping.notes.shifted.\(name)", "With Shift held, \"\(base)\" sends \(sends): Shift is done in hardware. Set notes.shifted (#226) once it's merged.")
+        }
     }
 
     /// Deck layers: deck 2's Play on its own channel means the left side switches channels. The note the controller
