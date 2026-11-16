@@ -83,3 +83,17 @@ Copy `default_mapping.toml`, edit it, and run with `--config my_mapping.toml`. O
 ```
 
 `Bridge` in `lc6000_bridge/bridge.py` is independent of MIDI ports and sockets. The tests feed it synthetic MIDI and OSC feedback, and include a real UDP loopback.
+
+### The Mac app (in progress)
+
+A native, sandboxed menu-bar app is replacing the Python bridge (#12). `Packages/ControllerBridgeKit` holds the logic and its tests. `App/` holds the menu-bar shell and the CoreMIDI and UDP adapters. The Xcode project is generated from `project.yml` and isn't committed.
+
+```sh
+(cd Packages/ControllerBridgeKit && swift test)
+brew install xcodegen && xcodegen generate
+xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configuration Release \
+  -derivedDataPath build CODE_SIGN_IDENTITY=- build
+scripts/smoke.sh   # required before a PR: a virtual LC6000 and a fake Syndicate check Play out and the Play LED back
+```
+
+Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. The app binds its feedback listener to `127.0.0.1:9096`, so it never triggers the local-network prompt. Quit Syndicate or the Python bridge first, since the smoke check needs UDP 9090 and 9096.

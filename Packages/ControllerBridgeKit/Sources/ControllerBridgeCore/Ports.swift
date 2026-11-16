@@ -22,7 +22,10 @@ public struct MIDIEndpoint: Equatable, Sendable, Identifiable {
 
 /// Sends MIDI to one destination, such as the controller's LEDs.
 public protocol MIDIOutput: Sendable {
-    func send(_ event: MIDIEvent)
+    /// Throws when the destination is gone, which counts as an unplug.
+    func send(_ event: MIDIEvent) throws
+    /// Closes the port. Nothing is sent after this.
+    func close()
 }
 
 /// The MIDI devices: what is connected, and opening ports on them. A connected source's events reach the
