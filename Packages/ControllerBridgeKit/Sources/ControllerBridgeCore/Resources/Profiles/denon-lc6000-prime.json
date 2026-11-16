@@ -14,7 +14,14 @@
       "channel": 1,
       "ignore_notes": [
         52
-      ]
+      ],
+      "layers": [
+        { "channel": 1, "deck": 1 },
+        { "channel": 2, "deck": 2 },
+        { "channel": 3, "deck": 3 },
+        { "channel": 4, "deck": 4 }
+      ],
+      "layer_note": 51
     },
     "osc": {
       "host": "127.0.0.1",

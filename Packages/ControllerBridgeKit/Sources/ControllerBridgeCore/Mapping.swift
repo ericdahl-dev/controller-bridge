@@ -24,26 +24,49 @@ public struct Mapping: Equatable, Sendable, Codable {
         /// Notes the controller sends on its own, such as the LC6000's idle heartbeat on note 52 (#103): dropped
         /// before anything sees them.
         public var ignoreNotes: [Int]
+        /// The controller's own deck layers (#79): each MIDI channel drives a Syndicate deck. Empty for a controller
+        /// without layers.
+        public var layers: [Layer]
+        /// The note the controller sends on a layer's channel as it becomes active (127) or inactive (0).
+        public var layerNote: Int?
 
         enum CodingKeys: String, CodingKey {
-            case input, output, channel
+            case input, output, channel, layers
             case ignoreNotes = "ignore_notes"
+            case layerNote = "layer_note"
         }
 
-        public init(input: String, output: String, channel: Int, ignoreNotes: [Int] = []) {
+        public init(
+            input: String, output: String, channel: Int, ignoreNotes: [Int] = [], layers: [Layer] = [], layerNote: Int? = nil
+        ) {
             self.input = input
             self.output = output
             self.channel = channel
             self.ignoreNotes = ignoreNotes
+            self.layers = layers
+            self.layerNote = layerNote
         }
 
-        /// `ignore_notes` may be left out: then nothing is ignored.
+        /// `ignore_notes`, `layers` and `layer_note` may be left out: nothing ignored, no layers.
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             input = try container.decode(String.self, forKey: .input)
             output = try container.decode(String.self, forKey: .output)
             channel = try container.decode(Int.self, forKey: .channel)
             ignoreNotes = try container.decodeIfPresent([Int].self, forKey: .ignoreNotes) ?? []
+            layers = try container.decodeIfPresent([Layer].self, forKey: .layers) ?? []
+            layerNote = try container.decodeIfPresent(Int.self, forKey: .layerNote)
+        }
+    }
+
+    /// One of a controller's deck layers: its MIDI channel, 1-16, and the Syndicate deck it drives, 1-4.
+    public struct Layer: Equatable, Sendable, Codable {
+        public var channel: Int
+        public var deck: Int
+
+        public init(channel: Int, deck: Int) {
+            self.channel = channel
+            self.deck = deck
         }
     }
 

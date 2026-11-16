@@ -148,27 +148,44 @@ struct SettingsView: View {
             set: { if settings.wrappedValue.controllers.indices.contains(index) { settings.wrappedValue.controllers[index] = $0 } }
         )
         heading(settings.wrappedValue.controllers.count > 1 ? "Controller \(index + 1)" : "Controller")
-        row("Deck") {
-            DeckPicker(deck: controller.wrappedValue.deck, state: model.status.presentation.deckPicker,
-                       problem: model.status.deckProblem) { deck in
-                // The deck applies at once, as in the panel. A saved change reaches the draft through the rebase on
-                // model.settings; a refused one leaves the draft alone and shows why (#90).
-                model.setDeck(deck, controller: index)
+        let following = !model.layers.isEmpty && controller.wrappedValue.followLayers != false
+        if !model.layers.isEmpty {
+            row("Layers") {
+                Toggle("Follow controller layers", isOn: Binding(
+                    get: { following },
+                    set: { controller.wrappedValue.followLayers = $0 }
+                ))
+                .font(Theme.ui(Theme.Size.label)).tint(Self.on)
+                // The LC6000's own Shift + deck select steps channel 1-4, so it picks deck 1-4 itself (#79).
+                if following { hint("Shift + deck select on the controller picks Deck 1-4") }
             }
-            fieldError(.deck(controller: index))
+        }
+        if !following {
+            row("Deck") {
+                DeckPicker(deck: controller.wrappedValue.deck, state: model.status.presentation.deckPicker,
+                           problem: model.status.deckProblem) { deck in
+                    // The deck applies at once, as in the panel. A saved change reaches the draft through the rebase on
+                    // model.settings; a refused one leaves the draft alone and shows why (#90).
+                    model.setDeck(deck, controller: index)
+                }
+                fieldError(.deck(controller: index))
+            }
         }
         row("MIDI input") {
             devicePicker(selection: controller.input, devices: sources)
             fieldError(.device(controller: index))
         }
         row("MIDI output") { devicePicker(selection: controller.output, devices: destinations) }
-        row("Channel") {
-            Picker("Channel", selection: controller.channel) {
-                Text("From the profile").tag(Int?.none)
-                ForEach(1...16, id: \.self) { Text("\($0)").tag(Int?.some($0)) }
+        // Deck and channel come from the controller's layers while it follows them (#79).
+        if !following {
+            row("Channel") {
+                Picker("Channel", selection: controller.channel) {
+                    Text("From the profile").tag(Int?.none)
+                    ForEach(1...16, id: \.self) { Text("\($0)").tag(Int?.some($0)) }
+                }
+                .labelsHidden().fixedSize()
+                fieldError(.channel(controller: index))
             }
-            .labelsHidden().fixedSize()
-            fieldError(.channel(controller: index))
         }
         if settings.wrappedValue.controllers.count > 1 {
             row("") {

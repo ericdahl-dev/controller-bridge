@@ -50,6 +50,9 @@ public final class Coordinator {
         var chosenOutput: MIDIEndpoint.ID?
         /// The MIDI channel picked in Settings (#25), 1-16, or nil for the profile's.
         var channel: Int?
+        /// One of the deck layers of a controller that follows its own layers (#79): it shares the unit with the
+        /// other layers, on its own channel.
+        var followsLayers = false
         /// The destination its LEDs go to, once open.
         var destination: MIDIEndpoint?
     }
@@ -131,6 +134,17 @@ public final class Coordinator {
         report(index, "Disconnected \(source.name)" + (detail.map { " (\($0))" } ?? ""))
     }
 
+    /// Whether two controllers are layers of one unit: both follow layers, on different channels. Two following
+    /// entries on one channel would put two decks on one layer, so they don't share.
+    private func sharesLayers(_ a: Int, with b: Int) -> Bool {
+        guard controllers[a].followsLayers, controllers[b].followsLayers else { return false }
+        let channelA = controllers[a].bridge.mapping.midi.channel, channelB = controllers[b].bridge.mapping.midi.channel
+        guard channelA != channelB, let source = controllers[b].source else { return channelA != channelB }
+        // Another layer already on this unit with my channel means this unit's layer is taken.
+        return !controllers.indices.contains { $0 != a && controllers[$0].source?.id == source.id
+            && controllers[$0].followsLayers && controllers[$0].bridge.mapping.midi.channel == channelA }
+    }
+
     /// Opens the controller's ports if a matching device is present. Returns whether its input is connected.
     private func connect(_ index: Int) -> Bool {
         let sources = midiSystem.sources
@@ -138,8 +152,10 @@ public final class Coordinator {
         if let chosen = controllers[index].chosenInput {
             source = sources.first { $0.id == chosen }
         } else {
-            // Automatic: a unit another controller already has stays with it.
-            let claimed = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].source?.id })
+            // Automatic: a unit another controller already has stays with it, except that a controller following its
+            // own layers shares its unit with its other layers, each on its own channel (#79).
+            let claimed = Set(controllers.indices.filter { $0 != index && !sharesLayers(index, with: $0) }
+                .compactMap { controllers[$0].source?.id })
             let free = sources.filter { !claimed.contains($0.id) }
             let known = controllers[index].knownSourceID.flatMap { id in free.first { $0.id == id } }
             source = known ?? free.first { ControllerProfile.matching($0.name, in: profiles) != nil }
@@ -246,8 +262,22 @@ public final class Coordinator {
         if let diagnostics {
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
-        for controller in controllers where controller.source?.id == source { controller.bridge.handle(event) }
+        for index in controllers.indices where controllers[index].source?.id == source {
+            layerSignal(event, controller: index)
+            controllers[index].bridge.handle(event)
+        }
         disconnectFailedOutputs()
+    }
+
+    /// The controller's own deck-layer switch (#79): its layer note on this entry's channel, 127 as the layer becomes
+    /// active and 0 as it stops being active.
+    private func layerSignal(_ event: MIDIEvent, controller index: Int) {
+        let mapping = controllers[index].bridge.mapping
+        guard let layerNote = mapping.midi.layerNote, case .noteOn(let channel, let note, let velocity) = event,
+              Int(note) == layerNote, Int(channel) + 1 == mapping.midi.channel else { return }
+        status.controllers[index].activeLayer = velocity > 0
+        // A hand still on Cue or a pad as the layer changes would leave it held on the old deck.
+        if velocity == 0 { controllers[index].bridge.releaseAll() } else { controllers[index].bridge.becameActiveLayer() }
     }
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
@@ -368,12 +398,16 @@ public final class Coordinator {
         status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
         var controller = Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first)
         controller.channel = entry.channel
+        controller.followsLayers = entry.followLayers == true
         controllers.append(controller)
+        status.controllers[index].followsLayers = controller.followsLayers
         controllers[index].bridge = makeBridge(first, for: index)
         setDevices(input: entry.input, output: entry.output, controller: index)
     }
 
     private func update(_ index: Int, to entry: ControllerSettings) {
+        controllers[index].followsLayers = entry.followLayers == true
+        status.controllers[index].followsLayers = controllers[index].followsLayers
         setDeck(entry.deck, controller: index)
         if entry.channel != controllers[index].channel {
             controllers[index].channel = entry.channel

@@ -23,6 +23,33 @@ public struct CoordinatorStatus: Equatable, Sendable {
     }
 }
 
+extension CoordinatorStatus {
+    /// The status as the menu shows it (#79): a run of layer entries (one unit following its layers) becomes the
+    /// one entry for its active layer, or its first layer before any layer signal. Other controllers stay as they are.
+    public func collapsingLayers() -> CoordinatorStatus {
+        var out = self
+        var folded: [ControllerStatus] = []
+        var group: [ControllerStatus] = []
+        func flush() {
+            if let shown = group.first(where: \.activeLayer) ?? group.first { folded.append(shown) }
+            group = []
+        }
+        for controller in controllers {
+            if controller.followsLayers {
+                // A new run starts when the channel order restarts: a second following entry's layers.
+                if let last = group.last, controller.deck <= last.deck { flush() }
+                group.append(controller)
+            } else {
+                flush()
+                folded.append(controller)
+            }
+        }
+        flush()
+        out.controllers = folded
+        return out
+    }
+}
+
 public struct ControllerStatus: Equatable, Sendable {
     /// The Syndicate deck this controller drives, 1-4.
     public var deck: Int
@@ -39,10 +66,14 @@ public struct ControllerStatus: Equatable, Sendable {
     public var lastProfile: String?
     /// Why it last disconnected, if it has (#91).
     public var lastDisconnect: DisconnectReason?
+    /// This entry is a deck layer the controller has switched to (#79): its layer note came in at velocity 127.
+    public var activeLayer: Bool
+    /// This entry is one deck layer of a controller that follows its own layers (#79).
+    public var followsLayers: Bool
 
     public init(
         deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false, outputOpen: Bool = false,
-        lastProfile: String? = nil, lastDisconnect: DisconnectReason? = nil
+        lastProfile: String? = nil, lastDisconnect: DisconnectReason? = nil, activeLayer: Bool = false, followsLayers: Bool = false
     ) {
         self.lastProfile = lastProfile
         self.lastDisconnect = lastDisconnect
@@ -52,6 +83,8 @@ public struct ControllerStatus: Equatable, Sendable {
         self.profile = profile
         self.master = master
         self.outputOpen = outputOpen
+        self.activeLayer = activeLayer
+        self.followsLayers = followsLayers
     }
 }
 
