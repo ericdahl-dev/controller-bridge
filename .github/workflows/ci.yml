@@ -27,6 +27,11 @@ jobs:
       - name: Package tests
         working-directory: Packages/ControllerBridgeKit
         run: swift test
+      # The release workflow (#28) only runs on tags, so its scripts are tested here on every pull request.
+      - name: Release script tests
+        run: |
+          scripts/test-preflight.sh
+          python3 -I scripts/test_ci_profile.py
 
   app:
     name: App build (Release, ad-hoc)
