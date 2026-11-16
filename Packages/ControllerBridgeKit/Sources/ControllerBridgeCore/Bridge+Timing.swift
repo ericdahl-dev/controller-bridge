@@ -38,6 +38,12 @@ extension Bridge {
         led(mapping.leds.ring, lit ? Self.velocity(ringColor) : Self.off)
     }
 
+    /// New deck colors (#123): the ring repaints in its deck's.
+    func setDeckColors(_ colors: DeckColors) {
+        deckColors = colors
+        ringLED()
+    }
+
     /// The deck's badge color, so the ring shows which deck this layer drives (#122).
     var ringColor: [Int] {
         guard mapping.leds.ringFollowsDeck, let deck = deckColors[mapping.deck.number] else { return mapping.leds.ringColor }

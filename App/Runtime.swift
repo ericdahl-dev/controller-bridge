@@ -47,6 +47,7 @@ enum BridgeHost {
                 status.lastDropout = coordinatorStatus.lastDropout
                 status.sweeping = coordinatorStatus.sweeping
                 status.demo = coordinatorStatus.demo
+                status.deckColors = coordinatorStatus.deckColors
             }
         }
     }
