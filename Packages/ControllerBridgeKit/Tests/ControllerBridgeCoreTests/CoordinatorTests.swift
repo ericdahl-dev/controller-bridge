@@ -1,5 +1,5 @@
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// A fake LC6000 plus a fake Syndicate, plugged into a Coordinator. Tests check only what comes out: the OSC sent

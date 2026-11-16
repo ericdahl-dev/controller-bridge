@@ -1,5 +1,5 @@
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// Pitch fader, jog and Needle Drop. Expected values come from the Python bridge's tests and codec.

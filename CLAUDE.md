@@ -1,4 +1,4 @@
-# lc6000-osc-bridge
+# controller-bridge
 
 ## Working rules
 
@@ -10,7 +10,7 @@
 
 ### Issue tracker
 
-GitHub Issues on ericdahl-dev/lc6000-osc-bridge, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+GitHub Issues on ericdahl-dev/controller-bridge, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
