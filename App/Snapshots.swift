@@ -90,6 +90,7 @@ enum Snapshots {
         do { try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true) } catch {
             print("Couldn't create \(directory): \(error)"); return
         }
+        write(buttonStates, to: "\(directory)/buttons.png")
         for (name, configure) in states {
             let status = BridgeStatus()
             configure(status)
@@ -114,10 +115,40 @@ enum Snapshots {
         log.append(.oscOut(OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])))
         log.append(.oscIn(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)])))
         log.append(.oscIn(OSCMessage("/Syndicate/Deck/1/Progress", [.float(0.25)])))
+        // A connected controller with its LED output open, and one with no controller at all (#70).
+        let connected = BridgeStatus()
+        connected.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", outputOpen: true)]
+        connected.feedback = .listening(port: 9096)
+        connected.syndicateFeedback = .live
+        let empty = DiagnosticsLog()
         for tab in DiagnosticsWindow.Tab.allCases {
-            let window = DiagnosticsWindow(log: log, sweeping: tab == .sweep, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {}, tab: tab, scrolls: false)
-            write(window.frame(width: 720, height: 420), to: "\(directory)/diagnostics-\(tab.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")).png")
+            let name = tab.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")
+            let window = DiagnosticsWindow(
+                log: log, status: connected, sweeping: tab == .sweep, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+                tab: tab, scrolls: false
+            )
+            write(window.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name).png")
+            let blank = DiagnosticsWindow(
+                log: empty, status: BridgeStatus(), sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+                tab: tab, scrolls: false
+            )
+            write(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png")
         }
+    }
+
+    /// The shared button styles (#67): normal, selected (bar + heavier text) and keyboard focus (ring).
+    private static var buttonStates: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            HStack(spacing: Theme.Space.s) {
+                Button("Normal") {}.buttonStyle(FlatButtonStyle())
+                Button("Selected") {}.buttonStyle(FlatButtonStyle(selected: true))
+                Button("Focused") {}.buttonStyle({ var style = FlatButtonStyle(); style.showsFocusForSnapshot = true; return style }())
+            }
+            Button("Setup guide…") {}.buttonStyle(LinkButtonStyle())
+        }
+        .padding(Theme.Space.xl)
+        .frame(width: 360)
+        .background(Theme.panel)
     }
 
     private static func icons(_ state: IconState) -> some View {

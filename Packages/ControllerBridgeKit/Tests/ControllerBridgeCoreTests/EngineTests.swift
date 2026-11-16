@@ -142,7 +142,7 @@ struct EngineTests {
         #expect(seen.values == [
             CoordinatorStatus(controllers: [ControllerStatus(deck: 1, connected: false, lastEvent: nil)]),
             CoordinatorStatus(
-                controllers: [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping")],
+                controllers: [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true)],
                 devices: [DeviceStatus(name: "DENON LC6000 PRIME", profile: "Custom mapping", note: nil)]
             ),
         ])
@@ -325,5 +325,21 @@ struct EngineTests {
 
         #expect(rig.coordinator.status.controllers.map(\.deck) == [1, 2])
         #expect(rig.midi.connected == [Rig.lc6000.id, unitB.id])
+    }
+
+    @Test("An imported profile from the pipe reaches the Coordinator: Play moves to its new note")
+    func setProfilesFromThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        var mapping = try Mapping.bundledDefault()
+        mapping.notes.buttons["play"] = 60
+        let pipe = EventPipe()
+
+        pipe.producer.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)])
+        pipe.producer.midi(.noteOn(channel: 0, note: 60, velocity: 127), source: Rig.lc6000.id)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
     }
 }

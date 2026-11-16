@@ -33,6 +33,8 @@ final class BridgeStatus {
     var demo = false
     var feedback: Feedback = .starting
     var problem: String?
+    /// The running mapping (#24): the bundled profile's name, or that an imported file is in use.
+    var mappingInUse = "Bundled default"
 
     var isConnected: Bool {
         guard problem == nil, !controllers.isEmpty, case .listening = feedback else { return false }
@@ -56,6 +58,9 @@ final class BridgeModel {
     private let storage = UserDefaultsStorage()
     /// What Settings shows and changes (#19). Saved in user defaults.
     private(set) var settings: BridgeSettings?
+    /// The profiles that ship with the app, and the ones running (with any import applied, #24).
+    private var bundledProfiles: [ControllerProfile] = []
+    private(set) var profiles: [ControllerProfile] = []
 
     init() {
         // Line-buffered stdout, so the smoke script sees the log even when it stops the app.
@@ -154,10 +159,18 @@ final class BridgeModel {
         let log = UnifiedLogSink()
         // Each connected device gets the profile its name matches (#43). The OSC settings come from the first
         // profile's mapping until Settings (#19) holds them.
-        let profiles: [ControllerProfile]
-        do { profiles = try ControllerProfile.bundled() } catch {
+        let bundled: [ControllerProfile]
+        do { bundled = try ControllerProfile.bundled() } catch {
             status.problem = "Couldn't load the controller profiles: \(error)"
             return
+        }
+        // A saved import (#24) applies at launch; one that no longer passes the check is set aside, and says why.
+        let (profiles, importProblems) = MappingStore.profiles(bundled: bundled)
+        bundledProfiles = bundled
+        self.profiles = profiles
+        status.mappingInUse = MappingStore.hasImport && importProblems.isEmpty ? "Imported: \(profiles[0].name)" : "Bundled default"
+        if !importProblems.isEmpty {
+            log.log("The saved mapping import was ignored: " + importProblems.joined(separator: "; "))
         }
         let mapping = profiles[0].mapping
         let settings = BridgeSettings.load(from: storage, defaults: .defaults(from: mapping))
@@ -202,6 +215,43 @@ final class BridgeModel {
             pipe.producer.setControllers(settings.controllers)
         }
         if !settings.ledsEnabled { pipe.producer.setLEDs(enabled: false) }
+    }
+
+    // MARK: Mapping import, export and reset (#24)
+
+    /// Checks the file and, if it passes, saves a copy and runs it: held controls are released and the controller
+    /// resyncs. Returns every problem; on any problem nothing changes and the old mapping keeps running.
+    func importMapping(from url: URL) -> [String] {
+        let data: Data
+        do { data = try Data(contentsOf: url) } catch { return ["Couldn't read \(url.lastPathComponent): \(error.localizedDescription)"] }
+        guard let active = profiles.first else { return ["The bridge didn't start, so there is no mapping to change."] }
+        let imported: ControllerProfile
+        do {
+            imported = try ControllerProfile.importing(data, bundled: bundledProfiles, active: active.id)
+        } catch MappingError.invalid(let problems) {
+            return problems
+        } catch {
+            return ["\(error)"]
+        }
+        do { try MappingStore.save(data) } catch { return ["Couldn't save the mapping: \(error.localizedDescription)"] }
+        profiles = MappingStore.replacing(imported, in: bundledProfiles)
+        status.mappingInUse = "Imported: \(imported.name)"
+        producer?.setProfiles(profiles)
+        return []
+    }
+
+    /// Writes the running profile, whole, so it can be edited and imported again.
+    func exportMapping(to url: URL) throws {
+        guard let active = profiles.first else { return }
+        try active.exported().write(to: url, options: .atomic)
+    }
+
+    /// Back to the bundled profiles; the saved import is deleted.
+    func resetMapping() {
+        MappingStore.remove()
+        profiles = bundledProfiles
+        status.mappingInUse = "Bundled default"
+        producer?.setProfiles(bundledProfiles)
     }
 }
 
