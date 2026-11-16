@@ -56,7 +56,7 @@ struct DiagnosticsWindow: View {
                 content
             }
             .padding(Theme.Space.xl)
-            StatusLineView(presentation: presentation, deck: status.shownDeck)
+            StatusLineView(presentation: presentation)
         }
         .frame(minWidth: 640, minHeight: 420)
         .background(Theme.background)
