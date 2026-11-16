@@ -73,6 +73,7 @@ enum Snapshots {
         do { try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true) } catch {
             print("Couldn't create \(directory): \(error)"); return
         }
+        write(buttonStates, to: "\(directory)/buttons.png")
         for (name, configure) in states {
             let status = BridgeStatus()
             configure(status)
@@ -101,6 +102,21 @@ enum Snapshots {
             let window = DiagnosticsWindow(log: log, sweeping: tab == .sweep, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {}, tab: tab, scrolls: false)
             write(window.frame(width: 720, height: 420), to: "\(directory)/diagnostics-\(tab.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")).png")
         }
+    }
+
+    /// The shared button styles (#67): normal, selected (bar + heavier text) and keyboard focus (ring).
+    private static var buttonStates: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            HStack(spacing: Theme.Space.s) {
+                Button("Normal") {}.buttonStyle(FlatButtonStyle())
+                Button("Selected") {}.buttonStyle(FlatButtonStyle(selected: true))
+                Button("Focused") {}.buttonStyle({ var style = FlatButtonStyle(); style.showsFocusForSnapshot = true; return style }())
+            }
+            Button("Setup guide…") {}.buttonStyle(LinkButtonStyle())
+        }
+        .padding(Theme.Space.xl)
+        .frame(width: 360)
+        .background(Theme.panel)
     }
 
     private static func icons(_ state: IconState) -> some View {

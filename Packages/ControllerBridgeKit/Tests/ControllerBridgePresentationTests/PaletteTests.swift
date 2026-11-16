@@ -28,4 +28,20 @@ struct PaletteTests {
         let ratio = Contrast.ratio(foreground, surface)
         #expect(ratio >= 4.5, "\(name): \(ratio)")
     }
+
+    /// Non-text contrast (WCAG 1.4.11): a UI edge or a selection mark that is the only cue needs 3:1 against what's
+    /// around it (#67).
+    static let nonTextPairs: [(String, RGB, RGB)] = [
+        ("button edge on panel", Palette.buttonEdge, Palette.panel),
+        ("button edge on button", Palette.buttonEdge, Palette.button),
+        ("selected bar on button", Palette.selectedBar, Palette.button),
+        ("selected bar on raised button", Palette.selectedBar, Palette.buttonRaised),
+    ]
+
+    @Test("Button edges and the selected-item bar reach 3:1 where they are the only cue", arguments: nonTextPairs.indices)
+    func nonTextContrast(index: Int) {
+        let (name, mark, surface) = Self.nonTextPairs[index]
+        let ratio = Contrast.ratio(mark, surface)
+        #expect(ratio >= 3, "\(name): \(ratio)")
+    }
 }

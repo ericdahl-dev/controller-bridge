@@ -163,20 +163,83 @@ struct StatusLineView: View {
     }
 }
 
-/// Syndicate's flat button: a slightly lighter gray, a hairline edge and a small radius.
+/// Syndicate's flat button: a slightly lighter gray, an edge and a small radius. Keyboard focus draws a ring, hover
+/// lifts the fill, and a selected one (a tab, a deck) gets a bar and bold text, not just a fill (#67).
 struct FlatButtonStyle: ButtonStyle {
-    /// Shown raised, as the active tab in a row of them (#26).
-    var raised = false
+    var selected: Bool
+    #if DEBUG
+    /// Snapshots only: draw the focus ring without real keyboard focus.
+    var showsFocusForSnapshot = false
+    #endif
+
+    init(selected: Bool = false) { self.selected = selected }
+
+    /// The older name, from the Diagnostics tabs (#26): raised is selected.
+    init(raised: Bool) { self.selected = raised }
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Theme.ui(12, .bold))
-            .textCase(.uppercase)
-            .foregroundStyle(Theme.text)
-            .frame(maxWidth: .infinity, minHeight: 26)
-            .background(configuration.isPressed || raised ? Theme.buttonRaised : Theme.button,
-                        in: RoundedRectangle(cornerRadius: Theme.corner))
-            .overlay(RoundedRectangle(cornerRadius: Theme.corner).strokeBorder(Theme.hairline, lineWidth: 1))
-            .contentShape(Rectangle())
+        #if DEBUG
+        FlatButton(configuration: configuration, selected: selected, forcedFocus: showsFocusForSnapshot)
+        #else
+        FlatButton(configuration: configuration, selected: selected, forcedFocus: false)
+        #endif
+    }
+
+    private struct FlatButton: View {
+        let configuration: ButtonStyleConfiguration
+        let selected: Bool
+        let forcedFocus: Bool
+        @Environment(\.isFocused) private var focused
+        @State private var hovering = false
+
+        var body: some View {
+            let shape = RoundedRectangle(cornerRadius: Theme.corner)
+            configuration.label
+                .font(Theme.ui(Theme.Size.label, selected ? .heavy : .bold))
+                .textCase(.uppercase)
+                .foregroundStyle(Theme.text)
+                .frame(maxWidth: .infinity, minHeight: 26)
+                .background(configuration.isPressed || hovering || selected ? Theme.buttonRaised : Theme.button, in: shape)
+                .overlay(alignment: .bottom) {
+                    if selected {
+                        Rectangle().fill(Color(Palette.selectedBar)).frame(height: 2).padding(.horizontal, Theme.Space.s)
+                    }
+                }
+                .overlay(shape.strokeBorder(Color(Palette.buttonEdge), lineWidth: 1))
+                .focusRing(focused || forcedFocus, shape: shape)
+                .contentShape(Rectangle())
+                .onHover { hovering = $0 }
+                .accessibilityAddTraits(selected ? .isSelected : [])
+        }
+    }
+}
+
+/// A plain text button (a link such as "Setup guide…", a disclosure): no fill, but the same focus ring (#67).
+struct LinkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        LinkButton(configuration: configuration)
+    }
+
+    private struct LinkButton: View {
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isFocused) private var focused
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(Theme.ui(Theme.Size.body, .semibold))
+                .foregroundStyle(hovering || configuration.isPressed ? Theme.text : Theme.caption)
+                .padding(.horizontal, Theme.Space.xs)
+                .focusRing(focused, shape: RoundedRectangle(cornerRadius: Theme.corner))
+                .contentShape(Rectangle())
+                .onHover { hovering = $0 }
+        }
+    }
+}
+
+extension View {
+    /// A 2 pt ring in the text color just outside the view, for keyboard focus.
+    func focusRing(_ shown: Bool, shape: some InsettableShape) -> some View {
+        overlay(shape.inset(by: -3).stroke(Theme.text, lineWidth: 2).opacity(shown ? 1 : 0))
     }
 }

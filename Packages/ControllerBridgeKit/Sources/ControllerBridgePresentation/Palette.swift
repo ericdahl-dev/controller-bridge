@@ -7,6 +7,10 @@ public enum Palette {
     public static let button = RGB(hex: 0x2A2A2A)
     public static let buttonRaised = RGB(hex: 0x424242)
     public static let hairline = RGB(hex: 0x393939)
+    /// A button's edge: the lightest gray that still reads at 3:1 on both the panel and the button fill (#67).
+    public static let buttonEdge = RGB(hex: 0x747474)
+    /// The bar under a selected tab or deck: the second, non-color cue for "selected" (#67).
+    public static let selectedBar = RGB(hex: 0xD5D5D5)
 
     // Text.
     public static let text = RGB(hex: 0xD5D5D5)
