@@ -339,6 +339,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var pulseMs: Int
         /// What Syndicate's LEDs show once feedback has stopped: dim, or off.
         public var staleIdle: StaleIdle
+        /// The velocities a button LED takes for full, dim and off (#194).
+        public var levels: LEDLevels
 
         public enum BeatPulse: String, Equatable, Sendable, Codable, CaseIterable {
             case off, beat, downbeat
@@ -359,12 +361,14 @@ public struct Mapping: Equatable, Sendable, Codable {
             case beatPulse = "beat_pulse"
             case pulseMs = "pulse_ms"
             case staleIdle = "stale_idle"
+            case levels
         }
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
-            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true
+            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000
         ) {
+            self.levels = levels
             self.ringFollowsDeck = ringFollowsDeck
             self.pitchCenter = pitchCenter
             self.ring = ring
@@ -388,9 +392,34 @@ public struct Mapping: Equatable, Sendable, Codable {
                 dimUnlitButtons: try c.decode(Bool.self, forKey: .dimUnlitButtons),
                 beatPulse: try c.decode(BeatPulse.self, forKey: .beatPulse), pulseMs: try c.decode(Int.self, forKey: .pulseMs),
                 staleIdle: try c.decode(StaleIdle.self, forKey: .staleIdle),
-                ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true
+                ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true,
+                levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000
             )
         }
+    }
+
+    /// A button LED's velocity for full, dim and off (#194). Each member may be left out: the LC6000's 127, 1 and 0.
+    public struct LEDLevels: Equatable, Sendable, Codable {
+        public var full: Int
+        public var dim: Int
+        public var off: Int
+
+        public static let lc6000 = LEDLevels(full: 127, dim: 1, off: 0)
+
+        public init(full: Int, dim: Int, off: Int) {
+            self.full = full
+            self.dim = dim
+            self.off = off
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            full = try c.decodeIfPresent(Int.self, forKey: .full) ?? Self.lc6000.full
+            dim = try c.decodeIfPresent(Int.self, forKey: .dim) ?? Self.lc6000.dim
+            off = try c.decodeIfPresent(Int.self, forKey: .off) ?? Self.lc6000.off
+        }
+
+        enum CodingKeys: String, CodingKey { case full, dim, off }
     }
 
     /// The mapping that ships with the app.

@@ -125,7 +125,8 @@
       "dim_unlit_buttons": true,
       "beat_pulse": "off",
       "pulse_ms": 100,
-      "stale_idle": "dim"
+      "stale_idle": "dim",
+      "levels": { "full": 127, "dim": 1, "off": 0 }
     }
   }
 }
