@@ -25,6 +25,8 @@ enum BridgeHost {
             Task { @MainActor in
                 status.bridges = coordinatorStatus.controllers
                 status.devices = coordinatorStatus.devices
+                status.syndicateFeedback = coordinatorStatus.feedback
+                status.lastDropout = coordinatorStatus.lastDropout
             }
         }
     }
