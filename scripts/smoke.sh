@@ -5,6 +5,11 @@
 # Usage: scripts/smoke.sh [path/to/ControllerBridge.app]
 # Default app: the Release ad-hoc build from `xcodebuild ... -configuration Release -derivedDataPath build`.
 # Use Release: a Debug ad-hoc build drops the hardened runtime, so it doesn't test what ships.
+#
+# It pins the app to the helper's virtual MIDI device by editing the app's saved settings for the run (#86), and puts
+# the user's settings back on exit, pass or fail. Only a SIGKILL skips that; then run
+#   defaults delete dev.ericdahl.ControllerBridge settings.v1
+# to go back to automatic devices.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
