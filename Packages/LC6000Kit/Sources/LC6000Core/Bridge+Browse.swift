@@ -18,4 +18,8 @@ extension Bridge {
     func browserForward(_ pressed: Bool) {
         if pressed { send("Browser/Enter", .int(1)) }
     }
+
+    func selectPress(_ pressed: Bool) {
+        if pressed { send("Browser/L\(mapping.deck.number)", .int(1)) }
+    }
 }

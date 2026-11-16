@@ -1,3 +1,4 @@
+import Foundation
 import LC6000Core
 import Testing
 
@@ -38,5 +39,27 @@ struct BrowseTests {
             OSCMessage("/Syndicate/Browser/Back", [.int(1)]),
             OSCMessage("/Syndicate/Browser/Enter", [.int(1)]),
         ])
+    }
+
+    @Test("Select press loads the browser's track onto this deck, on press only")
+    func selectPressLoads() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, 18)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Browser/L1", [.int(1)])])
+    }
+
+    @Test("Select press loads onto the mapping's deck")
+    func selectPressUsesDeck() throws {
+        let mapping = try Mapping.bundledDefault(overriddenBy: Data(#"{ "deck": { "number": 3 } }"#.utf8))
+        let osc = Rig.FakeOSC()
+        let coordinator = Coordinator(
+            mapping: mapping,
+            midi: Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out]),
+            osc: osc, clock: Rig.FakeClock(), log: Rig.FakeLog()
+        )
+        coordinator.start()
+        osc.sent.removeAll()
+        coordinator.midi(.noteOn(channel: 0, note: 18, velocity: 127), source: Rig.lc6000.id)
+        #expect(osc.sent == [OSCMessage("/Syndicate/Browser/L3", [.int(1)])])
     }
 }

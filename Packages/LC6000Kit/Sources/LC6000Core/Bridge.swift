@@ -15,6 +15,7 @@ final class Bridge {
             "track_next": { $0.trackNext },
             "back": { $0.browserBack },
             "forward": { $0.browserForward },
+            "select_press": { $0.selectPress },
         ]
     }
 
