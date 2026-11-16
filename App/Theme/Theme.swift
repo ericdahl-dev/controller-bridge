@@ -35,6 +35,27 @@ enum Theme {
 
     static let corner: CGFloat = 3
 
+    /// Spacing steps. Use these, not one-off numbers, so every window keeps one rhythm.
+    enum Space {
+        static let xs: CGFloat = 3
+        static let s: CGFloat = 6
+        static let m: CGFloat = 10
+        static let l: CGFloat = 12
+        static let xl: CGFloat = 16
+        static let xxl: CGFloat = 24
+    }
+
+    /// Type sizes, smallest first.
+    enum Size {
+        static let caption: CGFloat = 10
+        static let body: CGFloat = 11
+        static let label: CGFloat = 12
+        static let emphasis: CGFloat = 13
+        static let title: CGFloat = 14
+        static let value: CGFloat = 15
+        static let heading: CGFloat = 18
+    }
+
     /// Inter for UI text, with tabular figures so numbers don't jitter.
     static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         let name = switch weight {
@@ -56,7 +77,7 @@ enum Theme {
     }
 
     /// Small, bold, uppercase gray caption, as over Syndicate's REMAIN or QUANTIZE.
-    static let captionFont = ui(10, .bold)
+    static let captionFont = ui(Size.caption, .bold)
 }
 
 /// A deck number on its colored square.
