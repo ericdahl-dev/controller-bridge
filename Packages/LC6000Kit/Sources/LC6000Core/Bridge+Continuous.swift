@@ -68,6 +68,7 @@ extension Bridge {
         if bendDirection != 0, clock.now - lastJogTime >= Double(mapping.jog.bendReleaseMs) / 1000 {
             endBend()
         }
+        timingTick()
     }
 
     func endBend() {

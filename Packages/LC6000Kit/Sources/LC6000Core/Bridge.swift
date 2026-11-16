@@ -92,6 +92,8 @@ final class Bridge {
 
     // Syndicate's state, from feedback.
     var playing = false
+    /// A quantized start is waiting for the beat.
+    var playPending = false
     var loaded = false
     var synced = false
     var sliderEnabled = true
@@ -173,6 +175,7 @@ final class Bridge {
         case "playing":
             playing = value
             if !playing, bendDirection != 0 { endBend() }
+        case "playpending": playPending = value
         case "loaded": loaded = value
         case "sync": synced = value
         case "temposliderenabled": sliderEnabled = value
@@ -195,7 +198,7 @@ final class Bridge {
     // MARK: LEDs
 
     func refreshLEDs() {
-        buttonLED("play", on: playing)
+        playLED()
         refreshTransportLEDs()
         loopLEDs()
         padLEDs()
