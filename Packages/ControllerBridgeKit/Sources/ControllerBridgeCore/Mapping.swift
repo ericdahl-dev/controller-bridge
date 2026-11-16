@@ -47,17 +47,21 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
 
         public var rollSizes: [String]
+        /// The MIDI channel (1-16) the pads use (#224), when not the deck's: the DDJ-400/FLX4's deck 1 pads are on 8.
+        /// Left out (the LC6000), the pads are on the deck's channel.
+        public var channel: Int?
 
         /// The LC6000's: 1/32 of a beat on pad 1 up to 4 beats on pad 8.
         public static let lc6000RollSizes = RollSize.allCases.map(\.rawValue)
 
         public init(rollSizes: [String] = Self.lc6000RollSizes) { self.rollSizes = rollSizes }
 
-        enum CodingKeys: String, CodingKey { case rollSizes = "roll_sizes" }
+        enum CodingKeys: String, CodingKey { case rollSizes = "roll_sizes", channel }
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? Self.lc6000RollSizes
+            channel = try c.decodeIfPresent(Int.self, forKey: .channel)
         }
     }
 
@@ -115,10 +119,18 @@ public struct Mapping: Equatable, Sendable, Codable {
     public struct Layer: Equatable, Sendable, Codable {
         public var channel: Int
         public var deck: Int
+        /// The channel this layer's pads use (#224), when not `channel`: the DDJ-400/FLX4's deck 2 pads are on 10.
+        public var padChannel: Int?
 
-        public init(channel: Int, deck: Int) {
+        enum CodingKeys: String, CodingKey {
+            case channel, deck
+            case padChannel = "pad_channel"
+        }
+
+        public init(channel: Int, deck: Int, padChannel: Int? = nil) {
             self.channel = channel
             self.deck = deck
+            self.padChannel = padChannel
         }
     }
 

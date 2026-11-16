@@ -722,7 +722,13 @@ public final class Coordinator {
         var mapping = profile.mapping
         // The deck and channel are settings, not part of the profile.
         mapping.deck.number = status.controllers[index].deck
-        if let channel = controllers[index].channel { mapping.midi.channel = channel }
+        if let channel = controllers[index].channel {
+            mapping.midi.channel = channel
+            // A deck layer's pads may have their own channel (#224).
+            if let padChannel = profile.mapping.midi.layers.first(where: { $0.channel == channel })?.padChannel {
+                mapping.pads.channel = padChannel
+            }
+        }
         let bridge = makeBridge( mapping)
         bridge.setLEDsEnabled(ledsEnabled)
         bridge.layerShown = layerInFront(index, channel: mapping.midi.channel, layers: profile.mapping.midi.layers)
