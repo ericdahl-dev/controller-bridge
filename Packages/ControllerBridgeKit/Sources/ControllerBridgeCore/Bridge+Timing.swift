@@ -35,6 +35,12 @@ extension Bridge {
         if let pulse = lastPulseTime, let beat = lastClockTime, clock.now - beat <= Self.clockTimeout {
             lit = lit && clock.now - pulse < Double(mapping.leds.pulseMs) / 1000
         }
-        led(mapping.leds.ring, lit ? Self.velocity(mapping.leds.ringColor) : Self.off)
+        led(mapping.leds.ring, lit ? Self.velocity(ringColor) : Self.off)
+    }
+
+    /// The deck's badge color, so the ring shows which deck this layer drives (#122).
+    var ringColor: [Int] {
+        guard mapping.leds.ringFollowsDeck, let deck = deckColors[mapping.deck.number] else { return mapping.leds.ringColor }
+        return deck
     }
 }

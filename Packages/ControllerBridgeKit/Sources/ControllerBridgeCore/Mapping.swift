@@ -262,7 +262,10 @@ public struct Mapping: Equatable, Sendable, Codable {
     public struct LEDs: Equatable, Sendable, Codable {
         public var pitchCenter: Int
         public var ring: Int
+        /// The ring color when `ringFollowsDeck` is off.
         public var ringColor: [Int]
+        /// The ring shows its deck's badge color (#122). On in the bundled profile; a file without the key inherits it.
+        public var ringFollowsDeck: Bool
         public var rollPadColor: [Int]
         public var loopPadColor: [Int]
         public var dimUnlitButtons: Bool
@@ -285,6 +288,7 @@ public struct Mapping: Equatable, Sendable, Codable {
             case pitchCenter = "pitch_center"
             case ring
             case ringColor = "ring_color"
+            case ringFollowsDeck = "ring_follows_deck"
             case rollPadColor = "roll_pad_color"
             case loopPadColor = "loop_pad_color"
             case dimUnlitButtons = "dim_unlit_buttons"
@@ -295,8 +299,9 @@ public struct Mapping: Equatable, Sendable, Codable {
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
-            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle
+            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true
         ) {
+            self.ringFollowsDeck = ringFollowsDeck
             self.pitchCenter = pitchCenter
             self.ring = ring
             self.ringColor = ringColor
@@ -306,6 +311,21 @@ public struct Mapping: Equatable, Sendable, Codable {
             self.beatPulse = beatPulse
             self.pulseMs = pulseMs
             self.staleIdle = staleIdle
+        }
+
+        /// A profile written before #122 has no ring_follows_deck: following the deck is the default.
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(
+                pitchCenter: try c.decode(Int.self, forKey: .pitchCenter), ring: try c.decode(Int.self, forKey: .ring),
+                ringColor: try c.decode([Int].self, forKey: .ringColor),
+                rollPadColor: try c.decode([Int].self, forKey: .rollPadColor),
+                loopPadColor: try c.decode([Int].self, forKey: .loopPadColor),
+                dimUnlitButtons: try c.decode(Bool.self, forKey: .dimUnlitButtons),
+                beatPulse: try c.decode(BeatPulse.self, forKey: .beatPulse), pulseMs: try c.decode(Int.self, forKey: .pulseMs),
+                staleIdle: try c.decode(StaleIdle.self, forKey: .staleIdle),
+                ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true
+            )
         }
     }
 

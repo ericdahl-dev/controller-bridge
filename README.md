@@ -35,7 +35,7 @@ LC6000 ◀──MIDI LEDs──  Controller Bridge  ◀──OSC feedback :9096�
 - Play, Cue, Sync and Master follow Syndicate's state. Play blinks while a quantized start is pending.
 - Key Lock, Slip, Shift and the pad-mode buttons show the bridge's own state.
 - Pads show your hot cues in Syndicate's cue colors, quantized to the LC6000's 64-color table. A held pad lights brighter.
-- The platter ring lights when a track is loaded. It can also pulse on each beat or on the downbeat.
+- The platter ring lights when a track is loaded, in the color of its deck's badge in the app (deck 1 gray, 2 yellow, 3 orange, 4 teal), so switching layers changes it. It can also pulse on each beat or on the downbeat.
 
 **Recovery:**
 - Unplugging the LC6000, sleeping the Mac, switching layers or quitting releases every held control first, including a held Pitch Bend or a latched Reverse.
