@@ -2,14 +2,15 @@
 """Builds the LC6000 jog-display upload (#121, #165): a 198x198 PNG in, a jogseq plan out.
 
   python3 -I jogbuild.py png  <in.png> <out.png>     re-encode for the unit: rotated 180°, the PNG layout it accepts
-  python3 -I jogbuild.py plan <in.png> <out.plan>    the full host + upload + commit + show plan for jogseq
+  python3 -I jogbuild.py plan <in.png> <out.plan> [slot]   the host + upload + commit + show plan for jogseq (slot 1)
   python3 -I jogbuild.py selftest                    encoder round trips, no device
 
 The recipe, as verified on hardware (see #121's recipe comment):
   CTL  F0 00 02 0B 7F 10 60 00 04 04 01 01 00 F7, then F0 00 20 7F 01 F7      host hello (without it: ack 06)
+  (0C's three bytes are only the 21-bit size; the slot is 0E's first byte and 0A's image index.)
   WD   90 01 00, 0A 01 00 06 0D, 0C <size>, 0D <offset + 7-bit data>…, 0E <slot + byte-sum>
   WD   wait for the 01 10 0F 00 01 00 acks (06 = refused), then 7E 00 06 01, 10 (commit; unit answers 01 10 10)
-  WD   0A … 01 00 01 0D                                                        show image index 01
+  WD   0A … 01 00 <slot> 0D                                                    show the uploaded slot (djay: 01 logo, 02 cover art)
 Frame: F0 00 02 0B <target 7F> 10 <cmd> <len, 14-bit> <payload> F7.
 """
 import struct
@@ -26,7 +27,11 @@ HOST_HELLO = [
 ]
 HOST_GOODBYE = [0xF0, 0x00, 0x20, 0x7F, 0x02, 0xF7]
 SHOW_BLANK = [0x01, 0x00, 0x06, 0x0D]     # 0A before an upload: image index 06
-SHOW_INDEX_1 = [0x01, 0x00, 0x01, 0x0D]   # 0A after the commit: image index 01, the upload
+
+
+def show(slot):
+    """0A after the commit: show image index `slot`, the upload's slot (djay: 01 for its logo, 02 for cover art)."""
+    return [0x01, 0x00, slot, 0x0D]
 
 
 def frame(cmd, payload):
@@ -147,11 +152,11 @@ def hexs(msg):
     return ' '.join(f'{b:02X}' for b in msg)
 
 
-def plan(png):
-    """A jogseq plan: hello, upload, wait for the acks, commit, show index 01."""
-    msgs = upload(png)
+def plan(png, slot=1):
+    """A jogseq plan: hello, upload into `slot`, wait for the acks, commit, show that slot."""
+    msgs = upload(png, slot)
     body, commit = msgs[:-1], msgs[-1]
-    lines = ["# LC6000 jog upload (#121): host hello, upload, acks, commit, show index 01"]
+    lines = [f"# LC6000 jog upload (#121): host hello, upload to slot {slot}, acks, commit, show index {slot}"]
     lines += [f"0 CTL {hexs(m)}" for m in HOST_HELLO]
     lines.append("0 WD 90 01 00")
     lines += [f"{8 if i == 1 else 0} WD {hexs(m)}" for i, m in enumerate(body)]
@@ -159,7 +164,7 @@ def plan(png):
     lines.append(f"0 ACKS {len(body) - 1} 20000")
     lines.append(f"0 WD {hexs([0xF0, 0x7E, 0x00, 0x06, 0x01, 0xF7])}")
     lines.append(f"10 WD {hexs(commit)}")
-    lines.append(f"500 WD {hexs(frame(0x0A, SHOW_INDEX_1))}")
+    lines.append(f"500 WD {hexs(frame(0x0A, show(slot)))}")
     return '\n'.join(lines) + '\n'
 
 
@@ -177,18 +182,21 @@ def selftest():
     assert sysex_decode.lc6000_images(messages) == [png], "upload rebuilds to the same PNG"
     assert commit_0e(bytes([1, 2, 3])) == [1, 0, 0, 0, 0, 0, 0, 0, 6], "byte-sum as nibbles"
     assert commit_0e(bytes([0xFF] * 0x3AEE))[1:] == [(0x3AEE * 0xFF >> s) & 0xF for s in range(28, -4, -4)]
+    slot2 = plan(png, slot=2)
+    assert "7F 10 0E 00 09 02 " in slot2, "0E names the slot"
+    assert slot2.rstrip().endswith("7F 10 0A 00 04 01 00 02 0D F7"), "the show index is the slot"
     print("selftest ok:", len(png), "byte PNG,", len(messages), "messages")
 
 
 if __name__ == '__main__':
     if len(sys.argv) == 2 and sys.argv[1] == 'selftest':
         selftest()
-    elif len(sys.argv) == 4 and sys.argv[1] in ('png', 'plan'):
+    elif len(sys.argv) in (4, 5) and sys.argv[1] in ('png', 'plan'):
         source = open(sys.argv[2], 'rb').read()
         if sys.argv[1] == 'png':
             open(sys.argv[3], 'wb').write(for_unit(source))
         else:
-            open(sys.argv[3], 'w').write(plan(for_unit(source)))
+            open(sys.argv[3], 'w').write(plan(for_unit(source), slot=int(sys.argv[4]) if len(sys.argv) == 5 else 1))
     else:
         print(__doc__)
         sys.exit(2)

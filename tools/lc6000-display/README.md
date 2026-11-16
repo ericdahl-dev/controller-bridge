@@ -16,10 +16,17 @@ In short:
    - `0D`: chunks of a 21-bit offset plus the data as an MSB-first 7-bit bitstream
    - `0E`: slot `01`, then the PNG's 32-bit byte-sum as 8 nibbles
 3. **Commit:** wait for the `01 10 0F 00 01 00` acks, then send `7E 00 06 01` and `10`.
-4. **Show:** `0A 01 00 01 0D`, which displays image index 01.
+4. **Show:** `0A 01 00 <slot> 0D`, which displays the image in that slot.
 
-The display shows uploads **rotated 180°**, so images are sent pre-rotated. Uploads move about 3.1 KB/s, so they're
-for what changes rarely, not real-time readouts.
+`0C`'s three bytes are only the 21-bit size. The slot is `0E`'s first byte and `0A`'s image index: djay keeps its
+logo in slot 01 and loads cover art into slot 02 (#165).
+
+The display shows uploads **rotated 180°**, so images are sent pre-rotated.
+
+**Upload speed depends on the send API, not the unit.**
+- `MIDISendSysex` paces SysEx at MIDI 1.0 speed (31,250 baud, about 3.1 KB/s), so a 30 KB image takes about 10 s.
+- djay hands about 74 KB of cover art to CoreMIDI in about 40 ms, and the unit acks it all within about 1.1 s:
+  roughly 60–70 KB/s, as UMP or packet-list sends at USB speed.
 
 For real-time readouts, djay also sends two channel messages to WD on ch1 (#165):
 - **Pitch bend:** the platter marker. It's the virtual record's angle at 33⅓ rpm, wrapping once per turn, sent at
@@ -30,8 +37,8 @@ For real-time readouts, djay also sends two channel messages to WD on ch1 (#165)
 
 | File | What it does |
 |---|---|
-| `jogbuild.py` | PNG in, upload out. `png` re-encodes a 198×198 PNG for the unit (rotated 180°, in the layout the unit has accepted). `plan` writes a `jogseq` plan. `selftest` runs round trips with no device. |
-| `jogseq.swift` | Sends a plan to the unit once, listening on both ports. `dry` checks a plan and prints it. |
+| `jogbuild.py` | PNG in, upload out. `png` re-encodes a 198×198 PNG for the unit (rotated 180°, in the layout the unit has accepted). `plan` writes a `jogseq` plan, into slot 1 or the slot given. `selftest` runs round trips with no device. |
+| `jogseq.swift` | Sends a plan to the unit once, listening on both ports. `send` paces SysEx through `MIDISendSysex`; `burst` sends it as UMP packets at USB speed, as djay does, and checks the acks after. `dry` checks a plan and prints it. `selftest` checks the UMP packing. |
 | `sysex_decode.py` | Reads a MIDI Monitor capture (`.mmon`, text export or `.syx`), groups the SysEx, and rebuilds image uploads as PNG files (`--dump DIR`). |
 | `mmon_list.py` | Lists every message in a `.mmon`, with timing and "To"/"From" endpoints. |
 | `images/deck-ring.png` | Our app icon at 198×198, as a source image, not rotated. |
@@ -45,7 +52,8 @@ python3 -I jogbuild.py selftest
 python3 -I jogbuild.py plan images/deck-ring.png /tmp/deck-ring.plan
 swiftc -O -swift-version 5 jogseq.swift -o /tmp/jogseq
 /tmp/jogseq dry /tmp/deck-ring.plan      # checks and prints; sends nothing
-/tmp/jogseq send /tmp/deck-ring.plan     # sends once: see the rules below
+/tmp/jogseq send /tmp/deck-ring.plan     # sends once, SysEx paced at MIDI 1.0 speed: see the rules below
+/tmp/jogseq burst /tmp/deck-ring.plan    # the same at USB speed (not yet tried on hardware)
 ```
 
 A plan is one message per line: `<delay ms> WD|CTL <hex bytes>`, or `<delay ms> ACKS <count> <timeout ms>`, which

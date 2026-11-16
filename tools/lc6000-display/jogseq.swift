@@ -15,13 +15,43 @@ func name(_ e: MIDIEndpointRef) -> String {
     MIDIObjectGetStringProperty(e, kMIDIPropertyDisplayName, &s)
     return (s?.takeRetainedValue() as String?) ?? "?"
 }
+/// One SysEx message (F0 … F7) as UMP SysEx7 packets of two words each: the bytes between F0 and F7, six at a time.
+func sysex7Packets(_ message: [UInt8]) -> [[UInt32]] {
+    let body = Array(message.dropFirst().dropLast())
+    let pieces = stride(from: 0, to: max(body.count, 1), by: 6).map { Array(body[$0..<min($0 + 6, body.count)]) }
+    return pieces.enumerated().map { index, piece in
+        let status: UInt32 = pieces.count == 1 ? 0 : index == 0 ? 1 : index == pieces.count - 1 ? 3 : 2
+        let b = piece.map(UInt32.init) + Array(repeating: 0, count: 6 - piece.count)
+        return [0x3000_0000 | status << 20 | UInt32(piece.count) << 16 | b[0] << 8 | b[1],
+                b[2] << 24 | b[3] << 16 | b[4] << 8 | b[5]]
+    }
+}
+
 func hex(_ b: [UInt8], _ n: Int = 12) -> String {
     b.prefix(n).map { String(format: "%02X", $0) }.joined(separator: " ") + (b.count > n ? " … (\(b.count) B)" : "")
 }
 
 enum Step { case send(port: String, bytes: [UInt8]); case acks(count: Int, timeoutMs: Int) }
 let args = CommandLine.arguments
-guard args.count == 3, ["dry", "send"].contains(args[1]) else { print("usage: dry|send <plan>"); exit(2) }
+if args.count == 2 && args[1] == "selftest" {
+    // UMP SysEx7 (MIDI 2.0 spec, type 3): up to 6 bytes a packet; status 0 complete, 1 start, 2 continue, 3 end.
+    func hex(_ packets: [[UInt32]]) -> String { packets.map { $0.map { String(format: "%08X", $0) }.joined(separator: " ") }.joined(separator: " | ") }
+    let identity = sysex7Packets([0xF0, 0x7E, 0x00, 0x06, 0x01, 0xF7])
+    let thirteen = sysex7Packets([0xF0] + Array(1...13).map(UInt8.init) + [0xF7])
+    let checks = [
+        (hex(identity), "30047E00 06010000"),
+        (hex(thirteen), "30160102 03040506 | 30260708 090A0B0C | 30310D00 00000000"),
+        (hex(sysex7Packets([0xF0, 1, 2, 3, 4, 5, 6, 0xF7])), "30060102 03040506"),
+        (hex(sysex7Packets([0xF0, 0xF7])), "30000000 00000000"),
+    ]
+    for (got, want) in checks where got != want { print("FAIL: \(got) != \(want)"); exit(1) }
+    print("selftest ok")
+    exit(0)
+}
+guard args.count == 3, ["dry", "send", "burst"].contains(args[1]) else { print("usage: dry|send|burst <plan> | selftest"); exit(2) }
+// send: SysEx through MIDISendSysex, which paces it at MIDI 1.0 speed (31250 baud, about 3.1 KB/s).
+// burst: SysEx as UMP packets through MIDISendEventList, at USB speed, as djay sends it (#165); acks are checked after.
+let burst = args[1] == "burst"
 var plan: [(delay: Int, step: Step)] = []
 for (n, raw) in try String(contentsOfFile: args[2], encoding: .utf8).split(separator: "\n").enumerated() {
     let line = raw.trimmingCharacters(in: .whitespaces)
@@ -147,6 +177,7 @@ func send(_ bytes: [UInt8], to d: MIDIEndpointRef) -> Bool {
         _ = MIDIEventListAdd(&list, MemoryLayout<MIDIEventList>.size, packet, 0, 1, [word])
         return MIDISendEventList(outPort, d, &list) == noErr
     }
+    if burst { return sendBurst(bytes, to: d) }
     let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bytes.count)
     buffer.initialize(from: bytes, count: bytes.count)
     defer { buffer.deallocate() }
@@ -161,6 +192,24 @@ func send(_ bytes: [UInt8], to d: MIDIEndpointRef) -> Bool {
     let deadline = Date().addingTimeInterval(15)
     while !done.flag && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.005)) }
     return done.flag && req.pointee.bytesToSend == 0
+}
+
+/// Sends a SysEx message as UMP SysEx7 packets without waiting: 512 packets (1024 words, about 4.3 KB of event
+/// list) per MIDIEventList, well inside its 64 KB buffer.
+func sendBurst(_ bytes: [UInt8], to d: MIDIEndpointRef) -> Bool {
+    let capacity = 65536
+    let raw = UnsafeMutableRawPointer.allocate(byteCount: capacity, alignment: 8)
+    defer { raw.deallocate() }
+    let list = raw.bindMemory(to: MIDIEventList.self, capacity: 1)
+    let packets = sysex7Packets(bytes)
+    for start in stride(from: 0, to: packets.count, by: 512) {
+        var packet = MIDIEventListInit(list, ._1_0)
+        for words in packets[start..<min(start + 512, packets.count)] {
+            packet = MIDIEventListAdd(list, capacity, packet, 0, words.count, words)
+        }
+        guard MIDISendEventList(outPort, d, list) == noErr else { return false }
+    }
+    return true
 }
 
 print("\(since()) listening on WD and CTL")
