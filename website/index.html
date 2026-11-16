@@ -9,6 +9,17 @@
 <link rel="alternate" type="text/markdown" href="index.md">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#171717">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="DeckBridge">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="DeckBridge: LC6000 PRIME on Mac, with 14-bit jog over OSC">
+<meta property="og:description" content="DeckBridge, a Mac menu-bar app, connects a Denon LC6000 PRIME to Syndicate over OSC: 14-bit jog and pitch, deck layers and LED feedback. macOS 26 or later.">
+<meta property="og:url" content="https://getdeckbridge.app/">
+<meta property="og:image" content="https://getdeckbridge.app/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The DeckBridge app icon and the line The LC6000 PRIME bridge for your Mac, beside the DeckBridge menu-bar panel with a controller connected and feedback live">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="site-kind" content="software">
 <meta name="page-type" content="software">
 <script type="application/ld+json">
@@ -243,7 +254,7 @@
      the type is the dealt pairing (geist), self-hosted in site.css instead of Google Fonts -->
 <style>
 :root {
-  --p-bg: #171717; --p-surface: #20201f; --p-ink: #ededea; --p-muted: #8c8c8a;
+  --p-bg: #171717; --p-surface: #20201f; --p-ink: #ededea; --p-muted: #a8a8a5;
   --p-accent: #00ff48; --p-accent-ink: #171717; --p-action: #00ff48; --p-action-ink: #171717;
   --p-inv-bg: #ededea; --p-inv-surface: #dcdcd9; --p-inv-ink: #171717; --p-inv-muted: #5f5f5e;
   --p-inv-accent: #171717; --p-inv-accent-ink: #ededea; --p-inv-action: #171717; --p-inv-action-ink: #ededea;
@@ -277,8 +288,8 @@
     <a class="nav__logo" href="#top"><img src="img/favicon-64.png" alt="" width="28" height="28">DeckBridge</a>
     <nav class="nav__links" aria-label="Main">
       <div class="nav__item"><a class="nav__link" href="#setup">Setup</a></div>
+      <div class="nav__item"><a class="nav__link" href="#how">Signal</a></div>
       <div class="nav__item"><a class="nav__link" href="#features">Features</a></div>
-      <div class="nav__item"><a class="nav__link" href="#screens">Screens</a></div>
       <div class="nav__item"><a class="nav__link" href="#faq">Questions</a></div>
       <div class="nav__item"><a class="nav__link" href="support/">Support</a></div>
     </nav>
@@ -305,76 +316,24 @@
           <a class="btn btn--secondary" href="support/">Read the setup guide</a>
         </div>
       </div>
-      <div class="hero__window" data-fx="grain-gradient" data-fx-seed="7" role="img" aria-label="The DeckBridge panel with an LC6000 PRIME connected, feedback from Syndicate live and deck 1 selected, beside the MIDI monitor naming each control as it moves">
-        <div class="ly-piece db-win" aria-hidden="true">
-          <div class="db-win__bar"><span class="db-win__dots"><i></i><i></i><i></i></span><span><b>DeckBridge</b><span class="db-win__sub"> · Denon LC6000 PRIME</span></span><span class="db-win__sp"></span><span class="db-label">Controller</span><span class="db-live">Connected</span><span class="db-label">Feedback</span><span class="db-live">Live</span></div>
-          <div class="db-win__body">
-            <div class="db-panel">
-              <div class="db-panel__name">Denon LC6000 PRIME</div>
-              <div class="db-decks"><span class="is-on">1</span><span>2</span><span>3</span><span>4</span></div>
-              <div class="db-status"><span class="db-label">Controller</span><span class="db-label">Feedback</span><span class="db-live">Connected</span><span class="db-live">Live</span></div>
-              <div class="db-ports">OSC → 9090 · FEEDBACK ← 9096</div>
-              <div class="db-btns"><span>Settings…</span><span>Diagnostics…</span></div>
-              <div class="db-quiet"><span>Setup guide</span><span>Demo controller: Off</span><span>Quit</span></div>
-            </div>
-            <div class="db-mon">
-              <div class="db-tabs"><span class="is-on">MIDI monitor</span><span>LED sweep</span><span>OSC log</span></div>
-              <div class="db-rows" data-ly-steps="900">
-                <div class="db-row db-row--head"><span>Time</span><span>Ch</span><span>Message</span><span>Mapping</span></div>
-                <div class="db-row"><span>1234.500</span><span>ch1</span><span>note_on note=1 velocity=127</span><b>play</b></div>
-                <div class="db-row" data-step><span>1234.600</span><span>ch1</span><span>note_off note=1 velocity=0</span><b>play</b></div>
-                <div class="db-row" data-step><span>1234.700</span><span>ch1</span><span>note_on note=32 velocity=127</span><b>pad1</b></div>
-                <div class="db-row" data-step><span>1234.800</span><span>ch1</span><span>control_change control=17 value=10</span><b>jog_msb</b></div>
-                <div class="db-row" data-step><span>1234.900</span><span>ch1</span><span>control_change control=99 value=64</span><span class="db-warn">Unmapped</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="hero__window" data-fx="grain-gradient" data-fx-seed="7">
+        <!-- the real menu-bar panel (img/1-panel.webp, pr-assets ff60571), cropped to its window by CSS -->
+        <div class="ly-piece db-heroshot"><span class="db-crop" style="--sw: 1028; --sh: 658; --sx: 206; --sy: 196"><img src="img/1-panel.webp" alt="The DeckBridge menu-bar panel with a Denon LC6000 PRIME connected, feedback from Syndicate live, deck 1 of 4 selected, and OSC on ports 9090 and 9096" width="1440" height="900" fetchpriority="high" data-source="client" data-subject="the menu-bar panel"></span></div>
       </div>
     </div></div>
   </section>
 
-  <!-- APP-FRAME: the setup guide (App/SetupGuideView.swift), its four settings beside the open step -->
+  <!-- the setup guide: the real screenshot (img/3-setup.webp), cropped to its window -->
   <section class="section" id="setup" aria-labelledby="setup-h">
     <div class="wrap">
-      <div class="grid grid--top">
-        <h2 class="span-5" id="setup-h">Four settings in Syndicate, once</h2>
-        <div class="span-6 start-7 stack-4">
-          <p class="muted">Turn OSC input on, point feedback at port 9096, tick the subscriptions and switch the LC6000’s MIDI input off. DeckBridge opens this guide on first launch.</p>
+      <div class="grid grid--top fill db-split">
+        <div class="span-5 stack-4">
+          <h2 id="setup-h">Four settings in Syndicate, once</h2>
+          <p class="muted">Turn OSC input on, point feedback at port 9096, tick the subscriptions and switch the LC6000’s MIDI input off. DeckBridge opens this guide on first launch and says when Syndicate answers.</p>
           <a class="link" href="support/#setup">Read the setup steps</a>
         </div>
+        <div class="panel span-6 start-7 db-shotframe"><div class="db-shot"><span class="db-crop" style="--sw: 524; --sh: 658; --sx: 458; --sy: 196"><img src="img/3-setup.webp" alt="The DeckBridge setup guide listing four Syndicate settings: OSC input on port 9090, OSC feedback to 127.0.0.1 port 9096, the feedback subscriptions, and the LC6000 PRIME's MIDI input off" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the setup guide"></span></div></div>
       </div>
-      <div class="ui app fill db-win" role="img" aria-label="The DeckBridge setup guide: four Syndicate settings, each marked done, beside the OSC feedback subscriptions being turned on one by one">
-        <div class="app__pane app__pane--list db-guide">
-          <div class="db-guide__head"><span class="db-label">Set up Syndicate</span><b>Four settings, once</b><span>DeckBridge talks to Syndicate over OSC. Open Syndicate’s Settings and check these.</span></div>
-          <ol class="db-steps">
-            <li><i>1</i><span class="db-label">Settings → OSC</span><span>Turn OSC INPUT ENABLED on. The listen port is 9090.</span><em>Done</em></li>
-            <li><i>2</i><span class="db-label">Settings → OSC Feedback</span><span>Set DEST IP to 127.0.0.1 and PORT to 9096.</span><em>Done</em></li>
-            <li class="is-on"><i>3</i><span class="db-label">OSC Feedback → Subscriptions</span><span>Turn on the eight feedback subscriptions.</span><em>Done</em></li>
-            <li><i>4</i><span class="db-label">Settings → MIDI</span><span>Turn the LC6000 PRIME’s MIDI input off.</span><em>Done</em></li>
-          </ol>
-          <p class="db-guide__note">On start, DeckBridge asks Syndicate to RESEND STATE, so the LEDs light at once.</p>
-        </div>
-        <div class="app__pane app__pane--open db-subs" data-ui-loop>
-          <div class="db-guide__head"><span class="db-label">Settings → OSC Feedback → Subscriptions</span><b>Turn on these OSC FEEDBACK subscriptions</b></div>
-          <ul class="db-checks" data-ly-steps="700">
-            <li>Playing</li><li data-step>PlayPending</li><li data-step>Loaded and TrackInfo</li><li data-step>Position/Progress</li>
-            <li data-step>TempoSlider/TempoSliderEnabled</li><li data-step>Cues</li><li data-step>BPM/Sync</li><li data-step>Loop</li>
-          </ul>
-          <div class="db-guide__foot" data-ly-steps="700"><span><span class="db-label">Controller</span><span class="db-live">Connected</span></span><span><span class="db-label">Feedback</span><span class="db-live">Live</span></span><span class="db-done">Done: feedback live</span></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- the signal path: a sync diagram card (assets/diagrams), its own spec inline -->
-  <section class="section" id="how" aria-labelledby="how-h">
-    <div class="wrap">
-      <div class="grid grid--top">
-        <h2 class="span-5" id="how-h">From the LC6000 to Syndicate over OSC</h2>
-        <p class="span-6 start-7 muted">DeckBridge reads the controller’s USB MIDI, sends it to Syndicate’s OSC input on port 9090 and lights the LC6000 from Syndicate’s feedback on port 9096.</p>
-      </div>
-      <div class="panel db-path"><div class="dg" data-diagram><script type="application/json">{"layout": "sync", "size": "band", "alt": "The LC6000 PRIME's jog wheel, pitch fader and pads go to DeckBridge over USB MIDI, and on to Syndicate's OSC input on port 9090; Syndicate's feedback on port 9096 comes back to light the controller.", "left": {"label": "LC6000 PRIME", "icon": "ui:sliders-horizontal", "meta": "USB MIDI", "rows": [{"label": "Jog wheel", "meta": "14-bit"}, {"label": "Pitch fader", "meta": "14-bit"}, {"label": "Pads and LEDs", "meta": "MIDI"}]}, "link": {"label": "DeckBridge", "icon": "ui:refresh-cw"}, "right": {"label": "Syndicate", "icon": "ui:music", "meta": "OSC", "rows": [{"label": "OSC input", "meta": "9090"}, {"label": "OSC feedback", "meta": "9096"}, {"label": "Decks", "meta": "1 to 4"}]}}</script></div></div>
     </div>
   </section>
 
@@ -386,75 +345,41 @@
     </div>
   </section>
 
-  <!-- FEATURES-2x2 on two screens (g2): each panel holds a piece of the app's own UI, live -->
-  <section class="section g2 bg-mist" id="features" aria-labelledby="features-h">
+  <!-- the signal path: a sync diagram card (assets/diagrams), its own spec inline -->
+  <section class="section" id="how" aria-labelledby="how-h">
     <div class="wrap">
-      <div class="group">
-        <div class="section-head">
-          <h2 id="features-h">Built for the Denon LC6000 Syndicate setup. <span class="muted">Four decks, live lights and a clean recovery.</span></h2>
-        </div>
-        <div class="grid">
-          <article class="card card--row span-6">
-            <h3>Follows the LC6000’s deck layers</h3>
-            <p>Shift + deck select steps through the LC6000’s own layers, and DeckBridge drives Syndicate decks 1 to 4 to match.</p>
-            <div class="panel panel--flush db-card" role="img" aria-label="The deck badges 1 to 4 in the DeckBridge panel, each layer of the LC6000 driving the Syndicate deck of the same number">
-              <div class="db-card__in" aria-hidden="true">
-                <div class="db-decks db-decks--lg"><span class="is-on">1</span><span>2</span><span>3</span><span>4</span></div>
-                <ul class="db-log" data-ly-steps="800" data-ui-loop>
-                  <li><span class="db-mono">Shift + Deck 1</span><b>Syndicate deck 1</b></li>
-                  <li data-step><span class="db-mono">Shift + Deck 2</span><b>Syndicate deck 2</b></li>
-                  <li data-step><span class="db-mono">Shift + Deck 3</span><b>Syndicate deck 3</b></li>
-                  <li data-step><span class="db-mono">Shift + Deck 4</span><b>Syndicate deck 4</b></li>
-                </ul>
-              </div>
-            </div>
-          </article>
-          <article class="card card--row span-6">
-            <h3>Lights the LC6000 from Syndicate</h3>
-            <p>Play, Cue, Sync and the pads follow Syndicate’s state, with hot cues in its cue colours and the jog ring in the deck’s.</p>
-            <div class="panel panel--flush db-card" role="img" aria-label="LED feedback in DeckBridge: Play, Cue and Sync lit from Syndicate's state, the pads in the hot cue colours and the jog ring in the deck colour">
-              <div class="db-card__in" aria-hidden="true">
-                <ul class="db-leds">
-                  <li><i class="led led--on"></i><span>Play</span><em>Playing</em></li>
-                  <li><i class="led led--on"></i><span>Cue</span><em>Lit</em></li>
-                  <li><i class="led led--on"></i><span>Sync</span><em>On</em></li>
-                  <li><span class="pads"><i style="--c:#ff3b30"></i><i style="--c:#ffd60a"></i><i style="--c:#30d158"></i><i style="--c:#40c8e0"></i></span><span>Pads</span><em>Cue colours</em></li>
-                  <li><i class="led" style="--c:#ff0000"></i><span>Jog ring</span><em>Deck 1 colour</em></li>
-                </ul>
-              </div>
-            </div>
-          </article>
-        </div>
+      <div class="grid grid--top">
+        <h2 class="span-5" id="how-h">From the LC6000 to Syndicate over OSC</h2>
+        <p class="span-6 start-7 muted">DeckBridge reads the controller’s USB MIDI, sends it to Syndicate’s OSC input on port 9090 and lights the LC6000 from Syndicate’s feedback on port 9096.</p>
+      </div>
+      <div class="panel db-path"><div class="dg" data-diagram><script type="application/json">{"layout": "sync", "alt": "The LC6000 PRIME's jog wheel, pitch fader and pads go to DeckBridge over USB MIDI, and on to Syndicate's OSC input on port 9090; Syndicate's feedback on port 9096 comes back to light the controller.", "left": {"label": "LC6000 PRIME", "icon": "ui:sliders-horizontal", "meta": "USB MIDI", "rows": [{"label": "Jog wheel", "meta": "14-bit"}, {"label": "Pitch fader", "meta": "14-bit"}, {"label": "Pads and LEDs", "meta": "MIDI"}]}, "link": {"label": "DeckBridge", "icon": "ui:refresh-cw"}, "right": {"label": "Syndicate", "icon": "ui:music", "meta": "OSC", "rows": [{"label": "OSC input", "meta": "9090"}, {"label": "OSC feedback", "meta": "9096"}, {"label": "Decks", "meta": "1 to 4"}]}}</script></div></div>
+    </div>
+  </section>
+
+  <!-- FEATURES on the dark band (its inverse ground): two cards, each panel a crop of a real screenshot -->
+  <section class="section ground-inverse" id="features" style="--hm: 2" aria-labelledby="features-h">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="features-h">Built for the Denon LC6000 Syndicate setup. <span class="muted">Deck layers, live LEDs and a safe recovery.</span></h2>
       </div>
       <div class="grid">
-        <article class="card card--row span-6">
-          <h3>Releases held controls on unplug</h3>
-          <p>Unplug, sleep the Mac, switch layers or quit, and every held control lets go first. Plug back in and the LEDs repaint.</p>
-          <div class="panel panel--flush db-card" role="img" aria-label="DeckBridge's recovery: held controls released on unplug, the LEDs repainted on replug, and Syndicate's state asked for again after it restarts">
-            <div class="db-card__in" aria-hidden="true">
-              <ul class="db-log">
-                <li><span class="db-mono">Unplugged</span><b>Held controls released</b></li>
-                <li><span class="db-mono">Plugged back in</span><b>LEDs repainted</b></li>
-                <li><span class="db-mono">Syndicate restarted</span><b>State asked for again</b></li>
-              </ul>
-              <div class="db-status db-status--card"><span class="db-label">Controller</span><span class="db-label">Feedback</span><span class="db-live">Connected</span><span class="db-live">Live</span></div>
-            </div>
-          </div>
+        <article class="card card--row card--open span-6">
+          <h3>Checks every control in Diagnostics</h3>
+          <p>A MIDI monitor, an LED sweep and an OSC log show what goes in and comes out, with unmapped messages marked.</p>
+          <div class="panel db-shotpanel"><div class="db-shot"><span class="db-crop" style="--sw: 1020; --sh: 402; --sx: 210; --sy: 198"><img src="img/2-diagnostics.webp" alt="The DeckBridge Diagnostics window: the MIDI monitor lists each LC6000 PRIME message with its mapping, such as play, pad1 and jog, and marks unmapped ones" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the diagnostics window"></span></div></div>
         </article>
-        <article class="card card--row span-6">
+        <article class="card card--row card--open span-6">
           <h3>Runs with no hardware in demo mode</h3>
           <p>The demo controller plays a script against a simulated Syndicate, so you can watch DeckBridge work before you plug in.</p>
-          <div class="panel panel--flush db-card" role="img" aria-label="The DeckBridge panel with the demo controller on: the deck stays put and nothing is sent to the network">
-            <div class="db-card__in" aria-hidden="true">
-              <div class="db-panel__name">Denon LC6000 PRIME</div>
-              <div class="db-decks db-decks--dim"><span class="is-on">1</span><span>2</span><span>3</span><span>4</span></div>
-              <p class="db-note">Demo controller is on, so the deck stays put.</p>
-              <div class="db-status"><span class="db-label">Demo</span><span class="db-label">Controller</span><span class="db-live db-live--demo">Controller</span><span class="db-live">Connected</span></div>
-              <div class="db-quiet"><span>Setup guide</span><span class="db-demo">Demo controller: On</span><span>Quit</span></div>
-            </div>
-          </div>
+          <div class="panel db-shotpanel"><div class="db-shot"><span class="db-crop" style="--sw: 824; --sh: 402; --sx: 308; --sy: 198"><img src="img/4-demo.webp" alt="The DeckBridge panel in demo mode: a built-in demo controller drives the bridge so you can see it work with no hardware" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the panel in demo mode"></span></div></div>
         </article>
       </div>
+      <ul class="grid db-facts">
+        <li class="span-3"><b>Deck layers.</b> Shift + deck select drives Syndicate decks 1 to 4.</li>
+        <li class="span-3"><b>LEDs.</b> Play, Cue, Sync and the pads follow Syndicate, hot cues in its cue colours.</li>
+        <li class="span-3"><b>Jog ring.</b> Lit in the loaded deck’s colour.</li>
+        <li class="span-3"><b>Recovery.</b> Unplug or quit and held controls let go; plug back in and the LEDs repaint.</li>
+      </ul>
     </div>
   </section>
 
@@ -462,37 +387,8 @@
   <section class="section statement" id="next" data-moment="liquid-type" aria-labelledby="next-h">
     <div class="wrap">
       <p class="t-label">Coming in v1.1</p>
-      <h2 class="mo-lt__type db-big" id="next-h">Art on the jog wheel</h2>
+      <h2 class="mo-lt__type db-big" id="next-h">Art on the LC6000 jog wheel</h2>
       <p class="t-lead db-next">DeckBridge will show art on the LC6000’s jog-wheel display in real time, right under your hand.</p>
-    </div>
-  </section>
-
-  <!-- TABS-TOUR on the dark band (its inverse ground): the four real screenshots, one per tab, cropped to the window -->
-  <section class="section ground-inverse" id="screens" aria-labelledby="screens-h">
-    <div class="wrap">
-      <div class="grid grid--top">
-        <div class="span-5 stack-6">
-          <div class="section-head"><h2 id="screens-h">Inside DeckBridge</h2><p>Four screens from version 1.0.0, as the app shows them.</p></div>
-          <div class="tabs" role="tablist" aria-label="Screens">
-            <button class="tab" role="tab" id="tab-panel" aria-selected="true" aria-controls="tp-panel shot-panel">See the panel</button>
-            <button class="tab" role="tab" id="tab-setup" aria-selected="false" aria-controls="tp-setup shot-setup" tabindex="-1">Follow the setup</button>
-            <button class="tab" role="tab" id="tab-diag" aria-selected="false" aria-controls="tp-diag shot-diag" tabindex="-1">Check the controls</button>
-            <button class="tab" role="tab" id="tab-demo" aria-selected="false" aria-controls="tp-demo shot-demo" tabindex="-1">Try demo mode</button>
-          </div>
-          <div class="db-tabpanels">
-            <div role="tabpanel" id="tp-panel" aria-labelledby="tab-panel"><p>The menu-bar panel shows the controller, the feedback and the deck at a glance, with the OSC ports under them.</p></div>
-            <div role="tabpanel" id="tp-setup" aria-labelledby="tab-setup" hidden><p>The setup guide names each Syndicate setting to change and shows live status as each one takes.</p></div>
-            <div role="tabpanel" id="tp-diag" aria-labelledby="tab-diag" hidden><p>Diagnostics lists every MIDI message with its mapping, and marks the unmapped ones, next to the LED sweep and the OSC log.</p></div>
-            <div role="tabpanel" id="tp-demo" aria-labelledby="tab-demo" hidden><p>With the demo controller on, a scripted controller plays against a simulated Syndicate and nothing goes to the network.</p></div>
-          </div>
-        </div>
-        <div class="frame frame--split span-6 start-7 db-shots">
-          <div class="db-shot" id="shot-panel" style="--sw: 1028; --sh: 658; --sx: 206; --sy: 196"><span class="db-crop"><img src="img/1-panel.webp" alt="The DeckBridge menu-bar panel with a Denon LC6000 PRIME connected, feedback from Syndicate live, deck 1 of 4 selected, and OSC on ports 9090 and 9096" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the menu-bar panel"></span></div>
-          <div class="db-shot" id="shot-setup" style="--sw: 524; --sh: 658; --sx: 458; --sy: 196" hidden><span class="db-crop"><img src="img/3-setup.webp" alt="The DeckBridge setup guide listing four Syndicate settings: OSC input on port 9090, OSC feedback to 127.0.0.1 port 9096, the feedback subscriptions, and the LC6000 PRIME's MIDI input off" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the setup guide"></span></div>
-          <div class="db-shot" id="shot-diag" style="--sw: 1024; --sh: 658; --sx: 208; --sy: 196" hidden><span class="db-crop"><img src="img/2-diagnostics.webp" alt="The DeckBridge Diagnostics window: the MIDI monitor lists each LC6000 PRIME message with its mapping, such as play, pad1 and jog, and marks unmapped ones" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the diagnostics window"></span></div>
-          <div class="db-shot" id="shot-demo" style="--sw: 828; --sh: 658; --sx: 306; --sy: 196" hidden><span class="db-crop"><img src="img/4-demo.webp" alt="The DeckBridge panel in demo mode: a built-in demo controller drives the bridge so you can see it work with no hardware" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the panel in demo mode"></span></div>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -502,7 +398,7 @@
     <div class="wrap">
       <div class="grid grid--top">
         <div class="span-5 stack-6">
-          <div class="section-head"><h2 id="faq-h">Questions about the LC6000, Syndicate and DeckBridge</h2></div>
+          <div class="section-head"><h2 id="faq-h">Questions about DeckBridge</h2></div>
           <div class="db-needs">
             <h3 class="t-label">What you need</h3>
             <ul>
