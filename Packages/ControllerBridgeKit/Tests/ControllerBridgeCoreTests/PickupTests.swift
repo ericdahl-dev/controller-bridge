@@ -56,4 +56,37 @@ struct PickupTests {
         Self.fader(rig, 0x70)
         #expect(rig.osc.sent == [Self.tempo(-0.75011)])
     }
+
+    /// Loads a track at a reported 0.5 and picks the fader up there (0x60, 0.50009).
+    static func pickedUp(_ override: String? = nil) throws -> Rig {
+        let rig = try started(override)
+        report(rig, "Loaded", .int(1))
+        report(rig, "TempoSlider", .float(0.5))
+        fader(rig, 0x60)
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    @Test("A reported tempo that the bridge didn't send (sync, a mouse edit) re-arms pickup")
+    func outsideChangeRearms() throws {
+        let rig = try Self.pickedUp()
+        rig.clock.now = 2
+        Self.report(rig, "TempoSlider", .float(0.0))
+        Self.fader(rig, 0x70)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("A late echo of a value sent during a move doesn't re-arm: send 0.406, 0.422, 0.438, then 0.406 comes back")
+    func lateEchoDoesNotRearm() throws {
+        let rig = try Self.pickedUp()
+        Self.fader(rig, 0x5A)
+        rig.clock.now = 0.1
+        Self.fader(rig, 0x5B)
+        rig.clock.now = 0.2
+        Self.fader(rig, 0x5C)
+        rig.clock.now = 0.3
+        Self.report(rig, "TempoSlider", .float(0.40634))
+        Self.fader(rig, 0x5D)
+        #expect(rig.osc.sent == [Self.tempo(0.40634), Self.tempo(0.42196), Self.tempo(0.43759), Self.tempo(0.45321)])
+    }
 }

@@ -88,6 +88,8 @@ final class Bridge {
     var reportedTempo: Double?
     /// Where the fader was on its last move while armed, to see it cross the reported value.
     var faderPosition: Double?
+    /// TempoSlider values sent lately, with when, so a late echo of one isn't taken for an outside change.
+    var recentTempoSends: [(time: Double, value: Double)] = []
     /// The direction of the PhaseBend being held (1 or -1), or 0 when none is.
     var bendDirection = 0
     var lastJogTime = 0.0
@@ -193,8 +195,8 @@ final class Bridge {
             if !playing, bendDirection != 0 { endBend() }
         case "playpending": playPending = value
         case "temposlider":
-            reportedTempo = message.arguments.first?.number
-            return
+            guard let reported = message.arguments.first?.number else { return }
+            tempoReported(reported)
         case "loaded":
             loaded = value
             if loaded { rearmPickup() }

@@ -20,11 +20,26 @@ extension Bridge {
         guard pickedUp(at: rounded) else { return }
         guard rounded != lastTempo else { return }
         lastTempo = rounded
+        recentTempoSends.removeAll { clock.now - $0.time > Self.echoWindow }
+        recentTempoSends.append((clock.now, rounded))
         sendDeck("TempoSlider", .float(Float(rounded)))
         refreshLEDs()
     }
 
     // MARK: Pickup
+
+    /// How long after a send its echo may still come back from Syndicate.
+    static let echoWindow = 0.5
+
+    /// Syndicate reported its TempoSlider. A value the bridge didn't send (sync, a mouse edit, another controller)
+    /// moved the on-screen slider away from the fader, so pickup re-arms.
+    func tempoReported(_ value: Double) {
+        reportedTempo = value
+        let tolerance = 0.02
+        let isEcho = lastTempo.map { abs($0 - value) <= tolerance } == true
+            || recentTempoSends.contains { clock.now - $0.time <= Self.echoWindow && abs($0.value - value) <= tolerance }
+        if !isEcho { rearmPickup() }
+    }
 
     func rearmPickup() {
         pickupArmed = true
