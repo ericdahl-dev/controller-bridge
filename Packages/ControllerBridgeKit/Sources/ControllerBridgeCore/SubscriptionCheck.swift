@@ -71,8 +71,15 @@ struct SubscriptionCheck: Equatable {
             values[deck, default: []].insert(value)
             if value == "loaded", message.arguments.first?.wholeNumber == 1 { loaded.insert(deck) }
         }
+        // With Loaded and TrackInfo on, every deck sends Loaded, an empty one 0 (#211 capture). Deck values without it
+        // mean that subscription is off, and then no deck can be judged loaded.
+        let anyLoadedValue = values.values.contains { $0.contains("loaded") || $0.contains("trackinfo") }
+        if !values.isEmpty, !anyLoadedValue {
+            missing = [.loaded]
+            return
+        }
         missing = Subscription.allCases.filter { subscription in
-            // Loaded is what marks a deck loaded, so it can't be judged on one (#211's next slice judges it).
+            // Loaded is what marks a deck loaded, judged above.
             guard subscription != .loaded else { return false }
             return loaded.contains { deck in !subscription.values.contains { (values[deck] ?? []).contains($0) } }
         }

@@ -75,4 +75,9 @@ struct EverySubscriptionTests {
             + [OSCMessage("/Syndicate/Deck/2/Position", [.float(0)]), OSCMessage("/Syndicate/Deck/2/PlayerType", [.string("empty")])]
         #expect(try SubscriptionsTests.answered(Self.deck1.map(\.1) + empty).coordinator.status.missingSubscriptions == [])
     }
+
+    @Test("Deck values with no Loaded or TrackInfo from any deck: Loaded and TrackInfo is off (nothing else can be judged)")
+    func loadedMissing() throws {
+        #expect(try Self.missing(leaving: .loaded) == [.loaded])
+    }
 }
