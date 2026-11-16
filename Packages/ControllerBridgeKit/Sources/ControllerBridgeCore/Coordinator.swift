@@ -173,7 +173,8 @@ public final class Coordinator {
     /// The marker and the play light, from the tick: the hand while playing or after a platter move, at most 30 a
     /// second; the light 127 while playing, blinking every half-second while loaded and paused.
     private func jogMarkerTick() {
-        guard let driver = jogDisplay, driver.isConnected, let front = frontIndex else { return }
+        // Connected or only previewing (#221): the driver sends only while connected.
+        guard let driver = jogDisplay, let front = frontIndex else { return }
         let bridge = controllers[front].bridge
         let due = lastMarkerSent.map { clock.now - $0 >= 1 / Self.markerRate - 1e-9 } ?? true
         if due, bridge.playing || markerMoved {
@@ -200,11 +201,13 @@ public final class Coordinator {
     private func updateJogDisplay() {
         guard let driver = jogDisplay else { return }
         let connected = controllers.indices.filter { controllers[$0].source != nil }
-        guard jogDisplayEnabled, let first = connected.first else { return driver.disconnect() }
+        guard let first = connected.first else { return driver.disconnect() }
         let front = connected.first { status.controllers[$0].activeLayer } ?? first
         let deck = status.controllers[front].deck
         let track = controllers[front].bridge.track
-        driver.connect()
+        // Off in Settings, nothing reaches the unit (a goodbye only if it had said hello), but the driver keeps
+        // previewing for the Diagnostics simulator (#221).
+        if jogDisplayEnabled { driver.connect() } else { driver.disconnect() }
         driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255], title: track?.title,
                                       artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType))
     }
