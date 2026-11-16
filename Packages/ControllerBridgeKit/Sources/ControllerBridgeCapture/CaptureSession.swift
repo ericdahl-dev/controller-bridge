@@ -2,8 +2,8 @@
 /// the owner confirms, redoes or skips. The app and the tests feed it raw MIDI bytes, so it needs no CoreMIDI.
 ///
 /// Noise, such as the LC6000's note 52 heartbeat in host mode, isn't credited to a step. The prompt list starts with
-/// an `idle` prompt (hands off), and what arrives then is noise from that point on. When the capture ends, a message
-/// that came in every confirmed step is noise too.
+/// an `idle` prompt (hands off), and what arrives then is noise from that point on. A capture without one falls back,
+/// when it ends, to calling noise what came in every one of three or more confirmed steps.
 public struct CaptureSession: Sendable {
     public let appVersion: String
     public let device: String
@@ -84,11 +84,13 @@ public struct CaptureSession: Sendable {
         unique(finished.filter { $0.status == .confirmed && $0.prompt.gesture == .idle }.flatMap { $0.take.compactMap { Inference.noiseKey($0.bytes) } })
     }
 
-    /// Noise keys heard in every confirmed step (two at least, or nothing can be said to repeat). A step repeated
-    /// with Shift held doesn't count: it repeats its control on purpose.
+    /// Noise keys heard in every confirmed step, for a capture without a confirmed idle step. It takes three steps at
+    /// least, since two steps can share a real control (jog touch and jog edge both send the jog's CCs). A step
+    /// repeated with Shift held doesn't count: it repeats its control on purpose.
     private var repeatedNoise: [[UInt8]] {
+        guard !finished.contains(where: { $0.status == .confirmed && $0.prompt.gesture == .idle }) else { return [] }
         let takes = finished.filter { $0.status == .confirmed && $0.prompt.gesture != .idle && $0.prompt.shiftedOf == nil }.map(\.take)
-        guard takes.count >= 2 else { return [] }
+        guard takes.count >= 3 else { return [] }
         let keys = takes.map { Set($0.compactMap { Inference.noiseKey($0.bytes) }) }
         let everywhere = keys.dropFirst().reduce(keys[0]) { $0.intersection($1) }
         return unique(takes[0].compactMap { Inference.noiseKey($0.bytes) }).filter(everywhere.contains)
