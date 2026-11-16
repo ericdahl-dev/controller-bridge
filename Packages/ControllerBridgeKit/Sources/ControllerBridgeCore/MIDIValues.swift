@@ -1,12 +1,5 @@
 // Conversions from raw LC6000 MIDI values, shared by the control groups.
 
-/// Signed ticks from an LC6000 relative CC value, per the LC6000 PRIME MIDI spec: 0x01-0x3F turn forward that many
-/// ticks, 0x7F-0x40 turn back (0x7F is one tick back), and 0 is no movement.
-func relativeTicks(_ value: UInt8) -> Int {
-    let value = Int(value & 0x7F)
-    return value < 0x40 ? value : value - 0x80
-}
-
 /// An LC6000 pad or ring color velocity for an 8-bit RGB color.
 ///
 /// The 64-entry color table, velocities 0x00-0x3F, is 2 bits per channel laid out 0b00RRGGBB, confirmed on a real
@@ -46,4 +39,24 @@ func vividVelocity(_ red: Int, _ green: Int, _ blue: Int) -> UInt8 {
         return share < 0.3 ? 0 : Int((share * 3).rounded())
     }
     return UInt8(levels[0] << 4 | levels[1] << 2 | levels[2])
+}
+
+/// How a controller's relative encoders (a browse knob, a loop-size knob) write a turn into one CC value (#193).
+public enum EncoderFormat: String, CaseIterable, Equatable, Sendable, Codable {
+    /// The LC6000's: 0x01-0x3F turn forward that many ticks, 0x7F-0x40 turn back (0x7F is one tick back).
+    case twosComplement = "twos_complement"
+    /// 0x40 is no movement; above it turns forward, below it back.
+    case offset64 = "offset_64"
+    /// Bit 6 is the direction (set is back), the low six bits how far; 0x40 is a minus zero.
+    case signMagnitude = "sign_magnitude"
+
+    /// Signed ticks for one CC value.
+    public func ticks(_ value: UInt8) -> Int {
+        let value = Int(value & 0x7F)
+        switch self {
+        case .twosComplement: return value < 0x40 ? value : value - 0x80
+        case .offset64: return value - 0x40
+        case .signMagnitude: return value & 0x40 == 0 ? value : -(value & 0x3F)
+        }
+    }
 }

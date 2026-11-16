@@ -21,7 +21,8 @@
         { "channel": 3, "deck": 3 },
         { "channel": 4, "deck": 4 }
       ],
-      "layer_note": 51
+      "layer_note": 51,
+      "encoder_format": "twos_complement"
     },
     "osc": {
       "host": "127.0.0.1",
