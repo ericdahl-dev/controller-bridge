@@ -415,4 +415,42 @@ struct LayersTests {
         rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: layered)])
         #expect(rig.coordinator.status.controllers.map(\.followsLayers) == [true, false, true, true])
     }
+
+    /// The real unit's two ports, as macOS lists them: the jog display's (WD) first, then the controls'.
+    static let wdIn = MIDIEndpoint(id: 11, name: "Denon DJ LC6000 PRIME WD")
+    static let controlsIn = MIDIEndpoint(id: 12, name: "Denon DJ LC6000 PRIME LC6000 PRIME Controller")
+    static let wdOut = MIDIEndpoint(id: 13, name: "Denon DJ LC6000 PRIME WD")
+    static let controlsOut = MIDIEndpoint(id: 14, name: "Denon DJ LC6000 PRIME LC6000 PRIME Controller")
+
+    static func realUnit(destinations: [MIDIEndpoint] = [wdOut, controlsOut]) throws -> (Coordinator, Rig.FakeMIDISystem) {
+        let midi = Rig.FakeMIDISystem(sources: [wdIn, controlsIn], destinations: destinations)
+        let coordinator = Coordinator(
+            profiles: try ControllerProfile.bundled(), midi: midi, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: Rig.FakeLog()
+        )
+        coordinator.start(
+            controllers: ControllerSettings.expanded([ControllerSettings(deck: 1, input: nil, output: nil)], layers: lc6000Layers),
+            ledsEnabled: true
+        )
+        coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        return (coordinator, midi)
+    }
+
+    @Test("Every layer's LEDs go to the controls' port, never the jog display's (WD): layer 2 lights deck 2's Play there, WD gets nothing")
+    func layersShareTheControlsPort() throws {
+        let (coordinator, midi) = try Self.realUnit()
+        coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 127), source: Self.controlsIn.id)
+        coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: Self.controlsIn.id)   // to layer 2
+        #expect(midi.outputs[Self.wdOut.id]?.sent ?? [] == [])
+        #expect((midi.outputs[Self.controlsOut.id]?.sent ?? []).last { if case .noteOn(_, 1, _) = $0 { true } else { false } }
+            == .noteOn(channel: 0, note: 1, velocity: 127))   // normal mode: on ch1, where the controls are
+    }
+
+    @Test("If the controls' output doesn't share its input's name, the LEDs still never go to a port the profile excludes (WD)")
+    func excludedPortNeverGetsLEDs() throws {
+        let renamedOut = MIDIEndpoint(id: 15, name: "LC6000 PRIME Controller")
+        let (coordinator, midi) = try Self.realUnit(destinations: [Self.wdOut, renamedOut])
+        coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        #expect(midi.outputs[Self.wdOut.id]?.sent ?? [] == [])
+        #expect((midi.outputs[renamedOut.id]?.sent ?? []).contains(.noteOn(channel: 0, note: 1, velocity: 127)))
+    }
 }
