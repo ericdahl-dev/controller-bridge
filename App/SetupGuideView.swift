@@ -4,6 +4,8 @@ import SwiftUI
 
 struct SetupGuideView: View {
     let guide: SetupGuide
+    /// The panel's status, for the live check at the bottom (#68).
+    let presentation: StatusPresentation
     @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
@@ -18,15 +20,23 @@ struct SetupGuideView: View {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
                     HStack(alignment: .top, spacing: Theme.Space.m) {
+                        // Plain digits, no square: squares are for decks (#68).
                         Text("\(index + 1)")
                             .font(Theme.data(Theme.Size.value, .semibold))
-                            .foregroundStyle(Theme.text)
-                            .frame(width: 26, height: 26)
-                            .background(Theme.buttonRaised, in: RoundedRectangle(cornerRadius: Theme.corner))
+                            .foregroundStyle(Theme.caption)
+                            .frame(width: 20, alignment: .leading)
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text(step.title).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
                             Text(step.detail).font(Theme.ui(Theme.Size.emphasis)).foregroundStyle(Theme.text)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if !step.checklist.isEmpty {
+                                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                                          alignment: .leading, spacing: Theme.Space.xs) {
+                                    ForEach(step.checklist, id: \.self) { item in
+                                        Text("☐ " + item).font(Theme.data(Theme.Size.body)).foregroundStyle(Theme.text)
+                                    }
+                                }
+                            }
                         }
                     }
                     .accessibilityElement(children: .combine)
@@ -34,14 +44,16 @@ struct SetupGuideView: View {
             }
             .padding(Theme.Space.l)
             .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
-            Text("When the bridge starts, it asks Syndicate to RESEND STATE, so the LEDs light at once.")
+            Text(SetupGuide.footer)
                 .font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
+            // The live check: the panel's lights, so the DJ sees each step take (#68).
+            HStack(alignment: .bottom, spacing: Theme.Space.xl) {
+                ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }
                 Spacer()
-                Button("Done") { dismissWindow(id: SetupGuideWindow.id) }
+                Button(SetupGuide.doneTitle(feedbackLive: feedbackLive)) { dismissWindow(id: SetupGuideWindow.id) }
                     .buttonStyle(FlatButtonStyle())
-                    .frame(width: 120)
+                    .frame(width: feedbackLive ? 200 : 120)
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -49,6 +61,10 @@ struct SetupGuideView: View {
         .frame(width: 460)
         .background(Theme.background)
         .preferredColorScheme(.dark)
+    }
+
+    private var feedbackLive: Bool {
+        presentation.lights.contains { $0.label == "FEEDBACK" && $0.word == "LIVE" }
     }
 }
 

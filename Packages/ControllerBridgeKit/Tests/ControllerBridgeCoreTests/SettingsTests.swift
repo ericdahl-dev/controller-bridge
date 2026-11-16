@@ -113,4 +113,39 @@ struct SettingsTests {
         try settings.save(to: store)
         #expect(BridgeSettings.load(from: store, defaults: Self.defaults) == settings)
     }
+
+    @Test("Each problem names its field, so Settings can show it under that field (#68)")
+    func problemsNameTheirField() {
+        var bad = Self.defaults
+        bad.controllers[0].deck = 5
+        bad.syndicateHost = "  "
+        bad.syndicatePort = 0
+        bad.feedbackPort = 70_000
+        #expect(bad.fieldProblems == [
+            SettingsProblem(field: .deck(controller: 0), message: "Deck 5 is out of range, expected 1-4"),
+            SettingsProblem(field: .host, message: "The Syndicate host can't be empty"),
+            SettingsProblem(field: .oscPort, message: "OSC port 0 is out of range, expected 1-65535"),
+            SettingsProblem(field: .feedbackPort, message: "Feedback port 70000 is out of range, expected 1-65535"),
+        ])
+        #expect(bad.problems == bad.fieldProblems.map(\.message))
+    }
+
+    @Test("The host must be an IPv4 address for now; a name like studio-mac.local gets a plain way out (#62)", arguments: [
+        "studio-mac.local", "999.1.1.1", "192.168.1", "192.168.1.20.5", "localhost",
+    ])
+    func hostMustBeIPv4(host: String) {
+        var bad = Self.defaults
+        bad.syndicateHost = host
+        #expect(bad.fieldProblems == [SettingsProblem(
+            field: .host,
+            message: "\(host) isn't an IP address. Use the Mac's IP address, like 192.168.1.20 (System Settings › Network)."
+        )])
+    }
+
+    @Test("IPv4 addresses are fine, loopback included", arguments: ["127.0.0.1", "192.168.1.20", "10.0.0.255", " 192.168.1.20 "])
+    func ipv4Accepted(host: String) {
+        var good = Self.defaults
+        good.syndicateHost = host
+        #expect(good.fieldProblems == [])
+    }
 }

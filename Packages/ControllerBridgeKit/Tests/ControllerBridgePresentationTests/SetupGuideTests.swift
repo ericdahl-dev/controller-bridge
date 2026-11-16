@@ -11,13 +11,13 @@ struct SetupGuideTests {
         #expect(guide.steps.map(\.title) == [
             "Settings → OSC",
             "Settings → OSC FEEDBACK",
-            "Subscriptions",
+            "Settings → OSC FEEDBACK → SUBSCRIPTIONS",
             "Settings → MIDI",
         ])
         #expect(guide.steps.map(\.detail) == [
             "Turn OSC INPUT ENABLED on. The listen port is 9090.",
             "Set DEST IP to 127.0.0.1 and PORT to 9096.",
-            "Tick Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.",
+            "Turn on these OSC FEEDBACK subscriptions:",
             "Turn Denon LC6000 PRIME's MIDI input off. Otherwise Syndicate's own mapping and the bridge would both react to every button.",
         ])
     }
@@ -34,7 +34,7 @@ struct SetupGuideTests {
         let readme = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../README.md")
         let text = try String(contentsOf: readme, encoding: .utf8)
         let subscriptions = SetupGuide.subscriptions.dropLast().joined(separator: ", ") + " and " + SetupGuide.subscriptions.last!
-        #expect(text.contains("Tick these subscriptions: \(subscriptions)."))
+        #expect(text.contains("Turn on these subscriptions: \(subscriptions)."))
         #expect(text.contains("turn your controller's MIDI input **off**"))
     }
 
@@ -43,5 +43,30 @@ struct SetupGuideTests {
         #expect(SetupGuide.shouldShowAtLaunch(seenVersion: nil))
         #expect(!SetupGuide.shouldShowAtLaunch(seenVersion: SetupGuide.version))
         #expect(SetupGuide.shouldShowAtLaunch(seenVersion: SetupGuide.version - 1))
+    }
+
+    @Test("Step 3 lists the subscriptions as a checklist, and no step says \"Tick\" (#68)")
+    func subscriptionsChecklist() {
+        let guide = SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096)
+        #expect(guide.steps[2].checklist == [
+            "Playing", "PlayPending", "Loaded and TrackInfo", "Position/Progress", "TempoSlider/TempoSliderEnabled", "Cues",
+            "BPM/Sync", "Loop",
+        ])
+        #expect(guide.steps.allSatisfy { $0.checklist.isEmpty || $0.title.hasSuffix("SUBSCRIPTIONS") })
+        #expect(!guide.steps.contains { $0.detail.contains("Tick") })
+    }
+
+    @Test("The ports come from settings, not literals (#68)")
+    func portsFromSettings() {
+        let guide = SetupGuide(controller: nil, oscPort: 8000, feedbackPort: 8001)
+        #expect(guide.steps[0].detail == "Turn OSC INPUT ENABLED on. The listen port is 8000.")
+        #expect(guide.steps[1].detail == "Set DEST IP to 127.0.0.1 and PORT to 8001.")
+    }
+
+    @Test("The footer says what happens on start; Done confirms once feedback is live (#68)")
+    func footerAndDone() {
+        #expect(SetupGuide.footer == "On start, the bridge asks Syndicate to RESEND STATE, so the LEDs light at once.")
+        #expect(SetupGuide.doneTitle(feedbackLive: false) == "Done")
+        #expect(SetupGuide.doneTitle(feedbackLive: true) == "Done: feedback live")
     }
 }

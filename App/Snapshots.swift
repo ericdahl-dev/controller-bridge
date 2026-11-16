@@ -95,9 +95,20 @@ enum Snapshots {
             let status = BridgeStatus()
             configure(status)
             write(StatusPanel(status: status), to: "\(directory)/panel-\(name).png")
-            if name == "connected" { write(SetupGuideView(guide: status.setupGuide), to: "\(directory)/setup-guide.png") }
+            if name == "connected" || name == "waiting" {
+                write(SetupGuideView(guide: status.setupGuide, presentation: status.presentation), to: "\(directory)/setup-guide-\(name).png")
+            }
             write(icons(status.presentation.icon), to: "\(directory)/icon-\(name).png")
         }
+        // Settings (#68), through an NSHostingView: ImageRenderer can't draw its AppKit controls.
+        let defaults = BridgeSettings.defaults(from: try! ControllerProfile.bundled()[0].mapping)
+        writeAppKit(SettingsView(model: BridgeModel(preview: defaults)), to: "\(directory)/settings.png")
+        var two = defaults
+        two.controllers.append(ControllerSettings(deck: 3, input: nil, output: nil))
+        writeAppKit(SettingsView(model: BridgeModel(preview: two)), to: "\(directory)/settings-two-controllers.png")
+        let stopped = BridgeModel(preview: nil)
+        stopped.status.problem = "Couldn't start CoreMIDI"
+        writeAppKit(SettingsView(model: stopped), to: "\(directory)/settings-stopped.png")
         // The Diagnostics window (#26), with lines as the Kit formats them.
         let log = DiagnosticsLog()
         let monitor: [MIDIEvent] = [
@@ -159,6 +170,21 @@ enum Snapshots {
             Image(nsImage: MenuBarIcon.image(state)).renderingMode(.template).foregroundStyle(.white)
                 .padding(6).background(Color(white: 0.15))
         }
+    }
+
+    /// Renders through a hosting view's display cache, which draws AppKit-backed controls (pickers, text fields).
+    private static func writeAppKit(_ view: some View, to path: String) {
+        let host = NSHostingView(rootView: view.environment(\.colorScheme, .dark))
+        host.appearance = NSAppearance(named: .darkAqua)
+        // Lay out tall first, so the fitting height is the whole form, then shrink to it.
+        host.frame = NSRect(x: 0, y: 0, width: 440, height: 2000)
+        host.layoutSubtreeIfNeeded()
+        host.frame = NSRect(origin: .zero, size: NSSize(width: 440, height: host.fittingSize.height))
+        host.layoutSubtreeIfNeeded()
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { print("Couldn't render \(path)"); return }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { print("Couldn't render \(path)"); return }
+        do { try png.write(to: URL(fileURLWithPath: path)); print("Wrote \(path)") } catch { print("Couldn't write \(path): \(error)") }
     }
 
     private static func write(_ view: some View, to path: String) {

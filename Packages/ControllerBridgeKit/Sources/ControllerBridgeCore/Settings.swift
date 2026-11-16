@@ -77,31 +77,58 @@ extension BridgeSettings {
     }
 
     /// What's wrong, in Syndicate's words, so the DJ can fix it.
-    public var problems: [String] {
-        var out: [String] = []
-        for controller in controllers where !(1...4).contains(controller.deck) {
-            out.append("Deck \(controller.deck) is out of range, expected 1-4")
+    /// What's wrong, in Syndicate's words, so the DJ can fix it.
+    public var problems: [String] { fieldProblems.map(\.message) }
+
+    /// The same problems, each with the field it belongs to, so Settings can show it there (#68).
+    public var fieldProblems: [SettingsProblem] {
+        var out: [SettingsProblem] = []
+        for (index, controller) in controllers.enumerated() where !(1...4).contains(controller.deck) {
+            out.append(SettingsProblem(field: .deck(controller: index), message: "Deck \(controller.deck) is out of range, expected 1-4"))
         }
-        for (number, controller) in zip(1..., controllers) {
+        for (index, controller) in controllers.enumerated() {
             if let channel = controller.channel, !(1...16).contains(channel) {
-                out.append("Controller \(number): channel \(channel) is out of range, expected 1-16")
+                out.append(SettingsProblem(
+                    field: .channel(controller: index), message: "Controller \(index + 1): channel \(channel) is out of range, expected 1-16"
+                ))
             }
         }
         for (first, second) in pairs where first.settings.input != nil && first.settings.input?.id == second.settings.input?.id
             && first.settings.channel == second.settings.channel {
             let channel = first.settings.channel.map { "channel \($0)" } ?? "the same channel"
-            out.append("Controllers \(first.number) and \(second.number) both use \(first.settings.input!.name) on \(channel)")
+            out.append(SettingsProblem(
+                field: .device(controller: second.number - 1),
+                message: "Controllers \(first.number) and \(second.number) both use \(first.settings.input!.name) on \(channel)"
+            ))
         }
-        if syndicateHost.trimmingCharacters(in: .whitespaces).isEmpty {
-            out.append("The Syndicate host can't be empty")
+        let host = syndicateHost.trimmingCharacters(in: .whitespaces)
+        if host.isEmpty {
+            out.append(SettingsProblem(field: .host, message: "The Syndicate host can't be empty"))
+        } else if !Self.isIPv4(host) {
+            // The OSC sender takes an IPv4 address only, for now (#62).
+            out.append(SettingsProblem(
+                field: .host, message: "\(host) isn't an IP address. Use the Mac's IP address, like 192.168.1.20 (System Settings › Network)."
+            ))
         }
         let ports = 1...65_535
-        if !ports.contains(syndicatePort) { out.append("OSC port \(syndicatePort) is out of range, expected 1-65535") }
-        if !ports.contains(feedbackPort) { out.append("Feedback port \(feedbackPort) is out of range, expected 1-65535") }
+        if !ports.contains(syndicatePort) {
+            out.append(SettingsProblem(field: .oscPort, message: "OSC port \(syndicatePort) is out of range, expected 1-65535"))
+        }
+        if !ports.contains(feedbackPort) {
+            out.append(SettingsProblem(field: .feedbackPort, message: "Feedback port \(feedbackPort) is out of range, expected 1-65535"))
+        }
         if syndicatePort == feedbackPort {
-            out.append("The OSC port and the Feedback port can't both be \(syndicatePort)")
+            out.append(SettingsProblem(field: .feedbackPort, message: "The OSC port and the Feedback port can't both be \(syndicatePort)"))
         }
         return out
+    }
+
+    /// Four dot-separated whole numbers, 0-255 each.
+    static func isIPv4(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        return parts.count == 4 && parts.allSatisfy { part in
+            !part.isEmpty && part.count <= 3 && part.allSatisfy(\.isASCII) && part.allSatisfy(\.isNumber) && (Int(part) ?? 256) <= 255
+        }
     }
 }
 
@@ -148,4 +175,25 @@ public enum FeedbackListen: String, Codable, Equatable, Sendable {
         case .allNetworks: "0.0.0.0"
         }
     }
+}
+
+/// A settings problem and the field it belongs to.
+public struct SettingsProblem: Equatable, Sendable {
+    public var field: SettingsField
+    public var message: String
+
+    public init(field: SettingsField, message: String) {
+        self.field = field
+        self.message = message
+    }
+}
+
+/// Where in Settings a problem shows. Controllers are counted from 0.
+public enum SettingsField: Hashable, Sendable {
+    case deck(controller: Int)
+    case channel(controller: Int)
+    case device(controller: Int)
+    case host
+    case oscPort
+    case feedbackPort
 }
