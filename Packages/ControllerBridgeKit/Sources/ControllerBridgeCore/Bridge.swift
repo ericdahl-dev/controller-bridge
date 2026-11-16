@@ -23,6 +23,7 @@ final class Bridge {
             "mode_roll": { $0.padModeButton(.roll) },
             "mode_loop": { $0.padModeButton(.loop) },
             "mode_slicer": { $0.padModeButton(.slicer) },
+            "mode_cycle": { $0.padModeCycle },
             "platter_touch": { $0.platterTouch },
             // Browse, loops and jumps (Bridge+Browse.swift).
             "track_prev": { $0.trackPrevious },

@@ -1,8 +1,14 @@
 // Pads, pad modes and cue colors (#18), as in the Python bridge.
 
 /// What the pads do.
-enum PadMode {
+enum PadMode: CaseIterable {
     case hotCue, roll, loop, slicer
+
+    /// The next mode for a cycling button (#198): Hot Cue → Roll → Loop → Slicer → Hot Cue.
+    var next: PadMode {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
 }
 
 extension Bridge {
@@ -44,6 +50,15 @@ extension Bridge {
         }
     }
 
+    /// The one cycling mode button (#198), for a profile whose `pads.mode_select` is "cycle"; with the LC6000's four
+    /// buttons it does nothing. Like a mode button, it first releases any held pad.
+    func padModeCycle(_ pressed: Bool) {
+        guard pressed, mapping.pads.modeSelect == .cycle else { return }
+        releasePads()
+        padMode = padMode.next
+        refreshLEDs()
+    }
+
     /// Releases every held pad, and nothing else.
     func releasePads() {
         for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
@@ -71,8 +86,22 @@ extension Bridge {
     func padLEDs() {
         let modes: [(String, PadMode)] = [("mode_hotcue", .hotCue), ("mode_roll", .roll), ("mode_loop", .loop), ("mode_slicer", .slicer)]
         for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
+        cycleButtonLED()
         for (note, velocity) in zip(mapping.notes.pads, padColors()) { led(note, velocity) }
         ringLED()
+    }
+
+    /// The cycling button's own LED (#198): the profile's velocity for the current mode. With none, it's left alone.
+    private func cycleButtonLED() {
+        guard mapping.pads.modeSelect == .cycle, let levels = mapping.pads.modeCycleVelocities,
+              let note = mapping.notes.buttons["mode_cycle"] else { return }
+        let velocity = switch padMode {
+        case .hotCue: levels.hotcue
+        case .roll: levels.roll
+        case .loop: levels.loop
+        case .slicer: levels.slicer
+        }
+        led(note, UInt8(clamping: velocity))
     }
 
     /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad in the roll color.

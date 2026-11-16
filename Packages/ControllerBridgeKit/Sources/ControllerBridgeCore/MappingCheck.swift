@@ -193,6 +193,12 @@ extension Mapping {
     private static let optionalKeys: [String: OrderedJSON] = [
         "jog.relative_cc": .number(0, isInteger: true),
         "jog.relative_edge_cc": .number(0, isInteger: true),
+        // One cycling pad-mode button (#198): its note, and its LED's velocity per mode.
+        "notes.mode_cycle": .number(0, isInteger: true),
+        "pads.mode_cycle_velocities": .object([
+            ("hotcue", .number(0, isInteger: true)), ("roll", .number(0, isInteger: true)),
+            ("loop", .number(0, isInteger: true)), ("slicer", .number(0, isInteger: true)),
+        ]),
     ]
 
     /// Ranges and choices, by key path. A list element's path ends in `[]`.
