@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct ControllerBridgeApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = BridgeModel()
 
     var body: some Scene {

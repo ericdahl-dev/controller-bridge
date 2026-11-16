@@ -13,6 +13,10 @@ final class BridgeStatus {
     }
 
     var controllers: [String] = []
+    /// Each controller's deck, connection and last disconnect or reconnect, from the Coordinator (#20).
+    var bridges: [ControllerStatus] = []
+    /// Every MIDI source and the controller profile it matched (#43); one with no profile is listed, not bridged.
+    var devices: [DeviceStatus] = []
     var feedback: Feedback = .starting
     var problem: String?
 
@@ -29,6 +33,9 @@ final class BridgeModel {
     private var listener: FeedbackListener?
     private var ticker: Ticker?
     private var midi: CoreMIDISystem?
+    private var producer: EventPipe.Producer?
+    private var engine: Task<Void, Never>?
+    private var sleepObservers: [any NSObjectProtocol] = []
 
     init() {
         // Line-buffered stdout, so the smoke script sees the log even when it stops the app.
@@ -36,6 +43,33 @@ final class BridgeModel {
         // #34 themes every window dark; force it now so it drops in without a rewrite.
         NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
         start()
+        AppDelegate.model = self
+    }
+
+    /// Quit: release everything held in Syndicate, then call `done`. Calls it after one second at the latest, so a
+    /// stuck engine can't stop the app from quitting.
+    func quit(_ done: @escaping @MainActor () -> Void) {
+        guard let producer, let engine else { return done() }
+        var finished = false
+        let finish = { if !finished { finished = true; done() } }
+        producer.stop()
+        Task { @MainActor in
+            await engine.value
+            finish()
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            finish()
+        }
+    }
+
+    /// Release held controls before the Mac sleeps, and re-check the devices when it wakes.
+    private func observeSleep(_ producer: EventPipe.Producer) {
+        let center = NSWorkspace.shared.notificationCenter
+        sleepObservers = [
+            center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in producer.sleep() },
+            center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in producer.wake() },
+        ]
     }
 
     private func start() {
@@ -80,7 +114,24 @@ final class BridgeModel {
         }
 
         ticker = Ticker(producer: pipe.producer)
+        producer = pipe.producer
+        observeSleep(pipe.producer)
         let midi = midi!
-        Task.detached(name: "Bridge engine") { await BridgeHost.run(profiles: profiles, midi: midi, osc: osc, log: log, events: pipe.events) }
+        engine = Task.detached(name: "Bridge engine") {
+            await BridgeHost.run(profiles: profiles, midi: midi, osc: osc, log: log, status: status, events: pipe.events)
+        }
+    }
+}
+
+/// Holds quitting until the release sends have gone out (#20), for the menu's Quit button and for Command-Q alike: both
+/// go through `NSApplication.terminate`.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor static weak var model: BridgeModel?
+
+    @MainActor
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model = Self.model else { return .terminateNow }
+        model.quit { sender.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
 }

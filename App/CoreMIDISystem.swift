@@ -39,7 +39,12 @@ final class CoreMIDISystem: MIDISystem {
         self.output = output
         self.relay = relay
         self.onChange = onChange
-        relay.set { [weak self] in self?.pruneRemovedSources() }
+        // A device came or went: refresh the names, and let the Coordinator re-read the devices (#20). Through the pipe,
+        // so it stays in order behind the MIDI already queued from that device.
+        relay.set { [weak self] in
+            self?.pruneRemovedSources()
+            producer.devicesChanged()
+        }
     }
 
     var sources: [MIDIEndpoint] { (0..<MIDIGetNumberOfSources()).map { Self.endpoint(MIDIGetSource($0)) } }
