@@ -41,11 +41,15 @@ public struct DeckColors: Equatable, Sendable, Codable {
         4: [0x62, 0x92, 0x9E],
     ])
 
+    /// The deck whose color a cue palette slot holds: slots 1, 3, 5 and 7 are decks 1-4 (#123). Nil for any other.
+    public static func deck(forSlot slot: Int) -> Int? {
+        slot % 2 == 1 && (1...7).contains(slot) ? (slot + 1) / 2 : nil
+    }
+
     /// After a ColorPalette message ([slot, r, g, b]): the deck whose slot it is (slot 2N−1 is deck N) takes the color.
     /// Nil when the message isn't a deck's slot, so nothing needs repainting.
     public func updated(byPalette numbers: [Int]) -> DeckColors? {
-        guard numbers.count >= 4, numbers[0] % 2 == 1, (1...7).contains(numbers[0]) else { return nil }
-        let deck = (numbers[0] + 1) / 2
+        guard numbers.count >= 4, let deck = Self.deck(forSlot: numbers[0]) else { return nil }
         var out = self
         // Black would turn the ring off: that deck keeps its default color.
         out.rgb[deck] = Self.isBlack(numbers[1...3]) ? Self.defaults[deck] : Array(numbers[1...3])

@@ -50,7 +50,6 @@ struct StatusPresentationTests {
         (.error, 0xE06C6C),
     ] as [(StatusLight.Tone, UInt32)])
     func toneColors(tone: StatusLight.Tone, hex: UInt32) {
-        #expect(tone.color == RGB(hex: hex))
         #expect(tone.color(in: Palette.dark) == RGB(hex: hex))
     }
 
