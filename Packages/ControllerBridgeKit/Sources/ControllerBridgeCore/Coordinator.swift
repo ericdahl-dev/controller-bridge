@@ -232,8 +232,11 @@ public final class Coordinator {
 
     /// A MIDI message from a source. Only the controller connected to that source handles it.
     public func midi(_ event: MIDIEvent, source: MIDIEndpoint.ID) {
+        let mapping = (controllers.first { $0.source?.id == source } ?? controllers[0]).bridge.mapping
+        // Notes the controller sends on its own, such as the LC6000's idle heartbeat (#103), reach nothing.
+        if case .noteOn(_, let note, _) = event, mapping.midi.ignoreNotes.contains(Int(note)) { return }
+        if case .noteOff(_, let note, _) = event, mapping.midi.ignoreNotes.contains(Int(note)) { return }
         if let diagnostics {
-            let mapping = (controllers.first { $0.source?.id == source } ?? controllers[0]).bridge.mapping
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
         for controller in controllers where controller.source?.id == source { controller.bridge.handle(event) }

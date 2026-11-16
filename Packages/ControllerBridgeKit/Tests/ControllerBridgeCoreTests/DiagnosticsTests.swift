@@ -244,4 +244,17 @@ struct DiagnosticsTests {
         #expect(osc.lineParts.message == osc.text)
         #expect(osc.lineParts.label == "")
     }
+
+    @Test("The LC6000's idle heartbeat (note 52, about every 0.3 s) is dropped: no OSC, no monitor line (#103)")
+    func heartbeatIgnored() throws {
+        let (rig, events) = try Self.openRig()
+        rig.osc.sent.removeAll()
+        for _ in 0..<3 {
+            rig.coordinator.midi(.noteOn(channel: 0, note: 52, velocity: 127), source: Rig.lc6000.id)
+            rig.coordinator.midi(.noteOff(channel: 0, note: 52, velocity: 0), source: Rig.lc6000.id)
+        }
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        #expect(events.monitor.count == 1)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
+    }
 }
