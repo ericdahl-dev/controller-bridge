@@ -28,4 +28,15 @@ struct BrowseTests {
             OSCMessage("/Syndicate/Browser/Down", [.int(1)]),
         ])
     }
+
+    @Test("Back goes back in the browser and Forward enters, on press only")
+    func backAndForward() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, 16)
+        Self.press(rig, 17)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Browser/Back", [.int(1)]),
+            OSCMessage("/Syndicate/Browser/Enter", [.int(1)]),
+        ])
+    }
 }

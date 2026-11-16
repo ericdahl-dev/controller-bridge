@@ -10,4 +10,12 @@ extension Bridge {
     func trackNext(_ pressed: Bool) {
         if pressed { send("Browser/Down", .int(1)) }
     }
+
+    func browserBack(_ pressed: Bool) {
+        if pressed { send("Browser/Back", .int(1)) }
+    }
+
+    func browserForward(_ pressed: Bool) {
+        if pressed { send("Browser/Enter", .int(1)) }
+    }
 }

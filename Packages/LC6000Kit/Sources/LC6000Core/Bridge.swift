@@ -13,6 +13,8 @@ final class Bridge {
             // Browse, loops and jumps (Bridge+Browse.swift).
             "track_prev": { $0.trackPrevious },
             "track_next": { $0.trackNext },
+            "back": { $0.browserBack },
+            "forward": { $0.browserForward },
         ]
     }
 
