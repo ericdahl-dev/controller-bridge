@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
-PAGES = ["index.html", "support/index.html", "privacy/index.html"]
+PAGES = ["index.html", "support/index.html", "privacy/index.html", "capture/index.html"]
 ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt"]
 SITE = "https://getdeckbridge.app/"
 LLMS_HEADING = "# DeckBridge"
@@ -194,7 +194,25 @@ def check_sitemap(root, files):
     return out
 
 
-def problems(root):
+CAPTURE_PROMPTS = "capture/prompts.json"
+APP_PROMPTS = os.path.join("Packages", "ControllerBridgeKit", "Sources", "ControllerBridgeCapture", "Resources",
+                           "capture-prompts-dj.json")
+
+
+def check_capture_prompts(root, app_prompts):
+    """The web capture walks the app's own prompts (#190): its copy must be the app's file, byte for byte."""
+    site = os.path.join(root, CAPTURE_PROMPTS)
+    if not os.path.isfile(site):
+        return [f"{CAPTURE_PROMPTS}: missing; copy it from {app_prompts}"]
+    with open(site, "rb") as a, open(app_prompts, "rb") as b:
+        if a.read() != b.read():
+            return [f"{CAPTURE_PROMPTS}: isn't the app's prompt list byte for byte; copy it from {app_prompts}"]
+    return []
+
+
+def problems(root, app_prompts=None):
+    """`app_prompts`: the app's capture prompt list (#190), which the site's capture/prompts.json must equal byte for
+    byte; None skips the check (a site checked on its own)."""
     files = sorted(os.path.relpath(os.path.join(d, f), root).replace(os.sep, "/")
                    for d, _, names in os.walk(root) for f in names)
     out = [f"{page}: missing" for page in PAGES + ROOT_FILES if page not in files]
@@ -222,6 +240,8 @@ def problems(root):
                 out.append(f'llms.txt: doesn\'t start with "{LLMS_HEADING}"')
     if "sitemap.xml" in files:
         out += check_sitemap(root, files)
+    if app_prompts is not None:
+        out += check_capture_prompts(root, app_prompts)
     if size > MAX_BYTES:
         out.append(f"the site is {size / 1_000_000:.1f} MB, over 2 MB")
     return out
@@ -229,7 +249,9 @@ def problems(root):
 
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "website")
-    found = problems(root)
+    # The app's prompt list, when this repo has it (on the site branch before main is merged in, it may not).
+    app = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", APP_PROMPTS)
+    found = problems(root, app_prompts=app if os.path.isfile(app) else None)
     for problem in found:
         print("FAIL:", problem)
     print("== Site check passed" if not found else f"== {len(found)} site problem(s)")

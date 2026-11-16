@@ -134,3 +134,19 @@ test("adds no click listener where PostHog doesn't load", () => {
   assert.equal(load({ hostname: "127.0.0.1" }).listener, null);
   assert.equal(load({ stored: "1" }).listener, null);
 });
+
+// The web capture (#190): Start and the download are buttons, and send only that a capture started or finished.
+function clickButton(attrs, pathname = "/capture/") {
+  const run = load({ pathname });
+  const captured = [];
+  run.window.posthog = { capture: (name, props) => captured.push([name, { ...props }]) };
+  const button = { tagName: "BUTTON", getAttribute: (k) => attrs[k] ?? null };
+  // Like the DOM: closest() finds the button only if the selector asks for tagged buttons.
+  run.listener({ target: { closest: (selector) => (selector.includes("button[data-track]") ? button : null) } });
+  return captured;
+}
+
+test("the capture's Start and download buttons send capture_started and capture_finished, with the page only", () => {
+  assert.deepEqual(clickButton({ "data-track": "capture_started" }), [["capture_started", { path: "/capture/" }]]);
+  assert.deepEqual(clickButton({ "data-track": "capture_finished" }), [["capture_finished", { path: "/capture/" }]]);
+});

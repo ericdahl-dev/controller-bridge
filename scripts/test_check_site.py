@@ -27,6 +27,7 @@ GOOD = {
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
+    "capture/index.html": page(body='<a href="../">Home</a>'),
     "privacy/index.html": page(body='<h2 id="network">Network</h2><p>DeckBridge collects no data.</p>' + WEBSITE),
     "style.css": '@font-face { font-family: Inter; src: url("fonts/Inter-Regular.ttf"); } body { color: #EDEDEA; }',
     "fonts/Inter-Regular.ttf": "font",
@@ -217,6 +218,19 @@ class CheckSiteTests(unittest.TestCase):
         })
         self.assertEqual(check_site.problems(root), ["index.md: still has a TODO(user) TestFlight placeholder",
                                                      "support/index.html: still has a TODO(user) TestFlight placeholder"])
+
+    def test_the_capture_prompts_are_the_apps_byte_for_byte(self):
+        app = os.path.join(tempfile.mkdtemp(), "capture-prompts-dj.json")
+        with open(app, "w") as f:
+            f.write('[\n  {\n    "id" : "idle"\n  }\n]\n')
+        same = self.site({"capture/prompts.json": '[\n  {\n    "id" : "idle"\n  }\n]\n'})
+        self.assertEqual(check_site.problems(same, app_prompts=app), [])
+        changed = self.site({"capture/prompts.json": '[{"id": "idle"}]'})
+        self.assertEqual(check_site.problems(changed, app_prompts=app),
+                         ["capture/prompts.json: isn't the app's prompt list byte for byte; copy it from " + app])
+        missing = self.site()
+        self.assertEqual(check_site.problems(missing, app_prompts=app),
+                         ["capture/prompts.json: missing; copy it from " + app])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
