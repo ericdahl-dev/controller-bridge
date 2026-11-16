@@ -29,6 +29,8 @@ public enum PipeEvent: Equatable, Sendable {
     case setControllers([ControllerSettings])
     /// An imported mapping (#24): the controller profiles to run from now on.
     case setProfiles([ControllerProfile])
+    /// Profiles chosen by hand per device name (#200).
+    case setProfileChoices([String: String])
     /// Settings' jog display switch (#165), and a message from the display's WD port (the unit's upload answers).
     case setJogDisplay(enabled: Bool)
     case jogDisplayReply([UInt8])
@@ -77,6 +79,7 @@ public struct EventPipe: Sendable {
         public func resync() { continuation.yield(.resync) }
         public func setControllers(_ entries: [ControllerSettings]) { continuation.yield(.setControllers(entries)) }
         public func setProfiles(_ profiles: [ControllerProfile]) { continuation.yield(.setProfiles(profiles)) }
+        public func setProfileChoices(_ choices: [String: String]) { continuation.yield(.setProfileChoices(choices)) }
         public func setJogDisplay(enabled: Bool) { continuation.yield(.setJogDisplay(enabled: enabled)) }
         public func jogDisplayReply(_ bytes: [UInt8]) { continuation.yield(.jogDisplayReply(bytes)) }
         /// Quit. Queues the stop behind everything already sent, then closes the pipe, so nothing after it is handled.

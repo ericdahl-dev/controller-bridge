@@ -110,4 +110,10 @@ struct DemoTests {
         rig.run(to: 5)
         #expect(rig.session.sentToSyndicate.count == count)
     }
+
+    @Test("The demo's controller runs on the device named Demo controller, so Settings' picker and the capture window offer it (#200)")
+    func demoNamesItsDevice() throws {
+        let rig = try DemoRig()
+        #expect(rig.session.status.controllers.first?.device == "Demo controller")
+    }
 }

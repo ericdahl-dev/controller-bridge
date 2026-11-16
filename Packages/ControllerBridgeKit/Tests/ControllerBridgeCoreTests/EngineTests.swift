@@ -18,6 +18,22 @@ struct EngineTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
     }
 
+    @Test("Profile choices from the pipe reach the Coordinator: a device no profile names runs as the LC6000 (#200)")
+    func profileChoicesFromThePipe() async throws {
+        let mystery = MIDIEndpoint(id: 1006, name: "Mystery DJ 2")
+        let midi = Rig.FakeMIDISystem(sources: [mystery], destinations: [MIDIEndpoint(id: 2006, name: "Mystery DJ 2")])
+        let osc = Rig.FakeOSC(), log = Rig.FakeLog()
+        let coordinator = Coordinator(profiles: try ControllerProfile.bundled(), midi: midi, osc: osc, clock: Rig.FakeClock(), log: log)
+        coordinator.start()
+        let pipe = EventPipe()
+
+        pipe.producer.setProfileChoices(["Mystery DJ 2": "denon-lc6000-prime"])
+        pipe.producer.finish()
+        await Engine(coordinator: coordinator, log: log).run(pipe.events)
+
+        #expect(midi.connected == [mystery.id])
+    }
+
     @Test("A capture from the pipe pauses the controller, and nil gives it back (#186)")
     func captureFromThePipe() async throws {
         let rig = try Rig()
@@ -165,7 +181,7 @@ struct EngineTests {
             CoordinatorStatus(
                 controllers: [ControllerStatus(
                     deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true,
-                    lastProfile: "Custom mapping"
+                    lastProfile: "Custom mapping", device: "DENON LC6000 PRIME"
                 )],
                 devices: [DeviceStatus(name: "DENON LC6000 PRIME", profile: "Custom mapping", note: nil)]
             ),

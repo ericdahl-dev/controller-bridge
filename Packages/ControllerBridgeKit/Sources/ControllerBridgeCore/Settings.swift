@@ -22,10 +22,13 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     public var appearance = Appearance.matchMacOS
     /// "Show the deck on the jog display" (#165). Off until a hardware check passes.
     public var jogDisplay = false
+    /// A controller profile chosen by hand for a MIDI device (#200): device name → profile id. A device not listed is
+    /// Automatic, matched by its name; so is one whose chosen profile no longer exists.
+    public var profileChoices: [String: String] = [:]
 
     enum CodingKeys: String, CodingKey {
         case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
-        case followSyndicateDeckColors, customDeckColors, appearance, ringColors, jogDisplay
+        case followSyndicateDeckColors, customDeckColors, appearance, ringColors, jogDisplay, profileChoices
     }
 
     /// Settings saved before #123 have no deck colors: they load with the defaults.
@@ -42,6 +45,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         appearance = try c.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .matchMacOS
         ringColors = try c.decodeIfPresent(RingColors.self, forKey: .ringColors) ?? .vivid
         jogDisplay = try c.decodeIfPresent(Bool.self, forKey: .jogDisplay) ?? false
+        profileChoices = try c.decodeIfPresent([String: String].self, forKey: .profileChoices) ?? [:]
     }
 
     public init(
@@ -88,6 +92,7 @@ extension BridgeSettings {
         out.appearance = pick(\.appearance)
         out.ringColors = pick(\.ringColors)
         out.jogDisplay = pick(\.jogDisplay)
+        out.profileChoices = pick(\.profileChoices)
         // Controllers: the draft's list (an add or remove is the DJ's edit), each field rebased where both had it.
         out.controllers = draft.controllers.indices.map { index in
             let edited = draft.controllers[index]
