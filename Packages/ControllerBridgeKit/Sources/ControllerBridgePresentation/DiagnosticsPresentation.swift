@@ -58,13 +58,17 @@ public struct DiagnosticsFilter: Equatable, Sendable {
     public var text = ""
     /// OSC lines going this way; other lines (MIDI, the sweep) are never narrowed by it.
     public var direction = DiagnosticsDirection.both
+    /// OSC lines for this deck (1–4): /Deck/N/, its mixer channel /Mixer/CHN/ and its filter /Mixer/filterN.
+    /// Nil shows every deck. Other lines are never narrowed by it.
+    public var deck: Int?
 
-    public init(text: String = "", direction: DiagnosticsDirection = .both) {
+    public init(text: String = "", direction: DiagnosticsDirection = .both, deck: Int? = nil) {
         self.text = text
         self.direction = direction
+        self.deck = deck
     }
 
-    var isEmpty: Bool { text.isEmpty && direction == .both }
+    var isEmpty: Bool { text.isEmpty && direction == .both && deck == nil }
 
     func matches(_ line: DiagnosticsLines.Line) -> Bool {
         let text = line.text
@@ -73,7 +77,23 @@ public struct DiagnosticsFilter: Equatable, Sendable {
         case .received: if text.hasPrefix("OSC -> ") { return false }
         case .sent: if text.hasPrefix("OSC <- ") { return false }
         }
+        if let deck, text.hasPrefix("OSC "), !Self.address(of: text, isFor: deck) { return false }
         return self.text.isEmpty || text.localizedCaseInsensitiveContains(self.text)
+    }
+
+    /// "OSC <- /Syndicate/Mixer/CH2/Volume 1.0" is for deck 2: the address (before the arguments) has Deck/2,
+    /// Mixer/CH2 or Mixer/filter2.<part>.
+    private static func address(of text: String, isFor deck: Int) -> Bool {
+        let address = text.dropFirst(7).split(separator: " ").first ?? ""
+        let parts = address.split(separator: "/")
+        for (index, part) in parts.enumerated() {
+            if part == "Deck", index + 1 < parts.count, parts[index + 1] == "\(deck)" { return true }
+            if part == "Mixer", index + 1 < parts.count {
+                let next = parts[index + 1]
+                if next == "CH\(deck)" || next.hasPrefix("filter\(deck).") { return true }
+            }
+        }
+        return false
     }
 }
 

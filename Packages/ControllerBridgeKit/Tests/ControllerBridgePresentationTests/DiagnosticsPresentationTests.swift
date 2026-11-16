@@ -96,6 +96,28 @@ struct DiagnosticsPresentationTests {
         #expect(DiagnosticsDirection.allCases.map(\.rawValue) == ["In and out", "In", "Out"])
     }
 
+    @Test("Deck shows only the OSC lines for that deck: its Deck/N address, its mixer channel and its filter (#218)")
+    func deckFilter() {
+        var lines = DiagnosticsLines()
+        for message in [
+            "OSC <- /Syndicate/Deck/2/Playing 1",
+            "OSC <- /Syndicate/Deck/12/Playing 1",
+            "OSC <- /Syndicate/Mixer/CH2/Volume 1.0",
+            "OSC <- /Syndicate/Mixer/filter2.cut 0.5",
+            "OSC -> /Syndicate/Deck/2/PlayPause 1",
+            "OSC <- /Syndicate/Deck/3/Playing 1",
+            "OSC <- /Syndicate/Header/BPM 128.0",
+        ] { lines.append(to: .osc, message: message) }
+        #expect(lines.filter.deck == nil)
+        lines.filter.deck = 2
+        #expect(lines.shown(.osc).map(\.message) == [
+            "OSC <- /Syndicate/Deck/2/Playing 1",
+            "OSC <- /Syndicate/Mixer/CH2/Volume 1.0",
+            "OSC <- /Syndicate/Mixer/filter2.cut 0.5",
+            "OSC -> /Syndicate/Deck/2/PlayPause 1",
+        ])
+    }
+
     @Test("Hidden streaming lines can't push the rest out: after 20,100 of them, the Playing line is still shown (#97)")
     func hiddenLinesDontEvict() {
         var lines = DiagnosticsLines()
