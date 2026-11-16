@@ -1,0 +1,110 @@
+{
+  "id": "denon-lc6000-prime",
+  "name": "Denon LC6000 PRIME",
+  "device_hints": [
+    "LC6000"
+  ],
+  "mapping": {
+    "midi": {
+      "input": "LC6000",
+      "output": "LC6000",
+      "channel": 1
+    },
+    "osc": {
+      "host": "127.0.0.1",
+      "port": 9090,
+      "root": "/Syndicate/",
+      "feedback_host": "127.0.0.1",
+      "feedback_port": 9096
+    },
+    "deck": {
+      "number": 1
+    },
+    "jog": {
+      "ccs": [
+        55
+      ],
+      "bend_release_ms": 80,
+      "seek_seconds_per_tick": 0.02,
+      "seek_fallback_ticks_per_beat": 32,
+      "require_touch": false
+    },
+    "pitch": {
+      "msb_cc": 8,
+      "lsb_cc": 40,
+      "invert": false,
+      "dead_zone": 0.005
+    },
+    "needle": {
+      "cc": 64,
+      "touch_note": 70,
+      "require_touch": true
+    },
+    "browse": {
+      "select_turn_cc": 6,
+      "auto_loop_size_cc": 3
+    },
+    "notes": {
+      "play": 1,
+      "cue": 2,
+      "beat_jump_back": 3,
+      "beat_jump_forward": 4,
+      "track_prev": 5,
+      "track_next": 6,
+      "censor": 7,
+      "loop_in": 8,
+      "loop_out": 9,
+      "auto_loop": 10,
+      "back": 16,
+      "forward": 17,
+      "select_press": 18,
+      "vinyl": 19,
+      "sync": 20,
+      "master": 21,
+      "key_lock": 22,
+      "slip": 23,
+      "pitch_minus": 24,
+      "pitch_plus": 25,
+      "shift": 26,
+      "mode_hotcue": 27,
+      "mode_roll": 28,
+      "mode_slicer": 29,
+      "mode_loop": 30,
+      "pads": [
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39
+      ],
+      "platter_touch": 40,
+      "param_back": 68,
+      "param_forward": 69
+    },
+    "leds": {
+      "pitch_center": 42,
+      "ring": 40,
+      "ring_color": [
+        0,
+        128,
+        255
+      ],
+      "roll_pad_color": [
+        255,
+        140,
+        0
+      ],
+      "loop_pad_color": [
+        0,
+        255,
+        0
+      ],
+      "dim_unlit_buttons": true,
+      "beat_pulse": "off",
+      "pulse_ms": 100
+    }
+  }
+}
