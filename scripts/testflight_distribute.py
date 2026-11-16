@@ -156,7 +156,8 @@ def check_test_information(http, app, locale="en-US"):
 def submit_for_review(http, app, build):
     """Submits the build for Beta App Review, once. Already submitted, by an earlier run or by hand, is done."""
     check_test_information(http, app)
-    existing = get(http, f"/builds/{build}/betaAppReviewSubmission")["data"]
+    # The submissions list, filtered by build: empty when there's none (the build's own relationship may 404 instead).
+    existing = next(iter(get(http, "/betaAppReviewSubmissions", {"filter[build]": build})["data"]), None)
     if existing:
         print(f"Already submitted for Beta App Review ({existing['attributes'].get('betaReviewState', 'submitted')}).")
         return

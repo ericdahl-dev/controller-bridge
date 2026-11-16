@@ -34,8 +34,10 @@ class FakeASC:
             return 200, {"data": {"id": "app1", "attributes": self.review_detail}}
         if method == "GET" and path == "/apps/app1/betaAppLocalizations":
             return 200, {"data": [{"id": f"al{i}", "attributes": a} for i, a in enumerate(self.app_localizations)]}
-        if method == "GET" and path == "/builds/build1/betaAppReviewSubmission":
-            return 200, {"data": self.submission}
+        if method == "GET" and path == "/betaAppReviewSubmissions":
+            # The list filtered by build: empty when there's none, never a 404 for "none".
+            assert query["filter[build]"] == "build1"
+            return 200, {"data": [self.submission] if self.submission else []}
         if method == "POST" and path == "/betaAppReviewSubmissions":
             assert body == {"data": {"type": "betaAppReviewSubmissions",
                                      "relationships": {"build": {"data": {"type": "builds", "id": "build1"}}}}}
