@@ -7,6 +7,14 @@ cd Packages/ControllerBridgeKit
 swift test
 ```
 
+## Testing notes
+
+- **Bind before `.contains` in `#expect`.** `#expect((x?.y ?? []).contains(z))` passes when `x` is nil: Swift Testing
+  expands the `contains` call, and the optional chain short-circuits it, so the test can't fail (found in #148). Write
+  `let sent = rig.midi.outputs[id]?.sent ?? []`, then `#expect(sent.contains(z))`. Comparisons such as `x?.y == v`,
+  `x?.y ?? [] == v` and `(x?.y ?? []).last == v` fail correctly.
+- When a new test passes on its first run, check it can fail: revert the change it covers, or bind its subject as above.
+
 ## Modules
 
 - **ControllerBridgeCore**: the Coordinator, the Bridge, the mapping and the OSC codec. Pure Swift with Foundation only: no
@@ -18,7 +26,8 @@ A profile file is `{ "id", "name", "device_hints", "exclude_hints", "mapping" }`
 `device_hints` its name contains (ignoring case; the longest hint wins), unless its name contains one of the profile's
 `exclude_hints`. The LC6000 PRIME shows up as two ports, "…LC6000 PRIME Controller", which sends every control, and
 "…LC6000 PRIME WD", which sends nothing, so its profile excludes `LC6000 PRIME WD` (#99). The LEDs go to the
-destination with the same name as the connected source.
+destination with the same name as the connected source; a controller's layers share it (#143), and the fallback by
+name hint never picks an excluded port.
 
 ## The default mapping
 
