@@ -163,12 +163,12 @@ public final class Coordinator {
         jogDisplayEnabled = enabled
         updateJogDisplay()
     }
-    /// The marker: the master clock's hand while the deck in front plays, else where the platter left it.
-    private var jogMarker = JogMarker()
+    /// Each controller entry's needle: its deck's own phase in the bar, else where its platter left it (#165).
+    private var jogNeedles: [Int: JogMarker] = [:]
     private var masterBPM: Double?
     private var lastMarkerSent: Double?
-    /// The platter moved since the last marker went out.
-    private var markerMoved = false
+    /// The entries whose platter moved since the last needles went out.
+    private var needlesMoved: Set<Int> = []
     /// At most this many marker updates a second.
     static let markerRate = 30.0
 
@@ -200,23 +200,36 @@ public final class Coordinator {
     /// The deck the jog display (or its preview) shows.
     private var jogIndex: Int? { frontIndex ?? previewIndex }
 
-    /// The master clock feeds the hand while the deck in front plays (#165).
+    /// The user's pick (#165): each deck's needle is its own phase, from its BarRamp at its BPM; the master clock is
+    /// the lit ring segment, the same on every deck.
     private func jogClock(_ message: OSCMessage) {
         let address = message.address.lowercased()
         if address.hasSuffix("/header/bpm"), let bpm = message.arguments.first?.number, bpm > 0 { masterBPM = bpm }
-        guard address.hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber,
-              let front = jogIndex, controllers[front].bridge.playing else { return }
-        jogMarker.beat(beat, bpm: masterBPM ?? 120, at: clock.now)
+        if address.hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber, (1...4).contains(beat) {
+            jogDisplay?.masterBeat(beat)
+        }
+        // A deck that stops keeps its needle where it is; a paused deck's ramp sets it without running on.
+        if address.hasSuffix("/playing"), message.arguments.first?.isTrue == false {
+            for index in controllers.indices where address == controllers[index].bridge.deckAddress("Playing").lowercased() {
+                jogNeedles[index]?.freeze(at: clock.now)
+            }
+        }
+        guard address.hasSuffix("/barramp"), let phase = message.arguments.first?.number else { return }
+        for index in controllers.indices where address == controllers[index].bridge.deckAddress("BarRamp").lowercased() {
+            let bridge = controllers[index].bridge
+            let bpm = bridge.playing ? bridge.bpm ?? masterBPM ?? 120 : 0
+            jogNeedles[index, default: JogMarker()].ramp(phase, bpm: bpm, at: clock.now)
+        }
     }
 
     /// Platter moves on the deck in front turn the hand.
     private func jogPlatter() {
         for index in controllers.indices where controllers[index].bridge.jogCountsPending != 0 {
             let bridge = controllers[index].bridge
-            if index == frontIndex {
-                jogMarker.platter(counts: bridge.jogCountsPending, countsPerRev: bridge.mapping.jog.countsPerRev, at: clock.now)
-                markerMoved = true
-            }
+            jogNeedles[index, default: JogMarker()].platter(
+                counts: bridge.jogCountsPending, countsPerRev: bridge.mapping.jog.countsPerRev, at: clock.now
+            )
+            needlesMoved.insert(index)
             bridge.jogCountsPending = 0
         }
     }
@@ -225,14 +238,20 @@ public final class Coordinator {
     /// second; the light 127 while playing, blinking every half-second while loaded and paused.
     private func jogMarkerTick() {
         // Connected or only previewing (#221): the driver sends only while connected.
-        guard let driver = jogDisplay, let front = jogIndex else { return }
-        let bridge = controllers[front].bridge
+        guard let driver = jogDisplay else { return }
         let due = lastMarkerSent.map { clock.now - $0 >= 1 / Self.markerRate - 1e-9 } ?? true
-        if due, bridge.playing || markerMoved {
-            driver.marker(jogMarker.pitchBend(at: clock.now))
+        if due {
+            // Every deck's needle for the simulator; the unit gets the deck in front's. A paused deck's stays put.
+            for index in controllers.indices where controllers[index].bridge.playing || needlesMoved.contains(index) {
+                let needle = (jogNeedles[index] ?? JogMarker()).pitchBend(at: clock.now)
+                driver.deckMarker(deck: status.controllers[index].deck, needle)
+                if index == jogIndex { driver.marker(needle) }
+            }
             lastMarkerSent = clock.now
-            markerMoved = false
+            needlesMoved.removeAll()
         }
+        guard let front = jogIndex else { return }
+        let bridge = controllers[front].bridge
         driver.playLight(bridge.playing || (bridge.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
     }
 
@@ -740,6 +759,8 @@ public final class Coordinator {
                 addController(entries[index])
             }
         }
+        // The entries may have dropped and reconnected the controller: the display follows again (#165).
+        updateJogDisplay()
     }
 
     // Kept as separate small functions: Xcode 26.6's optimizer crashed (CopyPropagation) on one loop doing all three.
