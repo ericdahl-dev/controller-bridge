@@ -7,6 +7,7 @@
   and so are <link rel="canonical"> and <link rel="alternate">. The one exception is the PostHog loader script
   (POSTHOG_LOADER), which website/analytics.js adds to count visits; the privacy page discloses it
 - every page has a title and a meta description
+- every page loads the site's own analytics.js, and every mailto: link has a data-track (the click event it sends)
 - every <img> has an alt attribute (alt="" for a decorative one)
 - every <script type="application/ld+json"> block parses as JSON
 - no page title or main heading uses another company's name as the product's
@@ -34,6 +35,7 @@ PRIVACY_STATEMENTS = [
 ]
 OTHER_COMPANIES = ["Syndicate", "Denon"]
 MAX_BYTES = 2_000_000
+ANALYTICS = "analytics.js"  # at the site's root; every page loads it
 POSTHOG_LOADER = "https://us-assets.i.posthog.com/static/array.js"  # allowed only as a <script src>
 LINK_RELS = {"canonical", "alternate"}  # a <link> with only these rels points somewhere; any other rel loads it
 
@@ -54,6 +56,8 @@ class Page(HTMLParser):
         self.title, self.h1, self.description = None, None, None
         self.text = []
         self.refs = []  # (url, loaded): loaded is "script" for a <script src>, True for other resources, False for links
+        self.scripts = []  # src of every <script src>
+        self.untracked_mailto = []  # href of every mailto: link without a data-track
         self.no_alt = []  # src of every <img> without an alt attribute
         self.json_ld = []  # the text of each <script type="application/ld+json">
         self._in = None
@@ -68,6 +72,10 @@ class Page(HTMLParser):
             self.description = (attrs.get("content") or "").strip()
         if tag == "a" and attrs.get("href") is not None:
             self.refs.append((attrs["href"], False))
+            if attrs["href"].lower().startswith("mailto:") and not attrs.get("data-track"):
+                self.untracked_mailto.append(attrs["href"])
+        if tag == "script" and attrs.get("src") is not None:
+            self.scripts.append(attrs["src"])
         if tag == "link" and attrs.get("href") is not None:
             rels = (attrs.get("rel") or "").lower().split()
             self.refs.append((attrs["href"], not rels or not set(rels) <= LINK_RELS))
@@ -104,16 +112,20 @@ def css_refs(css):
     return [a or b for a, b in CSS_REFS.findall(CSS_DATA_URI.sub("", CSS_COMMENT.sub("", css)))]
 
 
+def target(root, file, url):
+    """The file a relative URL on a page points to."""
+    return os.path.normpath(os.path.join(os.path.dirname(os.path.join(root, file)), urlsplit(url).path))
+
+
 def resolves(root, file, url):
-    path = urlsplit(url).path
-    if path == "":
+    if urlsplit(url).path == "":
         return True
-    target = os.path.normpath(os.path.join(os.path.dirname(os.path.join(root, file)), path))
-    if not target.startswith(os.path.normpath(root)):
+    target_ = target(root, file, url)
+    if not target_.startswith(os.path.normpath(root)):
         return False
-    if os.path.isdir(target):
-        target = os.path.join(target, "index.html")
-    return os.path.isfile(target)
+    if os.path.isdir(target_):
+        target_ = os.path.join(target_, "index.html")
+    return os.path.isfile(target_)
 
 
 def check_refs(root, file, refs):
@@ -142,6 +154,10 @@ def check_page(root, file, text):
             if words and re.search(rf"\b{name}\b", words, re.IGNORECASE):
                 out.append(f"{file}: the <{part}> names {name}")
     out += [f'{file}: <img src="{src}"> has no alt' for src in page.no_alt]
+    if not any(target(root, file, src) == os.path.join(os.path.normpath(root), ANALYTICS)
+               for src in page.scripts if not is_external(src)):
+        out.append(f"{file}: doesn't load {ANALYTICS}")
+    out += [f'{file}: <a href="{href}"> has no data-track' for href in page.untracked_mailto]
     for n, block in enumerate(page.json_ld, 1):
         try:
             json.loads(block)

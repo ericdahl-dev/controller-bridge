@@ -34,7 +34,9 @@ GOOD = {
     "robots.txt": "User-agent: *\nAllow: /\nSitemap: https://getdeckbridge.app/sitemap.xml\n",
     "sitemap.xml": sitemap("https://getdeckbridge.app/"),
     "llms.txt": "# DeckBridge\n\n> A bridge.\n",
+    "analytics.js": "/* PostHog */",
 }
+NO_ANALYTICS = "<!-- no analytics.js -->"
 
 
 class CheckSiteTests(unittest.TestCase):
@@ -45,6 +47,9 @@ class CheckSiteTests(unittest.TestCase):
             files.pop(name)
         root = tempfile.mkdtemp()
         for name, text in files.items():
+            if name.endswith(".html") and "analytics.js" not in text and NO_ANALYTICS not in text:
+                # every page loads the site's analytics.js (a test that wants one without it says NO_ANALYTICS)
+                text = text.replace("</head>", f'<script src="{"../" * name.count("/")}analytics.js" defer></script></head>')
             path = os.path.join(root, name)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w") as f:
@@ -190,6 +195,20 @@ class CheckSiteTests(unittest.TestCase):
             'privacy/index.html: doesn\'t say "counts clicks on a few links"',
             'privacy/index.html: doesn\'t say "to have your visits removed, email"',
         ])
+
+    def test_every_page_loads_analytics_js(self):
+        root = self.site({"support/index.html": page(head=NO_ANALYTICS, body='<a href="../">Home</a>'),
+                          "privacy/index.html": GOOD["privacy/index.html"].replace(
+                              "</head>", '<script src="../js/analytics.js"></script>' + NO_ANALYTICS + "</head>"),
+                          "js/analytics.js": "/* not the site's */"})
+        self.assertEqual(check_site.problems(root), ["privacy/index.html: doesn't load analytics.js",
+                                                     "support/index.html: doesn't load analytics.js"])
+
+    def test_every_mailto_link_names_its_click_event(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a>'
+                                                          ' <a href="mailto:a@b.example" data-track="contact_email_clicked">a@b</a>'
+                                                          ' <a href="mailto:a@b.example?subject=Beta">Join</a>')})
+        self.assertEqual(check_site.problems(root), ['support/index.html: <a href="mailto:a@b.example?subject=Beta"> has no data-track'])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})

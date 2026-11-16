@@ -47,6 +47,7 @@
 <link rel="stylesheet" href="../site.css">
 <script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
 <script src="../assets/backgrounds/backgrounds.js"></script>
+<script src="../analytics.js" defer></script>
 <script type="application/ld+json">
 {
  "@context": "https://schema.org",
@@ -153,7 +154,7 @@
     </nav>
     <div class="nav__actions">
       <!-- TODO(user): TestFlight public link -->
-      <a class="btn btn--primary" href="mailto:deckbridge@ericdahl.dev?subject=DeckBridge%20TestFlight%20beta">Join the TestFlight beta</a>
+      <a class="btn btn--primary" href="mailto:deckbridge@ericdahl.dev?subject=DeckBridge%20TestFlight%20beta" data-track="join_beta_clicked" data-track-destination="email">Join the TestFlight beta</a>
     </div>
     <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -208,7 +209,7 @@
     <div class="wrap">
       <div class="grid grid--top">
         <h2 class="span-5" id="help-h">Contact support</h2>
-        <p class="span-6 start-7">Email <a href="mailto:deckbridge@ericdahl.dev">deckbridge@ericdahl.dev</a>. If you can, include what the panel shows and the <strong>Copy details</strong> text.</p>
+        <p class="span-6 start-7">Email <a href="mailto:deckbridge@ericdahl.dev" data-track="contact_email_clicked">deckbridge@ericdahl.dev</a>. If you can, include what the panel shows and the <strong>Copy details</strong> text.</p>
       </div>
     </div>
   </section>
@@ -223,7 +224,7 @@
           <p class="footer__lede">A Mac menu-bar app for the LC6000 PRIME.</p>
         </div>
         <div class="span-2 start-9 footer__col"><h3>Help</h3><ul><li><a href="../support/">Support</a></li><li><a href="../support/#setup">Setup guide</a></li></ul></div>
-        <div class="span-2 footer__col"><h3>Contact</h3><ul><li><a href="mailto:deckbridge@ericdahl.dev">deckbridge@ericdahl.dev</a></li><li><a href="../privacy/">Privacy</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Contact</h3><ul><li><a href="mailto:deckbridge@ericdahl.dev" data-track="contact_email_clicked">deckbridge@ericdahl.dev</a></li><li><a href="../privacy/">Privacy</a></li></ul></div>
       </div>
       <div class="footer__legal">
         <span>DeckBridge is an independent app and is not affiliated with, endorsed by, or sponsored by Untitled Audio or Denon DJ. Syndicate, Denon DJ and LC6000 PRIME are trademarks of their respective owners.</span>
@@ -235,7 +236,7 @@
 
 <nav class="actionbar" aria-label="Quick actions">
   <!-- TODO(user): TestFlight public link -->
-  <a class="btn btn--primary" href="mailto:deckbridge@ericdahl.dev?subject=DeckBridge%20TestFlight%20beta">Join the TestFlight beta</a>
+  <a class="btn btn--primary" href="mailto:deckbridge@ericdahl.dev?subject=DeckBridge%20TestFlight%20beta" data-track="join_beta_clicked" data-track-destination="email">Join the TestFlight beta</a>
 </nav>
 
 <script type="module" src="../assets/system.js"></script>
