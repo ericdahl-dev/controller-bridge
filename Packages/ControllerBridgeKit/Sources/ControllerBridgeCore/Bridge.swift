@@ -150,6 +150,12 @@ final class Bridge {
 
     /// The resync for this controller: forget what the LEDs show and repaint every one. The Coordinator asks
     /// Syndicate to resend (one Resend for all controllers, #21).
+    /// The controller switched to this deck layer (#79): it shows this layer's LEDs now, so paint them all.
+    func becameActiveLayer() {
+        ledCache.removeAll()
+        refreshLEDs()
+    }
+
     func start() {
         feedbackStale = false
         rearmPickup()

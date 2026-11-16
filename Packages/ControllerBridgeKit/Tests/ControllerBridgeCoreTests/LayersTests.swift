@@ -104,4 +104,17 @@ struct LayersTests {
         Self.note(rig, channel: 2, 1, 127)       // Play, now on ch2
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
     }
+
+    @Test("Switching to a layer repaints its LEDs on its channel from its deck: deck 2 playing lights Play on ch2")
+    func activationRepaints() throws {
+        let rig = try Self.layered()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        output.sent.removeAll()
+
+        Self.note(rig, channel: 1, 51, 0)
+        Self.note(rig, channel: 2, 51, 127)
+        // Play is note 1; ch2 is channel 1 counted from 0. Lit full: deck 2 is playing.
+        #expect(output.sent.contains(.noteOn(channel: 1, note: 1, velocity: 127)))
+    }
 }

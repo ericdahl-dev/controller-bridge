@@ -251,7 +251,7 @@ public final class Coordinator {
               Int(note) == layerNote, Int(channel) + 1 == mapping.midi.channel else { return }
         status.controllers[index].activeLayer = velocity > 0
         // A hand still on Cue or a pad as the layer changes would leave it held on the old deck.
-        if velocity == 0 { controllers[index].bridge.releaseAll() }
+        if velocity == 0 { controllers[index].bridge.releaseAll() } else { controllers[index].bridge.becameActiveLayer() }
     }
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
