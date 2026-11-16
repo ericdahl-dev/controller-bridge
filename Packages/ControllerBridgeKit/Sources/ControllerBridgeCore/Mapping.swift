@@ -35,6 +35,9 @@ public struct Mapping: Equatable, Sendable, Codable {
         notes = try c.decode(Notes.self, forKey: .notes)
         leds = try c.decode(LEDs.self, forKey: .leds)
         pads = try c.decodeIfPresent(Pads.self, forKey: .pads) ?? Pads()
+        if pads.modeSelect == .cycle, notes.buttons["mode_cycle"] == nil {
+            throw ShapeError("pads: mode_select is cycle, but notes has no mode_cycle button")
+        }
     }
 
     /// The pads' Roll mode (#196): pad N plays `rollSizes[N - 1]`, by Syndicate's SlipLoop names. A pad past the list

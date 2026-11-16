@@ -139,3 +139,47 @@ struct PadModeButtonsUnchangedTests {
         #expect(PadModeCycleCoordinatorTests.pad1(rig) == [OSCMessage("/Syndicate/Deck/1/SetCueLoop", [.int(1)])])
     }
 }
+
+/// The import check and decoder (#198), in plain words.
+@Suite("Pad mode select in the import check")
+struct PadModeSelectImportTests {
+    static func importing(_ json: String) throws {
+        _ = try ControllerProfile.importing(Data(json.utf8), bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+    }
+
+    @Test("mode_select is buttons or cycle")
+    func unknownValue() {
+        #expect(throws: MappingError.invalid([#"mapping.pads.mode_select: "cycling" isn't one of buttons, cycle"#])) {
+            try Self.importing(#"{"mapping": {"pads": {"mode_select": "cycling"}}}"#)
+        }
+    }
+
+    @Test("mode_select is text")
+    func wrongType() {
+        #expect(throws: MappingError.invalid([#"mapping.pads.mode_select: expected text, got 2"#])) {
+            try Self.importing(#"{"mapping": {"pads": {"mode_select": 2}}}"#)
+        }
+    }
+
+    @Test("Each cycle velocity is a MIDI velocity, 0-127")
+    func velocityRange() {
+        #expect(throws: MappingError.invalid([#"mapping.pads.mode_cycle_velocities.roll: 200 is out of range, expected 0-127"#])) {
+            try Self.importing(#"""
+                {"mapping": {"notes": {"mode_cycle": 120},
+                 "pads": {"mode_select": "cycle", "mode_cycle_velocities": {"hotcue": 127, "roll": 200, "loop": 32, "slicer": 1}}}}
+                """#)
+        }
+    }
+
+    @Test("A cycling profile needs its mode_cycle button")
+    func cycleNeedsButton() {
+        #expect(throws: MappingError.invalid(["pads: mode_select is cycle, but notes has no mode_cycle button"])) {
+            try Self.importing(#"{"mapping": {"pads": {"mode_select": "cycle"}}}"#)
+        }
+    }
+
+    @Test("A good cycling import works")
+    func goodImport() throws {
+        try Self.importing(#"{"mapping": {"notes": {"mode_cycle": 120}, "pads": {"mode_select": "cycle"}}}"#)
+    }
+}
