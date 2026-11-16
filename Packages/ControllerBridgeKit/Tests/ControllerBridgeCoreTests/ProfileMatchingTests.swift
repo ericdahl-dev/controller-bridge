@@ -1,0 +1,118 @@
+import ControllerBridgeCore
+import Foundation
+import Testing
+
+/// Picking a controller profile by device name (#43), at the Coordinator seam. Which device a controller then binds
+/// to (saved unique id first, then name) is #20's.
+@Suite("Profile matching")
+struct ProfileMatchingTests {
+    /// A Coordinator over the given profiles and MIDI sources, with a destination named like each source.
+    final class ProfileRig {
+        let midi: Rig.FakeMIDISystem
+        let osc = Rig.FakeOSC()
+        let log = Rig.FakeLog()
+        let coordinator: Coordinator
+
+        init(profiles: [ControllerProfile], sources: [MIDIEndpoint]) {
+            midi = Rig.FakeMIDISystem(
+                sources: sources,
+                destinations: sources.map { MIDIEndpoint(id: $0.id + 1000, name: $0.name) }
+            )
+            coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: Rig.FakeClock(), log: log)
+        }
+    }
+
+    static let iac = MIDIEndpoint(id: 1000, name: "IAC Bus 1")
+    static let lc6000 = MIDIEndpoint(id: 1001, name: "DENON LC6000 PRIME")
+
+    @Test("A device whose name matches a profile's hint gets that profile; a device with none is listed but not bridged")
+    func matchesByDeviceName() throws {
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.iac, Self.lc6000])
+        rig.coordinator.start()
+
+        #expect(rig.midi.connected == [Self.lc6000.id])
+        #expect(rig.coordinator.status.devices == [
+            DeviceStatus(name: "IAC Bus 1", profile: nil, note: "No controller profile matches IAC Bus 1, so it isn't bridged."),
+            DeviceStatus(name: "DENON LC6000 PRIME", profile: "Denon LC6000 PRIME", note: nil),
+        ])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
+    }
+
+    static let other = MIDIEndpoint(id: 1002, name: "Some Other Controller")
+
+    @Test("With no matching device nothing is bridged: the device is listed with a plain message, and logged")
+    func noMatch() throws {
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.other])
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+
+        #expect(rig.midi.connected == [])
+        #expect(rig.coordinator.status.devices == [
+            DeviceStatus(name: "Some Other Controller", profile: nil, note: "No controller profile matches Some Other Controller, so it isn't bridged."),
+        ])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == [nil])
+        #expect(rig.log.lines.contains("No controller profile matches Some Other Controller, so it isn't bridged."))
+
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Self.other.id)
+        #expect(rig.osc.sent == [])
+        // A later device-list change lists it again but doesn't log it twice.
+        rig.coordinator.devicesChanged()
+        #expect(rig.log.lines.filter { $0.hasPrefix("No controller profile matches") }.count == 1)
+    }
+
+    @Test("Hints match without regard to case")
+    func hintIgnoresCase() throws {
+        let lower = MIDIEndpoint(id: 1003, name: "denon lc6000 prime")
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [lower])
+        rig.coordinator.start()
+        #expect(rig.midi.connected == [lower.id])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
+    }
+
+    @Test("A second controller is just a profile file: a TP-1 device gets Test Pad, and its own Play note sends PlayPause")
+    func secondProfileBridges() throws {
+        let testPad = try ControllerProfile(decoding: ProfileTests.testPadFile())
+        let pad = MIDIEndpoint(id: 1004, name: "TP-1 Pad")
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled() + [testPad], sources: [Self.iac, pad])
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+
+        #expect(rig.midi.connected == [pad.id])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Test Pad"])
+        // Test Pad's Play is note 60 on MIDI channel 2 (1 when 0-based); the LC6000's note 1 does nothing here.
+        rig.coordinator.midi(.noteOn(channel: 1, note: 1, velocity: 127), source: pad.id)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 60, velocity: 127), source: pad.id)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
+    }
+
+    @Test("If two profiles match one device, the one with the longest matching hint wins, and that is logged")
+    func longestHintWins() throws {
+        var mk2 = try ControllerProfile(decoding: ProfileTests.testPadFile())
+        mk2.name = "LC6000 MK2 (test)"
+        mk2.deviceHints = ["LC6000 PRIME MK2"]
+        let device = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME MK2")
+        // The shorter, bundled "LC6000" hint is listed first, so order alone wouldn't pick MK2.
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled() + [mk2], sources: [device])
+        rig.coordinator.start()
+
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["LC6000 MK2 (test)"])
+        #expect(rig.log.lines.contains(
+            "DENON LC6000 PRIME MK2 matches Denon LC6000 PRIME and LC6000 MK2 (test); using LC6000 MK2 (test), whose hint is longest."
+        ))
+    }
+
+    @Test("If two profiles' matching hints are equally long, the first listed profile wins")
+    func tieGoesToFirst() throws {
+        var a = try ControllerProfile(decoding: ProfileTests.testPadFile())
+        a.name = "Pad A"
+        a.deviceHints = ["PAD-X"]
+        var b = a
+        b.name = "Pad B"
+        let device = MIDIEndpoint(id: 1006, name: "PAD-X USB")
+        for (profiles, expected) in [([a, b], "Pad A"), ([b, a], "Pad B")] {
+            let rig = ProfileRig(profiles: profiles, sources: [device])
+            rig.coordinator.start()
+            #expect(rig.coordinator.status.controllers.map(\.profile) == [expected])
+        }
+    }
+}

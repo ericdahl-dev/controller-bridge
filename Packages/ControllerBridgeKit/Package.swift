@@ -11,8 +11,9 @@ let package = Package(
     targets: [
         // All bridge logic: the Coordinator, the Bridge, the mapping and the OSC codec.
         // Pure Swift: no CoreMIDI, no Network framework, no UI.
-        .target(name: "ControllerBridgeCore", resources: [.copy("Resources/default_mapping.json")]),
-        .testTarget(name: "ControllerBridgeCoreTests", dependencies: ["ControllerBridgeCore"]),
+        .target(name: "ControllerBridgeCore", resources: [.copy("Resources/Profiles")]),
+        // Resources holds test-only profiles, such as a second controller that ships in no app.
+        .testTarget(name: "ControllerBridgeCoreTests", dependencies: ["ControllerBridgeCore"], resources: [.copy("Resources")]),
         // What the UI shows, as plain values: colors, contrast, deck badges and status words. No SwiftUI, so the
         // logic behind the look is tested here; the views themselves are checked by screenshot (#34).
         .target(name: "ControllerBridgePresentation"),
