@@ -25,8 +25,12 @@ struct CaptureWindowRoot: View {
             made.refresh(sources: model.sources, destinations: model.destinations, preselect: model.captureDevice)
             model.captureDevice = nil
             controller = made
+            model.endCapture = { [weak made] in made?.end() }
         }
-        .onDisappear { controller?.end() }
+        .onDisappear {
+            controller?.end()
+            model.endCapture = nil
+        }
     }
 }
 
@@ -68,7 +72,7 @@ private struct CapturePortsPage: View {
 
     var body: some View {
         CaptureHeading(eyebrow: "Help add a controller", title: "Capture your controller")
-        Text("DeckBridge listens while you press, move and turn each control, and records what it sends. The capture sends nothing to your controller or anywhere else. It takes about five minutes.")
+        Text("DeckBridge listens while you press, move and turn each control, and records what it sends. Nothing is sent to your controller unless you choose the LED test at the end, and nothing leaves this Mac unless you save or email the file. It takes about five minutes.")
             .font(Theme.ui(13)).foregroundStyle(Theme.caption)
             .fixedSize(horizontal: false, vertical: true)
         Picker("Controller", selection: $controller.picked) {
@@ -161,14 +165,14 @@ private struct CaptureDonePage: View {
         let demo = controller.flow.file?.device == DemoCapture.deviceName
         let partial = (controller.flow.file?.steps.count ?? 0) < controller.flow.stepCount
         CaptureHeading(eyebrow: "Help add a controller", title: partial ? "Capture ended early" : "Capture finished")
-        Text("Send it to DeckBridge and it can become a supported controller. Nothing has been sent; it leaves this Mac only if you save or email it." + (demo ? "" : " Closing this window gives the controller back to Syndicate."))
+        Text("Send it to DeckBridge and it can become a supported controller. Nothing has been sent; it leaves this Mac only if you save or email it." + (demo ? "" : " DeckBridge is sending this controller's moves to Syndicate again."))
             .font(Theme.ui(13)).foregroundStyle(Theme.caption)
             .fixedSize(horizontal: false, vertical: true)
         CaptureContents(lines: controller.flow.file?.summary ?? [])
         TextField("Note (optional), such as your firmware version", text: $controller.note, axis: .vertical)
             .lineLimit(1...3)
             .font(Theme.ui(13))
-        CaptureLEDOffer(controller: controller)
+        if controller.canTestLEDs { CaptureLEDOffer(controller: controller) }
         CaptureExportButtons(controller: controller) { dismissWindow(id: CaptureWindow.id) }
         if let note = controller.exportNote {
             Text(note).font(Theme.ui(12)).foregroundStyle(Theme.caption)
@@ -257,7 +261,9 @@ private struct CaptureLEDPage: View {
     var body: some View {
         let flow = controller.flow
         CaptureHeading(eyebrow: "LED test \(flow.ledProbeNumber) of \(flow.ledProbeCount)", title: flow.ledProbe?.text ?? "")
-        CaptureLEDChoices(question: flow.ledProbe?.question ?? .lit) { controller.answerLED($0) }
+        CaptureLEDChoices(
+            question: flow.ledProbe?.question ?? .lit, enabled: flow.canAnswerLED, sameAsLast: flow.canSameAsLast
+        ) { controller.answerLED($0) }
         HStack {
             Spacer()
             Button("Skip LED test") { controller.skipLEDs() }.buttonStyle(PillButtonStyle(kind: .quiet))
@@ -267,6 +273,9 @@ private struct CaptureLEDPage: View {
 
 private struct CaptureLEDChoices: View {
     let question: LEDProbe.Question
+    /// Off until the probe has lit on the controller.
+    let enabled: Bool
+    let sameAsLast: Bool
     let answer: (CaptureFlow.LEDChoice) -> Void
 
     var body: some View {
@@ -286,7 +295,9 @@ private struct CaptureLEDChoices: View {
     private func pills(_ choices: [(String, CaptureFlow.LEDChoice)]) -> some View {
         FlowRow(spacing: Theme.Step.x2) {
             ForEach(choices, id: \.0) { choice in
-                Button(choice.0) { answer(choice.1) }.buttonStyle(PillButtonStyle(small: true))
+                Button(choice.0) { answer(choice.1) }
+                    .buttonStyle(PillButtonStyle(small: true))
+                    .disabled(!enabled || (choice.1 == .sameAsLast && !sameAsLast))
             }
         }
     }

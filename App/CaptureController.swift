@@ -78,7 +78,11 @@ final class CaptureController {
             watched = endpoint
             setCapture(endpoint.id)
             listen(to: listened)
-            ledDestination = ports.output.first.flatMap { name in destinations.first { $0.name == name } }
+            // The output on the same device entity; by name only when exactly one destination has it.
+            ledDestination = CaptureMIDIOutput.destination(pairedWith: endpoint) ?? ports.output.first.flatMap { name in
+                let named = destinations.filter { $0.name == name }
+                return named.count == 1 ? named[0] : nil
+            }
             flow.start(device: picked.name, ports: ports, at: time)
         } else {
             flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: time)
@@ -114,8 +118,26 @@ final class CaptureController {
 
     /// Starts the LED test: opens the controller's main output (the demo controller has none: its sends go nowhere)
     /// and lets ProbeSender's messages out every 50 ms.
+    /// Whether the done page offers the LED test: once, and only with a way to reach the controller (the demo has none
+    /// to reach, and needs none).
+    var canTestLEDs: Bool { flow.canStartLEDs && (isDemo || ledDestination != nil) }
+
+    private var isDemo: Bool { flow.file?.device == DemoCapture.deviceName }
+
     func startLEDs() {
-        if ledOutput == nil, let ledDestination { ledOutput = CaptureMIDIOutput(destination: ledDestination) }
+        guard canTestLEDs else { return }
+        if !isDemo {
+            if ledOutput == nil, let ledDestination { ledOutput = CaptureMIDIOutput(destination: ledDestination) }
+            guard ledOutput != nil else {
+                exportNote = "DeckBridge can't reach the controller's output, so the LED test can't run."
+                return
+            }
+            // The bridge holds the controller again, LEDs included, so the test isn't painted over (#187).
+            if let watched {
+                paused = watched.id
+                setCapture(watched.id)
+            }
+        }
         flow.startLEDs(scope: ledScope, at: ProcessInfo.processInfo.systemUptime)
         announce()
         guard sendTask == nil else { return }
@@ -139,6 +161,11 @@ final class CaptureController {
 
     private func sendDue() {
         for message in flow.dueSends(at: ProcessInfo.processInfo.systemUptime) { ledOutput?.send(message) }
+        // The test is over and everything is off: give the controller back, which repaints its LEDs.
+        if flow.phase == .done, !flow.hasPendingSends, paused != nil {
+            setCapture(nil)
+            paused = nil
+        }
     }
 
     /// Before the output closes: ends the LED test, and sends what's still queued (its off messages), keeping the gap.
@@ -152,13 +179,14 @@ final class CaptureController {
         }
     }
 
-    /// The steps are done: nothing more is heard. The bridge keeps the controller paused, with its LEDs held, until the
-    /// window closes, so the LED test can follow (#187).
+    /// The steps are done: nothing more is heard, and the bridge gets the controller back until an LED test (#187).
     private func endListening() {
         input?.stop()
         input = nil
         listenTask?.cancel()
         demoTask?.cancel()
+        if paused != nil { setCapture(nil) }
+        paused = nil
     }
 
     /// Ends the capture: the LED test turns off what it lit, the bridge gets the controller back, and nothing more is

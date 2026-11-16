@@ -31,6 +31,23 @@ final class CaptureMIDIOutput {
         MIDISendEventList(port, destination, &list)
     }
 
+    /// The destination on the same device entity as `source` (the port pair CoreMIDI groups together), so with two
+    /// units of one name the probe reaches the one being captured. Nil when the entity has no destination.
+    static func destination(pairedWith source: MIDIEndpoint) -> MIDIEndpoint? {
+        var object = MIDIObjectRef()
+        var type = MIDIObjectType.other
+        var entity = MIDIEntityRef()
+        guard MIDIObjectFindByUniqueID(source.id, &object, &type) == noErr, object != 0,
+            MIDIEndpointGetEntity(object, &entity) == noErr, entity != 0, MIDIEntityGetNumberOfDestinations(entity) > 0
+        else { return nil }
+        let ref = MIDIEntityGetDestination(entity, 0)
+        var id: MIDIUniqueID = 0
+        MIDIObjectGetIntegerProperty(ref, kMIDIPropertyUniqueID, &id)
+        var name: Unmanaged<CFString>?
+        MIDIObjectGetStringProperty(ref, kMIDIPropertyDisplayName, &name)
+        return MIDIEndpoint(id: id, name: (name?.takeRetainedValue() as String?) ?? "MIDI \(id)")
+    }
+
     func close() {
         MIDIPortDispose(port)
         MIDIClientDispose(client)

@@ -417,13 +417,22 @@ enum Snapshots {
             ("led-lit", {
                 var flow = captureFlow(at: nil, fed: true)
                 flow.startLEDs(scope: .full, at: 1e6)
+                _ = flow.dueSends(at: 1e6)  // Play lit, so the answers are on
                 return CaptureController(flow: flow, now: 1e6)
             }()),
             ("led-color", {
                 var flow = captureFlow(at: nil, fed: true)
                 flow.startLEDs(scope: .full, at: 1e6)
-                while flow.ledProbe?.question != .color { flow.answerLED(.lit(true), at: 1e6) }
-                flow.answerLED(.color("red"), at: 1e6)
+                // Each answer waits for its probe to go out: let the sends out, 100 ms apart, between answers.
+                var now = 1e6
+                func shown() { while flow.hasPendingSends { _ = flow.dueSends(at: now); now += 0.1 } }
+                shown()
+                while flow.ledProbe?.question != .color {
+                    flow.answerLED(.lit(true), at: now)
+                    shown()
+                }
+                flow.answerLED(.color("red"), at: now)
+                shown()
                 return CaptureController(flow: flow, now: 1e6)
             }()),
             ("done-note", {
