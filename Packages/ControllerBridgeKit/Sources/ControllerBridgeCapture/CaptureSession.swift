@@ -53,7 +53,10 @@ public struct CaptureSession: Sendable {
 
     private mutating func finish(_ status: StepStatus) {
         guard let prompt = current else { return }
-        steps.append(CaptureStep(prompt: prompt.id, status: status, messages: messages))
+        steps.append(CaptureStep(
+            prompt: prompt.id, status: status, messages: messages,
+            controls: Inference.controls(in: take.map(\.bytes))
+        ))
         take = []
         index += 1
     }
