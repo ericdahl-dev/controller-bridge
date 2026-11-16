@@ -279,6 +279,26 @@ struct SettingsTests {
         #expect(after.syndicatePort == 9191)
     }
 
+    // #151: the ring's color mapping.
+
+    @Test("Ring colors default to Vivid; old settings load as Vivid; Exact round-trips and survives a rebase")
+    func ringColorsSetting() {
+        #expect(Self.defaults.ringColors == .vivid)
+        let store = MemoryStore()
+        store.values[BridgeSettings.storageKey] = Data(#"""
+            {"controllers":[{"deck":1}],"syndicateHost":"127.0.0.1","syndicatePort":9090,"feedbackPort":9096,
+             "feedbackListen":"thisMac","ledsEnabled":true}
+            """#.utf8)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).ringColors == .vivid)
+        var exact = Self.defaults
+        exact.ringColors = .exact
+        try? exact.save(to: store)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).ringColors == .exact)
+        var saved = Self.defaults
+        saved.controllers[0].deck = 2
+        #expect(BridgeSettings.rebased(draft: exact, base: Self.defaults, onto: saved).ringColors == .exact)
+    }
+
     @Test("A field the DJ also edited in Settings keeps the DJ's value")
     func editedFieldWins() {
         let base = Self.defaults

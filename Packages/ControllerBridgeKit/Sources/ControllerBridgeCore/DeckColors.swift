@@ -2,6 +2,12 @@
 ///
 /// One source of truth: the Presentation tests pin `DeckBadge`'s fills to `defaults`. A value, so a user setting can
 /// replace the defaults later (#123): the Bridge reads its colors from its own `deckColors`.
+/// How the ring (and a held pad) turns a color into the LC6000's 64 (#151): vivid keeps the hue; exact rounds each
+/// channel, as the pad cue colors do.
+public enum RingColors: String, Equatable, Sendable, Codable, CaseIterable {
+    case vivid, exact
+}
+
 public struct DeckColors: Equatable, Sendable, Codable {
     /// [r, g, b] for decks 1-4.
     public var rgb: [Int: [Int]]

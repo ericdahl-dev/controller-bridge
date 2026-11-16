@@ -144,4 +144,14 @@ struct DeckColorTests {
         Self.palette(rig, slot: 1, rgb[0], rgb[1], rgb[2])
         #expect(rig.leds[40] == velocity)
     }
+
+    @Test("Switching ring colors to Exact repaints at once: deck 2's yellow goes from vivid 56 to exact 57, and back")
+    func ringColorsSwitch() throws {
+        let rig = try Self.onDeck(2)
+        #expect(rig.leds[40] == 56)
+        rig.coordinator.setRingColors(.exact)
+        #expect(rig.leds[40] == 57)
+        rig.coordinator.setRingColors(.vivid)
+        #expect(rig.leds[40] == 56)
+    }
 }
