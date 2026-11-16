@@ -214,10 +214,10 @@ public struct Mapping: Equatable, Sendable, Codable {
 
     /// The mapping that ships with the app.
     public static func bundledDefault() throws -> Mapping {
-        try decodeChecked(defaultJSON())
+        try checked(defaultJSON())
     }
 
-    private static func decodeChecked(_ json: Data) throws -> Mapping {
+    static func checked(_ json: Data) throws -> Mapping {
         let mapping = try JSONDecoder().decode(Mapping.self, from: json)
         let problems = mapping.problems
         guard problems.isEmpty else { throw MappingError.invalid(problems) }
@@ -239,7 +239,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         let base = try JSONSerialization.jsonObject(with: defaultJSON())
         let user = try JSONSerialization.jsonObject(with: override)
         let merged = try JSONSerialization.data(withJSONObject: merge(base, user))
-        return try decodeChecked(merged)
+        return try checked(merged)
     }
 
     private static func merge(_ base: Any, _ override: Any) -> Any {
@@ -250,11 +250,9 @@ public struct Mapping: Equatable, Sendable, Codable {
         return out
     }
 
+    /// The default mapping: the body of the bundled LC6000 profile, the first controller this app supports.
     static func defaultJSON() throws -> Data {
-        guard let url = Bundle.module.url(forResource: "default_mapping", withExtension: "json") else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-        return try Data(contentsOf: url)
+        try ControllerProfile.mappingJSON(of: ControllerProfile.bundledFile("denon-lc6000-prime"))
     }
 }
 

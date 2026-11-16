@@ -15,6 +15,8 @@ final class BridgeStatus {
     var controllers: [String] = []
     /// Each controller's deck, connection and last disconnect or reconnect, from the Coordinator (#20).
     var bridges: [ControllerStatus] = []
+    /// Every MIDI source and the controller profile it matched (#43); one with no profile is listed, not bridged.
+    var devices: [DeviceStatus] = []
     var feedback: Feedback = .starting
     var problem: String?
 
@@ -72,11 +74,14 @@ final class BridgeModel {
 
     private func start() {
         let log = UnifiedLogSink()
-        let mapping: Mapping
-        do { mapping = try Mapping.bundledDefault() } catch {
-            status.problem = "Couldn't load the mapping: \(error)"
+        // Each connected device gets the profile its name matches (#43). The OSC settings come from the first
+        // profile's mapping until Settings (#19) holds them.
+        let profiles: [ControllerProfile]
+        do { profiles = try ControllerProfile.bundled() } catch {
+            status.problem = "Couldn't load the controller profiles: \(error)"
             return
         }
+        let mapping = profiles[0].mapping
         let pipe = EventPipe()
         let status = status
 
@@ -113,7 +118,7 @@ final class BridgeModel {
         observeSleep(pipe.producer)
         let midi = midi!
         engine = Task.detached(name: "Bridge engine") {
-            await BridgeHost.run(mapping: mapping, midi: midi, osc: osc, log: log, status: status, events: pipe.events)
+            await BridgeHost.run(profiles: profiles, midi: midi, osc: osc, log: log, status: status, events: pipe.events)
         }
     }
 }

@@ -10,10 +10,10 @@ import os
 /// which also keeps it in order with the MIDI already queued.
 enum BridgeHost {
     static func run(
-        mapping: Mapping, midi: any MIDISystem, osc: any OSCSender, log: any LogSink, status: BridgeStatus,
+        profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, log: any LogSink, status: BridgeStatus,
         events: AsyncStream<PipeEvent>
     ) async {
-        let coordinator = Coordinator(mapping: mapping, midi: midi, osc: osc, clock: SystemClock(), log: log)
+        let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
         coordinator.start()
         await Engine(coordinator: coordinator, log: log, onStatus: statusSink(status)).run(events)
     }
@@ -22,7 +22,10 @@ enum BridgeHost {
     /// outside any actor: a closure written in main-actor code and called on the engine's task traps (#14 spike).
     private nonisolated static func statusSink(_ status: BridgeStatus) -> @Sendable (CoordinatorStatus) -> Void {
         { coordinatorStatus in
-            Task { @MainActor in status.bridges = coordinatorStatus.controllers }
+            Task { @MainActor in
+                status.bridges = coordinatorStatus.controllers
+                status.devices = coordinatorStatus.devices
+            }
         }
     }
 }

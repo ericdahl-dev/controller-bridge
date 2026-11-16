@@ -97,7 +97,7 @@ struct RecoveryTests {
         #expect(repainted.contains(.noteOn(channel: 0, note: 42, velocity: 0)))    // pitch center
         #expect(rig.osc.sent == [Self.resend])
         #expect(rig.midi.connected == [Rig.lc6000.id])
-        #expect(rig.coordinator.status.controllers == [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME")])
+        #expect(rig.coordinator.status.controllers == [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping")])
 
         rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
