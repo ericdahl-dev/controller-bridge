@@ -81,4 +81,30 @@ struct TimingTests {
         Self.tick(rig, at: 0.6)
         #expect(rig.leds[1] == 127)
     }
+
+    static func cues(_ slots: [Int32]) -> OSCMessage {
+        OSCMessage("/Syndicate/Deck/1/Cues", slots.flatMap { [OSCArgument.int($0), .string($0 == 0 ? "" : "Cue")] })
+    }
+
+    static func palette(_ slot: Int32, _ red: Int32, _ green: Int32, _ blue: Int32) -> OSCMessage {
+        OSCMessage("/Syndicate/ColorPalette", [.int(slot), .int(red), .int(green), .int(blue)])
+    }
+
+    @Test("A held hot-cue pad shows the brightest version of its color, and goes back to its color on release")
+    func heldPadIsBrightest() throws {
+        let rig = try Self.startedRig()
+        // Slot 1 is navy (0, 0, 128): blue level 2, so 0b00_00_10 = 2. Brightest is (0, 0, 255): 0b00_00_11 = 3.
+        // Slot 2 is dim red (40, 0, 0): it rounds to black, so it lights at the lowest red, 16. Brightest is 48.
+        rig.coordinator.feedback(Self.palette(1, 0, 0, 128))
+        rig.coordinator.feedback(Self.palette(2, 40, 0, 0))
+        rig.coordinator.feedback(Self.cues([1, 2, 0, 0, 0, 0, 0, 0]))
+        #expect([rig.leds[32], rig.leds[33]] == [2, 16])
+
+        rig.coordinator.midi(.noteOn(channel: 0, note: 32, velocity: 127), source: Rig.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 0, note: 33, velocity: 127), source: Rig.lc6000.id)
+        #expect([rig.leds[32], rig.leds[33]] == [3, 48])
+
+        rig.coordinator.midi(.noteOff(channel: 0, note: 32, velocity: 0), source: Rig.lc6000.id)
+        #expect([rig.leds[32], rig.leds[33]] == [2, 48])
+    }
 }
