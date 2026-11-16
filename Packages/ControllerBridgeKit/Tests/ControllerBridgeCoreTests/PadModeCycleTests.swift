@@ -114,3 +114,28 @@ struct PadModeCycleCoordinatorTests {
         #expect(rig.leds[120] == nil)
     }
 }
+
+/// The LC6000 is unchanged by #198: its four buttons pick the mode, and a mode_cycle note does nothing under "buttons".
+@Suite("Pad mode buttons unchanged")
+struct PadModeButtonsUnchangedTests {
+    @Test("With the four buttons, a mapped mode_cycle note neither changes the mode nor lights")
+    func cycleIgnored() throws {
+        let rig = try PadModeCycleCoordinatorTests.started(
+            #"{ "notes": { "mode_cycle": 120 }, "pads": { "mode_cycle_velocities": { "hotcue": 127, "roll": 64, "loop": 32, "slicer": 1 } } }"#)
+        PadsTests.press(rig, PadModeCycleCoordinatorTests.cycleNote)
+        #expect(PadModeCycleCoordinatorTests.pad1(rig) == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(1), .int(1)]),
+                                                          OSCMessage("/Syndicate/Deck/1/HotCue", [.int(1), .int(0)])])
+        #expect(rig.leds[120] == nil)
+    }
+
+    @Test("The bundled LC6000: Roll's button (28) picks Roll and lights; Loop's (30) picks cue loop")
+    func lc6000Buttons() throws {
+        let rig = try PadModeCycleCoordinatorTests.started(nil)
+        PadsTests.press(rig, PadsTests.modeRoll)
+        #expect(rig.leds[28] == 127)
+        #expect(PadModeCycleCoordinatorTests.pad1(rig) == [OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(1)]),
+                                                          OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(0)])])
+        PadsTests.press(rig, PadsTests.modeLoop)
+        #expect(PadModeCycleCoordinatorTests.pad1(rig) == [OSCMessage("/Syndicate/Deck/1/SetCueLoop", [.int(1)])])
+    }
+}
