@@ -1,0 +1,83 @@
+import ControllerBridgeCapture
+import Testing
+
+/// Deck layer variants (#217): the layer button, the indicator the controller sends, and how deck 2's controls differ
+/// from deck 1's. Hand-built from the confirmed LC6000 layer behavior (#79, #120). HAND-BUILT, REPLACE WITH #213'S
+/// RECORDING.
+@Suite("Capture layers")
+struct LayerTests {
+    static let prompts = [
+        CapturePrompt(id: "deck1.play", text: "Press Play on deck 1.", gesture: .press),
+        CapturePrompt(id: "layer2.select", text: "Switch to deck 2.", gesture: .press, layer: 2),
+        CapturePrompt(id: "deck2.play", text: "Press Play on deck 2.", gesture: .press, layer: 2, layerOf: "deck1.play"),
+    ]
+
+    /// Shift + deck select on the LC6000: Shift (note 26) held, deck select (ch16 note 55) pressed and let go, then
+    /// note 51 at 0 on the old channel and at 127 on the new one, then Shift let go.
+    static let lc6000Select: [[UInt8]] = [
+        [0x90, 26, 0x7F], [0x9F, 55, 0x7F], [0x8F, 55, 0x00], [0x90, 51, 0x00], [0x91, 51, 0x7F], [0x80, 26, 0x00],
+    ]
+
+    static func file(select: [[UInt8]]?, deck2Play: [[UInt8]]?) -> CaptureFile {
+        var session = CaptureSession(appVersion: "1.2.0", device: "Test", ports: CapturePorts(input: [], output: []), prompts: prompts)
+        var now = 0.0
+        func take(_ messages: [[UInt8]]?) {
+            if let messages {
+                for bytes in messages { session.receive(bytes, at: now); now += 0.1 }
+                session.confirm(at: now + 1)
+            } else {
+                session.skip(at: now + 1)
+            }
+            now += 2
+        }
+        take([[0x90, 1, 0x7F], [0x80, 1, 0x00]])
+        take(select)
+        take(deck2Play)
+        return session.file
+    }
+
+    static func note(_ channel: Int, _ number: Int, _ release: NoteRelease?) -> ControlFacts {
+        ControlFacts(kind: .note, channel: channel, number: number, release: release, first: 127, last: 127, min: 127, max: 127)
+    }
+
+    @Test("LC6000, multi-channel state: Shift + note 55 on ch 16 selects layer 2, note 51 on ch 2 marks it, deck 2 is channel +1")
+    func lc6000MultiChannel() {
+        let layers = CaptureLayers.infer(
+            prompts: Self.prompts, steps: Self.file(select: Self.lc6000Select, deck2Play: [[0x91, 1, 0x7F], [0x81, 1, 0x00]]).steps
+        )
+        #expect(layers == [LayerFacts(
+            layer: 2, select: Self.note(16, 55, .noteOff), withShift: true, indicator: Self.note(2, 51, nil),
+            channelOffset: 1, numberOffset: 0
+        )])
+    }
+
+    @Test("LC6000, normal state: deck 2's Play still comes on ch 1, so the offset is 0 and only the indicator tells layers apart")
+    func lc6000Normal() {
+        let layers = CaptureLayers.infer(
+            prompts: Self.prompts, steps: Self.file(select: Self.lc6000Select, deck2Play: [[0x90, 1, 0x7F], [0x80, 1, 0x00]]).steps
+        )
+        #expect(layers.first?.channelOffset == 0)
+        #expect(layers.first?.numberOffset == 0)
+        #expect(layers.first?.indicator == Self.note(2, 51, nil))
+    }
+
+    @Test("A plain deck button: no Shift, no indicator; deck 2 moves its notes up 64")
+    func plainButton() {
+        let layers = CaptureLayers.infer(
+            prompts: Self.prompts,
+            steps: Self.file(select: [[0x90, 70, 0x7F], [0x80, 70, 0x00]], deck2Play: [[0x90, 65, 0x7F], [0x80, 65, 0x00]]).steps
+        )
+        #expect(layers == [LayerFacts(
+            layer: 2, select: Self.note(1, 70, .noteOff), withShift: false, indicator: nil, channelOffset: 0, numberOffset: 64
+        )])
+    }
+
+    @Test("Skipped steps leave their part unknown rather than guessed")
+    func skipped() {
+        let noSelect = CaptureLayers.infer(prompts: Self.prompts, steps: Self.file(select: nil, deck2Play: [[0x91, 1, 0x7F]]).steps)
+        #expect(noSelect == [LayerFacts(layer: 2, select: nil, withShift: false, indicator: nil, channelOffset: 1, numberOffset: 0)])
+        let noPlay = CaptureLayers.infer(prompts: Self.prompts, steps: Self.file(select: Self.lc6000Select, deck2Play: nil).steps)
+        #expect(noPlay.first?.channelOffset == nil)
+        #expect(noPlay.first?.numberOffset == nil)
+    }
+}
