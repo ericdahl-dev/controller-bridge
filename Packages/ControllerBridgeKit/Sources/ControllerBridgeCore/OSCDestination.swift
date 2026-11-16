@@ -20,6 +20,7 @@ public final class OSCDestination: OSCSender {
     private struct State {
         var sink: (any DatagramSink)?
         var onReady: (@Sendable () -> Void)?
+        var lastError: String?
     }
 
     private let resolver: any HostResolver
@@ -36,6 +37,12 @@ public final class OSCDestination: OSCSender {
         self.lookupTimeout = lookupTimeout
     }
 
+    /// A destination is open: sends go out.
+    public var isReady: Bool { state.withLock { $0.sink != nil } }
+
+    /// Why the last connect, or the last send, failed; nil once a destination opens and sends work.
+    public var lastError: String? { state.withLock { $0.lastError } }
+
     /// Called each time a destination opens, so the app can ask Syndicate to resend its state: anything sent while
     /// there was no destination was dropped.
     public var onReady: (@Sendable () -> Void)? {
@@ -50,20 +57,27 @@ public final class OSCDestination: OSCSender {
         if BridgeSettings.isIPv4(host) {
             address = host
         } else {
-            guard let resolved = await lookUp(host) else { return "Can't find \(host) on the network" }
+            guard let resolved = await lookUp(host) else { return failed("Can't find \(host) on the network") }
             address = resolved
         }
         do {
             let sink = try open(address, port)
             let ready = state.withLock { state -> (@Sendable () -> Void)? in
                 state.sink = sink
+                state.lastError = nil
                 return state.onReady
             }
             ready?()
             return nil
         } catch {
-            return "\(error)"
+            return failed("Couldn't send OSC to \(address):\(port)")
         }
+    }
+
+    /// Records why a connect failed and returns it; the old destination, if any, stays.
+    private func failed(_ problem: String) -> String {
+        state.withLock { $0.lastError = problem }
+        return problem
     }
 
     /// The resolver's answer, or nil if it fails or takes longer than the timeout. The lookup isn't awaited past the

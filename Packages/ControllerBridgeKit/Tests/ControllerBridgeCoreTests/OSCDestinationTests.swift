@@ -112,4 +112,23 @@ struct OSCDestinationTests {
         #expect(sinks.opened.isEmpty)
         resolver.fail()   // let the hung lookup go
     }
+
+    @Test("#109: a sender that can't open at launch drops sends and says why; a later good host starts sending, no restart")
+    func failedLaunchFixedByApply() async throws {
+        let sinks = FakeSinks(), resolver = FakeResolver()
+        sinks.refuse = ["10.0.0.99"]
+        let destination = Self.destination(sinks, resolver)
+        let problem = await destination.connect(host: "10.0.0.99", port: 9090)
+        #expect(problem == "Couldn't send OSC to 10.0.0.99:9090")
+        #expect(destination.lastError == problem)
+        #expect(!destination.isReady)
+        destination.send(Self.play)                      // dropped, no crash
+        #expect(sinks.opened.isEmpty)
+
+        #expect(await destination.connect(host: "127.0.0.1", port: 9090) == nil)
+        #expect(destination.isReady)
+        #expect(destination.lastError == nil)
+        destination.send(Self.play)
+        #expect(sinks.sink("127.0.0.1:9090")?.sent == [Self.play.encoded()])
+    }
 }
