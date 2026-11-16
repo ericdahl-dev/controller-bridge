@@ -185,6 +185,41 @@ struct DiagnosticsPresentationTests {
             """)
     }
 
+    @Test("The window draws the newest 2,000 shown lines; Copy still takes every shown line (#218)")
+    func drawLimit() {
+        var lines = DiagnosticsLines()
+        for n in 1...2_500 { lines.append(to: .osc, message: "OSC -> /Syndicate/Browser/Down \(n)") }
+        let drawn = lines.drawn(.osc)
+        #expect(drawn.count == 2_000)
+        #expect(drawn.first?.message == "OSC -> /Syndicate/Browser/Down 501")
+        #expect(drawn.last?.message == "OSC -> /Syndicate/Browser/Down 2500")
+        #expect(lines.plainText(.osc).split(separator: "\n").count == 2_500)
+    }
+
+    @Test("400 messages a second for 60 seconds: 24,000 appends, then a refresh of the shown lines, stay well inside budget (#218)")
+    func sustainedLoad() {
+        var lines = DiagnosticsLines()
+        lines.hideStreaming = false
+        let clock = ContinuousClock()
+        let appending = clock.measure {
+            for n in 0..<24_000 {
+                let message = switch n % 4 {
+                case 0: "OSC <- /Syndicate/Deck/\(n % 3 + 1)/Position \(n)"
+                case 1: "OSC <- /Syndicate/Deck/\(n % 3 + 1)/BarRamp 0.\(n)"
+                case 2: "OSC <- /Syndicate/Mixer/CH\(n % 3 + 1)/Meter 0.\(n)"
+                default: "OSC <- /Syndicate/Deck/1/Playing \(n % 2)"
+                }
+                lines.append(to: .osc, message: message)
+            }
+        }
+        var drawn: [DiagnosticsLines.Line] = []
+        let refreshing = clock.measure { drawn = lines.drawn(.osc) }
+        #expect(drawn.count == 2_000)
+        // The window refreshes at most 10 times a second, so one refresh has 100 ms; the appends have the whole minute.
+        #expect(appending < .seconds(2), "appending took \(appending)")
+        #expect(refreshing < .milliseconds(100), "a refresh took \(refreshing)")
+    }
+
     @Test("Hidden streaming lines can't push the rest out: after 20,100 of them, the Playing line is still shown (#97)")
     func hiddenLinesDontEvict() {
         var lines = DiagnosticsLines()

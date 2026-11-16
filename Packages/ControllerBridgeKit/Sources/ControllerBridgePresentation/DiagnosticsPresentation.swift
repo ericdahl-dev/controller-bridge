@@ -182,6 +182,15 @@ public struct DiagnosticsLines: Equatable, Sendable {
         return out
     }
 
+    /// How many shown lines the window draws (#218): one selectable text of 20,000 lines would stutter at 10 redraws a
+    /// second. Copy and Save still take all of them.
+    public static let drawLimit = 2_000
+
+    /// What the window draws: the newest `drawLimit` shown lines, oldest first.
+    public func drawn(_ tab: DiagnosticsTab) -> [Line] {
+        Array(shown(tab).suffix(Self.drawLimit))
+    }
+
     /// A tab's kept lines, with or without the streaming ones, oldest first.
     private func kept(_ tab: DiagnosticsTab) -> [Line] {
         let list = lists[tab, default: Ring()].lines
