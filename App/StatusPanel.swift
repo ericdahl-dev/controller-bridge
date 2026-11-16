@@ -124,7 +124,7 @@ struct StatusPanel: View {
                                 NSPasteboard.general.clearContents()
                                 NSPasteboard.general.setString(problem, forType: .string)
                             }
-                            .buttonStyle(.plain).font(Theme.captionFont).foregroundStyle(Theme.caption)
+                            .buttonStyle(LinkButtonStyle())
                         }
                     }
                 }
@@ -140,7 +140,7 @@ struct StatusPanel: View {
                 // Quiet controls: the guide, the demo, and Quit kept apart from the main buttons (#66).
                 HStack(spacing: Theme.Space.l) {
                     quietButton("Setup guide") { SetupGuideWindow.open(openWindow) }
-                    quietButton("Demo controller: \(status.demo ? "On" : "Off")", color: status.demo ? Theme.attention : Theme.caption) {
+                    quietButton("Demo controller: \(status.demo ? "On" : "Off")", color: status.demo ? Theme.attention : nil) {
                         setDemo(!status.demo)
                     }
                     Spacer(minLength: 0)
@@ -164,12 +164,15 @@ struct StatusPanel: View {
         }
     }
 
-    /// A small caption-style text button, with no fill and no underline.
-    private func quietButton(_ title: String, color: Color = Theme.caption, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .buttonStyle(.plain)
-            .font(Theme.captionFont)
-            .foregroundStyle(color)
+    /// A quiet text button with no fill or underline, and agent2's focus ring and hover (#67). A color, when given,
+    /// goes on the label itself so the style's caption gray doesn't cover it.
+    @ViewBuilder
+    private func quietButton(_ title: String, color: Color? = nil, action: @escaping () -> Void) -> some View {
+        if let color {
+            Button(action: action) { Text(title).foregroundStyle(color) }.buttonStyle(LinkButtonStyle())
+        } else {
+            Button(title, action: action).buttonStyle(LinkButtonStyle())
+        }
     }
 
     private var feedbackPort: String {
@@ -215,7 +218,11 @@ struct DeckPicker: View {
             ForEach(1...4, id: \.self) { number in
                 Button { setDeck(number) } label: {
                     if number == deck {
+                        // Not color alone: the current deck also gets the selected bar under it (#67).
                         DeckBadgeView(deck: number)
+                            .overlay(alignment: .bottom) {
+                                Rectangle().fill(Color(Palette.selectedBar)).frame(height: 2).offset(y: 4)
+                            }
                     } else {
                         Text("\(number)")
                             .font(Theme.data(15, .semibold))
@@ -249,7 +256,7 @@ struct OtherDevicesList: View {
                 }
                 .foregroundStyle(Theme.caption)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LinkButtonStyle())
             .accessibilityLabel("\(summary), \(expanded ? "expanded" : "collapsed")")
             if expanded {
                 ForEach(rows, id: \.self) { row in
