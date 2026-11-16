@@ -218,6 +218,7 @@ extension Mapping {
     private static let choices: [String: [String]] = [
         "leds.beat_pulse": LEDs.BeatPulse.allRawValues,
         "leds.stale_idle": LEDs.StaleIdle.allRawValues,
+        "midi.encoder_format": EncoderFormat.allRawValues,
     ]
 
     /// A range, count or choice problem with a value of the right kind; nil when it's fine.

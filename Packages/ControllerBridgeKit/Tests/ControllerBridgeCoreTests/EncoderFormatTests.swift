@@ -89,3 +89,32 @@ struct EncoderFormatCoordinatorTests {
         ])
     }
 }
+
+/// The profile import check (#193): an encoder format is one of the three names, in plain words.
+@Suite("Encoder format in the import check")
+struct EncoderFormatImportTests {
+    static func importing(_ json: String) throws -> ControllerProfile {
+        try ControllerProfile.importing(Data(json.utf8), bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+    }
+
+    @Test("An unknown format names the three it can be")
+    func unknownFormat() {
+        #expect(throws: MappingError.invalid([
+            #"mapping.midi.encoder_format: "offset64" isn't one of twos_complement, offset_64, sign_magnitude"#,
+        ])) {
+            try Self.importing(#"{"mapping": {"midi": {"encoder_format": "offset64"}}}"#)
+        }
+    }
+
+    @Test("A number where a format belongs says text was expected")
+    func wrongKind() {
+        #expect(throws: MappingError.invalid([#"mapping.midi.encoder_format: expected text, got 1"#])) {
+            try Self.importing(#"{"mapping": {"midi": {"encoder_format": 1}}}"#)
+        }
+    }
+
+    @Test("A good format imports")
+    func goodFormat() throws {
+        #expect(try Self.importing(#"{"mapping": {"midi": {"encoder_format": "sign_magnitude"}}}"#).mapping.midi.encoderFormat == .signMagnitude)
+    }
+}
