@@ -103,4 +103,21 @@ struct EngineTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
         #expect(rig.midi.connected == [])
     }
+
+    @Test("Stop from the pipe releases held controls before run() returns, and events after it are not handled")
+    func stopFromThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)   // Cue held
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+
+        pipe.producer.stop()
+        pipe.producer.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)    // after quit: dropped
+        // No finish(): stop alone ends the loop.
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
+        #expect(rig.midi.connected == [])
+    }
 }

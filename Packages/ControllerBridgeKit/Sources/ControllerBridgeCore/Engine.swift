@@ -10,7 +10,7 @@ public struct Engine {
         self.log = log
     }
 
-    /// Returns when the pipe finishes.
+    /// Returns when the pipe finishes, or right after a stop.
     public func run(_ events: AsyncStream<PipeEvent>) async {
         for await event in events {
             switch event {
@@ -25,6 +25,10 @@ public struct Engine {
             case .devicesChanged: coordinator.devicesChanged()
             case .sleep: coordinator.willSleep()
             case .wake: coordinator.didWake()
+            case .stop:
+                // Releases are sent synchronously, so they have all gone out once run() returns.
+                coordinator.stop()
+                return
             }
         }
     }
