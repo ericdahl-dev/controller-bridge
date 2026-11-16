@@ -68,6 +68,10 @@ Checked on hardware (2026-11-15, see #12 and #103):
   0x01–0x3F turn forward, 0x7F is one tick back. Another controller's profile can say `"offset_64"` (0x40 is still,
   0x41 one forward) or `"sign_magnitude"` (bit 6 is back, the low six bits how far). Left out, it's
   `"twos_complement"`.
+- `jog.relative_cc` (#204): for a platter that sends relative ticks on one CC (most Pioneer DDJ jogs), not the LC6000's
+  14-bit position. The ticks decode by `midi.encoder_format`, `jog.counts_per_rev` counts ticks per turn, and
+  `jog.msb_cc`/`jog.lsb_cc` may be left out. `jog.relative_edge_cc` is the platter's edge on its own CC: it nudges
+  without a touch, even with `require_touch`. Left out, the jog is the LC6000's absolute pair.
 - `leds`: the button LED notes and the `0b00RRGGBB` color table are confirmed.
 
 Still PROVISIONAL:
