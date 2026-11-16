@@ -6,10 +6,10 @@ import Testing
 struct SpokenStatusTests {
     @Test("A light is spoken in natural case: our fixed labels are capitalized, words lowercased, device names kept")
     func spokenLights() {
-        #expect(StatusLight(label: "FEEDBACK", word: "PORT 9096 IN USE", tone: .error).spoken == "Feedback: port 9096 in use")
-        #expect(StatusLight(label: "CONTROLLER", word: "NOT CONNECTED", tone: .idle).spoken == "Controller: not connected")
-        #expect(StatusLight(label: "Denon LC6000 PRIME", word: "CONNECTED", tone: .live).spoken == "Denon LC6000 PRIME: connected")
-        #expect(StatusLight(label: "DDJ-FLX4", word: "NO PROFILE", tone: .attention).spoken == "DDJ-FLX4: no profile")
+        #expect(StatusLight(label: "Feedback", word: "Port 9096 in use", tone: .error).spoken == "Feedback: port 9096 in use")
+        #expect(StatusLight(label: "Controller", word: "Not connected", tone: .idle).spoken == "Controller: not connected")
+        #expect(StatusLight(label: "Denon LC6000 PRIME", word: "Connected", tone: .live).spoken == "Denon LC6000 PRIME: connected")
+        #expect(StatusLight(label: "DDJ-FLX4", word: "No profile", tone: .attention).spoken == "DDJ-FLX4: no profile")
     }
 
     // Since #66 the controller light is always CONTROLLER; the panel header says which device it is.

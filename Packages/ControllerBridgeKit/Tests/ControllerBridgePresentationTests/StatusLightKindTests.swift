@@ -20,3 +20,15 @@ struct StatusLightKindTests {
         #expect(StatusLight(unmatchedDevice: "DDJ-FLX4").kind == .device)
     }
 }
+
+@Suite("Status words in natural case")
+struct NaturalCaseLineTests {
+    @Test("Several controllers count the worst word mid-sentence, and an acronym keeps its caps: 1 MIDI error")
+    func acronymAfterCount() {
+        let state = BridgeState(
+            controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1,
+            others: [BridgeState.ControllerEntry(controller: .failed(profile: "Denon LC6000 PRIME"), deck: 3)]
+        )
+        #expect(StatusPresentation(state).lineParts.first == StatusLinePart(label: "Controllers", word: "1 MIDI error", tone: .attention))
+    }
+}

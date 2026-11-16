@@ -10,7 +10,7 @@ struct SubscriptionsPresentationTests {
     @Test("No deck data: an orange FEEDBACK ● NO DECK DATA light")
     func noDeckDataLight() {
         let status = StatusPresentation(BridgeState(controller: Self.connected, feedback: .noDeckData(port: 9096), deck: 1))
-        #expect(status.lights.contains(StatusLight(label: "FEEDBACK", word: "NO DECK DATA", tone: .attention)))
+        #expect(status.lights.contains(StatusLight(label: "Feedback", word: "No deck data", tone: .attention)))
     }
 
     @Test("No deck data: help names the subscriptions to turn on, and links the guide")
@@ -24,7 +24,7 @@ struct SubscriptionsPresentationTests {
     @Test("Cues missing on a loaded deck: the light stays LIVE, and help says the pad colors need the Cues subscription")
     func cuesMissing() {
         let state = BridgeState(controller: Self.connected, feedback: .live(port: 9096), deck: 1, missingSubscriptions: ["cues"])
-        #expect(StatusPresentation(state).lights.contains(StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live)))
+        #expect(StatusPresentation(state).lights.contains(StatusLight(label: "Feedback", word: "Live", tone: .live)))
         #expect(HelpMessage(state) == HelpMessage(
             text: "Hot cue pad colors need the Cues subscription. Turn it on in Syndicate › Settings › OSC FEEDBACK.",
             showsGuide: true
