@@ -105,4 +105,46 @@ struct RelativeJogCoordinatorTests {
         Self.turn(rig, 0x7F)   // +189: one beat, 9 left over
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(1)])])
     }
+
+    static let touchProfile = #"""
+    { "midi": { "encoder_format": "offset_64" },
+      "jog": { "relative_cc": 33, "relative_edge_cc": 34, "counts_per_rev": 720, "require_touch": true } }
+    """#
+
+    static func touch(_ rig: Rig, _ down: Bool) {
+        // The platter's touch note, 40 in the LC6000 mapping.
+        rig.coordinator.midi(down ? .noteOn(channel: 0, note: 40, velocity: 127) : .noteOff(channel: 0, note: 40, velocity: 0),
+                             source: Rig.lc6000.id)
+    }
+
+    @Test("With require_touch, the top does nothing until touched, bends while touched, and letting go ends the bend")
+    func touchTop() throws {
+        let rig = try Self.started(Self.touchProfile)
+        Self.playing(rig)
+        Self.turn(rig, 0x41)
+        #expect(rig.osc.sent == [])
+        Self.touch(rig, true)
+        Self.turn(rig, 0x41)
+        Self.touch(rig, false)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]),
+        ])
+    }
+
+    @Test("The edge (CC 34) needs no touch: with require_touch it still nudges")
+    func edgeWithoutTouch() throws {
+        let rig = try Self.started(Self.touchProfile)
+        Self.playing(rig)
+        Self.turn(rig, cc: 34, 0x3F)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(-1)])])
+    }
+
+    @Test("Without require_touch, the top turns without a touch, as the LC6000's does")
+    func noTouchNeeded() throws {
+        let rig = try Self.started()
+        Self.playing(rig)
+        Self.turn(rig, 0x41)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
+    }
 }
