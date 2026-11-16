@@ -20,6 +20,8 @@ public enum PipeEvent: Equatable, Sendable {
     case setDeck(Int, controller: Int)
     case setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int)
     case setLEDs(enabled: Bool)
+    /// Start (a source) or end (nil) the capture window's pause of a controller (#186).
+    case setCapture(source: MIDIEndpoint.ID?)
     case setDeckColors(followSyndicate: Bool, custom: DeckColors)
     case setRingColors(RingColors)
     /// The OSC destination opened late (#84): ask Syndicate to resend its state, since what was sent before was dropped.
@@ -64,6 +66,7 @@ public struct EventPipe: Sendable {
             continuation.yield(.setDevices(input: input, output: output, controller: controller))
         }
         public func setLEDs(enabled: Bool) { continuation.yield(.setLEDs(enabled: enabled)) }
+        public func setCapture(source: MIDIEndpoint.ID?) { continuation.yield(.setCapture(source: source)) }
         public func setRingColors(_ mode: RingColors) { continuation.yield(.setRingColors(mode)) }
         public func setDeckColors(followSyndicate: Bool, custom: DeckColors) {
             continuation.yield(.setDeckColors(followSyndicate: followSyndicate, custom: custom))
