@@ -11,7 +11,7 @@ struct SetupGuideView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xl) {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text("SET UP SYNDICATE").font(Theme.captionFont).foregroundStyle(Theme.caption)
+                Text("Set up Syndicate").textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
                 Text("Four settings, once").font(Theme.ui(Theme.Size.heading, .bold)).foregroundStyle(Theme.text)
                 Text("\(AppInfo.displayName) talks to Syndicate over OSC. Open Syndicate's Settings and check these.")
                     .font(Theme.ui(Theme.Size.label)).foregroundStyle(Theme.caption)
@@ -26,7 +26,7 @@ struct SetupGuideView: View {
                             .foregroundStyle(Theme.caption)
                             .frame(width: 20, alignment: .leading)
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                            Text(step.title.uppercased()).font(Theme.captionFont).foregroundStyle(Theme.caption)
+                            Text(step.title).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
                             Text(step.detail).font(Theme.ui(Theme.Size.emphasis)).foregroundStyle(Theme.text)
                                 .fixedSize(horizontal: false, vertical: true)
                             if !step.checklist.isEmpty {

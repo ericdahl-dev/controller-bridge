@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Template image: black + alpha only. Set isTemplate = true; macOS tints it for light and dark menu bars. -->
+  <circle cx="7.50" cy="7.50" r="6.20" fill="none" stroke="#000" stroke-width="1.80"/>
+  <rect x="6.70" y="0.40" width="1.60" height="3.60" rx="0.60" fill="#000" transform="rotate(40 7.50 7.50)"/>
+  <circle cx="7.50" cy="7.50" r="1.50" fill="#000"/>
+</svg>

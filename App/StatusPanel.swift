@@ -112,7 +112,7 @@ struct StatusPanel: View {
                 }
                 if let help = status.help {
                     VStack(alignment: .leading, spacing: Theme.Space.s) {
-                        Text("WHY NO LEDS?").font(Theme.captionFont).foregroundStyle(Theme.caption)
+                        Text("Why no LEDs?").textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
                         Text(help.text).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.text)
                             .fixedSize(horizontal: false, vertical: true)
                         if help.showsGuide {
@@ -124,18 +124,19 @@ struct StatusPanel: View {
                                 NSPasteboard.general.clearContents()
                                 NSPasteboard.general.setString(problem, forType: .string)
                             }
-                            .buttonStyle(.plain).font(Theme.captionFont).foregroundStyle(Theme.caption)
+                            .buttonStyle(CaptionButtonStyle()).font(Theme.captionFont).foregroundStyle(Theme.caption)
                         }
                     }
                 }
                 HStack(spacing: Theme.Space.s) {
-                    SettingsLink { Text("Settings…") }.buttonStyle(FlatButtonStyle())
+                    SettingsLink { Text("Settings…") }.buttonStyle(FlatButtonStyle()).keyboardShortcut(",")
                     Button("Diagnostics…") {
                         // A menu-bar (LSUIElement) app must come forward first, or the window opens behind.
                         NSApp.activate()
                         openWindow(id: "diagnostics")
                     }
                     .buttonStyle(FlatButtonStyle())
+                    .keyboardShortcut("d")
                 }
                 // Quiet controls: the guide, the demo, and Quit kept apart from the main buttons (#66).
                 HStack(spacing: Theme.Space.l) {
@@ -167,7 +168,7 @@ struct StatusPanel: View {
     /// A small caption-style text button, with no fill and no underline.
     private func quietButton(_ title: String, color: Color = Theme.caption, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
-            .buttonStyle(.plain)
+            .buttonStyle(CaptionButtonStyle())
             .font(Theme.captionFont)
             .foregroundStyle(color)
     }
@@ -224,7 +225,7 @@ struct DeckPicker: View {
                             .background(Theme.button, in: RoundedRectangle(cornerRadius: Theme.corner))
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(CaptionButtonStyle())
                 .accessibilityLabel("Deck \(number)")
                 .accessibilityAddTraits(number == deck ? .isSelected : [])
             }
@@ -245,11 +246,11 @@ struct OtherDevicesList: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.system(size: 8, weight: .bold))
-                    Text(summary).font(Theme.captionFont)
+                    Text(summary).textCase(.uppercase).font(Theme.captionFont)
                 }
                 .foregroundStyle(Theme.caption)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CaptionButtonStyle())
             .accessibilityLabel("\(summary), \(expanded ? "expanded" : "collapsed")")
             if expanded {
                 ForEach(rows, id: \.self) { row in
