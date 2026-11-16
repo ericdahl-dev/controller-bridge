@@ -11,6 +11,226 @@
 <meta name="theme-color" content="#171717">
 <meta name="site-kind" content="software">
 <meta name="page-type" content="software">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "Organization",
+   "@id": "https://getdeckbridge.app/#org",
+   "name": "DeckBridge",
+   "url": "https://getdeckbridge.app/",
+   "logo": {
+    "@type": "ImageObject",
+    "url": "https://getdeckbridge.app/img/icon-512.png",
+    "width": 512,
+    "height": 512
+   },
+   "email": "deckbridge@ericdahl.dev",
+   "contactPoint": {
+    "@type": "ContactPoint",
+    "contactType": "customer support",
+    "email": "deckbridge@ericdahl.dev",
+    "availableLanguage": "en"
+   }
+  },
+  {
+   "@type": "WebSite",
+   "@id": "https://getdeckbridge.app/#website",
+   "url": "https://getdeckbridge.app/",
+   "name": "DeckBridge",
+   "inLanguage": "en",
+   "publisher": {
+    "@id": "https://getdeckbridge.app/#org"
+   }
+  },
+  {
+   "@type": "WebPage",
+   "@id": "https://getdeckbridge.app/#webpage",
+   "url": "https://getdeckbridge.app/",
+   "name": "DeckBridge: LC6000 PRIME on Mac, with 14-bit jog over OSC",
+   "isPartOf": {
+    "@id": "https://getdeckbridge.app/#website"
+   },
+   "about": {
+    "@id": "https://getdeckbridge.app/#app"
+   },
+   "primaryImageOfPage": {
+    "@id": "https://getdeckbridge.app/#shot-panel"
+   },
+   "inLanguage": "en"
+  },
+  {
+   "@type": "SoftwareApplication",
+   "@id": "https://getdeckbridge.app/#app",
+   "name": "DeckBridge",
+   "url": "https://getdeckbridge.app/",
+   "description": "A native macOS menu-bar app that bridges a Denon LC6000 PRIME controller to Syndicate over MIDI and OSC. It reads the controller's MIDI over USB, sends it to Syndicate's OSC input (port 9090) at full 14-bit resolution for the jog wheel and pitch fader, and lights the controller's LEDs from Syndicate's OSC feedback (port 9096).",
+   "applicationCategory": "MultimediaApplication",
+   "applicationSubCategory": "DJ controller bridge",
+   "operatingSystem": "macOS 26 or later",
+   "softwareVersion": "1.0.0",
+   "softwareRequirements": "Syndicate with OSC input enabled; a Denon LC6000 PRIME connected over USB",
+   "inLanguage": "en",
+   "image": "https://getdeckbridge.app/img/icon-512.png",
+   "screenshot": [
+    {
+     "@type": "ImageObject",
+     "@id": "https://getdeckbridge.app/#shot-panel",
+     "url": "https://getdeckbridge.app/img/1-panel.webp",
+     "width": 1440,
+     "height": 900,
+     "caption": "The DeckBridge menu-bar panel: controller connected, feedback live, deck 1 selected."
+    },
+    {
+     "@type": "ImageObject",
+     "url": "https://getdeckbridge.app/img/2-diagnostics.webp",
+     "width": 1440,
+     "height": 900,
+     "caption": "Diagnostics: the MIDI monitor shows every controller message with its mapping, next to the LED sweep and the OSC log."
+    },
+    {
+     "@type": "ImageObject",
+     "url": "https://getdeckbridge.app/img/3-setup.webp",
+     "width": 1440,
+     "height": 900,
+     "caption": "The setup guide: four settings in Syndicate, once."
+    },
+    {
+     "@type": "ImageObject",
+     "url": "https://getdeckbridge.app/img/4-demo.webp",
+     "width": 1440,
+     "height": 900,
+     "caption": "Demo controller: see the bridge work without hardware."
+    }
+   ],
+   "featureList": [
+    "Full-resolution 14-bit jog wheel and pitch fader, with pickup on the pitch fader",
+    "Deck layers that follow the LC6000's own layers: decks 1 to 4 from one controller",
+    "Deck colors that follow Syndicate's palette live, with the jog ring lit in the deck color",
+    "The LC6000's printed Shift functions",
+    "LED feedback for Play, Cue, Sync and pads, with hot cues in Syndicate's cue colors",
+    "Safe recovery: unplug, sleep or quit releases held controls; replug repaints the LEDs",
+    "Diagnostics: MIDI monitor, LED sweep and OSC log",
+    "Demo controller to try it without hardware",
+    "A second LC6000 can drive another deck",
+    "Works with Syndicate on another Mac over the local network"
+   ],
+   "publisher": {
+    "@id": "https://getdeckbridge.app/#org"
+   },
+   "author": {
+    "@id": "https://getdeckbridge.app/#org"
+   }
+  },
+  {
+   "@type": "FAQPage",
+   "@id": "https://getdeckbridge.app/#faq",
+   "isPartOf": {
+    "@id": "https://getdeckbridge.app/#website"
+   },
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "What is DeckBridge?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "DeckBridge is a native Mac menu-bar app that lets you play Syndicate from a Denon LC6000 PRIME by bridging the controller’s MIDI to Syndicate OSC. It sends the 14-bit jog wheel and pitch fader to Syndicate at full resolution and lights the controller’s LEDs from Syndicate’s OSC feedback."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Which controllers does DeckBridge support?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "DeckBridge supports one controller today, the Denon LC6000 PRIME, connected over USB. A single LC6000 drives all four Syndicate decks through its own deck layers."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What are the requirements for DeckBridge?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "DeckBridge needs macOS 26 or later, Syndicate with OSC input enabled, and a Denon LC6000 PRIME connected over USB. It runs in the menu bar with no Dock icon."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How much does DeckBridge cost?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Pricing for DeckBridge hasn’t been announced yet. Version 1.0.0 is in beta on TestFlight now, and the Mac App Store version is coming soon."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How does DeckBridge setup work?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "To set up DeckBridge, you change four settings in Syndicate once: turn on OSC input (port 9090), point OSC feedback at 127.0.0.1 port 9096, turn on the listed feedback subscriptions, and turn the LC6000’s MIDI input off in Syndicate. DeckBridge opens a setup guide with these steps on first launch, and it shows “Done: feedback live” once Syndicate answers."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Does DeckBridge need djay Pro or Engine DJ?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No, DeckBridge works with Syndicate only and doesn’t need djay Pro or Engine DJ to run the LC6000. Quit those apps or any other app using the LC6000 first, and power-cycle the controller if one was open, because they can switch its MIDI mode until it restarts."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Is DeckBridge made by or affiliated with Untitled Audio or Denon DJ?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No, DeckBridge is an independent app, not made by, affiliated with or endorsed by Untitled Audio (the makers of Syndicate) or Denon DJ. It works with Syndicate through Syndicate’s OSC API."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Does DeckBridge collect any data?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No, DeckBridge collects no data: no account, no tracking, no analytics. It only sends Syndicate OSC messages to Syndicate and listens for its feedback, on this Mac by default or on your local network if you choose that."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Can I try DeckBridge without an LC6000?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Yes, DeckBridge’s demo controller runs a scripted controller against a simulated Syndicate, so you can see it work without an LC6000. Nothing goes to the network, and demo mode is off again at the next launch."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Can I use two LC6000s, or run Syndicate on another Mac?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Yes, DeckBridge can drive a second LC6000 on another Syndicate deck, and it can reach Syndicate running on another Mac over your local network. Add the second unit under Settings › Add controller; both share Syndicate’s one feedback stream. For another Mac, set Syndicate’s host to that Mac’s IP address and set feedback to listen on All networks. macOS asks once for local-network permission."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Where do I get DeckBridge?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "DeckBridge 1.0.0 is available now as a beta on TestFlight, and it’s coming soon to the Mac App Store. Email deckbridge@ericdahl.dev to join the beta."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What’s coming next for DeckBridge?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Coming in v1.1, DeckBridge will show art on the LC6000’s jog-wheel display in real time. Version 1.0.0 is in beta on TestFlight now, so this LC6000 Syndicate setup keeps growing from there."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
 <link rel="preload" href="fonts/Geist.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" href="img/favicon-64.png" type="image/png">
 <link rel="stylesheet" href="assets/system.css">
@@ -35,9 +255,13 @@
   --display-tracking-xl: -0.045em;
 }
 </style>
+<link rel="stylesheet" href="assets/diagrams/diagram.css">
 <link rel="stylesheet" href="site.css">
 <script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
 <script src="assets/backgrounds/backgrounds.js"></script>
+<script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>
+<link rel="modulepreload" href="assets/moments/moments.js"><link rel="modulepreload" href="assets/moments/lib.js">
+<link rel="modulepreload" href="assets/moments/word-highlight/moment.js"><link rel="modulepreload" href="assets/moments/liquid-type/moment.js">
 </head>
 <body>
 <!-- type: software
@@ -52,8 +276,11 @@
     <a class="skip-link" href="#top">Skip to content</a>
     <a class="nav__logo" href="#top"><img src="img/favicon-64.png" alt="" width="28" height="28">DeckBridge</a>
     <nav class="nav__links" aria-label="Main">
+      <div class="nav__item"><a class="nav__link" href="#setup">Setup</a></div>
+      <div class="nav__item"><a class="nav__link" href="#features">Features</a></div>
+      <div class="nav__item"><a class="nav__link" href="#screens">Screens</a></div>
+      <div class="nav__item"><a class="nav__link" href="#faq">Questions</a></div>
       <div class="nav__item"><a class="nav__link" href="support/">Support</a></div>
-      <div class="nav__item"><a class="nav__link" href="privacy/">Privacy</a></div>
     </nav>
     <div class="nav__actions">
       <!-- TODO(user): TestFlight public link. Until it exists, the beta is joined by email. -->
@@ -106,6 +333,204 @@
       </div>
     </div></div>
   </section>
+
+  <!-- APP-FRAME: the setup guide (App/SetupGuideView.swift), its four settings beside the open step -->
+  <section class="section" id="setup" aria-labelledby="setup-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <h2 class="span-5" id="setup-h">Four settings in Syndicate, once</h2>
+        <div class="span-6 start-7 stack-4">
+          <p class="muted">Turn OSC input on, point feedback at port 9096, tick the subscriptions and switch the LC6000’s MIDI input off. DeckBridge opens this guide on first launch.</p>
+          <a class="link" href="support/#setup">Read the setup steps</a>
+        </div>
+      </div>
+      <div class="ui app fill db-win" role="img" aria-label="The DeckBridge setup guide: four Syndicate settings, each marked done, beside the OSC feedback subscriptions being turned on one by one">
+        <div class="app__pane app__pane--list db-guide">
+          <div class="db-guide__head"><span class="db-label">Set up Syndicate</span><b>Four settings, once</b><span>DeckBridge talks to Syndicate over OSC. Open Syndicate’s Settings and check these.</span></div>
+          <ol class="db-steps">
+            <li><i>1</i><span class="db-label">Settings → OSC</span><span>Turn OSC INPUT ENABLED on. The listen port is 9090.</span><em>Done</em></li>
+            <li><i>2</i><span class="db-label">Settings → OSC Feedback</span><span>Set DEST IP to 127.0.0.1 and PORT to 9096.</span><em>Done</em></li>
+            <li class="is-on"><i>3</i><span class="db-label">OSC Feedback → Subscriptions</span><span>Turn on the eight feedback subscriptions.</span><em>Done</em></li>
+            <li><i>4</i><span class="db-label">Settings → MIDI</span><span>Turn the LC6000 PRIME’s MIDI input off.</span><em>Done</em></li>
+          </ol>
+          <p class="db-guide__note">On start, DeckBridge asks Syndicate to RESEND STATE, so the LEDs light at once.</p>
+        </div>
+        <div class="app__pane app__pane--open db-subs" data-ui-loop>
+          <div class="db-guide__head"><span class="db-label">Settings → OSC Feedback → Subscriptions</span><b>Turn on these OSC FEEDBACK subscriptions</b></div>
+          <ul class="db-checks" data-ly-steps="700">
+            <li>Playing</li><li data-step>PlayPending</li><li data-step>Loaded and TrackInfo</li><li data-step>Position/Progress</li>
+            <li data-step>TempoSlider/TempoSliderEnabled</li><li data-step>Cues</li><li data-step>BPM/Sync</li><li data-step>Loop</li>
+          </ul>
+          <div class="db-guide__foot" data-ly-steps="700"><span><span class="db-label">Controller</span><span class="db-live">Connected</span></span><span><span class="db-label">Feedback</span><span class="db-live">Live</span></span><span class="db-done">Done: feedback live</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- the signal path: a sync diagram card (assets/diagrams), its own spec inline -->
+  <section class="section" id="how" aria-labelledby="how-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <h2 class="span-5" id="how-h">From the LC6000 to Syndicate over OSC</h2>
+        <p class="span-6 start-7 muted">DeckBridge reads the controller’s USB MIDI, sends it to Syndicate’s OSC input on port 9090 and lights the LC6000 from Syndicate’s feedback on port 9096.</p>
+      </div>
+      <div class="panel db-path"><div class="dg" data-diagram><script type="application/json">{"layout": "sync", "size": "band", "alt": "The LC6000 PRIME's jog wheel, pitch fader and pads go to DeckBridge over USB MIDI, and on to Syndicate's OSC input on port 9090; Syndicate's feedback on port 9096 comes back to light the controller.", "left": {"label": "LC6000 PRIME", "icon": "ui:sliders-horizontal", "meta": "USB MIDI", "rows": [{"label": "Jog wheel", "meta": "14-bit"}, {"label": "Pitch fader", "meta": "14-bit"}, {"label": "Pads and LEDs", "meta": "MIDI"}]}, "link": {"label": "DeckBridge", "icon": "ui:refresh-cw"}, "right": {"label": "Syndicate", "icon": "ui:music", "meta": "OSC", "rows": [{"label": "OSC input", "meta": "9090"}, {"label": "OSC feedback", "meta": "9096"}, {"label": "Decks", "meta": "1 to 4"}]}}</script></div></div>
+    </div>
+  </section>
+
+  <!-- word-highlight: the one statement, 12 to 40 words, its strong words turn to the accent -->
+  <section class="section statement bg-band bg-bleed" id="why" style="--g-screen: 100svh" data-moment="word-highlight" aria-label="Why DeckBridge">
+    <div class="wrap">
+      <p class="t-label">Why DeckBridge</p>
+      <p class="mo-wh__text">Syndicate’s own MIDI mapping (0.3.7) can’t read the LC6000’s 14‑bit jog wheel or pitch fader, and it lights only the DDJ-FLX4 and FLX10. DeckBridge sends both at <strong>full resolution</strong> and lights the LC6000 from Syndicate’s feedback.</p>
+    </div>
+  </section>
+
+  <!-- FEATURES-2x2 on two screens (g2): each panel holds a piece of the app's own UI, live -->
+  <section class="section g2 bg-mist" id="features" aria-labelledby="features-h">
+    <div class="wrap">
+      <div class="group">
+        <div class="section-head">
+          <h2 id="features-h">Built for the Denon LC6000 Syndicate setup. <span class="muted">Four decks, live lights and a clean recovery.</span></h2>
+        </div>
+        <div class="grid">
+          <article class="card card--row span-6">
+            <h3>Follows the LC6000’s deck layers</h3>
+            <p>Shift + deck select steps through the LC6000’s own layers, and DeckBridge drives Syndicate decks 1 to 4 to match.</p>
+            <div class="panel panel--flush db-card" role="img" aria-label="The deck badges 1 to 4 in the DeckBridge panel, each layer of the LC6000 driving the Syndicate deck of the same number">
+              <div class="db-card__in" aria-hidden="true">
+                <div class="db-decks db-decks--lg"><span class="is-on">1</span><span>2</span><span>3</span><span>4</span></div>
+                <ul class="db-log" data-ly-steps="800" data-ui-loop>
+                  <li><span class="db-mono">Shift + Deck 1</span><b>Syndicate deck 1</b></li>
+                  <li data-step><span class="db-mono">Shift + Deck 2</span><b>Syndicate deck 2</b></li>
+                  <li data-step><span class="db-mono">Shift + Deck 3</span><b>Syndicate deck 3</b></li>
+                  <li data-step><span class="db-mono">Shift + Deck 4</span><b>Syndicate deck 4</b></li>
+                </ul>
+              </div>
+            </div>
+          </article>
+          <article class="card card--row span-6">
+            <h3>Lights the LC6000 from Syndicate</h3>
+            <p>Play, Cue, Sync and the pads follow Syndicate’s state, with hot cues in its cue colours and the jog ring in the deck’s.</p>
+            <div class="panel panel--flush db-card" role="img" aria-label="LED feedback in DeckBridge: Play, Cue and Sync lit from Syndicate's state, the pads in the hot cue colours and the jog ring in the deck colour">
+              <div class="db-card__in" aria-hidden="true">
+                <ul class="db-leds">
+                  <li><i class="led led--on"></i><span>Play</span><em>Playing</em></li>
+                  <li><i class="led led--on"></i><span>Cue</span><em>Lit</em></li>
+                  <li><i class="led led--on"></i><span>Sync</span><em>On</em></li>
+                  <li><span class="pads"><i style="--c:#ff3b30"></i><i style="--c:#ffd60a"></i><i style="--c:#30d158"></i><i style="--c:#40c8e0"></i></span><span>Pads</span><em>Cue colours</em></li>
+                  <li><i class="led" style="--c:#ff0000"></i><span>Jog ring</span><em>Deck 1 colour</em></li>
+                </ul>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="grid">
+        <article class="card card--row span-6">
+          <h3>Releases held controls on unplug</h3>
+          <p>Unplug, sleep the Mac, switch layers or quit, and every held control lets go first. Plug back in and the LEDs repaint.</p>
+          <div class="panel panel--flush db-card" role="img" aria-label="DeckBridge's recovery: held controls released on unplug, the LEDs repainted on replug, and Syndicate's state asked for again after it restarts">
+            <div class="db-card__in" aria-hidden="true">
+              <ul class="db-log">
+                <li><span class="db-mono">Unplugged</span><b>Held controls released</b></li>
+                <li><span class="db-mono">Plugged back in</span><b>LEDs repainted</b></li>
+                <li><span class="db-mono">Syndicate restarted</span><b>State asked for again</b></li>
+              </ul>
+              <div class="db-status db-status--card"><span class="db-label">Controller</span><span class="db-label">Feedback</span><span class="db-live">Connected</span><span class="db-live">Live</span></div>
+            </div>
+          </div>
+        </article>
+        <article class="card card--row span-6">
+          <h3>Runs with no hardware in demo mode</h3>
+          <p>The demo controller plays a script against a simulated Syndicate, so you can watch DeckBridge work before you plug in.</p>
+          <div class="panel panel--flush db-card" role="img" aria-label="The DeckBridge panel with the demo controller on: the deck stays put and nothing is sent to the network">
+            <div class="db-card__in" aria-hidden="true">
+              <div class="db-panel__name">Denon LC6000 PRIME</div>
+              <div class="db-decks db-decks--dim"><span class="is-on">1</span><span>2</span><span>3</span><span>4</span></div>
+              <p class="db-note">Demo controller is on, so the deck stays put.</p>
+              <div class="db-status"><span class="db-label">Demo</span><span class="db-label">Controller</span><span class="db-live db-live--demo">Controller</span><span class="db-live">Connected</span></div>
+              <div class="db-quiet"><span>Setup guide</span><span class="db-demo">Demo controller: On</span><span>Quit</span></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- liquid-type: the coming feature's headline ripples under the pointer -->
+  <section class="section statement" id="next" data-moment="liquid-type" aria-labelledby="next-h">
+    <div class="wrap">
+      <p class="t-label">Coming in v1.1</p>
+      <h2 class="mo-lt__type db-big" id="next-h">Art on the jog wheel</h2>
+      <p class="t-lead db-next">DeckBridge will show art on the LC6000’s jog-wheel display in real time, right under your hand.</p>
+    </div>
+  </section>
+
+  <!-- TABS-TOUR on the dark band (its inverse ground): the four real screenshots, one per tab, cropped to the window -->
+  <section class="section ground-inverse" id="screens" aria-labelledby="screens-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <div class="span-5 stack-6">
+          <div class="section-head"><h2 id="screens-h">Inside DeckBridge</h2><p>Four screens from version 1.0.0, as the app shows them.</p></div>
+          <div class="tabs" role="tablist" aria-label="Screens">
+            <button class="tab" role="tab" id="tab-panel" aria-selected="true" aria-controls="tp-panel shot-panel">See the panel</button>
+            <button class="tab" role="tab" id="tab-setup" aria-selected="false" aria-controls="tp-setup shot-setup" tabindex="-1">Follow the setup</button>
+            <button class="tab" role="tab" id="tab-diag" aria-selected="false" aria-controls="tp-diag shot-diag" tabindex="-1">Check the controls</button>
+            <button class="tab" role="tab" id="tab-demo" aria-selected="false" aria-controls="tp-demo shot-demo" tabindex="-1">Try demo mode</button>
+          </div>
+          <div class="db-tabpanels">
+            <div role="tabpanel" id="tp-panel" aria-labelledby="tab-panel"><p>The menu-bar panel shows the controller, the feedback and the deck at a glance, with the OSC ports under them.</p></div>
+            <div role="tabpanel" id="tp-setup" aria-labelledby="tab-setup" hidden><p>The setup guide names each Syndicate setting to change and shows live status as each one takes.</p></div>
+            <div role="tabpanel" id="tp-diag" aria-labelledby="tab-diag" hidden><p>Diagnostics lists every MIDI message with its mapping, and marks the unmapped ones, next to the LED sweep and the OSC log.</p></div>
+            <div role="tabpanel" id="tp-demo" aria-labelledby="tab-demo" hidden><p>With the demo controller on, a scripted controller plays against a simulated Syndicate and nothing goes to the network.</p></div>
+          </div>
+        </div>
+        <div class="frame frame--split span-6 start-7 db-shots">
+          <div class="db-shot" id="shot-panel" style="--sw: 1028; --sh: 658; --sx: 206; --sy: 196"><span class="db-crop"><img src="img/1-panel.webp" alt="The DeckBridge menu-bar panel with a Denon LC6000 PRIME connected, feedback from Syndicate live, deck 1 of 4 selected, and OSC on ports 9090 and 9096" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the menu-bar panel"></span></div>
+          <div class="db-shot" id="shot-setup" style="--sw: 524; --sh: 658; --sx: 458; --sy: 196" hidden><span class="db-crop"><img src="img/3-setup.webp" alt="The DeckBridge setup guide listing four Syndicate settings: OSC input on port 9090, OSC feedback to 127.0.0.1 port 9096, the feedback subscriptions, and the LC6000 PRIME's MIDI input off" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the setup guide"></span></div>
+          <div class="db-shot" id="shot-diag" style="--sw: 1024; --sh: 658; --sx: 208; --sy: 196" hidden><span class="db-crop"><img src="img/2-diagnostics.webp" alt="The DeckBridge Diagnostics window: the MIDI monitor lists each LC6000 PRIME message with its mapping, such as play, pad1 and jog, and marks unmapped ones" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the diagnostics window"></span></div>
+          <div class="db-shot" id="shot-demo" style="--sw: 828; --sh: 658; --sx: 306; --sy: 196" hidden><span class="db-crop"><img src="img/4-demo.webp" alt="The DeckBridge panel in demo mode: a built-in demo controller drives the bridge so you can see it work with no hardware" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the panel in demo mode"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ: the page's split, the requirements on the left; every question a details element, answer first.
+       The FAQPage JSON-LD in the head repeats these words exactly: change both together. -->
+  <section class="section" id="faq" style="--hm: 2" aria-labelledby="faq-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <div class="span-5 stack-6">
+          <div class="section-head"><h2 id="faq-h">Questions about the LC6000, Syndicate and DeckBridge</h2></div>
+          <div class="db-needs">
+            <h3 class="t-label">What you need</h3>
+            <ul>
+              <li><b>A Mac on macOS 26 or later.</b> DeckBridge lives in the menu bar and has no Dock icon.</li>
+              <li><b>Syndicate, with OSC input turned on.</b> DeckBridge drives Syndicate over OSC.</li>
+              <li><b>A Denon LC6000 PRIME over USB.</b> It’s the only controller supported today.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="db-faq span-6 start-7">
+          <details><summary>What is DeckBridge?</summary><p>DeckBridge is a native Mac menu-bar app that lets you play Syndicate from a Denon LC6000 PRIME by bridging the controller’s MIDI to Syndicate OSC. It sends the 14-bit jog wheel and pitch fader to Syndicate at full resolution and lights the controller’s LEDs from Syndicate’s OSC feedback.</p></details>
+          <details><summary>Which controllers does DeckBridge support?</summary><p>DeckBridge supports one controller today, the Denon LC6000 PRIME, connected over USB. A single LC6000 drives all four Syndicate decks through its own deck layers.</p></details>
+          <details><summary>What are the requirements for DeckBridge?</summary><p>DeckBridge needs macOS 26 or later, Syndicate with OSC input enabled, and a Denon LC6000 PRIME connected over USB. It runs in the menu bar with no Dock icon.</p></details>
+          <!-- TODO(user): replace this answer with the real price once it is decided -->
+          <details><summary>How much does DeckBridge cost?</summary><p>Pricing for DeckBridge hasn’t been announced yet. Version 1.0.0 is in beta on TestFlight now, and the Mac App Store version is coming soon.</p></details>
+          <details><summary>How does DeckBridge setup work?</summary><p>To set up DeckBridge, you change four settings in Syndicate once: turn on OSC input (port 9090), point OSC feedback at 127.0.0.1 port 9096, turn on the listed feedback subscriptions, and turn the LC6000’s MIDI input off in Syndicate. DeckBridge opens a setup guide with these steps on first launch, and it shows “Done: feedback live” once Syndicate answers.</p></details>
+          <details><summary>Does DeckBridge need djay Pro or Engine DJ?</summary><p>No, DeckBridge works with Syndicate only and doesn’t need djay Pro or Engine DJ to run the LC6000. Quit those apps or any other app using the LC6000 first, and power-cycle the controller if one was open, because they can switch its MIDI mode until it restarts.</p></details>
+          <details><summary>Is DeckBridge made by or affiliated with Untitled Audio or Denon DJ?</summary><p>No, DeckBridge is an independent app, not made by, affiliated with or endorsed by Untitled Audio (the makers of Syndicate) or Denon DJ. It works with Syndicate through Syndicate’s OSC API.</p></details>
+          <details><summary>Does DeckBridge collect any data?</summary><p>No, DeckBridge collects no data: no account, no tracking, no analytics. It only sends Syndicate OSC messages to Syndicate and listens for its feedback, on this Mac by default or on your local network if you choose that.</p></details>
+          <details><summary>Can I try DeckBridge without an LC6000?</summary><p>Yes, DeckBridge’s demo controller runs a scripted controller against a simulated Syndicate, so you can see it work without an LC6000. Nothing goes to the network, and demo mode is off again at the next launch.</p></details>
+          <details><summary>Can I use two LC6000s, or run Syndicate on another Mac?</summary><p>Yes, DeckBridge can drive a second LC6000 on another Syndicate deck, and it can reach Syndicate running on another Mac over your local network. Add the second unit under Settings › Add controller; both share Syndicate’s one feedback stream. For another Mac, set Syndicate’s host to that Mac’s IP address and set feedback to listen on All networks. macOS asks once for local-network permission.</p></details>
+          <!-- TODO(user): TestFlight public link. Once it is live, the last sentence becomes "The TestFlight link is at the top of this page." -->
+          <details><summary>Where do I get DeckBridge?</summary><p>DeckBridge 1.0.0 is available now as a beta on TestFlight, and it’s coming soon to the Mac App Store. Email deckbridge@ericdahl.dev to join the beta.</p></details>
+          <details><summary>What’s coming next for DeckBridge?</summary><p>Coming in v1.1, DeckBridge will show art on the LC6000’s jog-wheel display in real time. Version 1.0.0 is in beta on TestFlight now, so this LC6000 Syndicate setup keeps growing from there.</p></details>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer class="footer closing footer--dark ground-inverse" id="contact" aria-labelledby="close-h">
@@ -142,5 +567,6 @@
 <script type="module" src="assets/system.js"></script>
 <script type="module" src="assets/motion/motion.js"></script>
 <script type="module" src="assets/layout/layout.js"></script>
+<script type="module" src="assets/diagrams/mount.js"></script>
 </body>
 </html>
