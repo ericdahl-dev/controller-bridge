@@ -73,6 +73,25 @@ class CheckSiteTests(unittest.TestCase):
             "style.css: loads https://x.example/bg.png from another site",
         ])
 
+    def test_canonical_and_alternate_links_are_links_not_loads(self):
+        root = self.site({"index.html": GOOD["index.html"].replace(
+            "</head>", '<link rel="canonical" href="https://getdeckbridge.app/">'
+                       '<link rel="Alternate" type="text/markdown" href="https://getdeckbridge.app/index.md"></head>')})
+        self.assertEqual(check_site.problems(root), [])
+
+    def test_external_stylesheets_icons_and_preloads_still_fail(self):
+        root = self.site({"index.html": GOOD["index.html"].replace(
+            "</head>", '<link rel="alternate stylesheet" href="https://x.example/a.css">'
+                       '<link rel="icon" href="https://x.example/i.png">'
+                       '<link rel="preload" as="font" href="https://x.example/f.woff2">'
+                       '<link href="https://x.example/norel.css"></head>')})
+        self.assertEqual(check_site.problems(root), [
+            "index.html: loads https://x.example/a.css from another site",
+            "index.html: loads https://x.example/i.png from another site",
+            "index.html: loads https://x.example/f.woff2 from another site",
+            "index.html: loads https://x.example/norel.css from another site",
+        ])
+
     def test_a_page_without_a_title_or_description_fails(self):
         root = self.site({"support/index.html": page(title="", description="", body='<a href="../">Home</a>')})
         self.assertEqual(check_site.problems(root), ["support/index.html: no <title>",

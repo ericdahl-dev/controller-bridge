@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Checks the DeckBridge website (#169) before anyone looks at it or it's published:
 - every page exists, and every internal link and asset resolves
-- nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine
+- nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
+  and so are <link rel="canonical"> and <link rel="alternate">
 - every page has a title and a meta description
 - no page title or main heading uses another company's name as the product's
 - the privacy page says the app collects no data
@@ -18,6 +19,7 @@ PRIVACY = "privacy/index.html"
 PRIVACY_STATEMENT = "collects no data"
 OTHER_COMPANIES = ["Syndicate", "Denon"]
 MAX_BYTES = 2_000_000
+LINK_RELS = {"canonical", "alternate"}  # a <link> with only these rels points somewhere; any other rel loads it
 
 
 def is_external(url):
@@ -48,7 +50,8 @@ class Page(HTMLParser):
         if tag == "a" and attrs.get("href") is not None:
             self.refs.append((attrs["href"], False))
         if tag == "link" and attrs.get("href") is not None:
-            self.refs.append((attrs["href"], True))
+            rels = (attrs.get("rel") or "").lower().split()
+            self.refs.append((attrs["href"], not rels or not set(rels) <= LINK_RELS))
         if attrs.get("src") is not None:
             self.refs.append((attrs["src"], True))
 
