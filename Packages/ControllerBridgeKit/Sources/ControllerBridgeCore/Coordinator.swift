@@ -301,14 +301,17 @@ public final class Coordinator {
     }
 
     /// Starts or ends the capture of a source (#186). While it's captured, its MIDI drives neither Syndicate nor its
-    /// LEDs. Starting releases what its controllers held, like an unplug, and forgets the jog's position, so the first
-    /// message after the capture only seeds it. `nil`, an unplug or stop ends the capture.
+    /// LEDs, though its layers are still followed. Starting releases what its controllers held, like an unplug, forgets
+    /// the jog's position, so the first message after only seeds it, and re-arms the pitch pickup. `nil`, an unplug or
+    /// stop ends the capture.
     public func setCapture(source: MIDIEndpoint.ID?) {
         capturing = source
         guard let source else { return }
         for controller in controllers where controller.source?.id == source {
             controller.bridge.releaseAll()
             controller.bridge.jogPosition = nil
+            // The capture sweeps the pitch fader, so it waits for pickup after, instead of jumping the tempo.
+            controller.bridge.rearmPickup()
         }
     }
 
@@ -353,8 +356,9 @@ public final class Coordinator {
         if let diagnostics {
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
-        if source == capturing { return }
         let routed = layerHandover(event, source: source)
+        // Captured (#186): the layers still follow the unit, so the right one is active after; nothing else runs.
+        if source == capturing { return }
         for index in controllers.indices where controllers[index].source?.id == source {
             controllers[index].bridge.handle(routed)
             for notice in controllers[index].bridge.notices { log.log(notice) }

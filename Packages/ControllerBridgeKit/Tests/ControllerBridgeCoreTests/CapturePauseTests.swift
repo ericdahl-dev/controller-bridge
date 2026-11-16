@@ -74,4 +74,33 @@ struct CapturePauseTests {
         rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
     }
+
+    @Test("The pitch fader swept during the capture waits for pickup after it, instead of jumping the tempo")
+    func pitchWaitsForPickup() throws {
+        let rig = try Self.started()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TempoSlider", [.float(0.5)]))
+        PickupTests.fader(rig, 0x60)  // picked up at Syndicate's 0.5
+        rig.coordinator.setCapture(source: Rig.lc6000.id)
+        PickupTests.fader(rig, 0x00)  // swept while capturing
+        PickupTests.fader(rig, 0x7F)
+        rig.coordinator.setCapture(source: nil)
+        rig.osc.sent.removeAll()
+
+        PickupTests.fader(rig, 0x7E)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("A layer switched during the capture is the active one after it: Play on ch1 then goes to deck 2")
+    func layerFollowedDuringCapture() throws {
+        let rig = try LayersTests.layered()
+        rig.coordinator.setCapture(source: Rig.lc6000.id)
+        LayersTests.note(rig, channel: 1, 51, 0)
+        LayersTests.note(rig, channel: 2, 51, 127)
+        rig.coordinator.setCapture(source: nil)
+        rig.osc.sent.removeAll()
+
+        LayersTests.note(rig, channel: 1, 1, 127)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
+    }
 }
