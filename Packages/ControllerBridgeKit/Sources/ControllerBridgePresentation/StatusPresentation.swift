@@ -3,6 +3,9 @@
 public struct BridgeState: Equatable, Sendable {
     public enum Controller: Equatable, Sendable {
         case connected(profile: String)
+        /// Connected earlier this session, now gone (#66): orange, so an unplug mid-set is noticed.
+        case unplugged(profile: String?)
+        /// Never connected since launch.
         case notConnected
         /// A MIDI device is there, but no controller profile matches it (#43).
         case noProfile(device: String)
@@ -26,17 +29,35 @@ public struct BridgeState: Equatable, Sendable {
     public var deck: Int
     /// The bridge couldn't start at all; the reason goes in the panel and the diagnostics (#26).
     public var stopped: Bool
-    /// The last time Syndicate's feedback stopped (#21), if it has.
+    /// When Syndicate's feedback last stopped (#21), as the time to show, such as "21:14".
     public var lastDropout: String?
 
     /// The deck is Syndicate's tempo master (#53). Not a problem, so it never changes the icon.
     public var master: Bool
     /// The built-in demo controller is running (#64), not real hardware.
     public var demo: Bool
+    /// The last connect, disconnect or unplug, for the header's subtitle.
+    public var lastEvent: String?
+    /// Further controllers after the first (#25), each with its own deck and last event.
+    public var others: [ControllerEntry]
+
+    public struct ControllerEntry: Equatable, Sendable {
+        public var controller: Controller
+        public var deck: Int
+        public var lastEvent: String?
+
+        public init(controller: Controller, deck: Int, lastEvent: String? = nil) {
+            self.controller = controller
+            self.deck = deck
+            self.lastEvent = lastEvent
+        }
+    }
 
     public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil,
-                master: Bool = false, demo: Bool = false) {
+                master: Bool = false, demo: Bool = false, lastEvent: String? = nil, others: [ControllerEntry] = []) {
         self.demo = demo
+        self.lastEvent = lastEvent
+        self.others = others
         self.controller = controller
         self.feedback = feedback
         self.deck = deck
@@ -89,6 +110,41 @@ public struct StatusLinePart: Equatable, Sendable {
     public var text: String { label.map { "\($0) ● \(word)" } ?? word }
 }
 
+/// The panel's header: what controller this is, and what last happened to it.
+public struct StatusHeader: Equatable, Sendable {
+    public var title: String
+    public var subtitle: String?
+
+    public init(title: String, subtitle: String?) {
+        self.title = title
+        self.subtitle = subtitle
+    }
+}
+
+/// One controller in the panel: who it is, whether it's connected, and its deck.
+public struct ControllerBlock: Equatable, Sendable {
+    public var header: StatusHeader
+    public var light: StatusLight
+    public var deck: Int
+
+    public init(header: StatusHeader, light: StatusLight, deck: Int) {
+        self.header = header
+        self.light = light
+        self.deck = deck
+    }
+}
+
+/// A small caption over a value, such as LAST DROPOUT over 21:14. The caption is natural case; the view uppercases it.
+public struct CaptionedValue: Equatable, Sendable {
+    public var caption: String
+    public var value: String
+
+    public init(caption: String, value: String) {
+        self.caption = caption
+        self.value = value
+    }
+}
+
 /// The menu-bar icon's state dot.
 public enum IconState: Equatable, Sendable {
     case ok
@@ -100,23 +156,28 @@ public enum IconState: Equatable, Sendable {
 public struct StatusPresentation: Equatable, Sendable {
     public var lights: [StatusLight]
     public var line: String
+    /// The panel's header: the first controller's name and its last event (#66).
+    public var header: StatusHeader
+    /// One block per controller: its header, its CONTROLLER light and its deck (#66, #25).
+    public var blocks: [ControllerBlock]
     /// The parts of `line`, for the status bar to draw in their tones.
     public var lineParts: [StatusLinePart]
     public var icon: IconState
     /// The orange MASTER light, apart from `lights` so it never counts toward the icon (#53).
     public var master: StatusLight?
-    /// "LAST DROPOUT: …" for the panel, once Syndicate's feedback has stopped at least once (#21).
-    public var lastDropout: String?
+    /// LAST DROPOUT and its time, once Syndicate's feedback has stopped at least once (#21, #66).
+    public var lastDropout: CaptionedValue?
+    /// Whether Quit asks before quitting (#66).
+    public var quitAsks: Bool
 
     /// How many characters the panel's status bar holds without truncating (360 pt, 10 pt semibold caps).
-    public static let lineBudget = 60
+    public static let lineBudget = 56
 
     public init(_ state: BridgeState, lineBudget: Int = StatusPresentation.lineBudget) {
-        let controller: StatusLight = switch state.controller {
-        case .connected(let profile): StatusLight(label: profile, word: "CONNECTED", tone: .live)
-        case .notConnected: StatusLight(label: "CONTROLLER", word: "NOT CONNECTED", tone: .idle)
-        case .noProfile(let device): StatusLight(label: device, word: "NO PROFILE", tone: .attention)
-        }
+        let controller = Self.light(for: state.controller)
+        blocks = ([BridgeState.ControllerEntry(controller: state.controller, deck: state.deck, lastEvent: state.lastEvent)] + state.others)
+            .map { ControllerBlock(header: Self.header(for: $0.controller, lastEvent: $0.lastEvent), light: Self.light(for: $0.controller), deck: $0.deck) }
+        header = blocks[0].header
         let feedback: StatusLight = switch state.feedback {
         case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)
         case .live: StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live)
@@ -125,24 +186,47 @@ public struct StatusPresentation: Equatable, Sendable {
         case .portInUse(let port): StatusLight(label: "FEEDBACK", word: "PORT \(port) IN USE", tone: .error)
         case .failed: StatusLight(label: "FEEDBACK", word: "FAILED", tone: .error)
         }
-        lights = (state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)] : [])
+        // A bridge that couldn't start has nothing starting or connecting: the BRIDGE light alone tells the truth (#66).
+        lights = state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)]
             // Orange and first, and it keeps the icon on attention: DEMO must never be mistaken for real hardware.
-            + (state.demo ? [StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention)] : [])
-            + [controller, feedback]
+            : (state.demo ? [StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention)] : []) + [controller, feedback]
         master = state.master ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
         // The status bar: each light, then the deck, then MASTER, cut to whole parts that fit (#66).
         let parts = lights.map { (StatusLinePart(label: $0.label, word: $0.word, tone: $0.tone), Self.priority(of: $0, controller: controller)) }
-            + [(StatusLinePart(label: nil, word: "DECK [\(state.deck)]", tone: .idle), 4)]
+            + [(StatusLinePart(label: nil, word: "DECK " + blocks.map { "[\($0.deck)]" }.joined(separator: " "), tone: .idle), 4)]
             + (state.master ? [(StatusLinePart(label: nil, word: "MASTER", tone: .attention), 3)] : [])
         lineParts = Self.fit(parts, budget: lineBudget)
         line = lineParts.map(\.text).joined(separator: Self.separator)
-        icon = if lights.contains(where: { $0.tone == .error }) { .error }
-            else if lights.allSatisfy({ $0.tone == .live }) { .ok }
+        // Every controller counts: an unplugged second one needs a look too.
+        let allLights = lights + blocks.dropFirst().map(\.light)
+        icon = if allLights.contains(where: { $0.tone == .error }) { .error }
+            else if allLights.allSatisfy({ $0.tone == .live }) { .ok }
             else { .attention }
-        lastDropout = state.lastDropout.map { "LAST DROPOUT: " + $0 }
+        lastDropout = state.lastDropout.map { CaptionedValue(caption: "Last dropout", value: $0) }
+        // Quitting stops a working set only while feedback is live, so that's when Quit asks first (#66).
+        if case .live = state.feedback { quitAsks = true } else { quitAsks = false }
     }
 
     static let separator = " · "
+
+    /// The label is always CONTROLLER, so the lights don't shift sideways; the name is in the header (#66).
+    static func light(for controller: BridgeState.Controller) -> StatusLight {
+        switch controller {
+        case .connected: StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live)
+        case .unplugged: StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention)
+        case .notConnected: StatusLight(label: "CONTROLLER", word: "NOT CONNECTED", tone: .idle)
+        case .noProfile: StatusLight(label: "CONTROLLER", word: "NO PROFILE", tone: .attention)
+        }
+    }
+
+    static func header(for controller: BridgeState.Controller, lastEvent: String?) -> StatusHeader {
+        switch controller {
+        case .connected(let profile): StatusHeader(title: profile, subtitle: lastEvent)
+        case .unplugged(let profile): StatusHeader(title: profile ?? "Controller unplugged", subtitle: lastEvent)
+        case .notConnected: StatusHeader(title: "No controller", subtitle: lastEvent)
+        case .noProfile(let device): StatusHeader(title: device, subtitle: "No controller profile matches it")
+        }
+    }
 
     /// Lower keeps longer: DEMO and error lights, then the controller, feedback, MASTER, and DECK last.
     private static func priority(of light: StatusLight, controller: StatusLight) -> Int {

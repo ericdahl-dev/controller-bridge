@@ -25,6 +25,7 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .stale
                 $0.lastDropout = "Syndicate feedback stopped"
+                $0.lastDropoutTime = "21:14"
             }),
             ("connected-master-others", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", master: true)]
@@ -36,8 +37,9 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
+            // Never connected since launch: gray NOT CONNECTED (#66).
             ("not-connected", {
-                $0.bridges = [ControllerStatus(deck: 2, connected: false, lastEvent: "Unplugged Denon LC6000 PRIME at 21:14")]
+                $0.bridges = [ControllerStatus(deck: 2, connected: false)]
                 $0.devices = [
                     DeviceStatus(name: "DDJ-FLX4", profile: nil, note: "No controller profile matches DDJ-FLX4, so it isn't bridged."),
                     DeviceStatus(name: "IAC Bus 1", profile: nil, note: nil),
@@ -55,6 +57,21 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
                 $0.demo = true
+            }),
+            // Connected earlier, then pulled mid-set: orange UNPLUGGED (#66).
+            ("unplugged", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
+            // Two controllers (#25): a block and a deck picker each; the status line lists both decks.
+            ("two-controllers", {
+                $0.bridges = [
+                    ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME"),
+                    ControllerStatus(deck: 3, connected: true, profile: "Denon LC6000 PRIME"),
+                ]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
             }),
             ("starting-deck4", { $0.deck = 4 }),
             ("many-lights", {

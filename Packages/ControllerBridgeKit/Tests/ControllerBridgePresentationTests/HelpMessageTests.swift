@@ -12,7 +12,7 @@ struct HelpMessageTests {
     @Test("Port in use: says another app has the port, so feedback can't arrive, and links the guide")
     func portInUse() {
         #expect(HelpMessage(Self.state(.portInUse(port: 9096))) == HelpMessage(
-            text: "Another app is using port 9096, so Syndicate's feedback can't reach the bridge and the LEDs stay dark. Quit the other app, such as a second bridge, then reopen this one.",
+            text: "Another app holds port 9096. Quit it, then reopen the bridge.",
             showsGuide: true
         ))
     }
@@ -20,7 +20,7 @@ struct HelpMessageTests {
     @Test("No feedback yet: names Syndicate's OSC FEEDBACK settings to check, and links the guide")
     func waiting() {
         #expect(HelpMessage(Self.state(.waiting(port: 9096))) == HelpMessage(
-            text: "Syndicate hasn't sent any feedback yet, so the LEDs stay dark. In Syndicate's Settings → OSC FEEDBACK, set DEST IP to 127.0.0.1 and PORT to 9096.",
+            text: "No feedback from Syndicate yet. Set OSC FEEDBACK to 127.0.0.1 : 9096.",
             showsGuide: true
         ))
     }
@@ -28,7 +28,7 @@ struct HelpMessageTests {
     @Test("Feedback dropped: asks whether Syndicate is still running, and links the guide")
     func dropped() {
         #expect(HelpMessage(Self.state(.stopped(port: 9096))) == HelpMessage(
-            text: "Syndicate's feedback stopped, so the LEDs may be out of date. Is Syndicate still running? When it answers again, the bridge asks it to RESEND STATE.",
+            text: "Syndicate stopped answering. Is it still running? The LEDs catch up when it's back.",
             showsGuide: true
         ))
     }
@@ -36,7 +36,7 @@ struct HelpMessageTests {
     @Test("No controller, feedback live: says to plug it in; the guide isn't the fix, so no link")
     func noController() {
         #expect(HelpMessage(Self.state(.live(port: 9096), .notConnected)) == HelpMessage(
-            text: "No controller is connected. Plug it in over USB, and the bridge connects to it by itself.",
+            text: "No controller connected. Plug it in over USB; the bridge finds it.",
             showsGuide: false
         ))
     }
@@ -48,6 +48,23 @@ struct HelpMessageTests {
 
     @Test("Feedback problems come before a missing controller: the port message wins")
     func feedbackFirst() {
-        #expect(HelpMessage(Self.state(.portInUse(port: 9096), .notConnected))?.text.hasPrefix("Another app is using port 9096") == true)
+        #expect(HelpMessage(Self.state(.portInUse(port: 9096), .notConnected))?.text.hasPrefix("Another app holds port 9096") == true)
+    }
+
+    @Test("A stopped bridge says what to do in plain words, before anything else; the raw error isn't in it (#66)")
+    func stopped() {
+        let state = BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true)
+        #expect(HelpMessage(state) == HelpMessage(
+            text: "The bridge couldn't open MIDI. Quit and reopen it. If that doesn't help, restart the Mac.",
+            showsGuide: false
+        ))
+    }
+
+    @Test("Unplugged mid-set: says to plug it back in; the bridge picks it up again by itself (#66)")
+    func unplugged() {
+        #expect(HelpMessage(Self.state(.live(port: 9096), .unplugged(profile: "Denon LC6000 PRIME"))) == HelpMessage(
+            text: "The controller was unplugged. Plug it back in; the bridge picks it up again.",
+            showsGuide: false
+        ))
     }
 }
