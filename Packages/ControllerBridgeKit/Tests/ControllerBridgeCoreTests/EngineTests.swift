@@ -18,6 +18,24 @@ struct EngineTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
     }
 
+    @Test("A capture from the pipe pauses the controller, and nil gives it back (#186)")
+    func captureFromThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+
+        pipe.producer.setCapture(source: Rig.lc6000.id)
+        pipe.producer.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        pipe.producer.midi(.noteOff(channel: 0, note: 1, velocity: 0), source: Rig.lc6000.id)
+        pipe.producer.setCapture(source: nil)
+        pipe.producer.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(1)])])
+    }
+
     @Test("A Playing 1 datagram from the pipe is decoded and lights the Play LED full")
     func udpFromThePipeIsDecodedAsFeedback() async throws {
         let rig = try Rig()

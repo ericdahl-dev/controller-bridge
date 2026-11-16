@@ -15,6 +15,8 @@ public final class Coordinator {
     /// Devices matching more than one profile, already logged.
     private var loggedAmbiguous: Set<MIDIEndpoint.ID> = []
     private var bridges: [Bridge] { controllers.map(\.bridge) }
+    /// The source the capture window (#186) is recording, whose MIDI drives nothing meanwhile.
+    private var capturing: MIDIEndpoint.ID?
     /// Deck colors from Syndicate's palette, the defaults until one arrives (#123).
     private var syndicateDeckColors = DeckColors.defaults
     /// Settings' deck colors (#123): follow Syndicate, or the custom colors.
@@ -50,6 +52,7 @@ public final class Coordinator {
     private func applyDeckColors() {
         status.deckColors = deckColors
         for bridge in bridges { bridge.setDeckColors(deckColors) }
+        updateJogDisplay()
     }
 
     /// When the last feedback message arrived, if any has (#21).
@@ -118,6 +121,83 @@ public final class Coordinator {
         self.init(profiles: [profile], midi: midi, osc: osc, clock: clock, log: log)
     }
 
+    // MARK: Jog display (#165)
+
+    /// The LC6000's jog display, when the app found its WD port.
+    private var jogDisplay: JogDisplayDriver?
+    /// The marker: the master clock's hand while the deck in front plays, else where the platter left it.
+    private var jogMarker = JogMarker()
+    private var masterBPM: Double?
+    private var lastMarkerSent: Double?
+    /// The platter moved since the last marker went out.
+    private var markerMoved = false
+    /// At most this many marker updates a second.
+    static let markerRate = 30.0
+
+    /// The controller whose deck the display shows: the active layer, else the first connected one.
+    private var frontIndex: Int? {
+        let connected = controllers.indices.filter { controllers[$0].source != nil }
+        return connected.first { status.controllers[$0].activeLayer } ?? connected.first
+    }
+
+    /// The master clock feeds the hand while the deck in front plays (#165).
+    private func jogClock(_ message: OSCMessage) {
+        let address = message.address.lowercased()
+        if address.hasSuffix("/header/bpm"), let bpm = message.arguments.first?.number, bpm > 0 { masterBPM = bpm }
+        guard address.hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber,
+              let front = frontIndex, controllers[front].bridge.playing else { return }
+        jogMarker.beat(beat, bpm: masterBPM ?? 120, at: clock.now)
+    }
+
+    /// Platter moves on the deck in front turn the hand.
+    private func jogPlatter() {
+        for index in controllers.indices where controllers[index].bridge.jogCountsPending != 0 {
+            let bridge = controllers[index].bridge
+            if index == frontIndex {
+                jogMarker.platter(counts: bridge.jogCountsPending, countsPerRev: bridge.mapping.jog.countsPerRev, at: clock.now)
+                markerMoved = true
+            }
+            bridge.jogCountsPending = 0
+        }
+    }
+
+    /// The marker and the play light, from the tick: the hand while playing or after a platter move, at most 30 a
+    /// second; the light 127 while playing, blinking every half-second while loaded and paused.
+    private func jogMarkerTick() {
+        guard let driver = jogDisplay, driver.isConnected, let front = frontIndex else { return }
+        let bridge = controllers[front].bridge
+        let due = lastMarkerSent.map { clock.now - $0 >= 1 / Self.markerRate - 1e-9 } ?? true
+        if due, bridge.playing || markerMoved {
+            driver.marker(jogMarker.pitchBend(at: clock.now))
+            lastMarkerSent = clock.now
+            markerMoved = false
+        }
+        driver.playLight(bridge.playing || (bridge.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
+    }
+
+    /// Drives the jog display from now on: it says hello and shows the deck in front once a controller is connected.
+    public func attachJogDisplay(_ driver: JogDisplayDriver) {
+        jogDisplay = driver
+        updateJogDisplay()
+    }
+
+    /// A message from the jog display's WD port: the unit's answers to an upload.
+    public func jogDisplayReply(_ bytes: [UInt8]) {
+        jogDisplay?.reply(bytes)
+    }
+
+    /// The display shows the deck in front: the active layer, else the first connected controller. With none
+    /// connected, it says goodbye.
+    private func updateJogDisplay() {
+        guard let driver = jogDisplay else { return }
+        let connected = controllers.indices.filter { controllers[$0].source != nil }
+        guard let first = connected.first else { return driver.disconnect() }
+        let front = connected.first { status.controllers[$0].activeLayer } ?? first
+        let deck = status.controllers[front].deck
+        driver.connect()
+        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255]))
+    }
+
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
     /// connected is not an error: it connects when it appears.
     ///
@@ -138,6 +218,7 @@ public final class Coordinator {
             }
             controllers[index].bridge.start()
         }
+        updateJogDisplay()
         requestResend()
     }
 
@@ -159,6 +240,7 @@ public final class Coordinator {
             }
         }
         disconnectFailedOutputs()
+        updateJogDisplay()
     }
 
     /// Reading from a source failed, such as a reconnect that couldn't attach. Counts as that controller's unplug.
@@ -171,6 +253,7 @@ public final class Coordinator {
     /// Releases everything the controller held, exactly once, and closes its ports.
     private func disconnect(_ index: Int, reason: DisconnectReason) {
         guard let source = controllers[index].source else { return }
+        if capturing == source.id { capturing = nil }
         let bridge = controllers[index].bridge
         bridge.releaseAll()
         controllers[index].source = nil
@@ -188,6 +271,7 @@ public final class Coordinator {
         case .unplugged, .deviceChanged, .removed, .stopped: nil
         }
         report(index, "Disconnected \(source.name)" + (detail.map { " (\($0))" } ?? ""))
+        updateJogDisplay()
     }
 
     /// Whether two controllers are layers of one unit: both follow layers, on different channels. Two following
@@ -298,6 +382,21 @@ public final class Coordinator {
         status.controllers[index].lastEvent = event
     }
 
+    /// Starts or ends the capture of a source (#186). While it's captured, its MIDI drives neither Syndicate nor its
+    /// LEDs, though its layers are still followed. Starting releases what its controllers held, like an unplug, forgets
+    /// the jog's position, so the first message after only seeds it, and re-arms the pitch pickup. `nil`, an unplug or
+    /// stop ends the capture.
+    public func setCapture(source: MIDIEndpoint.ID?) {
+        capturing = source
+        guard let source else { return }
+        for controller in controllers where controller.source?.id == source {
+            controller.bridge.releaseAll()
+            controller.bridge.jogPosition = nil
+            // The capture sweeps the pitch fader, so it waits for pickup after, instead of jumping the tempo.
+            controller.bridge.rearmPickup()
+        }
+    }
+
     /// Releases everything held in Syndicate. Safe to call again: a second call sends nothing.
     public func stop() {
         for index in controllers.indices {
@@ -320,6 +419,8 @@ public final class Coordinator {
     public func tick() {
         runSweep()
         for bridge in bridges { bridge.tick() }
+        jogDisplay?.tick()
+        jogMarkerTick()
         checkLiveness()
         checkSubscriptions()
         disconnectFailedOutputs()
@@ -340,11 +441,14 @@ public final class Coordinator {
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
         let routed = layerHandover(event, source: source)
+        // Captured (#186): the layers still follow the unit, so the right one is active after; nothing else runs.
+        if source == capturing { return }
         for index in controllers.indices where controllers[index].source?.id == source {
             controllers[index].bridge.handle(routed)
             for notice in controllers[index].bridge.notices { log.log(notice) }
             controllers[index].bridge.notices.removeAll()
         }
+        jogPlatter()
         disconnectFailedOutputs()
     }
 
@@ -401,6 +505,7 @@ public final class Coordinator {
         status.controllers[target].activeLayer = true
         controllers[target].bridge.ledChannel = multiChannel || controllers[target].bridge.mapping.midi.channel == 1 ? nil : 0
         controllers[target].bridge.becameActiveLayer()
+        updateJogDisplay()
     }
 
     /// Where a layer's LEDs go; repaints there if it moved.
@@ -428,6 +533,7 @@ public final class Coordinator {
             }
         }
         diagnostics?(.oscIn(message))
+        jogClock(message)
         answer?.messages.append(message)
         if SubscriptionCheck.provesSubscriptions(message.address) { status.noDeckData = false }
         feedbackArrived()

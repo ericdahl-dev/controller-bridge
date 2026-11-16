@@ -186,6 +186,9 @@ struct SettingsView: View {
                 }
                 .buttonStyle(PillButtonStyle(kind: .quiet))
             }
+            // Until #200's "Controller not found?" in the controller picker replaces it.
+            Button("Help add a controller…") { openWindow(id: CaptureWindow.id) }
+                .buttonStyle(PillButtonStyle(kind: .quiet))
         }
         mappingSection
     }

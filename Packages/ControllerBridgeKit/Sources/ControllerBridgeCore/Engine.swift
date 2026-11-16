@@ -83,6 +83,8 @@ public struct Engine {
             case .diagnostics(let open):
                 diagnosticsOpen = open
                 setDiagnostics(active, open: open)
+            // A real device is captured, so the real Coordinator pauses it, demo or not.
+            case .setCapture(let source): coordinator.setCapture(source: source)
             case .ledSweep(let delay): active.startLEDSweep(delay: delay)
             case .stopLEDSweep: active.stopLEDSweep()
             case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setControllers, .setProfiles, .resync:
