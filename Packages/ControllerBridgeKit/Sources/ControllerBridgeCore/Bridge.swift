@@ -67,7 +67,7 @@ final class Bridge {
     private(set) var outputFailed = false
     private let osc: any OSCSender
     let clock: any Clock
-    private let root: String
+    let root: String
     /// The mapping's MIDI channel, 0-based.
     let channel: UInt8
     /// Button names by note, from the mapping.
@@ -282,6 +282,11 @@ final class Bridge {
         if address == (root + "ColorPalette").lowercased() { return colorPalette(message.arguments) }
         // The master clock is one for all decks too.
         if address == (root + "Header/Clock").lowercased() { return headerClock(message.arguments) }
+        // The mixer channel of this deck (#207).
+        if mapping.mixer != nil, let mixer = MixerOSC.parse(message.address, root: root) {
+            if mixer.channel == mapping.deck.number { mixerFeedback(mixer.value, message.arguments) }
+            return
+        }
         let deckPrefix = (root + "Deck/\(mapping.deck.number)/").lowercased()
         guard address.hasPrefix(deckPrefix) else { return }
         let key = address.dropFirst(deckPrefix.count)

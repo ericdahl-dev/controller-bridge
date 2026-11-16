@@ -111,4 +111,55 @@ struct MixerTests {
         for controller: UInt8 in [19, 4, 7, 39, 11, 15, 23] { Self.cc(rig, controller, 100) }
         #expect(rig.osc.sent == [])
     }
+
+    // MARK: Pickup (#207), as the pitch fader's
+
+    static func report(_ rig: Rig, _ path: String, _ value: Float) {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH1/" + path, [.float(value)]))
+    }
+
+    @Test("After Syndicate reports a volume the fader didn't send, the fader waits until it comes within tolerance")
+    func picksUpWithinTolerance() throws {
+        let rig = try Self.started()
+        Self.report(rig, "Volume", 0.8)
+        Self.cc(rig, 19, 26)   // 0.203
+        Self.cc(rig, 19, 90)   // 0.706
+        #expect(rig.osc.sent == [])
+        Self.cc(rig, 19, 101)  // 0.79365: within 0.03
+        Self.cc(rig, 19, 110)
+        #expect(rig.osc.sent == [Self.mixer("Volume", 0.79365), Self.mixer("Volume", 0.86508)])
+    }
+
+    @Test("A move that jumps across the reported value picks up")
+    func picksUpCrossing() throws {
+        let rig = try Self.started()
+        Self.report(rig, "EQ/Low", 0.5)
+        Self.cc(rig, 15, 20)
+        Self.cc(rig, 15, 100)
+        #expect(rig.osc.sent == [Self.mixer("EQ/Low", 0.78571)])
+    }
+
+    @Test("Syndicate's echo of what the knob sent doesn't re-arm it")
+    func echoKeepsItLive() throws {
+        let rig = try Self.started()
+        Self.cc(rig, 11, 40)
+        Self.report(rig, "EQ/Mid", 0.3125)
+        Self.cc(rig, 11, 41)
+        #expect(rig.osc.sent == [Self.mixer("EQ/Mid", 0.3125), Self.mixer("EQ/Mid", 0.32031)])
+    }
+
+    @Test("Another channel's report doesn't arm this deck's fader; pickup false drives at once")
+    func otherChannelAndOff() throws {
+        let rig = try Self.started()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH2/Volume", [.float(0.9)]))
+        Self.cc(rig, 19, 0)
+        #expect(rig.osc.sent == [Self.mixer("Volume", 0)])
+
+        let off = try Rig(override: Self.section.replacingOccurrences(of: #""pickup": true"#, with: #""pickup": false"#))
+        off.coordinator.start()
+        off.osc.sent.removeAll()
+        Self.report(off, "Volume", 0.9)
+        Self.cc(off, 19, 0)
+        #expect(off.osc.sent == [Self.mixer("Volume", 0)])
+    }
 }

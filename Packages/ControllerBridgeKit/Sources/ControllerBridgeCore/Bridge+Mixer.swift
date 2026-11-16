@@ -7,6 +7,13 @@ struct MixerState {
     var msb: [MixerValue: UInt8] = [:]
     /// The last value sent per control, rounded as sent.
     var lastSent: [MixerValue: Double] = [:]
+    /// Recent sends, for telling Syndicate's echo from an outside change.
+    var recentSends: [MixerValue: [(time: Double, value: Double)]] = [:]
+    /// What Syndicate last reported per control.
+    var reported: [MixerValue: Double] = [:]
+    /// Controls waiting to meet Syndicate's value (pickup), and where each last was.
+    var armed: Set<MixerValue> = []
+    var position: [MixerValue: Double] = [:]
 }
 
 extension Bridge {
@@ -41,9 +48,49 @@ extension Bridge {
 
     private func sendMixer(_ kind: MixerValue, _ level: Double) {
         let rounded = (level * 100_000).rounded() / 100_000
-        guard rounded != mixerState.lastSent[kind] else { return }
+        guard mixerPickedUp(kind, at: rounded), rounded != mixerState.lastSent[kind] else { return }
         mixerState.lastSent[kind] = rounded
-        send(address: MixerOSC.address(kind, channel: mapping.deck.number, root: mapping.osc.root), [.float(Float(rounded))])
+        mixerState.recentSends[kind, default: []].removeAll { clock.now - $0.time > Self.echoWindow }
+        mixerState.recentSends[kind, default: []].append((clock.now, rounded))
+        send(address: MixerOSC.address(kind, channel: mapping.deck.number, root: root), [.float(Float(rounded))])
+    }
+}
+
+extension Bridge {
+    /// Syndicate's report of a mixer value on this deck's channel.
+    func mixerFeedback(_ kind: MixerValue, _ arguments: [OSCArgument]) {
+        guard let value = arguments.first?.number else { return }
+        if mixerControls.contains(where: { $0.value == kind }) { mixerReported(kind, value) }
+    }
+
+    /// A value the controller didn't send (another controller, the mouse) moved Syndicate away from the control, so
+    /// pickup arms, as the pitch fader's (#22). Syndicate's echo of a send doesn't.
+    private func mixerReported(_ kind: MixerValue, _ value: Double) {
+        mixerState.reported[kind] = value
+        guard let mixer = mapping.mixer, mixer.pickup else { return }
+        let tolerance = mixer.pickupTolerance
+        let echo = mixerState.lastSent[kind].map { abs($0 - value) <= tolerance } == true
+            || (mixerState.recentSends[kind] ?? []).contains { clock.now - $0.time <= Self.echoWindow && abs($0.value - value) <= tolerance }
+        if !echo {
+            mixerState.armed.insert(kind)
+            mixerState.position[kind] = nil
+            mixerState.lastSent[kind] = nil
+        }
+    }
+
+    /// Whether the control at `level` drives Syndicate: always unless armed; armed, once it's within tolerance of the
+    /// reported value or moves across it.
+    fileprivate func mixerPickedUp(_ kind: MixerValue, at level: Double) -> Bool {
+        guard let mixer = mapping.mixer, mixer.pickup, mixerState.armed.contains(kind),
+            let reported = mixerState.reported[kind]
+        else { return true }
+        let previous = mixerState.position[kind]
+        mixerState.position[kind] = level
+        let near = abs(level - reported) <= mixer.pickupTolerance
+        let crossed = previous.map { ($0 - reported) * (level - reported) < 0 } ?? false
+        guard near || crossed else { return false }
+        mixerState.armed.remove(kind)
+        return true
     }
 }
 

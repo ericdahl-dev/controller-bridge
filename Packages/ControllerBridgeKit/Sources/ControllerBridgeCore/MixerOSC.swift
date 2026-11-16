@@ -41,7 +41,8 @@ public enum MixerOSC {
     /// The channel and value of a mixer feedback address, or nil for anything else.
     public static func parse(_ address: String, root: String) -> Parsed? {
         for channel in 1...4 {
-            for value in MixerValue.allCases where address == self.address(value, channel: channel, root: root) {
+            // Syndicate matches addresses without regard to case, so feedback is read the same way.
+            for value in MixerValue.allCases where address.lowercased() == self.address(value, channel: channel, root: root).lowercased() {
                 return Parsed(channel: channel, value: value)
             }
         }
