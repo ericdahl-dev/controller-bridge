@@ -4,6 +4,16 @@ public struct SetupGuide: Equatable, Sendable {
     public struct Step: Equatable, Sendable {
         public var title: String
         public var detail: String
+        /// Items to turn on, shown as a checklist under the detail (#68).
+        public var checklist: [String] = []
+    }
+
+    /// The guide's closing line.
+    public static let footer = "On start, the bridge asks Syndicate to RESEND STATE, so the LEDs light at once."
+
+    /// The Done button's label: it confirms the setup once feedback is live (#68). Natural case; the button uppercases.
+    public static func doneTitle(feedbackLive: Bool) -> String {
+        feedbackLive ? "Done: feedback live" : "Done"
     }
 
     /// The feedback Syndicate must send, as its OSC FEEDBACK subscriptions are named.
@@ -24,12 +34,13 @@ public struct SetupGuide: Equatable, Sendable {
 
     /// `controller` is the profile's name, such as "Denon LC6000 PRIME", or nil when there is none yet.
     public init(controller: String?, oscPort: Int, feedbackPort: Int) {
-        let list = Self.subscriptions.dropLast().joined(separator: ", ") + " and " + Self.subscriptions.last!
         let device = controller.map { "\($0)'s" } ?? "your controller's"
         steps = [
             Step(title: "Settings → OSC", detail: "Turn OSC INPUT ENABLED on. The listen port is \(oscPort)."),
             Step(title: "Settings → OSC FEEDBACK", detail: "Set DEST IP to 127.0.0.1 and PORT to \(feedbackPort)."),
-            Step(title: "Subscriptions", detail: "Tick \(list)."),
+            // All four titles follow Syndicate's menu path (#68).
+            Step(title: "Settings → OSC FEEDBACK → SUBSCRIPTIONS", detail: "Turn on these OSC FEEDBACK subscriptions:",
+                 checklist: Self.subscriptions),
             Step(title: "Settings → MIDI",
                  detail: "Turn \(device) MIDI input off. Otherwise Syndicate's own mapping and the bridge would both react to every button."),
         ]
