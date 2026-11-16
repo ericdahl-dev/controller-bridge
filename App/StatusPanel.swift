@@ -239,6 +239,9 @@ struct ControllerBlockView: View {
                 DeckPicker(deck: block.deck, state: picker, problem: deckProblem, setDeck: setDeck)
             }
         }
+        // One container per controller, named with its number, so VoiceOver can tell two blocks apart (#89).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(block.accessibilityLabel)
     }
 }
 

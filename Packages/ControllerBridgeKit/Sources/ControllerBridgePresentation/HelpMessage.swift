@@ -36,16 +36,22 @@ public struct HelpMessage: Equatable, Sendable {
         case .stopped:
             self.init(text: "Syndicate stopped answering. Is it still running? The LEDs catch up when it's back.", showsGuide: true)
         case .starting, .live, .failed:
-            // A failed listener shows its reason in the panel already.
-            switch state.controller {
+            // Every controller counts (#89): the first that needs a hand, named by its number when there are several.
+            let all = [state.controller] + state.others.map(\.controller)
+            guard let index = all.firstIndex(where: { if case .connected = $0 { false } else { true } }) else { return nil }
+            let name = all.count > 1 ? "Controller \(index + 1)" : nil
+            switch all[index] {
             case .notConnected:
-                self.init(text: "No controller connected. Plug it in over USB; the bridge finds it.", showsGuide: false)
+                self.init(text: name.map { "\($0) isn't connected. Plug it in over USB; the bridge finds it." }
+                    ?? "No controller connected. Plug it in over USB; the bridge finds it.", showsGuide: false)
             case .unplugged:
-                self.init(text: "The controller was unplugged. Plug it back in; the bridge picks it up again.", showsGuide: false)
+                self.init(text: "\(name ?? "The controller") was unplugged. Plug it back in; the bridge picks it up again.", showsGuide: false)
             case .failed:
-                self.init(text: "Lost contact with the controller. Check the USB cable, then unplug and replug.", showsGuide: false)
+                self.init(text: "Lost contact with \(name?.lowercased() ?? "the controller"). Check the USB cable, then unplug and replug.",
+                          showsGuide: false)
             case .waiting:
-                self.init(text: "Waiting for the device chosen in Settings.", showsGuide: false)
+                self.init(text: name.map { "\($0) is waiting for the device chosen in Settings." } ?? "Waiting for the device chosen in Settings.",
+                          showsGuide: false)
             case .connected:
                 return nil
             }
