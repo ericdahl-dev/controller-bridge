@@ -54,7 +54,10 @@ extension Bridge {
         let cue = Int32(index + 1)
         switch padMode {
         case .hotCue: hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
-        case .roll: hold(.pad(index), "SlipLoop/" + Self.rollSizes[index], press: [.int(1)], release: [.int(0)])
+        case .roll:
+            // The check allows 8 pads only; a hand-built mapping with more mustn't trap (#92).
+            guard Self.rollSizes.indices.contains(index) else { return }
+            hold(.pad(index), "SlipLoop/" + Self.rollSizes[index], press: [.int(1)], release: [.int(0)])
         case .loop: sendDeck("SetCueLoop", .int(cue))
         case .slicer: break
         }

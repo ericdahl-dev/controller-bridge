@@ -188,6 +188,12 @@ extension Mapping {
             "needle.cc": 0...127, "needle.touch_note": 0...127,
             "browse.select_turn_cc": 0...127, "browse.auto_loop_size_cc": 0...127,
             "leds.pitch_center": 0...127, "leds.ring": 0...127,
+            "jog.seek_fallback_ticks_per_beat": 1...1000,
+            // Every other number, so no imported value can be absurd (#92).
+            "osc.port": 1...65535, "osc.feedback_port": 1...65535,
+            "osc.feedback_quiet_ms": 0...60000, "osc.feedback_answer_ms": 0...60000, "leds.pulse_ms": 0...60000,
+            "jog.bend_release_ms": 1...5000, "jog.seek_seconds_per_tick": 0...10,
+            "pitch.dead_zone": 0...1, "pitch.pickup_tolerance": 0...1,
         ]
         for color in ["ring_color", "roll_pad_color", "loop_pad_color"] { table["leds.\(color)[]"] = 0...255 }
         return table
@@ -212,6 +218,8 @@ extension Mapping {
             }
         case .array(let items) where colors.contains(pattern) && items.count != 3:
             return "expected 3 values, got \(items.count)"
+        case .array(let items) where pattern == "notes.pads" && items.count != 8:
+            return "expected 8 pads, got \(items.count)"
         case .string(let text):
             if let allowed = choices[pattern], !allowed.contains(text) {
                 return "\(describe(value)) isn't one of \(allowed.joined(separator: ", "))"

@@ -36,7 +36,7 @@ struct MappingCheckTests {
             "jog.dead: unknown key",
             "pitch.dead_zone: expected a number, got \"small\"",
         ])
-        #expect(Self.problems(#"{"notes": {"pads": [32, "x"]}, "deck": 2}"#) == [
+        #expect(Self.problems(#"{"notes": {"pads": [32, "x", 34, 35, 36, 37, 38, 39]}, "deck": 2}"#) == [
             "notes.pads[1]: expected a whole number, got \"x\"",
             "deck: expected an object, got 2",
         ])
@@ -49,7 +49,7 @@ struct MappingCheckTests {
 
     @Test("Notes and CCs are 0–127, including pads, jog CCs and LED notes")
     func midiRanges() {
-        #expect(Self.problems(#"{"notes": {"play": 128, "pads": [32, -1]}, "jog": {"ccs": [55, 200]}, "leds": {"ring": 300}}"#) == [
+        #expect(Self.problems(#"{"notes": {"play": 128, "pads": [32, -1, 34, 35, 36, 37, 38, 39]}, "jog": {"ccs": [55, 200]}, "leds": {"ring": 300}}"#) == [
             "notes.play: 128 is out of range, expected 0-127",
             "notes.pads[1]: -1 is out of range, expected 0-127",
             "jog.ccs[1]: 200 is out of range, expected 0-127",
@@ -123,5 +123,48 @@ struct MappingCheckTests {
         // 20 bytes, cut off mid-object: the reader runs out at byte 20.
         #expect(Self.problems(#"{"notes": {"play": 1"#) == ["The file isn't valid JSON (near byte 20)."])
         #expect(Self.problems(#"[1, 2]"#) == ["mapping: expected an object, got a list"])
+    }
+
+    // MARK: Files that once crashed the app (#92). An imported file is untrusted.
+
+    @Test("A file nested 100 000 deep is refused with one readable problem, instead of overflowing the stack")
+    func deepNesting() {
+        let deep = #"{"x": "# + String(repeating: "[", count: 100_000) + String(repeating: "]", count: 100_000) + "}"
+        #expect(Self.problems(deep) == ["The file nests deeper than 64 levels, so it isn't a mapping."])
+    }
+
+    @Test("There are exactly 8 pads: 9, or none, is refused")
+    func padCount() {
+        #expect(Self.problems(#"{"notes": {"pads": [32, 33, 34, 35, 36, 37, 38, 39, 41]}}"#) == ["notes.pads: expected 8 pads, got 9"])
+        #expect(Self.problems(#"{"notes": {"pads": []}}"#) == ["notes.pads: expected 8 pads, got 0"])
+    }
+
+    @Test("Jog ticks per beat must be at least 1, so the paused-jog fallback never divides by zero")
+    func ticksPerBeat() {
+        #expect(Self.problems(#"{"jog": {"seek_fallback_ticks_per_beat": 0}}"#) == [
+            "jog.seek_fallback_ticks_per_beat: 0 is out of range, expected 1-1000",
+        ])
+    }
+
+    @Test("Every other number has a range too: a port past 65535, a negative time and a huge time are named")
+    func numberRanges() {
+        #expect(Self.problems(#"{"osc": {"port": 70000, "feedback_port": 0, "feedback_quiet_ms": -5, "feedback_answer_ms": 1e300}}"#) == [
+            "osc.port: 70000 is out of range, expected 1-65535",
+            "osc.feedback_port: 0 is out of range, expected 1-65535",
+            "osc.feedback_quiet_ms: -5 is out of range, expected 0-60000",
+            "osc.feedback_answer_ms: 1e+300 is out of range, expected 0-60000",
+        ])
+        #expect(Self.problems(#"{"jog": {"bend_release_ms": 0, "seek_seconds_per_tick": 11}, "pitch": {"dead_zone": 2, "pickup_tolerance": -1}, "leds": {"pulse_ms": 99999}}"#) == [
+            "jog.bend_release_ms: 0 is out of range, expected 1-5000",
+            "jog.seek_seconds_per_tick: 11 is out of range, expected 0-10",
+            "pitch.dead_zone: 2 is out of range, expected 0-1",
+            "pitch.pickup_tolerance: -1 is out of range, expected 0-1",
+            "leds.pulse_ms: 99999 is out of range, expected 0-60000",
+        ])
+    }
+
+    @Test("A number too big to be a real number (1e999 is infinity) is refused where the user wrote it")
+    func infiniteNumber() {
+        #expect(Self.problems(#"{"pitch": {"dead_zone": 1e999}}"#) == ["The file has a number too large to use (near byte 24)."])
     }
 }

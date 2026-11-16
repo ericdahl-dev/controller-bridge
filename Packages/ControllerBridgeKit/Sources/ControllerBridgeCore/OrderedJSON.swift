@@ -33,6 +33,19 @@ indirect enum OrderedJSON: Equatable {
         var description: String { "The file isn't valid JSON (near byte \(offset))." }
     }
 
+    /// Deeper than any mapping (its schema is 3 levels), and shallow enough that parsing, checking and freeing the
+    /// value can't overflow the stack on a hostile file (#92).
+    static let maxDepth = 64
+
+    struct TooLarge: Error, CustomStringConvertible {
+        var offset: Int
+        var description: String { "The file has a number too large to use (near byte \(offset))." }
+    }
+
+    struct TooDeep: Error, CustomStringConvertible {
+        var description: String { "The file nests deeper than \(OrderedJSON.maxDepth) levels, so it isn't a mapping." }
+    }
+
     init(parsing data: Data) throws {
         var parser = Parser(bytes: Array(data))
         self = try parser.value()
@@ -43,6 +56,7 @@ indirect enum OrderedJSON: Equatable {
     private struct Parser {
         let bytes: [UInt8]
         var index = 0
+        var depth = 0
 
         mutating func skipSpace() {
             while index < bytes.count, [0x20, 0x0A, 0x0D, 0x09].contains(bytes[index]) { index += 1 }
@@ -62,6 +76,11 @@ indirect enum OrderedJSON: Equatable {
             }
         }
 
+        mutating func enter() throws {
+            depth += 1
+            guard depth <= OrderedJSON.maxDepth else { throw TooDeep() }
+        }
+
         mutating func literal(_ word: String) throws {
             let w = Array(word.utf8)
             guard index + w.count <= bytes.count, Array(bytes[index..<index + w.count]) == w else { throw ParseError(offset: index) }
@@ -69,6 +88,8 @@ indirect enum OrderedJSON: Equatable {
         }
 
         mutating func object() throws -> OrderedJSON {
+            try enter()
+            defer { depth -= 1 }
             index += 1
             var pairs: [(key: String, value: OrderedJSON)] = []
             skipSpace()
@@ -90,6 +111,8 @@ indirect enum OrderedJSON: Equatable {
         }
 
         mutating func array() throws -> OrderedJSON {
+            try enter()
+            defer { depth -= 1 }
             index += 1
             var items: [OrderedJSON] = []
             skipSpace()
@@ -133,6 +156,8 @@ indirect enum OrderedJSON: Equatable {
             guard index > start, let value = Double(String(decoding: bytes[start..<index], as: UTF8.self)) else {
                 throw ParseError(offset: start)
             }
+            // 1e999 parses as infinity, which no setting can use and which can't be written back as JSON.
+            guard value.isFinite else { throw TooLarge(offset: start) }
             return .number(value, isInteger: isInteger)
         }
     }
