@@ -28,4 +28,18 @@ extension Bridge {
         let ticks = relativeTicks(value)
         for _ in 0..<abs(ticks) { send(ticks > 0 ? "Browser/Down" : "Browser/Up", .int(1)) }
     }
+
+    // MARK: Loops
+
+    func loopIn(_ pressed: Bool) {
+        if pressed { sendDeck("LoopIn", .int(1)) }
+    }
+
+    func loopOut(_ pressed: Bool) {
+        if pressed { sendDeck("LoopOut", .int(1)) }
+    }
+
+    func autoLoop(_ pressed: Bool) {
+        if pressed { sendDeck("Loop", .int(1)) }
+    }
 }

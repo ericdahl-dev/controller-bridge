@@ -88,4 +88,17 @@ struct BrowseTests {
         Self.turn(rig, cc: 6, 0x7D)
         #expect(rig.osc.sent == Array(repeating: OSCMessage("/Syndicate/Browser/Up", [.int(1)]), count: 3))
     }
+
+    @Test("Loop In, Loop Out and Auto Loop send LoopIn, LoopOut and Loop to the deck, on press only")
+    func loopButtons() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, 8)
+        Self.press(rig, 9)
+        Self.press(rig, 10)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/LoopIn", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/LoopOut", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Loop", [.int(1)]),
+        ])
+    }
 }

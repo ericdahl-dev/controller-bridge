@@ -16,6 +16,9 @@ final class Bridge {
             "back": { $0.browserBack },
             "forward": { $0.browserForward },
             "select_press": { $0.selectPress },
+            "loop_in": { $0.loopIn },
+            "loop_out": { $0.loopOut },
+            "auto_loop": { $0.autoLoop },
         ]
     }
 
