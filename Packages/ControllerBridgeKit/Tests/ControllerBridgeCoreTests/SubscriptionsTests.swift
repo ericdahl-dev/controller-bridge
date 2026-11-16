@@ -96,4 +96,26 @@ struct SubscriptionsTests {
         })
         #expect(rig.coordinator.status.missingSubscriptions == [])
     }
+
+    @Test("Silence is never missing subscriptions: an unanswered Resend goes stale, with no deck data warning")
+    func silenceFlagsNothing() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        Self.tick(rig, at: 2.0)
+        #expect(rig.coordinator.status.noDeckData == false)
+        #expect(rig.coordinator.status.missingSubscriptions == [])
+    }
+
+    @Test("A later complete answer clears an earlier gap: during a paused set, the quiet Resend gets every value again")
+    func laterAnswerClearsGap() throws {
+        let rig = try Self.answered([OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)])])
+        #expect(rig.coordinator.status.missingSubscriptions == [.playing, .cues, .sync, .loop])
+        Self.tick(rig, at: 10.3)                 // 10 s quiet: the next Resend
+        rig.clock.now = 10.5
+        for value in ["Loaded", "Playing", "Cues", "Sync", "Loop"] {
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/\(value)", [.int(1)]))
+        }
+        Self.tick(rig, at: 12.3)
+        #expect(rig.coordinator.status.missingSubscriptions == [])
+    }
 }
