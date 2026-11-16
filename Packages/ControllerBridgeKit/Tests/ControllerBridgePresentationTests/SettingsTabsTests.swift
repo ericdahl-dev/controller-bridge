@@ -46,4 +46,22 @@ struct SettingsTabsTests {
         #expect(refusal.tab == nil)
         #expect(refusal.focus == nil)
     }
+
+    @Test("The footer names each problem's tab, in tab order, then the problems with no field; VoiceOver hears them all")
+    func footerAndAnnouncement() {
+        let refusal = SettingsRefusal(
+            fields: [
+                SettingsProblem(field: .host, message: "The Syndicate host can't be empty"),
+                SettingsProblem(field: .channel(controller: 0), message: "Channel 17 is out of range, expected 1-16"),
+            ],
+            other: ["The bridge isn't running"]
+        )
+        #expect(refusal.footer == [
+            "Controller: Channel 17 is out of range, expected 1-16",
+            "Syndicate: The Syndicate host can't be empty",
+            "The bridge isn't running",
+        ])
+        #expect(refusal.announcement == "Settings not applied. Controller: Channel 17 is out of range, expected 1-16. "
+            + "Syndicate: The Syndicate host can't be empty. The bridge isn't running.")
+    }
 }

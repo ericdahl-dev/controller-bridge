@@ -31,10 +31,21 @@ public enum SettingsTab: Int, CaseIterable, Hashable, Sendable {
 public struct SettingsRefusal: Equatable, Sendable {
     public var tab: SettingsTab?
     public var focus: SettingsField?
+    /// The footer's list: each field's problem after its tab's name, in tab order, then the problems with no field.
+    public var footer: [String]
+
+    /// What VoiceOver announces, so a jump to another tab is never a surprise (agent2's review of #171).
+    public var announcement: String {
+        "Settings not applied. " + footer.map { $0 + "." }.joined(separator: " ")
+    }
 
     public init(fields: [SettingsProblem], other: [String] = []) {
-        let first = fields.min { SettingsTab(field: $0.field).rawValue < SettingsTab(field: $1.field).rawValue }
-        tab = first.map { SettingsTab(field: $0.field) }
-        focus = first?.field
+        // A stable sort by tab: problems on one tab keep their form order.
+        let sorted = fields.enumerated().sorted {
+            (SettingsTab(field: $0.element.field).rawValue, $0.offset) < (SettingsTab(field: $1.element.field).rawValue, $1.offset)
+        }.map(\.element)
+        tab = sorted.first.map { SettingsTab(field: $0.field) }
+        focus = sorted.first?.field
+        footer = sorted.map { "\(SettingsTab(field: $0.field).title): \($0.message)" } + other
     }
 }
