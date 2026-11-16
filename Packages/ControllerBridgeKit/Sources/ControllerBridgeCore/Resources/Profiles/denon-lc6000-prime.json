@@ -31,7 +31,7 @@
     "jog": {
       "msb_cc": 17,
       "lsb_cc": 49,
-      "counts_per_rev": 16384,
+      "counts_per_rev": 3600,
       "bend_release_ms": 80,
       "seek_seconds_per_rev": 2.0,
       "beats_per_rev": 4,

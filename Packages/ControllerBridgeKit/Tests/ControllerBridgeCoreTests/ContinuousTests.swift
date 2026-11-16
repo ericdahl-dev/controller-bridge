@@ -270,4 +270,24 @@ struct ContinuousTests {
         }
         #expect(rig.osc.sent == [])
     }
+
+    @Test("Measured on the unit: (10,62)→(10,64) is 2 counts forward; (38,3)→(37,0) is 131 back, about 0.15 s with the measured 3600 a turn")
+    func measuredCounts() throws {
+        let rig = try Self.started(#"{ "jog": { "seek_seconds_per_rev": 4 } }"#)
+        Self.feedback(rig, "TrackInfo", [.string("t"), .string("a"), .string("8A"), .float(120), .float(200), .int(100), .int(400), .string("track")])
+        Self.feedback(rig, "Progress", [.float(0.5)])
+        Self.cc(rig, 17, 10); Self.cc(rig, 49, 62)
+        Self.cc(rig, 17, 10); Self.cc(rig, 49, 64)
+        // +2 of 3600 a turn × 4 s a turn = 0.00222 s; of 200 s = +0.0000111.
+        Self.cc(rig, 17, 38); Self.cc(rig, 49, 3)    // a jump: 4867 - 1344 = 3523 forward
+        rig.osc.sent.removeAll()
+        Self.cc(rig, 17, 37); Self.cc(rig, 49, 0)
+        // -131 / 3600 × 4 s = -0.14556 s; of 200 s = -0.00072778.
+        guard case .float(let before)? = rig.osc.sent.last?.arguments.first else {
+            Issue.record("expected a WaveformSeek, got \(rig.osc.sent)")
+            return
+        }
+        // In all 2 + 3523 - 131 = 3394 counts: 3394 / 3600 turns × 4 s = 3.7711 s of 200 s, from 0.5 to 0.518856.
+        #expect(abs(Double(before) - 0.518_856) < 0.000_01)
+    }
 }

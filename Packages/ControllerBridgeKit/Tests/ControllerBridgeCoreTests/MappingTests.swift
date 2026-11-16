@@ -18,10 +18,10 @@ struct MappingTests {
             feedbackQuietMs: 10000, feedbackAnswerMs: 2000
         ))
         #expect(mapping.deck.number == 1)
-        // The jog as the hardware sends it (#103, captured 2026-11-15): a 14-bit position on CC 17/49. counts_per_rev,
-        // seek_seconds_per_rev and beats_per_rev are PROVISIONAL until one slow full turn is measured.
+        // The jog as the hardware sends it (#103, captured 2026-11-15): a 14-bit position on CC 17/49. One slow full
+        // turn measured about 3552 counts, so 3600; seek_seconds_per_rev and beats_per_rev are still PROVISIONAL.
         #expect(mapping.jog == .init(
-            msbCC: 17, lsbCC: 49, countsPerRev: 16384, bendReleaseMs: 80, seekSecondsPerRev: 2.0, beatsPerRev: 4, requireTouch: false
+            msbCC: 17, lsbCC: 49, countsPerRev: 3600, bendReleaseMs: 80, seekSecondsPerRev: 2.0, beatsPerRev: 4, requireTouch: false
         ))
         // pickup and pickup_tolerance are new in the app (#22): Python had no pickup.
         #expect(mapping.pitch == .init(msbCC: 8, lsbCC: 40, invert: false, deadZone: 0.005, pickup: true, pickupTolerance: 0.02))
