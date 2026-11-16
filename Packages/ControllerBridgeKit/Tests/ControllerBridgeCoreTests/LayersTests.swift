@@ -87,4 +87,21 @@ struct LayersTests {
         Self.note(rig, channel: 2, 51, 127)
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, true, false, false])
     }
+
+    @Test("Leaving a layer releases what was held on its deck, once; the new layer's controls drive the new deck")
+    func switchReleasesHolds() throws {
+        let rig = try Self.layered()
+        Self.note(rig, channel: 1, 2, 127)       // Cue held on layer 1
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(1)])])
+        rig.osc.sent.removeAll()
+
+        Self.note(rig, channel: 16, 55, 127)     // Shift + deck select
+        Self.note(rig, channel: 1, 51, 0)
+        Self.note(rig, channel: 2, 51, 127)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
+        rig.osc.sent.removeAll()
+
+        Self.note(rig, channel: 2, 1, 127)       // Play, now on ch2
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
+    }
 }
