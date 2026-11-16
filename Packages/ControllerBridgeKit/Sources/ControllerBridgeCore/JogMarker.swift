@@ -27,6 +27,11 @@ public struct JogMarker: Equatable, Sendable {
         mode = .ramp(phase: phase, since: time, bpm: bpm)
     }
 
+    /// The deck stopped: the hand stays where it is at `time`.
+    public mutating func freeze(at time: Double) {
+        mode = .held(angle(at: time))
+    }
+
     /// The platter moved by `counts` of `countsPerRev`: the hand moves with it, from where it is.
     public mutating func platter(counts: Int, countsPerRev: Int, at time: Double) {
         guard countsPerRev > 0 else { return }

@@ -124,7 +124,8 @@ struct JogDisplayCoordinatorTests {
 }
 
 /// The marker and the play light on the WD port (#165), at the Coordinator seam. Pitch bend on ch1 is E0 lsb msb;
-/// the play light is note 1 on ch1. Worked by hand at 120 BPM: a quarter-second into beat 1 is 2048 (E0 00 10).
+/// the play light is note 1 on ch1. The marker is the deck's own needle (the user's pick), from its BarRamp and BPM.
+/// Worked by hand at 120 BPM (a 2 s bar): a quarter-second after BarRamp 0 is 1/8 turn, 2048 (E0 00 10).
 @Suite("Jog marker at the Coordinator")
 struct JogMarkerCoordinatorTests {
     static func started() throws -> (Rig, JogDisplayDriverTests.FakePort) {
@@ -148,32 +149,42 @@ struct JogMarkerCoordinatorTests {
         rig.coordinator.tick()
     }
 
-    @Test("Playing, the hand follows the master clock: 0 on beat 1, 2048 a quarter-second on")
-    func clockHand() throws {
+    @Test("Playing, the needle is the deck's phase: BarRamp 0 at 120 BPM is 0, then 2048 a quarter-second on")
+    func deckNeedle() throws {
         let (rig, port) = try Self.started()
         Self.feed(rig, "Deck/1/Playing", .int(1))
-        Self.feed(rig, "Header/BPM", .float(120))
-        Self.feed(rig, "Header/Clock", .int(1))
+        Self.feed(rig, "Deck/1/BPM", .float(120))
+        Self.feed(rig, "Deck/1/BarRamp", .float(0))
         Self.tick(rig, at: 0)
         Self.tick(rig, at: 0.25)
         #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x00, 0x10]])
+    }
+
+    @Test("The master clock doesn't move the needle: Header/Clock 3 with no BarRamp leaves it at 0")
+    func masterDoesntMoveIt() throws {
+        let (rig, port) = try Self.started()
+        Self.feed(rig, "Deck/1/Playing", .int(1))
+        Self.feed(rig, "Header/BPM", .float(120))
+        Self.feed(rig, "Header/Clock", .int(3))
+        Self.tick(rig, at: 0.2)
+        #expect(Self.bends(port) == [[0xE0, 0x00, 0x00]])
     }
 
     @Test("At most 30 a second: ticks every 10 ms send at 0, 0.04 and 0.08 s (0, 327, 655)")
     func rateLimit() throws {
         let (rig, port) = try Self.started()
         Self.feed(rig, "Deck/1/Playing", .int(1))
-        Self.feed(rig, "Header/BPM", .float(120))
-        Self.feed(rig, "Header/Clock", .int(1))
+        Self.feed(rig, "Deck/1/BPM", .float(120))
+        Self.feed(rig, "Deck/1/BarRamp", .float(0))
         for step in 0...9 { Self.tick(rig, at: Double(step) * 0.01) }
         #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x47, 0x02], [0xE0, 0x0F, 0x05]])
     }
 
-    @Test("Paused, the clock doesn't move it; a quarter turn of the platter (900 counts) does: 4096")
+    @Test("Paused, a ramp (0.5) sets it but doesn't run on; a quarter turn of the platter (900 counts) moves it to 0.75: 12288")
     func pausedPlatter() throws {
         let (rig, port) = try Self.started()
-        Self.feed(rig, "Header/BPM", .float(120))
-        Self.feed(rig, "Header/Clock", .int(2))
+        Self.feed(rig, "Deck/1/BPM", .float(120))
+        Self.feed(rig, "Deck/1/BarRamp", .float(0.5))
         Self.tick(rig, at: 0.2)
         #expect(Self.bends(port) == [])
         // Platter at 1000, then 1900: 900 counts forward (CC 17 then CC 49).
@@ -182,7 +193,25 @@ struct JogMarkerCoordinatorTests {
             rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
         }
         Self.tick(rig, at: 0.3)
-        #expect(Self.bends(port) == [[0xE0, 0x00, 0x20]])
+        #expect(Self.bends(port) == [[0xE0, 0x00, 0x60]])
+    }
+
+    @Test("Playing then paused, the needle stops where it was: BarRamp 0, paused a quarter-second on (1/8), then 900 counts: 3/8, 6144")
+    func pauseFreezes() throws {
+        let (rig, port) = try Self.started()
+        Self.feed(rig, "Deck/1/Playing", .int(1))
+        Self.feed(rig, "Deck/1/BPM", .float(120))
+        Self.feed(rig, "Deck/1/BarRamp", .float(0))
+        rig.clock.now = 0.25
+        Self.feed(rig, "Deck/1/Playing", .int(0))
+        port.wd.removeAll()
+        rig.clock.now = 1
+        for (msb, lsb) in [(UInt8(7), UInt8(104)), (14, 108)] {
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: msb), source: Rig.lc6000.id)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
+        }
+        Self.tick(rig, at: 1)
+        #expect(Self.bends(port) == [[0xE0, 0x00, 0x30]])
     }
 
     @Test("The play light: 127 while playing; loaded and paused, it blinks every half-second")
@@ -290,5 +319,76 @@ struct JogDisplaySettingTests {
         var draft = base
         draft.jogDisplay = true
         #expect(BridgeSettings.rebased(draft: draft, base: base, onto: base).jogDisplay == true)
+    }
+}
+
+
+/// Every deck's needle for the simulator, and the master beat for the ring (#165, the user's pick): the needle is each
+/// deck's own phase, the lit segment is the master's beat, the same on every deck.
+@Suite("Jog needles per deck and the master beat")
+struct JogNeedleEventTests {
+    final class Events: @unchecked Sendable { var list: [JogDisplayEvent] = [] }
+
+    static func started() throws -> (Rig, JogDisplayDriverTests.FakePort, Events) {
+        let rig = try Rig()
+        let port = JogDisplayDriverTests.FakePort(), events = Events()
+        let driver = JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1) { _ in [0, 0, 0, 255] }
+        driver.onEvent = { events.list.append($0) }
+        rig.coordinator.attachJogDisplay(driver)
+        rig.coordinator.setJogDisplay(enabled: true)
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
+        ))
+        JogDisplayCoordinatorTests.answer(rig, port)
+        port.wd.removeAll()
+        events.list.removeAll()
+        return (rig, port, events)
+    }
+
+    static func needles(_ events: Events) -> [Int: Int] {
+        var out: [Int: Int] = [:]
+        for case let .deckMarker(deck, pitchBend) in events.list { out[deck] = pitchBend }
+        return out
+    }
+
+    @Test("Decks 1 and 3 playing at their own phase: each needle reported; the unit gets only deck 1's (in front)")
+    func perDeck() throws {
+        let (rig, port, events) = try Self.started()
+        for (deck, ramp) in [(1, 0.25), (3, 0.5)] {
+            JogMarkerCoordinatorTests.feed(rig, "Deck/\(deck)/Playing", .int(1))
+            JogMarkerCoordinatorTests.feed(rig, "Deck/\(deck)/BPM", .float(120))
+            JogMarkerCoordinatorTests.feed(rig, "Deck/\(deck)/BarRamp", .float(Float(ramp)))
+        }
+        JogMarkerCoordinatorTests.tick(rig, at: 0)
+        #expect(Self.needles(events) == [1: 4096, 3: 8192])
+        #expect(JogMarkerCoordinatorTests.bends(port) == [[0xE0, 0x00, 0x20]])
+    }
+
+    @Test("Settings' Apply (setControllers) leaves the display on: a goodbye while the entries change, then hello again")
+    func applyKeepsItOn() throws {
+        let (_, port, _) = try Self.started()
+        #expect(port.controller.suffix(2) == JogDisplay.hello[...])
+    }
+
+    @Test("A paused deck's needle stays where it was")
+    func paused() throws {
+        let (rig, _, events) = try Self.started()
+        JogMarkerCoordinatorTests.feed(rig, "Deck/3/Playing", .int(1))
+        JogMarkerCoordinatorTests.feed(rig, "Deck/3/BPM", .float(120))
+        JogMarkerCoordinatorTests.feed(rig, "Deck/3/BarRamp", .float(0.5))
+        JogMarkerCoordinatorTests.tick(rig, at: 0)
+        JogMarkerCoordinatorTests.feed(rig, "Deck/3/Playing", .int(0))
+        events.list.removeAll()
+        JogMarkerCoordinatorTests.tick(rig, at: 0.5)
+        #expect(Self.needles(events) == [:])
+    }
+
+    @Test("Header/Clock is the master beat for every deck's ring, as an event only: nothing is sent for it")
+    func masterBeat() throws {
+        let (rig, port, events) = try Self.started()
+        JogMarkerCoordinatorTests.feed(rig, "Header/Clock", .int(3))
+        #expect(events.list.contains(.masterBeat(3)))
+        #expect(port.wd == [])
     }
 }
