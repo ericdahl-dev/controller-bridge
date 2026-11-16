@@ -52,11 +52,11 @@ public struct ProfileDraft: Sendable {
 
     mutating func set(_ path: String, _ value: DraftJSON) { profile.set(path, value) }
 
-    /// What the profile import check says about the draft's mapping, as a partial mapping over the defaults. Empty
-    /// means it imports as written.
+    /// What the profile check says about the draft's mapping as a new controller's own profile (#251): its keys
+    /// against each other, never against the LC6000's. Empty means it passes as written.
     public var problems: [String] {
         guard let mapping = profile["mapping"] else { return [] }
-        return Mapping.problems(in: Data(mapping.text().utf8))
+        return Mapping.problems(in: Data(mapping.text().utf8), whole: true)
     }
 
     mutating func todo(_ key: String, _ how: String) {
