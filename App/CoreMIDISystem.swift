@@ -14,7 +14,8 @@ enum CoreMIDIError: Error {
 /// Every CoreMIDI block is made in a `nonisolated static` function: a closure written in main-actor code would be
 /// main-actor isolated, and CoreMIDI blocks get no runtime isolation check, so it would race silently (#14 spike).
 final class CoreMIDISystem: MIDISystem {
-    private let client: MIDIClientRef
+    /// The app's one MIDI client; the jog display's ports are made on it too (#165).
+    let client: MIDIClientRef
     private let input: MIDIPortRef
     private let output: MIDIPortRef
     /// Connected sources by unique id, with their names.
