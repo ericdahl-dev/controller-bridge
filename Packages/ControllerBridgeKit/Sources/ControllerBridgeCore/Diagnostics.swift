@@ -75,8 +75,11 @@ extension Mapping {
             return notes.buttons.first { $0.value == note }?.key ?? DiagnosticEvent.unmapped
         case .controlChange(_, let controller, _):
             let cc = Int(controller)
-            let named: [(Int, String)] = [
-                (jog.msbCC, "jog_msb"), (jog.lsbCC, "jog_lsb"),
+            let jogNames: [(Int, String)] = switch jog.mode {
+            case .absolute(let msb, let lsb): [(msb, "jog_msb"), (lsb, "jog_lsb")]
+            case .relative(let cc, let edge): [(cc, "jog_relative")] + (edge.map { [($0, "jog_relative_edge")] } ?? [])
+            }
+            let named: [(Int, String)] = jogNames + [
                 (pitch.msbCC, "pitch_msb"), (pitch.lsbCC, "pitch_lsb"), (needle.msbCC, "needle_msb"), (needle.lsbCC, "needle_lsb"),
                 (browse.selectTurnCC, "select_turn"), (browse.autoLoopSizeCC, "auto_loop_size"),
             ]

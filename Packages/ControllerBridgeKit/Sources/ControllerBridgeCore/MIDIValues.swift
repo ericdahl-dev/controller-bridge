@@ -59,4 +59,13 @@ public enum EncoderFormat: String, CaseIterable, Equatable, Sendable, Codable {
         case .signMagnitude: return value & 0x40 == 0 ? value : -(value & 0x3F)
         }
     }
+
+    /// The CC value that turns by `ticks` (clamped to what one value can say), for the demo controller (#204).
+    public func value(forTicks ticks: Int) -> UInt8 {
+        switch self {
+        case .twosComplement: return UInt8(max(-64, min(63, ticks)) & 0x7F)
+        case .offset64: return UInt8(max(0, min(127, ticks + 0x40)))
+        case .signMagnitude: return ticks < 0 ? UInt8(0x40 | min(63, -ticks)) : UInt8(min(63, ticks))
+        }
+    }
 }

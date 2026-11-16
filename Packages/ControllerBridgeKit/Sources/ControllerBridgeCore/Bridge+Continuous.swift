@@ -120,8 +120,18 @@ extension Bridge {
         jog(counts: counts)
     }
 
-    private func jog(counts: Int) {
-        guard counts != 0, platterTouched || !mapping.jog.requireTouch else { return }
+    /// A relative jog's tick on the platter's top (#204), in the profile's encoder format.
+    func jogRelative(_ value: UInt8) {
+        jog(counts: mapping.midi.encoderFormat.ticks(value))
+    }
+
+    /// A relative jog's tick on the platter's edge (#204): it moves without a touch.
+    func jogRelativeEdge(_ value: UInt8) {
+        jog(counts: mapping.midi.encoderFormat.ticks(value), needsTouch: false)
+    }
+
+    private func jog(counts: Int, needsTouch: Bool = true) {
+        guard counts != 0, platterTouched || !mapping.jog.requireTouch || !needsTouch else { return }
         lastJogTime = clock.now
         if playing {
             let direction = counts > 0 ? 1 : -1

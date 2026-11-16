@@ -118,12 +118,26 @@ public struct Mapping: Equatable, Sendable, Codable {
         public init(number: Int) { self.number = number }
     }
 
-    /// The jog wheel as a 14-bit platter position that counts up going forward and wraps at 16384 (#103). Movement
-    /// is the change in position, scaled per platter revolution.
+    /// The jog wheel. The LC6000's sends a 14-bit platter position that counts up going forward and wraps at 16384
+    /// (#103): movement is the change in position. A relative jog (#204) sends ticks on one CC instead, in the
+    /// profile's encoder format. Either way movement is scaled per platter revolution.
     public struct Jog: Equatable, Sendable, Codable {
-        public var msbCC: Int
-        public var lsbCC: Int
-        /// Position counts in one full platter turn: about 3552 measured on the LC6000 (#103), so 3600.
+        /// How the platter reports movement.
+        public enum Mode: Equatable, Sendable {
+            case absolute(msbCC: Int, lsbCC: Int)
+            /// Ticks on `cc` (the platter's top). `edgeCC`, if the controller has one, is the platter's edge, which
+            /// moves without a touch.
+            case relative(cc: Int, edgeCC: Int?)
+        }
+
+        public var msbCC: Int?
+        public var lsbCC: Int?
+        /// A relative jog's CC (#204). When set, the jog is relative and the 14-bit pair may be left out.
+        public var relativeCC: Int?
+        /// A relative jog's edge CC, which needs no touch (#204).
+        public var relativeEdgeCC: Int?
+        /// Counts in one full platter turn: about 3552 position counts measured on the LC6000 (#103), so 3600. For a
+        /// relative jog, ticks per turn.
         public var countsPerRev: Int
         public var bendReleaseMs: Int
         /// While paused, how far one platter turn moves the playhead.
@@ -132,9 +146,16 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var beatsPerRev: Double
         public var requireTouch: Bool
 
+        public var mode: Mode {
+            if let relativeCC { return .relative(cc: relativeCC, edgeCC: relativeEdgeCC) }
+            return .absolute(msbCC: msbCC ?? 0, lsbCC: lsbCC ?? 0)
+        }
+
         enum CodingKeys: String, CodingKey {
             case msbCC = "msb_cc"
             case lsbCC = "lsb_cc"
+            case relativeCC = "relative_cc"
+            case relativeEdgeCC = "relative_edge_cc"
             case countsPerRev = "counts_per_rev"
             case bendReleaseMs = "bend_release_ms"
             case seekSecondsPerRev = "seek_seconds_per_rev"
@@ -142,17 +163,53 @@ public struct Mapping: Equatable, Sendable, Codable {
             case requireTouch = "require_touch"
         }
 
+        /// A jog needs its 14-bit pair or a relative CC; either is enough (#204).
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            msbCC = try c.decodeIfPresent(Int.self, forKey: .msbCC)
+            lsbCC = try c.decodeIfPresent(Int.self, forKey: .lsbCC)
+            relativeCC = try c.decodeIfPresent(Int.self, forKey: .relativeCC)
+            relativeEdgeCC = try c.decodeIfPresent(Int.self, forKey: .relativeEdgeCC)
+            countsPerRev = try c.decode(Int.self, forKey: .countsPerRev)
+            bendReleaseMs = try c.decode(Int.self, forKey: .bendReleaseMs)
+            seekSecondsPerRev = try c.decode(Double.self, forKey: .seekSecondsPerRev)
+            beatsPerRev = try c.decode(Double.self, forKey: .beatsPerRev)
+            requireTouch = try c.decode(Bool.self, forKey: .requireTouch)
+            guard relativeCC == nil else { return }
+            switch (msbCC, lsbCC) {
+            case (nil, nil): throw JogError.needsPairOrRelative
+            case (nil, _): throw JogError.missing("msb_cc")
+            case (_, nil): throw JogError.missing("lsb_cc")
+            default: break
+            }
+        }
+
         public init(
-            msbCC: Int, lsbCC: Int, countsPerRev: Int, bendReleaseMs: Int, seekSecondsPerRev: Double, beatsPerRev: Double,
-            requireTouch: Bool
+            msbCC: Int?, lsbCC: Int?, countsPerRev: Int, bendReleaseMs: Int, seekSecondsPerRev: Double, beatsPerRev: Double,
+            requireTouch: Bool, relativeCC: Int? = nil, relativeEdgeCC: Int? = nil
         ) {
             self.msbCC = msbCC
             self.lsbCC = lsbCC
+            self.relativeCC = relativeCC
+            self.relativeEdgeCC = relativeEdgeCC
             self.countsPerRev = countsPerRev
             self.bendReleaseMs = bendReleaseMs
             self.seekSecondsPerRev = seekSecondsPerRev
             self.beatsPerRev = beatsPerRev
             self.requireTouch = requireTouch
+        }
+    }
+
+    /// A jog that can't tell how the platter reports movement (#204), in plain words.
+    public enum JogError: Error, Equatable, CustomStringConvertible {
+        case needsPairOrRelative
+        case missing(String)
+
+        public var description: String {
+            switch self {
+            case .needsPairOrRelative: "jog: needs msb_cc and lsb_cc, or relative_cc"
+            case .missing(let key): "jog: \(key) is missing (or set relative_cc for a relative jog)"
+            }
         }
     }
 
@@ -348,6 +405,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         guard problems.isEmpty else { throw MappingError.invalid(problems) }
         do {
             return try JSONDecoder().decode(Mapping.self, from: json)
+        } catch let error as JogError {
+            throw MappingError.invalid([error.description])
         } catch let error as DecodingError {
             // The check runs first, so this shouldn't happen; if it does, the DJ still gets words, not a dump (#92).
             throw MappingError.invalid([Self.describe(error)])
