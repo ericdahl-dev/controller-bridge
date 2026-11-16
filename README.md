@@ -38,7 +38,7 @@ LC6000 ◀──MIDI LEDs──  Controller Bridge  ◀──OSC feedback :9096�
 - The platter ring lights when a track is loaded. It can also pulse on each beat or on the downbeat.
 
 **Recovery:**
-- Unplugging the LC6000, sleeping the Mac or quitting releases every held control first.
+- Unplugging the LC6000, sleeping the Mac, switching layers or quitting releases every held control first, including a held Pitch Bend or a latched Reverse.
 - Plugging the controller back in repaints its LEDs.
 - If Syndicate restarts, the bridge asks it to send its state again.
 
@@ -54,27 +54,58 @@ Install **Controller Bridge** from the Mac App Store (macOS 26 or later). It liv
 ## Set up Syndicate
 
 1. **Settings → OSC:** turn **OSC INPUT ENABLED** on. The listen port defaults to 9090.
-2. **Settings → OSC FEEDBACK:** set DEST IP to the bridge's computer (`127.0.0.1` if it's the same one) and PORT to `9096`. Turn on these subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.
-3. **Settings → MIDI:** turn your controller's MIDI input **off** (for example, Denon LC6000 PRIME). Otherwise Syndicate's own mapping and the bridge would both react to every button.
+2. **Settings → OSC FEEDBACK:** set DEST IP to the bridge's computer (`127.0.0.1` if it's the same one) and PORT to `9096`.
+3. **Settings → OSC FEEDBACK → SUBSCRIPTIONS:** Turn on these subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.
+4. **Settings → MIDI:** turn your controller's MIDI input **off** (for example, Denon LC6000 PRIME). Otherwise Syndicate's own mapping and the bridge would both react to every button.
 
 Quit djay Pro, Engine DJ or any other app using your controller first, and power-cycle your controller if one was open: they can switch its MIDI mode until it restarts.
 
-The menu's **Set up Syndicate** window shows the same steps.
+The **Setup guide** button in the panel, and **Setup Guide…** in Settings, show the same steps. The guide shows the panel's status lights as you go, and its button reads **Done: feedback live** once Syndicate answers.
+
+## Four decks from one LC6000
+
+The LC6000 has four deck layers: **Shift + deck select** steps through them, and the bridge follows. Layer N drives Syndicate deck N, so one unit plays all four decks. On its own the LC6000 keeps every control on MIDI channel 1 and only signals the layer; the bridge sends those controls to the active layer's deck. (Another DJ app can switch it to one channel per layer until it restarts; the bridge follows that too, but quit those apps first.)
+
+- **Switching layers:** anything held on the old layer is released on its deck, and the LEDs repaint from the new deck's state.
+- **Pitch fader:** all layers share the one fader, so on the new layer it waits until it meets that deck's tempo (pickup), and the tempo doesn't jump.
+- **The panel:** it shows the active deck with "Following controller layers" instead of the deck picker, since the hardware picks the deck.
+- **Turning it off:** turn off **Follow controller layers** in Settings to drive one deck, chosen in the panel or Settings, from every layer.
+
+## The menu-bar panel
+
+Click the menu-bar icon (a jog wheel) to open the panel:
+- **Header:** the controller's name and what last happened to it, such as an unplug.
+- **Deck picker:** four badges, 1–4. A click switches the deck at once.
+- **Status lights:**
+  - **CONTROLLER:** CONNECTED, UNPLUGGED, MIDI ERROR or WAITING.
+  - **FEEDBACK:** LIVE once Syndicate answers.
+  - **TEMPO:** MASTER when this deck leads the tempo.
+- **Why no LEDs?:** says in plain words what to fix when something is wrong, with a **Copy details** button for the raw error.
+- **Settings…** and **Diagnostics…**
+- **Demo controller:** runs a scripted controller against a simulated Syndicate, so you can see the bridge work without hardware. Nothing goes to the network, and it's off again at the next launch.
+- **Quit:** asks first while feedback is live, because quitting stops the controller.
+
+If the bridge itself can't start, the header says **Bridge stopped** with the reason: MIDI, Syndicate's address or the controller profiles. The help says how to fix it.
 
 ## Settings
 
 Open **Settings…** from the menu.
 
 - **Controller:** the Syndicate **Deck** (1–4), the **MIDI input** and **MIDI output**, and the **Channel**.
+  - **Layers:** with **Follow controller layers** on (the default for the LC6000), the controller picks the deck itself. See [Four decks from one LC6000](#four-decks-from-one-lc6000).
+  - **Deck:** a click applies at once, as in the panel.
   - Automatic picks the first connected device that a controller profile matches.
+  - **Channel:** "From the profile" uses the profile's channel (1 for the LC6000).
   - **Add controller** drives a second LC6000 on another deck. Both share Syndicate's one feedback stream.
   - To use two controllers on one device, tell them apart by channel.
 - **LEDs:** turn them off to run without lights.
-- **OSC:** Syndicate's host and port. The default is this Mac, port 9090.
+- **OSC:** Syndicate's host and port. The default is this Mac (`127.0.0.1`), port 9090. The host must be an IP address, such as `192.168.1.20` for Syndicate on another Mac (System Settings › Network shows it).
 - **Feedback:** the port Syndicate sends feedback to (default 9096) and where the app listens.
   - **This Mac only** is the default.
   - **All networks** is for Syndicate on another Mac. macOS asks once for permission to use the local network.
+- **Mapping:** import, export or reset the mapping. See [Mapping overrides](#mapping-overrides).
 - **Start at login:** off by default.
+- **Setup Guide…** reopens the Syndicate setup steps.
 
 Settings are checked before they're saved. A bad port, an empty host, or two controllers on the same device and channel are listed in plain words, and nothing changes until you fix them.
 
