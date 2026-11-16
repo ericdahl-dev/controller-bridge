@@ -162,3 +162,13 @@ test("The file name, email subject and body are the app's", () => {
   assert.equal(C.emailBody("DDJ-400"), "Here's a capture of my DDJ-400 for DeckBridge. The file is attached.");
   assert.equal(C.emailRecipient, "deckbridge@ericdahl.dev");
 });
+
+test("The app's prompts are written as given, layer fields included (#217), and no layers block: the app infers it", () => {
+  const s = C.session({ appVersion: "web 1.0.1", device: "DDJ-400", ports: { input: ["DDJ-400"], output: [] }, prompts: PROMPTS });
+  const file = plain(s.file());
+  assert.deepEqual(file.prompts, PROMPTS);
+  assert.deepEqual(file.prompts.find((p) => p.id === "deck2.play"), {
+    gesture: "press", id: "deck2.play", layer: 2, layer_of: "deck1.play", text: "Press and release Play on deck 2.",
+  });
+  assert.equal("layers" in file, false);
+});

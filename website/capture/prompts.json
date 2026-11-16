@@ -130,11 +130,14 @@
   {
     "gesture" : "press",
     "id" : "layer2.select",
+    "layer" : 2,
     "text" : "Switch the left side to deck 2 (its deck or layer button)."
   },
   {
     "gesture" : "press",
     "id" : "deck2.play",
+    "layer" : 2,
+    "layer_of" : "deck1.play",
     "text" : "Press and release Play on deck 2."
   }
 ]
