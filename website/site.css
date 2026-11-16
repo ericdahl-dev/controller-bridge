@@ -103,6 +103,13 @@
 .db-res.db-res--always dt, .db-res.db-res--always dd { margin: 0; font-size: var(--t-small, 14px); color: var(--muted); }
 .db-res.db-res--always b { display: block; font: var(--display-weight) var(--t-h3)/1.1 var(--font-display); letter-spacing: var(--display-tracking); color: var(--ink); }
 @media (max-width: 639px) { .db-map > div { grid-template-columns: minmax(0, 1fr); row-gap: var(--s-1); } }
+/* the controls list under its heading at full width: two columns of rows on a wide screen, so it fits one screen */
+.db-map--cols { margin-top: var(--s-5); }
+@media (min-width: 1024px) {
+  .db-map--cols { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: calc(var(--gutter) * 2); }
+  .db-map--cols > div { padding-block: var(--s-3); }
+  .db-map--cols > div:is(:first-child, :nth-child(2)) { padding-top: 0; }
+}
 .db-checklist li::before { content: "☐ "; color: var(--muted); }
 code { font-family: var(--font-mono); font-size: .92em; }
 .db-prows { display: grid; }
