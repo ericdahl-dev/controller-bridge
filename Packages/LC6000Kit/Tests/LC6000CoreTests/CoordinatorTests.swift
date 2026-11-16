@@ -1,3 +1,4 @@
+import Foundation
 import LC6000Core
 import Testing
 
@@ -59,8 +60,10 @@ final class Rig {
         return out
     }
 
-    init() throws {
-        coordinator = Coordinator(mapping: try Mapping.bundledDefault(), midi: midi, osc: osc, clock: clock, log: log)
+    /// A rig whose mapping is the default with `override` (a JSON mapping file) merged over it.
+    init(override: String? = nil) throws {
+        let mapping = try override.map { try Mapping.bundledDefault(overriddenBy: Data($0.utf8)) } ?? Mapping.bundledDefault()
+        coordinator = Coordinator(mapping: mapping, midi: midi, osc: osc, clock: clock, log: log)
     }
 }
 

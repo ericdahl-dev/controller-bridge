@@ -14,7 +14,7 @@ public final class Coordinator {
         self.osc = osc
         self.clock = clock
         self.log = log
-        bridges = [Bridge(mapping: mapping, osc: osc)]
+        bridges = [Bridge(mapping: mapping, osc: osc, clock: clock)]
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -36,6 +36,11 @@ public final class Coordinator {
     /// Releases everything held in Syndicate. Safe to call again: a second call sends nothing.
     public func stop() {
         for bridge in bridges { bridge.releaseAll() }
+    }
+
+    /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
+    public func tick() {
+        for bridge in bridges { bridge.tick() }
     }
 
     /// The first endpoint whose name contains `wanted`, ignoring case.

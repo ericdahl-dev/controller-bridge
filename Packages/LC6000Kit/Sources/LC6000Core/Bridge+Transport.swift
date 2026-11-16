@@ -71,6 +71,9 @@ extension Bridge {
     /// mapping import all come through here.
     func releaseAll() {
         for control in held.takeAll() { send(address: control.address, control.release) }
+        bendDirection = 0
+        platterTouched = false
+        needleTouched = false
         if shift {
             shift = false
             refreshLEDs()

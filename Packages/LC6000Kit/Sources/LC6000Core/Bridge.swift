@@ -19,6 +19,7 @@ final class Bridge {
             "shift": { $0.shiftButton },
             "key_lock": { $0.keyLock },
             "slip": { $0.slip },
+            "platter_touch": { $0.platterTouch },
             // Browse, loops and jumps (Bridge+Browse.swift).
             "track_prev": { $0.trackPrevious },
             "track_next": { $0.trackNext },
@@ -41,12 +42,18 @@ final class Bridge {
             // Browse, loops and jumps (Bridge+Browse.swift).
             "select_turn": { $0.selectTurn },
             "auto_loop_size": { $0.autoLoopSize },
+            // Pitch, jog and Needle Drop (Bridge+Continuous.swift).
+            "pitch_msb": { $0.pitchMSB },
+            "pitch_lsb": { $0.pitchLSB },
+            "jog": { $0.jog },
+            "needle": { $0.needle },
         ]
     }
 
     let mapping: Mapping
     var output: (any MIDIOutput)?
     private let osc: any OSCSender
+    let clock: any Clock
     private let root: String
     /// The mapping's MIDI channel, 0-based.
     let channel: UInt8
@@ -61,6 +68,22 @@ final class Bridge {
     var keyLockOn = false
     var slipOn = false
 
+    // Pitch, jog and Needle Drop state (Bridge+Continuous.swift).
+    var pitchMSBValue: UInt8 = 0
+    var pitchLSBValue: UInt8 = 0
+    /// The last TempoSlider value sent, so a repeat isn't resent.
+    var lastTempo: Double?
+    /// The direction of the PhaseBend being held (1 or -1), or 0 when none is.
+    var bendDirection = 0
+    var lastJogTime = 0.0
+    var platterTouched = false
+    var needleTouched = false
+    /// Where the playhead is, 0...1, and the track's length in seconds, from feedback.
+    var progress: Double?
+    var duration: Double?
+    /// Paused jog ticks not yet worth a whole beat.
+    var seekTickRemainder = 0
+
     // Syndicate's state, from feedback.
     var playing = false
     var loaded = false
@@ -71,9 +94,10 @@ final class Bridge {
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
 
-    init(mapping: Mapping, osc: any OSCSender) {
+    init(mapping: Mapping, osc: any OSCSender, clock: any Clock) {
         self.mapping = mapping
         self.osc = osc
+        self.clock = clock
         root = "/" + mapping.osc.root.trimmingSlashes() + "/"
         // A loaded mapping's channel is checked to be 1-16; clamping keeps a hand-built one from trapping.
         channel = UInt8(clamping: mapping.midi.channel - 1)
@@ -110,6 +134,10 @@ final class Bridge {
     }
 
     private func handleNote(_ note: Int, pressed: Bool) {
+        if note == mapping.needle.touchNote {
+            needleTouched = pressed
+            return
+        }
         guard let name = buttonNames[note], let handler = Self.buttonHandlers[name] else { return }
         handler(self)(pressed)
     }
@@ -129,11 +157,22 @@ final class Bridge {
         let key = address.dropFirst(deckPrefix.count)
         let value = message.arguments.first?.isTrue ?? false
         switch key {
-        case "playing": playing = value
+        case "playing":
+            playing = value
+            if !playing, bendDirection != 0 { endBend() }
         case "loaded": loaded = value
         case "sync": synced = value
         case "temposliderenabled": sliderEnabled = value
         case "loop": looping = value
+        case "trackinfo":
+            // Title, artist, key, BPM, length in seconds, …: only the length is used, for jog seeking.
+            guard message.arguments.count >= 5 else { return }
+            let length = message.arguments[4].number ?? 0
+            duration = length > 0 ? length : nil
+            return
+        case "progress":
+            progress = message.arguments.first?.number
+            return
         default: return
         }
         refreshLEDs()
@@ -145,6 +184,7 @@ final class Bridge {
         buttonLED("play", on: playing)
         refreshTransportLEDs()
         loopLEDs()
+        led(mapping.leds.pitchCenter, lastTempo == 0 ? Self.full : Self.off)
     }
 
     func buttonLED(_ name: String, on: Bool) {
@@ -182,6 +222,14 @@ final class Bridge {
 
 private extension OSCArgument {
     /// Feedback flags arrive as an int or a float; anything nonzero is on.
+    var number: Double? {
+        switch self {
+        case .int(let value): Double(value)
+        case .float(let value): Double(value)
+        case .string: nil
+        }
+    }
+
     var isTrue: Bool {
         switch self {
         case .int(let value): value != 0
