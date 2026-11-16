@@ -173,4 +173,14 @@ struct BrowseTests {
             OSCMessage("/Syndicate/Deck/1/SkipBarForward", [.int(1)]),
         ])
     }
+
+    @Test("The relative-tick boundary: 0x3F turns 63 steps down, 0x40 turns 64 steps up")
+    func relativeTickBoundary() throws {
+        let rig = try Self.startedRig()
+        Self.turn(rig, cc: 6, 0x3F)
+        #expect(rig.osc.sent == Array(repeating: OSCMessage("/Syndicate/Browser/Down", [.int(1)]), count: 63))
+        rig.osc.sent.removeAll()
+        Self.turn(rig, cc: 6, 0x40)
+        #expect(rig.osc.sent == Array(repeating: OSCMessage("/Syndicate/Browser/Up", [.int(1)]), count: 64))
+    }
 }
