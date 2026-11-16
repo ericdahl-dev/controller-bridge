@@ -1,5 +1,6 @@
 import AppKit
 import ControllerBridgeCore
+import ControllerBridgePresentation
 import Observation
 
 /// What the menu shows. A main-actor copy: the adapters report into it, and nothing reads the Coordinator from here.
@@ -27,6 +28,8 @@ final class BridgeStatus {
     var lastDropoutTime: String?
     /// The Syndicate OSC port in use, from settings (#66), for the panel's ports line.
     var oscPort = 9090
+    /// Which part couldn't start, when `problem` is set (#88).
+    var stopReason: BridgeState.StopReason = .midi
     /// Why the last deck change was refused, if it was (#90).
     var deckProblem: String?
     /// An LED sweep is running (#26).
@@ -133,13 +136,21 @@ final class BridgeModel {
 
     /// Saves `new` and puts it into effect, or throws the problems and changes nothing. Deck and device changes go
     /// through the pipe, so the Coordinator releases held controls first.
-    func apply(_ new: BridgeSettings) throws(SettingsError) {
-        // Never a silent success: with the bridge not running, nothing can be applied (#62).
-        guard let old = settings, let producer, let osc else {
-            throw .invalid(["The bridge isn't running, so settings can't be applied. Quit and reopen it."])
-        }
+    /// Returns a note when the settings were saved but can't take effect until a restart.
+    @discardableResult
+    func apply(_ new: BridgeSettings) throws(SettingsError) -> String? {
         var new = new
         new.syndicateHost = new.syndicateHost.trimmingCharacters(in: .whitespaces)
+        guard let old = settings, let producer, let osc else {
+            // Not running, such as a Syndicate host the sender couldn't open (#88): save valid settings anyway, so a
+            // fixed host is used at the next launch. Never a silent success (#62): say a restart is needed.
+            guard settings != nil else {
+                throw .invalid(["The bridge isn't running, so settings can't be applied. Quit and reopen it."])
+            }
+            try new.save(to: storage)
+            settings = new
+            return "Saved. Quit and reopen the bridge to use these settings."
+        }
         let problems = new.problems
         guard problems.isEmpty else { throw .invalid(problems) }
         if new.syndicateHost != old.syndicateHost || new.syndicatePort != old.syndicatePort {
@@ -156,6 +167,7 @@ final class BridgeModel {
         status.oscPort = new.syndicatePort
         if new.ledsEnabled != old.ledsEnabled { producer.setLEDs(enabled: new.ledsEnabled) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
+        return nil
     }
 
     /// (Re)binds the feedback listener. The old one is closed first; a failure shows in the status, never crashes.
@@ -182,6 +194,7 @@ final class BridgeModel {
         let bundled: [ControllerProfile]
         do { bundled = try ControllerProfile.bundled() } catch {
             status.problem = "Couldn't load the controller profiles: \(error)"
+            status.stopReason = .profiles
             return
         }
         // A saved import (#24) applies at launch; one that no longer passes the check is set aside, and says why.
@@ -207,6 +220,7 @@ final class BridgeModel {
             }
         } catch {
             status.problem = "Couldn't start CoreMIDI: \(error)"
+            status.stopReason = .midi
             log.log(status.problem!)
             return
         }
@@ -214,6 +228,7 @@ final class BridgeModel {
         let osc: SwappableOSCSender
         do { osc = try SwappableOSCSender(host: settings.syndicateHost, port: settings.syndicatePort) } catch {
             status.problem = "Couldn't open the OSC sender: \(error)"
+            status.stopReason = .oscSender
             log.log(status.problem!)
             return
         }
