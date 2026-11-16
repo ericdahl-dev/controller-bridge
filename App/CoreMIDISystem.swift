@@ -1,0 +1,147 @@
+// The CoreMIDI adapter. Not unit-tested: the smoke script (scripts/smoke.sh) covers it.
+import CoreMIDI
+import ControllerBridgeCore
+import Synchronization
+
+enum CoreMIDIError: Error {
+    case status(String, OSStatus)
+    case endpointGone(MIDIEndpoint)
+}
+
+/// Lists, connects and sends through CoreMIDI. Incoming MIDI is parsed inside the realtime callback and goes into the
+/// EventPipe; nothing else happens on that thread.
+///
+/// Every CoreMIDI block is made in a `nonisolated static` function: a closure written in main-actor code would be
+/// main-actor isolated, and CoreMIDI blocks get no runtime isolation check, so it would race silently (#14 spike).
+final class CoreMIDISystem: MIDISystem {
+    private let client: MIDIClientRef
+    private let input: MIDIPortRef
+    private let output: MIDIPortRef
+    /// Connected sources by unique id, with their names.
+    private let connected = Mutex<[MIDIUniqueID: String]>([:])
+    private let relay: ChangeRelay
+    private let onChange: @Sendable ([String]) -> Void
+
+    /// Calls `onChange` with the names of the connected sources whenever that list may have changed.
+    /// Must run on the main thread: notifications arrive on the run loop of the thread that made the client.
+    @MainActor
+    init(producer: EventPipe.Producer, onChange: @escaping @Sendable ([String]) -> Void) throws {
+        let relay = ChangeRelay()
+        var client = MIDIClientRef()
+        try check("MIDIClientCreateWithBlock", MIDIClientCreateWithBlock("ControllerBridge" as CFString, &client, Self.notifyBlock(relay)))
+        var input = MIDIPortRef()
+        try check("MIDIInputPortCreateWithProtocol",
+                  MIDIInputPortCreateWithProtocol(client, "Controller in" as CFString, ._1_0, &input, Self.receiveBlock(producer)))
+        var output = MIDIPortRef()
+        try check("MIDIOutputPortCreate", MIDIOutputPortCreate(client, "LED out" as CFString, &output))
+        self.client = client
+        self.input = input
+        self.output = output
+        self.relay = relay
+        self.onChange = onChange
+        relay.set { [weak self] in self?.pruneRemovedSources() }
+    }
+
+    var sources: [MIDIEndpoint] { (0..<MIDIGetNumberOfSources()).map { Self.endpoint(MIDIGetSource($0)) } }
+    var destinations: [MIDIEndpoint] { (0..<MIDIGetNumberOfDestinations()).map { Self.endpoint(MIDIGetDestination($0)) } }
+
+    func connect(source: MIDIEndpoint) throws {
+        let ref = try Self.find(source)
+        // The unique id rides along as the connection refCon, so each event knows its source.
+        try check("MIDIPortConnectSource", MIDIPortConnectSource(input, ref, UnsafeMutableRawPointer(bitPattern: Int(source.id))))
+        let names = connected.withLock { $0[source.id] = source.name; return Array($0.values) }
+        onChange(names)
+    }
+
+    func disconnect(source: MIDIEndpoint) {
+        if let ref = try? Self.find(source) { MIDIPortDisconnectSource(input, ref) }
+        let names = connected.withLock { $0[source.id] = nil; return Array($0.values) }
+        onChange(names)
+    }
+
+    func openOutput(destination: MIDIEndpoint) throws -> any MIDIOutput {
+        CoreMIDIOutput(port: output, destination: try Self.find(destination))
+    }
+
+    private func pruneRemovedSources() {
+        let names = connected.withLock { sources in
+            sources = sources.filter { id, _ in (try? Self.find(MIDIEndpoint(id: id, name: ""))) != nil }
+            return Array(sources.values)
+        }
+        onChange(names)
+    }
+
+    // MARK: Blocks, made outside any actor
+
+    private nonisolated static func receiveBlock(_ producer: EventPipe.Producer) -> MIDIReceiveBlock {
+        { list, refCon in
+            let source = MIDIEndpoint.ID(truncatingIfNeeded: Int(bitPattern: refCon))
+            for packet in list.unsafeSequence() {
+                for event in MIDIParse.events(words: Array(packet.words())) { producer.midi(event, source: source) }
+            }
+        }
+    }
+
+    private nonisolated static func notifyBlock(_ relay: ChangeRelay) -> MIDINotifyBlock {
+        { notification in
+            switch notification.pointee.messageID {
+            case .msgObjectAdded, .msgObjectRemoved, .msgSetupChanged: relay.fire()
+            default: break
+            }
+        }
+    }
+
+    // MARK: Endpoints
+
+    private static func endpoint(_ ref: MIDIEndpointRef) -> MIDIEndpoint {
+        var id: MIDIUniqueID = 0
+        MIDIObjectGetIntegerProperty(ref, kMIDIPropertyUniqueID, &id)
+        var name: Unmanaged<CFString>?
+        MIDIObjectGetStringProperty(ref, kMIDIPropertyDisplayName, &name)
+        return MIDIEndpoint(id: id, name: (name?.takeRetainedValue() as String?) ?? "MIDI \(id)")
+    }
+
+    private static func find(_ endpoint: MIDIEndpoint) throws -> MIDIEndpointRef {
+        var object = MIDIObjectRef()
+        var type = MIDIObjectType.other
+        guard MIDIObjectFindByUniqueID(endpoint.id, &object, &type) == noErr, object != 0 else {
+            throw CoreMIDIError.endpointGone(endpoint)
+        }
+        return object
+    }
+}
+
+/// Sends to one destination. CoreMIDI sends are thread-safe.
+struct CoreMIDIOutput: MIDIOutput {
+    let port: MIDIPortRef
+    let destination: MIDIEndpointRef
+
+    func send(_ event: MIDIEvent) {
+        var word = Self.ump(event)
+        var list = MIDIEventList()
+        let packet = MIDIEventListInit(&list, ._1_0)
+        _ = MIDIEventListAdd(&list, MemoryLayout<MIDIEventList>.size, packet, 0, 1, &word)
+        MIDISendEventList(port, destination, &list)
+    }
+
+    /// One UMP type 2 word (MIDI 1.0 channel voice, group 0). The smoke script checks the Play LED word exactly.
+    static func ump(_ event: MIDIEvent) -> UInt32 {
+        let (status, channel, data1, data2): (UInt32, UInt8, UInt8, UInt8) = switch event {
+        case .noteOff(let c, let n, let v): (0x8, c, n, v)
+        case .noteOn(let c, let n, let v): (0x9, c, n, v)
+        case .controlChange(let c, let n, let v): (0xB, c, n, v)
+        }
+        return 0x2000_0000 | status << 20 | UInt32(channel & 0x0F) << 16 | UInt32(data1 & 0x7F) << 8 | UInt32(data2 & 0x7F)
+    }
+}
+
+/// Lets the notify block, made before `self` exists, reach the system once it does.
+final class ChangeRelay: Sendable {
+    private let action = Mutex<(@Sendable () -> Void)?>(nil)
+    func set(_ action: @escaping @Sendable () -> Void) { self.action.withLock { $0 = action } }
+    func fire() { action.withLock { $0 }?() }
+}
+
+private func check(_ call: String, _ status: OSStatus) throws {
+    guard status == noErr else { throw CoreMIDIError.status(call, status) }
+}
