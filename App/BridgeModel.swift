@@ -27,6 +27,8 @@ final class BridgeStatus {
     var lastDropoutTime: String?
     /// The Syndicate OSC port in use, from settings (#66), for the panel's ports line.
     var oscPort = 9090
+    /// Why the last deck change was refused, if it was (#90).
+    var deckProblem: String?
     /// An LED sweep is running (#26).
     var sweeping = false
     /// The built-in demo controller is running (#64). Off at launch and never saved.
@@ -92,7 +94,13 @@ final class BridgeModel {
     func setDeck(_ deck: Int, controller index: Int) {
         guard var new = settings, new.controllers.indices.contains(index), new.controllers[index].deck != deck else { return }
         new.controllers[index].deck = deck
-        try? apply(new)
+        // A refused change says why, under the picker, instead of doing nothing (#90).
+        do {
+            try apply(new)
+            status.deckProblem = nil
+        } catch {
+            if case .invalid(let list) = error { status.deckProblem = list.joined(separator: " ") }
+        }
     }
 
     func quit(_ done: @escaping @MainActor () -> Void) {
