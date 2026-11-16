@@ -118,7 +118,9 @@ struct StatusLightView: View {
             Text(light.label.uppercased()).font(Theme.captionFont).foregroundStyle(Theme.caption)
             HStack(spacing: 5) {
                 Circle().fill(Color(light.tone.color)).frame(width: 7, height: 7)
+                // A word never breaks mid-word; the panel lays lights out in a grid instead.
                 Text(light.word).font(Theme.ui(12, .bold)).foregroundStyle(Color(light.tone.color))
+                    .lineLimit(1).fixedSize()
             }
         }
         .accessibilityElement(children: .combine)
@@ -135,8 +137,10 @@ struct StatusLineView: View {
         styledLine
             .font(Theme.ui(10, .semibold))
             .foregroundStyle(Theme.caption)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+            // Wraps to a second line rather than cutting off DECK or MASTER when the labels are long (a long profile
+            // name, DEMO, BRIDGE STOPPED). Never truncated.
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -144,18 +148,23 @@ struct StatusLineView: View {
     }
 
     private var styledLine: Text {
+        // Non-breaking spaces inside each segment, so a long line wraps only between segments, never mid-label.
+        let nbsp = "\u{00A0}"
         let separator = Text(" · ").foregroundStyle(Theme.caption)
         var line = Text("")
         for light in presentation.lights {
-            line = line + Text("\(light.label.uppercased()) ").foregroundStyle(Theme.caption)
-                + Text("● \(light.word)").foregroundStyle(Color(light.tone.color)) + separator
+            let label = light.label.uppercased().replacingOccurrences(of: " ", with: nbsp)
+            let word = light.word.replacingOccurrences(of: " ", with: nbsp)
+            line = line + Text(label + nbsp).foregroundStyle(Theme.caption)
+                + Text("●" + nbsp + word).foregroundStyle(Color(light.tone.color)) + separator
         }
-        line = line + Text("DECK [\(deck)]").foregroundStyle(Theme.caption)
+        line = line + Text("DECK" + nbsp + "[\(deck)]").foregroundStyle(Theme.caption)
         if let master = presentation.master {
             line = line + separator + Text(master.word).foregroundStyle(Color(master.tone.color))
         }
         return line
     }
+
 }
 
 /// Syndicate's flat button: a slightly lighter gray, a hairline edge and a small radius.
