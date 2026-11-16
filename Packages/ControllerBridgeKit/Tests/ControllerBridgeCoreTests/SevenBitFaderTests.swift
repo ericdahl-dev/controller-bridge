@@ -21,3 +21,21 @@ struct SevenBitFaderMappingTests {
         #expect([pitch.bits, pitch.msbCC, pitch.lsbCC] == [14, 8, 40])
     }
 }
+
+/// The 7-bit tempo mapping (#195): 64 is the exact center, so a centered fader reads 0. Below it each step is 1/64,
+/// above it 1/63, so 0 and 127 reach -1 and +1.
+@Suite("7-bit tempo")
+struct SevenBitTempoTests {
+    @Test("0, 32, 64, 96, 127 read -1, -0.5, 0, 0.507937, +1")
+    func table() {
+        let values = [0, 32, 64, 96, 127].map { tempoSlider(from7Bit: UInt8($0), invert: false, deadZone: 0) }
+        #expect(values.map { ($0 * 1_000_000).rounded() / 1_000_000 } == [-1, -0.5, 0, 0.507937, 1])
+    }
+
+    @Test("invert flips it; within the dead zone it snaps to 0")
+    func invertAndDeadZone() {
+        #expect(tempoSlider(from7Bit: 0, invert: true, deadZone: 0) == 1)
+        #expect(tempoSlider(from7Bit: 65, invert: false, deadZone: 0.02) == 0)   // 1/63 = 0.0159, inside 0.02
+        #expect(tempoSlider(from7Bit: 66, invert: false, deadZone: 0.02) == 2.0 / 63)
+    }
+}
