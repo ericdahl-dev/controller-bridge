@@ -94,4 +94,17 @@ struct ProfileImportTests {
         #expect(ControllerProfile.importNote(file: "mine.json", settingsOwned: ["mapping.midi.channel"]) ==
             "Imported mine.json. Deck, Channel and the OSC addresses come from Settings, so the file's midi.channel wasn't applied.")
     }
+
+    @Test("An import is checked against the profile it names: a key that profile doesn't have is unknown (#94)")
+    func schemaPerProfile() throws {
+        var mapping = try Mapping.bundledDefault()
+        mapping.notes.buttons["vinyl"] = nil
+        let pad = ControllerProfile(id: "no-vinyl", name: "No Vinyl", deviceHints: ["NV"], mapping: mapping)
+        let bundled = try ControllerProfile.bundled() + [pad]
+        let file = Data(#"{"mapping": {"notes": {"vinyl": 120}}}"#.utf8)
+        #expect(throws: MappingError.invalid(["mapping.notes.vinyl: unknown key"])) {
+            try ControllerProfile.importing(file, bundled: bundled, active: "no-vinyl")
+        }
+        #expect(try ControllerProfile.importing(file, bundled: bundled, active: "denon-lc6000-prime").mapping.notes.buttons["vinyl"] == 120)
+    }
 }

@@ -15,6 +15,10 @@ extension ControllerProfile {
         if let problem = Mapping.kindProblem(document, expected: headerSchema) { throw MappingError.invalid(["file: \(problem)"]) }
         guard case .object(let fields) = document else { throw MappingError.invalid(["file: expected an object"]) }
 
+        // The profile the file changes, so it's checked against that profile's own keys (#94).
+        let target = if case .string(let id)? = document["id"] { id } else { active }
+        let schema = try bundled.first { $0.id == target }.map { try OrderedJSON(parsing: JSONEncoder().encode($0.mapping)) }
+
         var problems: [String] = []
         for (key, value) in fields {
             guard let expected = headerSchema[key] else { problems.append("\(key): unknown key"); continue }
@@ -33,7 +37,7 @@ extension ControllerProfile {
                     }
                 }
             case ("mapping", _):
-                problems += Mapping.problems(in: value).map { "mapping.\($0)" }
+                problems += Mapping.problems(in: value, schema: schema).map { "mapping.\($0)" }
             default:
                 break
             }
@@ -49,8 +53,8 @@ extension ControllerProfile {
             profile.deviceHints = hints.compactMap { if case .string(let hint) = $0 { hint } else { nil } }
         }
         if let mapping = document["mapping"] {
-            let base = try OrderedJSON(parsing: mappingJSON(of: bundledFile(id)))
-            profile.mapping = try Mapping.checked(Mapping.merge(base, mapping.removing(settingsOwned)).data())
+            let base = try OrderedJSON(parsing: JSONEncoder().encode(profile.mapping))
+            profile.mapping = try Mapping.checked(Mapping.merge(base, mapping.removing(settingsOwned)).data(), schema: base)
         }
         return profile
     }
