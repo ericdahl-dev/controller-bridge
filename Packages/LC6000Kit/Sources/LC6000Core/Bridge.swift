@@ -19,6 +19,11 @@ final class Bridge {
             "shift": { $0.shiftButton },
             "key_lock": { $0.keyLock },
             "slip": { $0.slip },
+            // Pad modes (Bridge+Pads.swift).
+            "mode_hotcue": { $0.padModeButton(.hotCue) },
+            "mode_roll": { $0.padModeButton(.roll) },
+            "mode_loop": { $0.padModeButton(.loop) },
+            "mode_slicer": { $0.padModeButton(.slicer) },
             // Browse, loops and jumps (Bridge+Browse.swift).
             "track_prev": { $0.trackPrevious },
             "track_next": { $0.trackNext },
@@ -57,6 +62,7 @@ final class Bridge {
 
     // Controller state.
     var shift = false
+    var padMode = PadMode.hotCue
     var held = HeldControls()
     var keyLockOn = false
     var slipOn = false

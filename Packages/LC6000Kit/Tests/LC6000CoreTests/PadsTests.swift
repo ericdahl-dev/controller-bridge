@@ -45,4 +45,44 @@ struct PadsTests {
             OSCMessage("/Syndicate/Deck/1/HotCue", [.int(8), .int(0)]),
         ])
     }
+
+    @Test("In Roll mode a pad holds a slip roll: pad 1 is ThirtySecond, pad 8 is Four")
+    func rollPads() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, Self.modeRoll)
+        Self.press(rig, 32)
+        Self.press(rig, 39)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(0)]),
+            OSCMessage("/Syndicate/Deck/1/SlipLoop/Four", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/SlipLoop/Four", [.int(0)]),
+        ])
+    }
+
+    @Test("Roll sizes run ThirtySecond, Sixteenth, Eighth, Quarter, Half, One, Two, Four across the pads")
+    func rollSizes() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, Self.modeRoll)
+        for pad in UInt8(32)...39 { Self.down(rig, pad) }
+        #expect(rig.osc.sent.map(\.address) == [
+            "ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four",
+        ].map { "/Syndicate/Deck/1/SlipLoop/" + $0 })
+    }
+
+    @Test("In Loop mode a pad sets a cue loop on press, and its release sends nothing")
+    func loopPads() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, Self.modeLoop)
+        Self.press(rig, 34)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/SetCueLoop", [.int(3)])])
+    }
+
+    @Test("In Slicer mode the pads send nothing (Syndicate has no slicer routes)")
+    func slicerPads() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, Self.modeSlicer)
+        Self.press(rig, 32)
+        #expect(rig.osc.sent == [])
+    }
 }
