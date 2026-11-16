@@ -615,7 +615,7 @@ public final class Coordinator {
         controllers[index].bridge = bridge
         guard controllers[index].source != nil else { return false }
         status.controllers[index].profile = updated.name
-        bridge.start()
+        bridge.start(stale: old.feedbackStale)
         return true
     }
 
