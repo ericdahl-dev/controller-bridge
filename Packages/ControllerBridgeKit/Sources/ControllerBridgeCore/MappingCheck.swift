@@ -91,7 +91,7 @@ extension Mapping {
     private static func duplicates(in merged: OrderedJSON, written: Set<String>) -> [String] {
         let (notes, ccs) = uses(merged)
         var out: [String] = []
-        for (kind, list) in [("note", notes), ("CC", ccs)] {
+        for (kind, list) in [("note", notes), ("CC", ccs), ("channel", layerChannels(merged))] {
             var firstUse: [Double: String] = [:]
             var reported: [Double: [String]] = [:]
             for (path, n) in list {
@@ -105,6 +105,15 @@ extension Mapping {
             }
         }
         return out
+    }
+
+    /// Each layer's channel: two layers can't share one (#79).
+    private static func layerChannels(_ merged: OrderedJSON) -> [(String, Double)] {
+        guard case .array(let layers)? = merged["midi"]?["layers"] else { return [] }
+        return layers.indices.compactMap { index in
+            guard case .number(let channel, _)? = layers[index]["channel"] else { return nil }
+            return ("midi.layers[\(index)].channel", channel)
+        }
     }
 
     private static func value(at path: String, in document: OrderedJSON) -> OrderedJSON? {
@@ -182,6 +191,9 @@ extension Mapping {
         var table: [String: ClosedRange<Double>] = [
             "midi.channel": 1...16,
             "deck.number": 1...4,
+            "midi.layers[].channel": 1...16,
+            "midi.layers[].deck": 1...4,
+            "midi.layer_note": 0...127,
             "notes.pads[]": 0...127,
             "jog.ccs[]": 0...127,
             "pitch.msb_cc": 0...127, "pitch.lsb_cc": 0...127,

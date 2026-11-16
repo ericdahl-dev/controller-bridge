@@ -11,7 +11,14 @@
     "midi": {
       "input": "LC6000",
       "output": "LC6000",
-      "channel": 1
+      "channel": 1,
+      "layers": [
+        { "channel": 1, "deck": 1 },
+        { "channel": 2, "deck": 2 },
+        { "channel": 3, "deck": 3 },
+        { "channel": 4, "deck": 4 }
+      ],
+      "layer_note": 51
     },
     "osc": {
       "host": "127.0.0.1",

@@ -12,7 +12,12 @@ struct MappingTests {
     func defaultMapping() throws {
         let mapping = try Mapping.bundledDefault()
 
-        #expect(mapping.midi == .init(input: "LC6000", output: "LC6000", channel: 1))
+        #expect(mapping.midi == .init(
+            input: "LC6000", output: "LC6000", channel: 1,
+            // Added for #79, beyond the Python defaults: the LC6000's four deck layers.
+            layers: [.init(channel: 1, deck: 1), .init(channel: 2, deck: 2), .init(channel: 3, deck: 3), .init(channel: 4, deck: 4)],
+            layerNote: 51
+        ))
         #expect(mapping.osc == .init(host: "127.0.0.1", port: 9090, root: "/Syndicate/", feedbackHost: "127.0.0.1", feedbackPort: 9096,
             feedbackQuietMs: 10000, feedbackAnswerMs: 2000
         ))

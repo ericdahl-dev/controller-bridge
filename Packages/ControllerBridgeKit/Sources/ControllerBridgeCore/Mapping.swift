@@ -22,11 +22,44 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var output: String
         /// 1-16.
         public var channel: Int
+        /// The controller's own deck layers (#79): each MIDI channel drives a Syndicate deck. Empty for a controller
+        /// without layers.
+        public var layers: [Layer]
+        /// The note the controller sends on a layer's channel as it becomes active (127) or inactive (0).
+        public var layerNote: Int?
 
-        public init(input: String, output: String, channel: Int) {
+        enum CodingKeys: String, CodingKey {
+            case input, output, channel, layers
+            case layerNote = "layer_note"
+        }
+
+        public init(input: String, output: String, channel: Int, layers: [Layer] = [], layerNote: Int? = nil) {
             self.input = input
             self.output = output
             self.channel = channel
+            self.layers = layers
+            self.layerNote = layerNote
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            input = try c.decode(String.self, forKey: .input)
+            output = try c.decode(String.self, forKey: .output)
+            channel = try c.decode(Int.self, forKey: .channel)
+            // Optional, so a profile or import without layers still reads.
+            layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
+            layerNote = try c.decodeIfPresent(Int.self, forKey: .layerNote)
+        }
+    }
+
+    /// One of a controller's deck layers: its MIDI channel, 1-16, and the Syndicate deck it drives, 1-4.
+    public struct Layer: Equatable, Sendable, Codable {
+        public var channel: Int
+        public var deck: Int
+
+        public init(channel: Int, deck: Int) {
+            self.channel = channel
+            self.deck = deck
         }
     }
 
