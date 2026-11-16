@@ -32,6 +32,7 @@ jobs:
         run: |
           scripts/test-preflight.sh
           python3 -I scripts/test_ci_profile.py
+          python3 -I scripts/test_testflight_distribute.py
 
   app:
     name: App build (Release, ad-hoc)
