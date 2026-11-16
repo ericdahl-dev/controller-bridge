@@ -55,7 +55,7 @@ public struct CaptureSession: Sendable {
         guard let prompt = current else { return }
         steps.append(CaptureStep(
             prompt: prompt.id, status: status, messages: messages,
-            controls: Inference.controls(in: take.map(\.bytes))
+            controls: Inference.controls(in: take.map(\.bytes), gesture: prompt.gesture)
         ))
         take = []
         index += 1

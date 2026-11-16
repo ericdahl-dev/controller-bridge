@@ -52,4 +52,27 @@ struct InferenceTests {
             ControlFacts(kind: .cc, channel: 1, number: 64, lsb: 65, encoding: .absolute, first: 0, last: 16383, min: 0, max: 16383),
         ])
     }
+
+    @Test("An encoder turned right then left is relative: LC6000 browse is CC 6, two's complement")
+    func twosComplement() {
+        #expect(Self.controls(LC6000Traffic.browseTurn, gesture: .turn) == [
+            ControlFacts(kind: .cc, channel: 1, number: 6, encoding: .twosComplement, first: 1, last: 127, min: 1, max: 127),
+        ])
+    }
+
+    @Test("Offset-64 and sign-magnitude encoders are told apart by which values mean back")
+    func otherRelativeFormats() {
+        #expect(Self.controls(OtherTraffic.offset64Turn, gesture: .turn).map(\.encoding) == [.offset64])
+        #expect(Self.controls(OtherTraffic.signMagnitudeTurn, gesture: .turn).map(\.encoding) == [.signMagnitude])
+    }
+
+    @Test("A turn one way only in an ambiguous band leaves the encoding unknown rather than guessing")
+    func ambiguousTurn() {
+        #expect(Self.controls(OtherTraffic.oneWayTurn, gesture: .turn).map(\.encoding) == [nil])
+    }
+
+    @Test("A knob turned slowly near the bottom stays absolute: its values walk, they don't repeat")
+    func slowAbsoluteKnob() {
+        #expect(Self.controls(OtherTraffic.knob, gesture: .turn).map(\.encoding) == [.absolute])
+    }
 }

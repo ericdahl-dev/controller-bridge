@@ -18,6 +18,14 @@ enum LC6000Traffic {
     /// Needle Drop slid left to right: a 14-bit position on CC 64 (MSB) and CC 65 (LSB). Not an n / n+32 pair.
     static let needleSlide: Take = pairs(msb: 64, lsb: 65, values: [0, 4096, 8192, 12288, 16383])
 
+    /// The browse knob turned right three clicks, then left two: CC 6, two's complement (0x01 forward, 0x7F back).
+    static let browseTurn: Take = cc(6, [0x01, 0x01, 0x01, 0x7F, 0x7F])
+
+    /// One CC on channel 1, 50 ms apart.
+    static func cc(_ number: UInt8, _ values: [UInt8], channel: UInt8 = 0) -> Take {
+        values.enumerated().map { (Double($0) * 0.05, [0xB0 | channel, number, $1]) }
+    }
+
     /// A 14-bit value as MSB then LSB on channel 1, 10 ms apart.
     static func pairs(msb: UInt8, lsb: UInt8, values: [Int], channel: UInt8 = 0) -> Take {
         values.enumerated().flatMap { index, value -> Take in
@@ -32,6 +40,13 @@ enum OtherTraffic {
     /// A button released with a note-on at velocity 0, as many controllers do.
     /// A 7-bit knob turned from 10 to 20 on CC 22, channel 2.
     static let knob: [(time: Double, bytes: [UInt8])] = (10...20).map { (Double($0) * 0.01, [0xB1, 22, UInt8($0)]) }
+
+    /// Encoders turned right twice, then left twice, in the other relative formats.
+    static let offset64Turn = LC6000Traffic.cc(30, [0x41, 0x41, 0x3F, 0x3F])
+    static let signMagnitudeTurn = LC6000Traffic.cc(30, [0x01, 0x02, 0x41, 0x41])
+
+    /// An encoder turned one way only, 0x41 each click: offset-64 forward or sign-magnitude back, so it can't be told.
+    static let oneWayTurn = LC6000Traffic.cc(30, [0x41, 0x41, 0x41])
 
     static let noteOnZeroRelease: [(time: Double, bytes: [UInt8])] = [(0.00, [0x92, 0x0B, 0x7F]), (0.10, [0x92, 0x0B, 0x00])]
 }

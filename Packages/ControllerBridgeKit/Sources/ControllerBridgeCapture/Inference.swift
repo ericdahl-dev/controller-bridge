@@ -33,7 +33,7 @@ struct ControlKey: Hashable {
 
 enum Inference {
     /// The controls in one step, in the order they first appear.
-    static func controls(in messages: [[UInt8]]) -> [ControlFacts] {
+    static func controls(in messages: [[UInt8]], gesture: CaptureGesture) -> [ControlFacts] {
         let voices = messages.compactMap(Voice.init)
         let lsbOf = pairs(voices)
         let msbOf = Dictionary(uniqueKeysWithValues: lsbOf.map { ($1, $0) })
@@ -44,13 +44,13 @@ enum Inference {
             if byControl[key] == nil { order.append(key) }
             byControl[key, default: []].append(voice)
         }
-        return order.compactMap { key in byControl[key].flatMap { facts(key, lsb: lsbOf[key], $0) } }
+        return order.compactMap { key in byControl[key].flatMap { facts(key, lsb: lsbOf[key], gesture: gesture, $0) } }
     }
 
-    private static func facts(_ key: ControlKey, lsb: ControlKey?, _ voices: [Voice]) -> ControlFacts? {
+    private static func facts(_ key: ControlKey, lsb: ControlKey?, gesture: CaptureGesture, _ voices: [Voice]) -> ControlFacts? {
         switch key.kind {
         case .note: noteFacts(key, voices)
-        case .cc: ccFacts(key, lsb: lsb, voices)
+        case .cc: ccFacts(key, lsb: lsb, gesture: gesture, voices)
         case .pitchBend: nil
         }
     }
@@ -86,7 +86,7 @@ enum Inference {
         return lsbOf
     }
 
-    private static func ccFacts(_ key: ControlKey, lsb: ControlKey?, _ voices: [Voice]) -> ControlFacts? {
+    private static func ccFacts(_ key: ControlKey, lsb: ControlKey?, gesture: CaptureGesture, _ voices: [Voice]) -> ControlFacts? {
         var values: [Int] = []
         if let lsb {
             var msbValue: Int?
@@ -102,7 +102,8 @@ enum Inference {
         }
         guard let first = values.first, let last = values.last else { return nil }
         return ControlFacts(
-            kind: .cc, channel: key.channel + 1, number: key.number, lsb: lsb?.number, encoding: .absolute,
+            kind: .cc, channel: key.channel + 1, number: key.number, lsb: lsb?.number,
+            encoding: lsb == nil && gesture == .turn ? encoding(values) : .absolute,
             first: first, last: last, min: values.min() ?? first, max: values.max() ?? first
         )
     }
@@ -117,5 +118,22 @@ enum Inference {
             kind: .note, channel: key.channel + 1, number: key.number, release: release,
             first: first, last: last, min: presses.min() ?? first, max: presses.max() ?? first
         )
+    }
+
+    /// How a turned 7-bit CC encodes its value. The prompt asks for a turn right, then left, so a relative encoder
+    /// sends small steps both ways, often repeated. An absolute knob walks through its values without repeating.
+    /// A relative-looking turn one way only can't be told apart (0x41 is offset-64 forward and sign-magnitude back),
+    /// so its encoding is unknown (nil) rather than guessed.
+    private static func encoding(_ values: [Int]) -> Encoding? {
+        let small = 1...0x1F, nearMiddleBack = 0x30...0x3F, nearMiddleForward = 0x41...0x50
+        let twosBack = 0x61...0x7F, signBack = 0x41...0x5F
+        func all(_ ranges: ClosedRange<Int>...) -> Bool { values.allSatisfy { v in ranges.contains { $0.contains(v) } } }
+        func any(_ range: ClosedRange<Int>) -> Bool { values.contains { range.contains($0) } }
+        if all(small, twosBack), any(small), any(twosBack) { return .twosComplement }
+        if all(small, signBack), any(small), any(signBack) { return .signMagnitude }
+        if all(nearMiddleBack, nearMiddleForward), any(nearMiddleBack), any(nearMiddleForward) { return .offset64 }
+        let repeats = zip(values, values.dropFirst()).contains { $0 == $1 }
+        let oneWay = all(small) || all(twosBack) || all(signBack) || all(nearMiddleBack) || all(nearMiddleForward)
+        return repeats && oneWay ? nil : .absolute
     }
 }
