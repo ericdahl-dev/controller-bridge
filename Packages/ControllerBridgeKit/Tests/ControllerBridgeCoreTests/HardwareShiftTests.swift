@@ -89,3 +89,19 @@ struct HardwareShiftCoordinatorTests {
         #expect(rig.leds[Self.shiftNote] == 1)
     }
 }
+
+/// The LC6000 is unchanged by #226: no shifted notes, so the app's own Shift does it all.
+@Suite("Hardware Shift: the LC6000 unchanged")
+struct HardwareShiftLC6000Tests {
+    @Test("Beat Jump Back jumps a beat, Shift + it a bar, and notes 60 and 110 do nothing")
+    func lc6000() throws {
+        let rig = try HardwareShiftCoordinatorTests.started(nil)
+        let back = HardwareShiftCoordinatorTests.beatJumpBack
+        #expect(HardwareShiftCoordinatorTests.press(rig, back) == [OSCMessage("/Syndicate/Deck/1/SkipBeatBack", [.int(1)])])
+        PadsTests.down(rig, HardwareShiftCoordinatorTests.shiftNote)
+        #expect(HardwareShiftCoordinatorTests.press(rig, back) == [OSCMessage("/Syndicate/Deck/1/SkipBarBack", [.int(1)])])
+        PadsTests.up(rig, HardwareShiftCoordinatorTests.shiftNote)
+        #expect(HardwareShiftCoordinatorTests.press(rig, 60) == [])
+        #expect(HardwareShiftCoordinatorTests.press(rig, 110) == [])
+    }
+}
