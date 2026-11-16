@@ -110,6 +110,40 @@ struct TransportTests {
         #expect(rig.log.lines.filter { $0.contains("Pitch range") } == ["Pitch range (Shift + Pitch Bend) isn't available in Syndicate"])
     }
 
+    @Test("Shift + Key Lock resets the tempo: one TempoSlider 0.0, Key Lock untouched, and the fader waits to meet 0.0")
+    func shiftKeyLockResetsTempo() throws {
+        let rig = try Self.started()
+        PickupTests.report(rig, "TempoSliderEnabled", .int(1))
+        PickupTests.fader(rig, 0x60)   // the fader drives the tempo at 0.50009
+        let keyLockLED = rig.leds[22]
+        rig.osc.sent.removeAll()
+
+        Self.press(rig, 26)
+        Self.press(rig, 22)
+        Self.release(rig, 22)
+        Self.release(rig, 26)
+        #expect(rig.osc.sent == [PickupTests.tempo(0.0)])
+        #expect(rig.leds[22] == keyLockLED)
+
+        // The fader is still up at 0.5: it waits until it comes back to 0.0, then drives again.
+        PickupTests.fader(rig, 0x70)
+        PickupTests.fader(rig, 0x50)
+        #expect(rig.osc.sent == [PickupTests.tempo(0.0)])
+        PickupTests.fader(rig, 0x40)
+        PickupTests.fader(rig, 0x50)
+        #expect(rig.osc.sent == [PickupTests.tempo(0.0), PickupTests.tempo(0.0), PickupTests.tempo(0.25008)])
+    }
+
+    @Test("Shift + Key Lock on a synced follower (tempo slider disabled) sends nothing: Syndicate ignores TempoSlider then")
+    func shiftKeyLockWithSliderDisabled() throws {
+        let rig = try Self.started()
+        PickupTests.report(rig, "TempoSliderEnabled", .int(0))
+        rig.osc.sent.removeAll()
+        Self.press(rig, 26)
+        Self.press(rig, 22)
+        #expect(rig.osc.sent == [])
+    }
+
     @Test("Key Lock toggles on each press: PitchPreserve 1, then 0, and its LED follows")
     func keyLockToggles() throws {
         let rig = try Self.started()

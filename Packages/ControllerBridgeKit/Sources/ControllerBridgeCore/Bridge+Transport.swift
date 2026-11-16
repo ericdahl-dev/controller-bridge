@@ -37,8 +37,10 @@ extension Bridge {
         refreshLEDs()
     }
 
+    /// Key Lock toggles key lock; Shift + Key Lock is the LC6000's pitch reset, sent as a tempo reset (#114).
     func keyLock(_ pressed: Bool) {
         guard pressed else { return }
+        if shift { return resetTempo() }
         keyLockOn.toggle()
         sendDeck("PitchPreserve", .int(keyLockOn ? 1 : 0))
         refreshLEDs()
