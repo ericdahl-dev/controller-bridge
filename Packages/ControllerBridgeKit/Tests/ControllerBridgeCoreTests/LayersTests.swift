@@ -28,4 +28,37 @@ struct LayersTests {
             "midi.layers[1].channel: channel 1 is also midi.layers[0].channel",
         ])
     }
+
+    static let lc6000Layers = [
+        Mapping.Layer(channel: 1, deck: 1), Mapping.Layer(channel: 2, deck: 2),
+        Mapping.Layer(channel: 3, deck: 3), Mapping.Layer(channel: 4, deck: 4),
+    ]
+    static let unit = MIDIEndpoint(id: 1001, name: "Denon DJ LC6000 PRIME LC6000 PRIME Controller")
+
+    @Test("A controller entry that follows layers (the default when the profile has them) runs as one entry per layer")
+    func followingEntryExpands() {
+        let entry = ControllerSettings(deck: 1, input: Self.unit, output: nil)
+        #expect(ControllerSettings.expanded([entry], layers: Self.lc6000Layers) == [
+            ControllerSettings(deck: 1, input: Self.unit, output: nil, channel: 1, followLayers: true),
+            ControllerSettings(deck: 2, input: Self.unit, output: nil, channel: 2, followLayers: true),
+            ControllerSettings(deck: 3, input: Self.unit, output: nil, channel: 3, followLayers: true),
+            ControllerSettings(deck: 4, input: Self.unit, output: nil, channel: 4, followLayers: true),
+        ])
+    }
+
+    @Test("Following turned off, or a profile with no layers: the entry runs as it is")
+    func notFollowing() {
+        let off = ControllerSettings(deck: 2, input: Self.unit, output: nil, followLayers: false)
+        #expect(ControllerSettings.expanded([off], layers: Self.lc6000Layers) == [off])
+        let plain = ControllerSettings(deck: 2, input: nil, output: nil)
+        #expect(ControllerSettings.expanded([plain], layers: []) == [plain])
+    }
+
+    @Test("Settings saved before #79 still read, with following left to the default")
+    func oldSettingsDecode() throws {
+        let json = #"{"deck": 3, "input": null, "output": null}"#
+        let entry = try JSONDecoder().decode(ControllerSettings.self, from: Data(json.utf8))
+        #expect(entry == ControllerSettings(deck: 3, input: nil, output: nil))
+        #expect(entry.followLayers == nil)
+    }
 }

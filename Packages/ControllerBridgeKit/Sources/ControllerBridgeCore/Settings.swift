@@ -152,12 +152,26 @@ public struct ControllerSettings: Codable, Equatable, Sendable {
     public var output: MIDIEndpoint?
     /// The MIDI channel, 1-16, to tell two controllers on one device apart (#25). Nil is the profile's channel.
     public var channel: Int?
+    /// Follow the controller's own deck layers (#79): one entry per layer, channel N driving its deck. Nil is the
+    /// default: follow when the profile has layers.
+    public var followLayers: Bool?
 
-    public init(deck: Int, input: MIDIEndpoint?, output: MIDIEndpoint?, channel: Int? = nil) {
+    public init(deck: Int, input: MIDIEndpoint?, output: MIDIEndpoint?, channel: Int? = nil, followLayers: Bool? = nil) {
         self.deck = deck
         self.input = input
         self.output = output
         self.channel = channel
+        self.followLayers = followLayers
+    }
+
+    /// The entries the Coordinator runs: a following entry becomes one per layer, on the same devices (#79).
+    public static func expanded(_ entries: [ControllerSettings], layers: [Mapping.Layer]) -> [ControllerSettings] {
+        entries.flatMap { entry -> [ControllerSettings] in
+            guard entry.followLayers ?? true, !layers.isEmpty else { return [entry] }
+            return layers.map {
+                ControllerSettings(deck: $0.deck, input: entry.input, output: entry.output, channel: $0.channel, followLayers: true)
+            }
+        }
     }
 }
 
