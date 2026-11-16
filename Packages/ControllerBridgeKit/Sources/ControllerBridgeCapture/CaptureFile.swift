@@ -160,7 +160,7 @@ public struct CaptureStep: Codable, Equatable, Sendable {
     }
 }
 
-/// One raw MIDI message, `t` milliseconds after its step started. No wall-clock time is kept.
+/// One raw MIDI message, `t` milliseconds after its step's first message. No clock time is kept.
 public struct CaptureMessage: Codable, Equatable, Sendable {
     public var t: Int
     public var bytes: [UInt8]
