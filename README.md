@@ -75,9 +75,9 @@ The LC6000 has four deck layers: **Shift + deck select** steps through them, and
 
 Click the menu-bar icon (a jog wheel) to open the panel:
 - **Header:** the controller's name and what last happened to it, such as an unplug.
-- **Deck picker:** four badges, 1–4. A click switches the deck at once.
+- **Deck picker:** four badges, 1–4. A click switches the deck at once. A controller following its own layers (the LC6000's default) shows the active layer's deck with "Following controller layers" instead: the controller picks the deck.
 - **Status lights:**
-  - **CONTROLLER:** CONNECTED, UNPLUGGED, MIDI ERROR or WAITING.
+  - **CONTROLLER:** NOT CONNECTED (none yet since launch), CONNECTED, UNPLUGGED, MIDI ERROR or WAITING.
   - **FEEDBACK:** LIVE once Syndicate answers.
   - **TEMPO:** MASTER when this deck leads the tempo.
 - **Why no LEDs?:** says in plain words what to fix when something is wrong, with a **Copy details** button for the raw error.
