@@ -227,7 +227,9 @@ public final class Coordinator {
         status.controllers[index].lastProfile = profile.name
         let destinations = midiSystem.destinations
         let chosenOutput = controllers[index].chosenOutput.flatMap { id in destinations.first { $0.id == id } }
-        let taken = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].destination?.id })
+        // Layers of one unit share its port both ways (#79): a destination another layer has isn't taken from this one.
+        let taken = Set(controllers.indices.filter { $0 != index && !sharesLayers(index, with: $0) }
+            .compactMap { controllers[$0].destination?.id })
         let freeDestinations = controllers[index].chosenInput == nil ? destinations.filter { !taken.contains($0.id) } : destinations
         // The LEDs go back to the port the controls came from: same name first, then the name hint (#99).
         let sameName = freeDestinations.first { $0.name == source.name }
