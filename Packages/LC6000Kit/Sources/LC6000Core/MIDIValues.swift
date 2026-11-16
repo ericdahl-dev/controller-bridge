@@ -6,3 +6,16 @@ func relativeTicks(_ value: UInt8) -> Int {
     let value = Int(value & 0x7F)
     return value < 0x40 ? value : value - 0x80
 }
+
+/// A double-precision CC pair as 0...16383.
+func join14Bit(msb: UInt8, lsb: UInt8) -> Int {
+    Int(msb & 0x7F) << 7 | Int(lsb & 0x7F)
+}
+
+/// A 14-bit pitch fader position as Syndicate's TempoSlider, -1...+1. Within `deadZone` of the center it snaps to 0.
+func tempoSlider(from value14: Int, invert: Bool, deadZone: Double) -> Double {
+    var t = Double(value14) / 16383 * 2 - 1
+    if invert { t = -t }
+    if abs(t) < deadZone { t = 0 }
+    return min(1, max(-1, t))
+}
