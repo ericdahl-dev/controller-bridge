@@ -116,13 +116,18 @@ struct CoreMIDIOutput: MIDIOutput {
     let port: MIDIPortRef
     let destination: MIDIEndpointRef
 
-    func send(_ event: MIDIEvent) {
+    /// Throws when CoreMIDI refuses the send, which the Coordinator treats as an unplug.
+    func send(_ event: MIDIEvent) throws {
         var word = Self.ump(event)
         var list = MIDIEventList()
         let packet = MIDIEventListInit(&list, ._1_0)
         _ = MIDIEventListAdd(&list, MemoryLayout<MIDIEventList>.size, packet, 0, 1, &word)
-        MIDISendEventList(port, destination, &list)
+        try check("MIDISendEventList", MIDISendEventList(port, destination, &list))
     }
+
+    /// The output port is shared by every destination and lives as long as the MIDI client, so there is nothing to
+    /// close per destination.
+    func close() {}
 
     /// One UMP type 2 word (MIDI 1.0 channel voice, group 0). The smoke script checks the Play LED word exactly.
     static func ump(_ event: MIDIEvent) -> UInt32 {
