@@ -66,7 +66,7 @@ private struct CapturePortsPage: View {
 
     var body: some View {
         CaptureHeading(eyebrow: "Help add a controller", title: "Capture your controller")
-        Text("DeckBridge listens while you press, move and turn each control, and records what it sends. Nothing is sent to your controller or anywhere else. It takes about five minutes.")
+        Text("DeckBridge listens while you press, move and turn each control, and records what it sends. The capture sends nothing to your controller or anywhere else. It takes about five minutes.")
             .font(Theme.ui(13)).foregroundStyle(Theme.caption)
             .fixedSize(horizontal: false, vertical: true)
         Picker("Controller", selection: $controller.picked) {

@@ -116,4 +116,16 @@ struct CaptureFlowTests {
         flow.skip(at: 109)
         #expect(flow.takeAnnouncement() == "Capture finished: 3 steps, 1 skipped.")
     }
+
+    @Test("On the idle step, VoiceOver hears once when Next is ready")
+    func idleReady() {
+        var flow = Self.started(at: 100)
+        _ = flow.takeAnnouncement()
+        flow.tick(at: 103)
+        #expect(flow.takeAnnouncement() == nil)
+        flow.tick(at: 105.1)
+        #expect(flow.takeAnnouncement() == "Done listening. Next is available.")
+        flow.tick(at: 106)
+        #expect(flow.takeAnnouncement() == nil)
+    }
 }

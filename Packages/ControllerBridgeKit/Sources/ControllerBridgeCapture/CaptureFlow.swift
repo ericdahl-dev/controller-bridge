@@ -15,6 +15,9 @@ public struct CaptureFlow: Sendable {
     private var announcedStep: Int?
     private var announcedDetection: [String] = []
     private var announcedDone = false
+    /// The idle step whose Next became available, to be announced once.
+    private var idleReadyStep: Int?
+    private var announcedIdleReady: Int?
 
     public init(prompts: [CapturePrompt] = CapturePrompts.djController, appVersion: String) {
         self.prompts = prompts
@@ -54,6 +57,7 @@ public struct CaptureFlow: Sendable {
     /// The app's clock, a few times a second: shows what arrived since the last refresh.
     public mutating func tick(at time: Double) {
         if stale { refresh(at: time) }
+        if prompt?.gesture == .idle, canNext(at: time) { idleReadyStep = stepNumber }
     }
 
     private mutating func refresh(at time: Double? = nil) {
@@ -118,6 +122,10 @@ public struct CaptureFlow: Sendable {
                 announcedStep = stepNumber
                 announcedDetection = detection
                 return "Step \(stepNumber) of \(stepCount). \(prompt.text)"
+            }
+            if let ready = idleReadyStep, ready == stepNumber, announcedIdleReady != ready {
+                announcedIdleReady = ready
+                return "Done listening. Next is available."
             }
             guard detection != announcedDetection else { return nil }
             announcedDetection = detection
