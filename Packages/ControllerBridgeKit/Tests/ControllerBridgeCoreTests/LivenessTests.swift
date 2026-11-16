@@ -139,4 +139,29 @@ struct LivenessTests {
         #expect(rig.osc.sent == [Self.resend, Self.resend])
         #expect(rig.coordinator.status.feedback == .stale)
     }
+
+    @Test("Feedback that answers an open probe while stale is the full state already: back to live, no extra Resend")
+    func comebackAnsweringProbe() throws {
+        let rig = try Self.staleRig()
+        Self.tick(rig, at: 20.5)                 // probe
+        rig.clock.now = 21.0
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+
+        #expect(rig.osc.sent == [Self.resend])
+        #expect(rig.coordinator.status.feedback == .live)
+        #expect(rig.log.lines.contains("Syndicate feedback is back"))
+        #expect(rig.leds[1] == 127)
+    }
+
+    @Test("Feedback that comes back with no probe open (Syndicate restarted on its own) gets exactly one Resend")
+    func comebackUnprompted() throws {
+        let rig = try Self.staleRig()
+        rig.clock.now = 15.0                     // the last probe, at 10.5, is long past its answer window
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+
+        #expect(rig.osc.sent == [Self.resend])
+        #expect(rig.coordinator.status.feedback == .live)
+        #expect(rig.log.lines.contains("Syndicate feedback is back"))
+    }
 }

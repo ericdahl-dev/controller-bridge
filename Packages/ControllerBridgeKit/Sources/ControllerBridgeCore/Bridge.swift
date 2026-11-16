@@ -134,8 +134,10 @@ final class Bridge {
         self.ccNames = ccNames
     }
 
+    /// The resync for this controller: forget what the LEDs show and repaint every one. The Coordinator asks
+    /// Syndicate to resend (one Resend for all controllers, #21).
     func start() {
-        send("Feedback/Resend", .int(1))
+        feedbackStale = false
         ledCache.removeAll()
         refreshLEDs()
     }

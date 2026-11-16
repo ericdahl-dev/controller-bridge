@@ -64,6 +64,7 @@ public final class Coordinator {
             }
             controllers[index].bridge.start()
         }
+        requestResend()
     }
 
     /// The MIDI devices changed. Re-reads them, connecting controllers that appeared.
@@ -74,6 +75,7 @@ public final class Coordinator {
                 if !midiSystem.sources.contains(where: { $0.id == source.id }) { disconnect(index) }
             } else if connect(index) {
                 controllers[index].bridge.start()
+                requestResend()
             }
         }
         disconnectFailedOutputs()
@@ -211,9 +213,17 @@ public final class Coordinator {
     private var oscSettings: Mapping.OSC { controllers[0].bridge.mapping.osc }
 
     private func feedbackArrived() {
-        lastFeedbackAt = clock.now
+        let now = clock.now
+        let wasStale = status.feedback == .stale
+        // An answer to a Resend still in its answer window is the full state already.
+        let answering = resendSentAt.map { now - $0 < Double(oscSettings.feedbackAnswerMs) / 1000 } ?? false
+        lastFeedbackAt = now
         resendSentAt = nil
         status.feedback = .live
+        guard wasStale else { return }
+        log.log("Syndicate feedback is back")
+        for bridge in bridges { bridge.start() }
+        if !answering { requestResend() }
     }
 
     private func checkLiveness() {
