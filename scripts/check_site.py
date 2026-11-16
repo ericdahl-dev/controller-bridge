@@ -7,7 +7,7 @@
 - nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
   and so are <link rel="canonical"> and <link rel="alternate">. The one exception is the PostHog loader script
   (POSTHOG_LOADER), which website/analytics.js adds to count visits; the privacy page discloses it
-- every page has a title and a meta description; the home page links the LC6000 page (for/lc6000/, #268)
+- every page has a title and a meta description, and a page's canonical is its own URL; the home page links the LC6000 page (for/lc6000/, #268)
 - every page loads the site's own analytics.js, and every mailto: link has a data-track (the click event it sends)
 - no page, index.md or llms.txt still has a TODO(user) TestFlight placeholder (the public link is live)
 - every <img> has an alt attribute (alt="" for a decorative one)
@@ -62,7 +62,7 @@ class Page(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.title, self.h1, self.description = None, None, None
+        self.title, self.h1, self.description, self.canonical = None, None, None, None
         self.text = []
         self.refs = []  # (url, loaded): loaded is "script" for a <script src>, True for other resources, False for links
         self.scripts = []  # src of every <script src>
@@ -87,6 +87,8 @@ class Page(HTMLParser):
             self.scripts.append(attrs["src"])
         if tag == "link" and attrs.get("href") is not None:
             rels = (attrs.get("rel") or "").lower().split()
+            if "canonical" in rels:
+                self.canonical = attrs["href"]
             self.refs.append((attrs["href"], not rels or not set(rels) <= LINK_RELS))
         if tag == "script" and (attrs.get("type") or "").strip().lower() == "application/ld+json":
             self._ld = []
@@ -162,6 +164,8 @@ def check_page(root, file, text):
         for name in OTHER_COMPANIES:
             if words and re.search(rf"\b{name}\b", words, re.IGNORECASE):
                 out.append(f"{file}: the <{part}> names {name}")
+    if file in PAGES and page.canonical is not None and page.canonical != page_url(file):
+        out.append(f"{file}: its canonical is {page.canonical}, not {page_url(file)}")
     out += [f'{file}: <img src="{src}"> has no alt' for src in page.no_alt]
     if not any(target(root, file, src) == os.path.join(os.path.normpath(root), ANALYTICS)
                for src in page.scripts if not is_external(src)):

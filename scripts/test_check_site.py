@@ -293,6 +293,15 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(self.site({"index.html": no_link})),
                          ["index.html: doesn't link the LC6000 page (for/lc6000/)"])
 
+    def test_a_page_canonical_is_its_own_url(self):
+        # a page copied from another (the LC6000 page from home, #268) must not keep the original's canonical
+        copied = page(head='<link rel="canonical" href="https://getdeckbridge.app/">', body='<a href="../../">Home</a>')
+        own = page(head='<link rel="canonical" href="https://getdeckbridge.app/for/lc6000/">', body='<a href="../../">Home</a>')
+        self.assertEqual(check_site.problems(self.site({"for/lc6000/index.html": copied})),
+                         ["for/lc6000/index.html: its canonical is https://getdeckbridge.app/, "
+                          "not https://getdeckbridge.app/for/lc6000/"])
+        self.assertEqual(check_site.problems(self.site({"for/lc6000/index.html": own})), [])
+
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
         self.assertEqual(check_site.problems(root), ["img/Syndicate_logo.png: looks like another company's logo",
