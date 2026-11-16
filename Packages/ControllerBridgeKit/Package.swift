@@ -17,6 +17,7 @@ let package = Package(
         // What the UI shows, as plain values: colors, contrast, deck badges and status words. No SwiftUI, so the
         // logic behind the look is tested here; the views themselves are checked by screenshot (#34).
         .target(name: "ControllerBridgePresentation"),
-        .testTarget(name: "ControllerBridgePresentationTests", dependencies: ["ControllerBridgePresentation"]),
+        // Core only for the test that pins the deck badges to Core's deck colors (#122); the targets stay independent.
+        .testTarget(name: "ControllerBridgePresentationTests", dependencies: ["ControllerBridgePresentation", "ControllerBridgeCore"]),
     ]
 )

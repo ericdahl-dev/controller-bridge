@@ -34,6 +34,8 @@ up macOS's local-network prompt.
 
 Two keys are new, with no Python counterpart: `leds.beat_pulse` (`"off"`, `"beat"` or `"downbeat"`, default `"off"`)
 pulses the platter ring on Syndicate's master clock, and `leds.pulse_ms` (default 100) is how long each pulse stays lit.
+The ring shows its deck's badge color (`DeckColors`, #122) while `leds.ring_follows_deck` is true, as in the bundled
+profile. Set it to false to use the fixed `leds.ring_color` instead. A file without the key inherits the bundled true.
 
 Feedback liveness (#21) adds three more: `osc.feedback_quiet_ms` (default 10000) is how long the bridge waits with no
 feedback before asking Syndicate to resend, `osc.feedback_answer_ms` (default 2000) is how long that request may go

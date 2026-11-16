@@ -78,6 +78,8 @@ final class Bridge {
     var padMode = PadMode.hotCue
     var held = HeldControls()
     var keyLockOn = false
+    /// The deck colors the ring shows (#122); a setting can replace the defaults (#123).
+    var deckColors = DeckColors.defaults
     /// The address of a Reverse latched on with Shift + Censor (#114), so release-all turns it off on that deck.
     var latchedReverse: String?
     /// Lines for the log, taken by the Coordinator after each event (#114).
