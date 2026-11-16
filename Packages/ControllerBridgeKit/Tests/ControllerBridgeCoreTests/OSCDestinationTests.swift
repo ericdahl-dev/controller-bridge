@@ -149,4 +149,36 @@ struct OSCDestinationTests {
         destination.send(Self.play)
         #expect(failures.value == 2)
     }
+
+    @Test("Re-resolving (on send failures or wake) looks the name up again and moves to its new address")
+    func reresolveMovesToNewAddress() async throws {
+        let sinks = FakeSinks(), resolver = FakeResolver()
+        resolver.answers = ["studio-mac.local": "192.168.1.30"]
+        let destination = Self.destination(sinks, resolver)
+        #expect(await destination.connect(host: "studio-mac.local", port: 9090) == nil)
+        resolver.answers = ["studio-mac.local": "192.168.1.31"]   // it rejoined the network with a new address
+        await destination.reresolve()
+        destination.send(Self.play)
+        #expect(sinks.sink("192.168.1.31:9090")?.sent == [Self.play.encoded()])
+        #expect(resolver.asked == ["studio-mac.local", "studio-mac.local"])
+    }
+
+    @Test("Only one re-resolve runs at a time: a second request while one is in flight doesn't start another lookup")
+    func oneReresolveInFlight() async throws {
+        let sinks = FakeSinks(), resolver = GatedResolver()
+        let destination = Self.destination(sinks, resolver)
+        let first = Task { await destination.connect(host: "studio-mac.local", port: 9090) }
+        await resolver.waitForLookup()
+        resolver.answer("192.168.1.30")
+        _ = await first.value
+
+        let again = Task { await destination.reresolve() }
+        await resolver.waitForLookup()
+        await destination.reresolve()                  // in flight already: returns without a second lookup
+        #expect(resolver.pending == 1)
+        resolver.answer("192.168.1.31")
+        await again.value
+        destination.send(Self.play)
+        #expect(sinks.sink("192.168.1.31:9090")?.sent == [Self.play.encoded()])
+    }
 }

@@ -24,6 +24,9 @@ public final class OSCDestination: OSCSender {
         var address = ""
         var onSendFailure: (@Sendable () -> Void)?
         var lastFailureReport: Double?
+        /// The host and port asked for last, kept for re-resolving.
+        var target: (host: String, port: Int)?
+        var reresolving = false
     }
 
     private let resolver: any HostResolver
@@ -63,6 +66,7 @@ public final class OSCDestination: OSCSender {
     /// Points the destination at `host`, an IPv4 address or a name resolved off the caller. Returns why it couldn't,
     /// with the old destination still in use; nil when the new one is open.
     public func connect(host: String, port: Int) async -> String? {
+        state.withLock { $0.target = (host, port) }
         let address: String
         if BridgeSettings.isIPv4(host) {
             address = host
@@ -89,6 +93,19 @@ public final class OSCDestination: OSCSender {
     private func failed(_ problem: String) -> String {
         state.withLock { $0.lastError = problem }
         return problem
+    }
+
+    /// Looks the current host up again and moves there (on failing sends, or after wake): a `.local` Mac can rejoin the
+    /// network with a new address. One at a time; a request while one runs returns at once. An IPv4 host just reopens.
+    public func reresolve() async {
+        let target = state.withLock { state -> (host: String, port: Int)? in
+            guard !state.reresolving, let target = state.target else { return nil }
+            state.reresolving = true
+            return target
+        }
+        guard let target else { return }
+        _ = await connect(host: target.host, port: target.port)
+        state.withLock { $0.reresolving = false }
     }
 
     /// The resolver's answer, or nil if it fails or takes longer than the timeout. The lookup isn't awaited past the
