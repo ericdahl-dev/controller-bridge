@@ -9,7 +9,12 @@ struct SubscriptionCheck: Equatable {
     /// Nil for no answer at all: silence says nothing about subscriptions.
     init?(answer addresses: [String]) {
         guard !addresses.isEmpty else { return nil }
-        let paths = addresses.map { $0.lowercased() }
-        noDeckData = !paths.contains { $0.contains("/deck/") || $0.contains("/header/") }
+        noDeckData = !addresses.contains(where: Self.provesSubscriptions)
+    }
+
+    /// A deck or header value: some deck subscriptions are on.
+    static func provesSubscriptions(_ address: String) -> Bool {
+        let path = address.lowercased()
+        return path.contains("/deck/") || path.contains("/header/")
     }
 }

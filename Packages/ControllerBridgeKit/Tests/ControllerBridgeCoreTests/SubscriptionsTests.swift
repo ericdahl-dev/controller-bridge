@@ -24,4 +24,37 @@ struct SubscriptionsTests {
         #expect(rig.coordinator.status.feedback == .live)
         #expect(rig.coordinator.status.noDeckData == true)
     }
+
+    /// No deck data flagged at t = 2.
+    static func noDeckDataRig() throws -> Rig {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.clock.now = 0.3
+        rig.coordinator.feedback(Self.palette)
+        Self.tick(rig, at: 2.0)
+        return rig
+    }
+
+    @Test("A deck or header value arriving later, any time, clears it: the subscriptions are on now", arguments: [
+        "/Syndicate/Deck/2/Playing", "/Syndicate/Header/BPM",
+    ])
+    func deckValueClears(address: String) throws {
+        let rig = try Self.noDeckDataRig()
+        rig.clock.now = 30
+        rig.coordinator.feedback(Self.palette)
+        #expect(rig.coordinator.status.noDeckData == true)
+        rig.coordinator.feedback(OSCMessage(address, [.int(1)]))
+        #expect(rig.coordinator.status.noDeckData == false)
+    }
+
+    @Test("Empty decks with header values in the answer are plain LIVE: Syndicate sends nothing for an empty deck")
+    func emptyDecksWithHeader() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.clock.now = 0.3
+        rig.coordinator.feedback(Self.palette)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/BPM", [.float(120)]))
+        Self.tick(rig, at: 2.0)
+        #expect(rig.coordinator.status.noDeckData == false)
+    }
 }

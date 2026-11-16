@@ -412,6 +412,7 @@ public final class Coordinator {
         }
         diagnostics?(.oscIn(message))
         answer?.addresses.append(message.address)
+        if SubscriptionCheck.provesSubscriptions(message.address) { status.noDeckData = false }
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
