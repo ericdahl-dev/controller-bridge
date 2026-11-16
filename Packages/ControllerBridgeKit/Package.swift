@@ -23,7 +23,7 @@ let package = Package(
         .testTarget(name: "ControllerBridgePresentationTests", dependencies: ["ControllerBridgePresentation", "ControllerBridgeCore"]),
         // Guided controller capture (#185): a prompt list plus raw MIDI in, a capture file out. Pure Swift and independent
         // of Core, so the web capture (#190) can share the format without the bridge.
-        .target(name: "ControllerBridgeCapture"),
+        .target(name: "ControllerBridgeCapture", resources: [.copy("Resources/capture-prompts-dj.json")]),
         .testTarget(name: "ControllerBridgeCaptureTests", dependencies: ["ControllerBridgeCapture"]),
         // The LC6000 jog display's image (#165), shared by the upload and the Diagnostics simulator (#221): CoreGraphics
         // and CoreText, with the Geist faces it draws in (SIL OFL 1.1, Fonts/Geist-OFL.txt), so it renders the same
