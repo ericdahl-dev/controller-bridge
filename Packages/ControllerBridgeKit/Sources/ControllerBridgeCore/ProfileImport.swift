@@ -50,10 +50,56 @@ extension ControllerProfile {
     }
 }
 
+extension ControllerProfile {
+    /// The whole profile as a file (#24): id, name, hints and the full mapping, in the bundled file's key order, so
+    /// importing it gives this profile back.
+    public func exported() throws -> Data {
+        let encoder = JSONEncoder()
+        let encoded = try OrderedJSON(parsing: encoder.encode(mapping))
+        let schema = try OrderedJSON(parsing: Mapping.defaultJSON())
+        let file: OrderedJSON = .object([
+            ("id", .string(id)),
+            ("name", .string(name)),
+            ("device_hints", .array(deviceHints.map { .string($0) })),
+            ("mapping", encoded.ordered(like: schema)),
+        ])
+        return file.data(pretty: true)
+    }
+}
+
 extension OrderedJSON {
-    /// Back to JSON, keeping key order.
-    func data() -> Data {
-        Data(text().utf8)
+    /// The same JSON with object keys in `template`'s order; keys the template lacks keep their order, after.
+    func ordered(like template: OrderedJSON) -> OrderedJSON {
+        switch (self, template) {
+        case let (.object(pairs), .object(templatePairs)):
+            let rank = Dictionary(templatePairs.enumerated().map { ($1.key, $0) }, uniquingKeysWith: { a, _ in a })
+            let sorted = pairs.enumerated().sorted { a, b in
+                (rank[a.element.key] ?? Int.max, a.offset) < (rank[b.element.key] ?? Int.max, b.offset)
+            }.map(\.element)
+            return .object(sorted.map { pair in (pair.key, template[pair.key].map { pair.value.ordered(like: $0) } ?? pair.value) })
+        default:
+            return self
+        }
+    }
+
+    /// Back to JSON, keeping key order. Pretty: two-space indents, short lists of numbers on one line.
+    func data(pretty: Bool = false) -> Data {
+        Data((pretty ? prettyText(indent: "") + "\n" : text()).utf8)
+    }
+
+    private func prettyText(indent: String) -> String {
+        let inner = indent + "  "
+        switch self {
+        case .object(let pairs) where !pairs.isEmpty:
+            return "{\n" + pairs.map { "\(inner)\(Self.quoted($0.key)): \($0.value.prettyText(indent: inner))" }.joined(separator: ",\n")
+                + "\n\(indent)}"
+        case .array(let items) where items.contains(where: { if case .object = $0 { true } else { false } }):
+            return "[\n" + items.map { inner + $0.prettyText(indent: inner) }.joined(separator: ",\n") + "\n\(indent)]"
+        case .array(let items):
+            return "[" + items.map { $0.text() }.joined(separator: ", ") + "]"
+        default:
+            return text()
+        }
     }
 
     private func text() -> String {

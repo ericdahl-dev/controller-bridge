@@ -40,4 +40,15 @@ struct ProfileImportTests {
             try Self.importing(#"{"name": 5, "mapping": {"notes": {"paly": 1}, "midi": {"channel": 0}}, "colour": "red"}"#)
         }
     }
+
+    @Test("Export writes the whole merged profile, and importing it gives the same profile back")
+    func exportRoundTrips() throws {
+        let edited = try Self.importing(#"{"name": "My LC6000", "device_hints": ["LC6000", "PRIME"], "mapping": {"notes": {"play": 60}, "jog": {"ccs": [55, 54]}, "leds": {"beat_pulse": "downbeat"}}}"#)
+        let exported = try edited.exported()
+        #expect(try Self.importing(String(decoding: exported, as: UTF8.self)) == edited)
+        // Whole, not a diff: a value left at its default is written too.
+        let object = try #require(try JSONSerialization.jsonObject(with: exported) as? [String: Any])
+        #expect(object["id"] as? String == "denon-lc6000-prime")
+        #expect(((object["mapping"] as? [String: Any])?["notes"] as? [String: Any])?["cue"] as? Int == 2)
+    }
 }
