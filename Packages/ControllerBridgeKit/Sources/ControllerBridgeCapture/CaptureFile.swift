@@ -20,8 +20,11 @@ public struct CaptureFile: Codable, Equatable, Sendable {
     public var noise: [[UInt8]]
     public var steps: [CaptureStep]
 
+    /// The format this version writes and reads.
+    public static let currentFormat = 1
+
     public init(
-        format: Int = 1, appVersion: String, device: String, ports: CapturePorts, note: String? = nil,
+        format: Int = currentFormat, appVersion: String, device: String, ports: CapturePorts, note: String? = nil,
         prompts: [CapturePrompt], noise: [[UInt8]] = [], steps: [CaptureStep] = []
     ) {
         self.format = format
@@ -41,6 +44,7 @@ public struct CaptureFile: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         format = try c.decode(Int.self, forKey: .format)
+        guard format == Self.currentFormat else { throw CaptureFileError.unsupportedFormat(format) }
         appVersion = try c.decode(String.self, forKey: .appVersion)
         device = try c.decode(String.self, forKey: .device)
         ports = try c.decode(CapturePorts.self, forKey: .ports)
@@ -71,6 +75,18 @@ public struct CaptureFile: Codable, Equatable, Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(self)
+    }
+}
+
+/// Why a capture file can't be read.
+public enum CaptureFileError: Error, Equatable, CustomStringConvertible {
+    case unsupportedFormat(Int)
+
+    public var description: String {
+        switch self {
+        case .unsupportedFormat(let format):
+            "This capture file is format \(format); this version reads format \(CaptureFile.currentFormat). Update DeckBridge."
+        }
     }
 }
 

@@ -93,4 +93,11 @@ struct CaptureFileTests {
         #expect(encoded != nil)
         #expect(encoded == literal)
     }
+
+    @Test("A file from a newer format is refused in plain words, not misread")
+    func refusesNewerFormat() {
+        let newer = Self.literal.replacingOccurrences(of: "\"format\": 1", with: "\"format\": 2")
+        #expect(throws: CaptureFileError.unsupportedFormat(2)) { try CaptureFile.decode(Data(newer.utf8)) }
+        #expect(CaptureFileError.unsupportedFormat(2).description == "This capture file is format 2; this version reads format 1. Update DeckBridge.")
+    }
 }
