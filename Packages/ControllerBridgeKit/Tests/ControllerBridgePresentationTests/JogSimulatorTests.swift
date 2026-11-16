@@ -123,4 +123,13 @@ struct JogSimulatorTests {
         sim.apply(.playing(false))
         #expect(sim.litBeat(deck: 1) == nil)
     }
+
+    @Test("Diagnostics has a Jog display tab, last; before the unit shows anything it says how to turn it on")
+    func tab() {
+        #expect(DiagnosticsTab.allCases.map(\.rawValue) == ["MIDI Monitor", "LED Sweep", "OSC Log", "Jog display"])
+        #expect(DiagnosticsTab.jog.emptyText(controllerConnected: true)
+            == "Nothing on the jog display yet. Turn on Jog display in Settings, then load a track.")
+        #expect(DiagnosticsTab.jog.emptyText(controllerConnected: false)
+            == "No LC6000 connected. The jog display preview shows what DeckBridge sends it.")
+    }
 }
