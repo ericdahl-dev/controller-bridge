@@ -155,8 +155,14 @@ final class Bridge {
         channel = UInt8(clamping: mapping.midi.channel - 1)
         buttonNames = Dictionary(mapping.notes.buttons.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         var ccNames: [Int: String] = [:]
-        ccNames[mapping.jog.msbCC] = "jog_msb"
-        ccNames[mapping.jog.lsbCC] = "jog_lsb"
+        switch mapping.jog.mode {
+        case .absolute(let msb, let lsb):
+            ccNames[msb] = "jog_msb"
+            ccNames[lsb] = "jog_lsb"
+        case .relative(let cc, let edge):
+            ccNames[cc] = "jog_relative"
+            if let edge { ccNames[edge] = "jog_relative_edge" }
+        }
         ccNames[mapping.pitch.msbCC] = "pitch_msb"
         ccNames[mapping.pitch.lsbCC] = "pitch_lsb"
         ccNames[mapping.needle.msbCC] = "needle_msb"

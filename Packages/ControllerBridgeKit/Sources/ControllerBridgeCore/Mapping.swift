@@ -118,12 +118,26 @@ public struct Mapping: Equatable, Sendable, Codable {
         public init(number: Int) { self.number = number }
     }
 
-    /// The jog wheel as a 14-bit platter position that counts up going forward and wraps at 16384 (#103). Movement
-    /// is the change in position, scaled per platter revolution.
+    /// The jog wheel. The LC6000's sends a 14-bit platter position that counts up going forward and wraps at 16384
+    /// (#103): movement is the change in position. A relative jog (#204) sends ticks on one CC instead, in the
+    /// profile's encoder format. Either way movement is scaled per platter revolution.
     public struct Jog: Equatable, Sendable, Codable {
-        public var msbCC: Int
-        public var lsbCC: Int
-        /// Position counts in one full platter turn: about 3552 measured on the LC6000 (#103), so 3600.
+        /// How the platter reports movement.
+        public enum Mode: Equatable, Sendable {
+            case absolute(msbCC: Int, lsbCC: Int)
+            /// Ticks on `cc` (the platter's top). `edgeCC`, if the controller has one, is the platter's edge, which
+            /// moves without a touch.
+            case relative(cc: Int, edgeCC: Int?)
+        }
+
+        public var msbCC: Int?
+        public var lsbCC: Int?
+        /// A relative jog's CC (#204). When set, the jog is relative and the 14-bit pair may be left out.
+        public var relativeCC: Int?
+        /// A relative jog's edge CC, which needs no touch (#204).
+        public var relativeEdgeCC: Int?
+        /// Counts in one full platter turn: about 3552 position counts measured on the LC6000 (#103), so 3600. For a
+        /// relative jog, ticks per turn.
         public var countsPerRev: Int
         public var bendReleaseMs: Int
         /// While paused, how far one platter turn moves the playhead.
@@ -132,9 +146,16 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var beatsPerRev: Double
         public var requireTouch: Bool
 
+        public var mode: Mode {
+            if let relativeCC { return .relative(cc: relativeCC, edgeCC: relativeEdgeCC) }
+            return .absolute(msbCC: msbCC ?? 0, lsbCC: lsbCC ?? 0)
+        }
+
         enum CodingKeys: String, CodingKey {
             case msbCC = "msb_cc"
             case lsbCC = "lsb_cc"
+            case relativeCC = "relative_cc"
+            case relativeEdgeCC = "relative_edge_cc"
             case countsPerRev = "counts_per_rev"
             case bendReleaseMs = "bend_release_ms"
             case seekSecondsPerRev = "seek_seconds_per_rev"
@@ -143,11 +164,13 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
 
         public init(
-            msbCC: Int, lsbCC: Int, countsPerRev: Int, bendReleaseMs: Int, seekSecondsPerRev: Double, beatsPerRev: Double,
-            requireTouch: Bool
+            msbCC: Int?, lsbCC: Int?, countsPerRev: Int, bendReleaseMs: Int, seekSecondsPerRev: Double, beatsPerRev: Double,
+            requireTouch: Bool, relativeCC: Int? = nil, relativeEdgeCC: Int? = nil
         ) {
             self.msbCC = msbCC
             self.lsbCC = lsbCC
+            self.relativeCC = relativeCC
+            self.relativeEdgeCC = relativeEdgeCC
             self.countsPerRev = countsPerRev
             self.bendReleaseMs = bendReleaseMs
             self.seekSecondsPerRev = seekSecondsPerRev
