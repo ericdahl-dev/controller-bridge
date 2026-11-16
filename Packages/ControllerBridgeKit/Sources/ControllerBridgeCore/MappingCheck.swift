@@ -210,6 +210,7 @@ extension Mapping {
             "midi.ignore_notes[]": 0...127,
             "browse.select_turn_cc": 0...127, "browse.auto_loop_size_cc": 0...127,
             "leds.pitch_center": 0...127, "leds.ring": 0...127,
+            "leds.levels.full": 0...127, "leds.levels.dim": 0...127, "leds.levels.off": 0...127,
             "jog.counts_per_rev": 1...16384, "jog.beats_per_rev": 1...16, "jog.seek_seconds_per_rev": 0...60,
             // Every other number, so no imported value can be absurd (#92).
             "osc.port": 1...65535, "osc.feedback_port": 1...65535,

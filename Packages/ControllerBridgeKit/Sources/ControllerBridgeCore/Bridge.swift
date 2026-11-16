@@ -2,8 +2,7 @@
 ///
 /// Controls are added in extensions (one file per group), each registering its buttons in `buttonHandlers`.
 final class Bridge {
-    static let full: UInt8 = 127
-    static let dim: UInt8 = 1
+    /// A pad or the ring with no color. Button LEDs take the profile's levels instead (#194).
     static let off: UInt8 = 0
 
     /// Button handlers by mapping note name. Each is called with `pressed` on every press and release.
@@ -283,11 +282,16 @@ final class Bridge {
         led(mapping.leds.pitchCenter, pitchCenterVelocity)
     }
 
+    /// A button LED's full, dim and off velocities, from the profile (#194).
+    var fullLevel: UInt8 { UInt8(clamping: mapping.leds.levels.full) }
+    var dimLevel: UInt8 { UInt8(clamping: mapping.leds.levels.dim) }
+    var offLevel: UInt8 { UInt8(clamping: mapping.leds.levels.off) }
+
     func buttonLED(_ name: String, on: Bool) {
         guard let note = mapping.notes.buttons[name] else { return }
-        var idle = mapping.leds.dimUnlitButtons ? Self.dim : Self.off
-        if feedbackStale, Self.syndicateButtons.contains(name), mapping.leds.staleIdle == .off { idle = Self.off }
-        led(note, on ? Self.full : idle)
+        var idle = mapping.leds.dimUnlitButtons ? dimLevel : offLevel
+        if feedbackStale, Self.syndicateButtons.contains(name), mapping.leds.staleIdle == .off { idle = offLevel }
+        led(note, on ? fullLevel : idle)
     }
 
     /// An LED write for the LED sweep (#26): straight to the controller, past the cache.
@@ -311,7 +315,12 @@ final class Bridge {
             ledCache.removeAll()
             refreshLEDs()
         } else {
-            for (note, velocity) in ledCache.sorted(by: { $0.key < $1.key }) where velocity != Self.off { led(note, Self.off) }
+            // A button goes to the profile's off (#194); a pad or the ring to no color.
+            let colorNotes = Set(mapping.notes.pads + [mapping.leds.ring])
+            for (note, velocity) in ledCache.sorted(by: { $0.key < $1.key }) {
+                let off = colorNotes.contains(note) ? Self.off : offLevel
+                if velocity != off { led(note, off) }
+            }
             ledsEnabled = false
         }
     }

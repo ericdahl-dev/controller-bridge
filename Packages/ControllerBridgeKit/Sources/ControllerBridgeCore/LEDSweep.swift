@@ -24,12 +24,14 @@ struct LEDSweep {
                     + [caption]
             )
         }
-        // Then the pads and ring off, and every other note 0-127 at full, dim, then off, a third of the delay apart.
+        // Then the pads and ring off, and every other note 0-127 at the profile's full, dim, then off (#194), a third of
+        // the delay apart.
         let buttonNotes = (0...127).filter { !colorNotes.contains($0) }
         let buttonsStart = 64 * delay
         var buttons: [Step] = []
         for (index, note) in buttonNotes.enumerated() {
-            for (level, velocity) in [UInt8(127), 1, 0].enumerated() {
+            let levels = mapping.leds.levels
+            for (level, velocity) in [levels.full, levels.dim, levels.off].map({ UInt8(clamping: $0) }).enumerated() {
                 var step = Step(at: buttonsStart + Double(index) * delay + Double(level) * delay / 3, sends: [(note, velocity)], captions: [])
                 if index == 0, level == 0 {
                     step.sends = colorNotes.map { ($0, 0) } + step.sends
