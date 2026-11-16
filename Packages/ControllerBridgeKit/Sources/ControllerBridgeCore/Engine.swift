@@ -37,6 +37,10 @@ public struct Engine {
             case .devicesChanged: coordinator.devicesChanged()
             case .sleep: coordinator.willSleep()
             case .wake: coordinator.didWake()
+            case .setDeck(let deck, let controller): coordinator.setDeck(deck, controller: controller)
+            case .setDevices(let input, let output, let controller):
+                coordinator.setDevices(input: input, output: output, controller: controller)
+            case .setLEDs(let enabled): coordinator.setLEDs(enabled: enabled)
             case .stop:
                 // Releases are sent synchronously, so they have all gone out once run() returns.
                 coordinator.stop()
