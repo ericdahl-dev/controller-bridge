@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for scripts/testflight_distribute.py against a fake App Store Connect API. No network, no keys.
 Run: python3 -I scripts/test_testflight_distribute.py"""
-import os, sys, unittest
+import contextlib, io, os, sys, tempfile, unittest
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -15,7 +15,7 @@ class FakeASC:
 
     def __init__(self, builds=None):
         # Each build is (version, build number, states the poll sees in turn).
-        self.builds = builds if builds is not None else [("1.0.1", "42.1", ["VALID"])]
+        self.builds = builds if builds is not None else [("1.0.0", "41.1", ["VALID"]), ("1.0.1", "42.1", ["VALID"])]
         self.calls = []
         self.localizations = {}  # locale -> (id, whatsNew)
         self.groups = {"Internal": "g-int", "Syndicate": "g-ext", "Syndicate Friends": "g-other"}
@@ -217,6 +217,55 @@ class ReviewTests(unittest.TestCase):
                                               "detail": "Beta App Review Information is missing a contact email."}]})
         with self.assertRaisesRegex(td.TestInformationMissing, "Test Information"):
             td.submit_for_review(api.http, "app1", "build1")
+
+
+class RunTests(unittest.TestCase):
+    """The whole run, as the release workflow calls it."""
+
+    def run_distribute(self, api):
+        doc = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False)
+        doc.write(DOC); doc.close()
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = td.run(api.http, BUNDLE, "1.0.1", "42.1", doc.name, sleep=Recorder().sleep)
+        return code, out.getvalue() + err.getvalue()
+
+    def test_distributes_in_order_what_to_test_internal_external_review(self):
+        api = FakeASC()
+        code, out = self.run_distribute(api)
+        self.assertEqual(code, 0)
+        steps = [(m, p) for m, p, _, _ in api.calls if m != "GET"]
+        self.assertEqual(steps, [("POST", "/betaBuildLocalizations"), ("POST", "/betaGroups/g-int/relationships/builds"),
+                                 ("POST", "/betaGroups/g-ext/relationships/builds"), ("POST", "/betaAppReviewSubmissions")])
+        self.assertEqual(api.localizations["en-US"][1], "DeckBridge 1.0.1 has a new look.\n\n- Try Settings.")
+
+    def test_a_rerun_changes_nothing_new(self):
+        api = FakeASC()
+        self.run_distribute(api)
+        api.calls.clear()
+        api.group_conflict = True
+        code, _ = self.run_distribute(api)
+        self.assertEqual(code, 0)
+        self.assertFalse([c for c in api.calls if c[0] == "POST" and c[1] in ("/betaBuildLocalizations", "/betaAppReviewSubmissions")])
+
+    def test_missing_test_information_still_gives_internal_testers_the_build_then_fails(self):
+        api = FakeASC()
+        api.review_detail = {}
+        code, out = self.run_distribute(api)
+        self.assertNotEqual(code, 0)
+        self.assertIn("g-int", api.in_group)
+        self.assertIn("Test Information", out)
+        self.assertFalse([c for c in api.calls if c[1] == "/betaAppReviewSubmissions" and c[0] == "POST"])
+
+    def test_nothing_secret_is_printed(self):
+        api = FakeASC()
+        os.environ["ASC_KEY_ID"] = "KEYID123"
+        try:
+            _, out = self.run_distribute(api)
+        finally:
+            del os.environ["ASC_KEY_ID"]
+        self.assertNotIn("KEYID123", out)
+        self.assertNotIn("Bearer", out)
 
 
 if __name__ == "__main__":

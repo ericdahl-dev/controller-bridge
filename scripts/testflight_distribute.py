@@ -7,9 +7,12 @@ key the upload uses (Python standard library plus `openssl`, as ci_profile.py do
 Tested by scripts/test_testflight_distribute.py, through an injected HTTP layer: http(method, path, body, query)
 returns (status, json).
 """
-import sys
+import json, os, sys, time, urllib.error, urllib.parse, urllib.request
 
+API = "https://api.appstoreconnect.apple.com/v1"
 PLATFORM = "MAC_OS"
+INTERNAL_GROUP = "Internal"
+EXTERNAL_GROUP = "Syndicate"
 # App Store Connect usually processes a Mac build in 5 to 30 minutes.
 POLL_SECONDS = 30
 PROCESSING_TIMEOUT = 60 * 60
@@ -157,5 +160,56 @@ def submit_for_review(http, app, build):
     raise DistributeError(f"Couldn't submit for Beta App Review: {status} {text}")
 
 
+def run(http, bundle_id, version, build_number, doc_path, sleep):
+    """The whole distribution. Internal testers get the build even when the external half can't go on (missing Test
+    Information): that half is reported as failed and the run exits non-zero. Returns the exit code."""
+    try:
+        app = find_app(http, bundle_id)
+        build = find_build(http, bundle_id, version, build_number, sleep)
+        with open(doc_path, encoding="utf-8") as doc:
+            set_what_to_test(http, build, what_to_test(doc.read()))
+        add_to_group(http, app, build, INTERNAL_GROUP)
+    except DistributeError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 1
+    try:
+        check_test_information(http, app)
+        add_to_group(http, app, build, EXTERNAL_GROUP)
+        submit_for_review(http, app, build)
+    except DistributeError as error:
+        print("Internal testers have the build. The external step failed.", file=sys.stderr)
+        print(f"::error::{error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def api_http(method, path, body=None, query=None):
+    """The real HTTP layer: one signed request. Errors come back as (status, json); the token is never printed."""
+    import ci_profile  # the ES256 token, made with openssl from ASC_KEY_PATH
+    url = API + path + ("?" + urllib.parse.urlencode(query) if query else "")
+    request = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body else None)
+    request.add_header("Authorization", "Bearer " + ci_profile.token())
+    if body:
+        request.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            raw = response.read()
+            return response.status, (json.loads(raw) if raw else {})
+    except urllib.error.HTTPError as error:
+        raw = error.read()
+        try:
+            return error.code, json.loads(raw)
+        except ValueError:
+            return error.code, {"errors": [{"detail": raw.decode(errors="replace")[:300]}]}
+
+
+def main():
+    """Environment: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH, BUNDLE_ID, VERSION, BUILD_NUMBER, and WHAT_TO_TEST
+    (default docs/TESTFLIGHT.md)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    doc = os.environ.get("WHAT_TO_TEST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "TESTFLIGHT.md"))
+    return run(api_http, os.environ["BUNDLE_ID"], os.environ["VERSION"], os.environ["BUILD_NUMBER"], doc, time.sleep)
+
+
 if __name__ == "__main__":
-    sys.exit("run from the release workflow")
+    sys.exit(main())
