@@ -396,7 +396,7 @@ struct SettingsView: View {
                 Text(ProfilePicker.notFoundTitle).tag(String?.some(Self.notFoundTag))
             }
             .labelsHidden()
-            .frame(maxWidth: 220, alignment: .trailing)
+            .fixedSize()
             .disabled(!picker.enabled)
         }
     }

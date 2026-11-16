@@ -87,6 +87,16 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
+            // The LC6000 and its WD port (#200): the WD is listed as part of it, never offered for capture.
+            ("connected-wd", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", device: "LC6000 PRIME")]
+                $0.devices = [
+                    DeviceStatus(name: "LC6000 PRIME", profile: "Denon LC6000 PRIME", note: nil),
+                    DeviceStatus(name: "LC6000 PRIME WD", profile: nil, note: nil, partOf: "Denon LC6000 PRIME"),
+                ]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
             ("port-in-use", {
                 $0.bridges = [ControllerStatus(deck: 3, connected: true, profile: "Denon LC6000 PRIME")]
                 $0.feedback = .portInUse(port: 9096)
@@ -195,6 +205,11 @@ enum Snapshots {
         bad.syndicateHost = ""
         writeAppKit(SettingsView(model: BridgeModel(preview: bad), snapshotTab: .syndicate, problems: bad.fieldProblems),
                     to: "\(directory)/settings-syndicate-refused.png")
+        // The Controller picker (#200) for an unsupported device, and with nothing connected.
+        let unsupported = BridgeModel(preview: defaults)
+        unsupported.status.bridges = [ControllerStatus(deck: 1, connected: false)]
+        unsupported.status.devices = [DeviceStatus(name: "DDJ-FLX4", profile: nil, note: nil)]
+        writeAppKit(SettingsView(model: unsupported, snapshotTab: .controller), to: "\(directory)/settings-controller-unsupported.png")
         let stopped = BridgeModel(preview: nil)
         stopped.status.problem = "Couldn't start CoreMIDI"
         writeAppKit(SettingsView(model: stopped), to: "\(directory)/settings-stopped.png")
