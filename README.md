@@ -23,9 +23,11 @@ LC6000 ◀──MIDI LEDs──  Controller Bridge  ◀──OSC feedback :9096�
 | Pads in Loop mode | `SetCueLoop n` |
 | Loop In / Loop Out / Auto Loop, and the Auto Loop knob | `LoopIn` / `LoopOut` / `Loop`. Turning the knob halves or doubles the loop |
 | Beat Jump ◀ ▶ (Shift for a bar) | `SkipBeatBack` / `SkipBeatForward` (`SkipBar…` with Shift) |
-| Censor (hold) | `Reverse` 1/0 |
+| Censor (hold; Shift + Censor latches) | `Reverse` 1/0 while held; with Shift, each press turns `Reverse` on or off |
 | Key Lock / Slip | `PitchPreserve` / `CueSlip` |
-| Pitch − / + (Shift to reset) | `PitchDown` / `PitchUp` / `PitchReset` |
+| Shift + Key Lock (pitch reset) | `TempoSlider` 0.0, then the fader waits to meet 0.0. Nothing while the tempo slider is disabled (a synced follower) |
+| Pitch Bend − / + (hold) | `PhaseMinus` / `PhasePlus` 1/0, nudging the tempo while held |
+| Shift + Pitch Bend (pitch range) | Nothing: Syndicate has no OSC route for the slider's range. The log says so once |
 | Param ◀ ▶ | `BeatSkip ∓1` |
 | Browse knob turn and press (Shift for Enter), Back, Forward, Track ◀ ▶ | `Browser/Up`, `Browser/Down`, `Browser/L{deck}`, `Back`, `Enter` |
 

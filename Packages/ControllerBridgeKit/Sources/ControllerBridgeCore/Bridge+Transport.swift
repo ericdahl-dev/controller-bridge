@@ -1,4 +1,4 @@
-// Transport buttons: Play, Cue, Sync, Master, Censor, Key Lock, Slip, Pitch − / + and Shift.
+// Transport buttons: Play, Cue, Sync, Master, Censor, Key Lock, Slip, Pitch Bend − / + and Shift.
 // Triggers fire on press only; holds send 1, then 0.
 
 extension Bridge {
@@ -14,12 +14,22 @@ extension Bridge {
         if pressed { sendDeck("TempoMaster", .int(1)) }
     }
 
+    /// Pitch Bend − (#114): nudges the tempo down while held.
     func pitchMinus(_ pressed: Bool) {
-        if pressed { sendDeck(shift ? "PitchReset" : "PitchDown", .int(1)) }
+        if shift { pitchRange(pressed) } else { holdButton(.phaseMinus, "PhaseMinus", pressed: pressed) }
     }
 
+    /// Pitch Bend + (#114): nudges the tempo up while held.
     func pitchPlus(_ pressed: Bool) {
-        if pressed { sendDeck(shift ? "PitchReset" : "PitchUp", .int(1)) }
+        if shift { pitchRange(pressed) } else { holdButton(.phasePlus, "PhasePlus", pressed: pressed) }
+    }
+
+    /// Shift + Pitch Bend is the LC6000's pitch range. Syndicate has no OSC route for the slider's range, so it sends
+    /// nothing and says so once in the log (#114).
+    private func pitchRange(_ pressed: Bool) {
+        guard pressed, !pitchRangeNoted else { return }
+        pitchRangeNoted = true
+        notices.append("Pitch range (Shift + Pitch Bend) isn't available in Syndicate")
     }
 
     func shiftButton(_ pressed: Bool) {
@@ -27,8 +37,10 @@ extension Bridge {
         refreshLEDs()
     }
 
+    /// Key Lock toggles key lock; Shift + Key Lock is the LC6000's pitch reset, sent as a tempo reset (#114).
     func keyLock(_ pressed: Bool) {
         guard pressed else { return }
+        if shift { return resetTempo() }
         keyLockOn.toggle()
         sendDeck("PitchPreserve", .int(keyLockOn ? 1 : 0))
         refreshLEDs()
@@ -45,8 +57,24 @@ extension Bridge {
         holdButton(.cue, "Cue", pressed: pressed)
     }
 
+    /// Censor reverses while held. Shift + Censor latches Reverse instead: each press toggles it (#114). A latched
+    /// Reverse isn't a hold, but release-all still turns it off.
     func censor(_ pressed: Bool) {
+        if pressed, shift {
+            if let address = latchedReverse {
+                send(address: address, [.int(0)])
+                latchedReverse = nil
+            } else {
+                let address = deckAddress("Reverse")
+                send(address: address, [.int(1)])
+                latchedReverse = address
+            }
+            return
+        }
+        guard pressed || held.contains(.censor) else { return }
         holdButton(.censor, "Reverse", pressed: pressed)
+        // The hold's release turned Reverse off in Syndicate, latched or not.
+        if !pressed { latchedReverse = nil }
     }
 
     // MARK: Holds
@@ -71,6 +99,10 @@ extension Bridge {
     /// mapping import all come through here.
     func releaseAll() {
         for control in held.takeAll() { send(address: control.address, control.release) }
+        if let address = latchedReverse {
+            send(address: address, [.int(0)])
+            latchedReverse = nil
+        }
         bendDirection = 0
         platterTouched = false
         needleTouched = false
