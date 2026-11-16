@@ -7,14 +7,18 @@ extension BridgeStatus {
     /// The first controller, as the Coordinator reports it (#20, #43).
     var controller: ControllerStatus? { bridges.first }
 
-    /// MIDI sources no controller profile matches (#43).
-    var unmatchedDevices: [DeviceStatus] { devices.filter { $0.profile == nil } }
+    /// MIDI sources no controller profile matches (#43), leaving out a known controller's other ports (#200).
+    var unmatchedDevices: [DeviceStatus] { devices.filter { $0.profile == nil && $0.partOf == nil } }
 
     var shownDeck: Int { controller?.deck ?? deck }
 
     /// Unmatched devices: a quiet gray list, or one orange NO PROFILE row when no controller is connected (#43).
     var otherDevices: OtherDevices {
-        OtherDevices(unmatched: unmatchedDevices.map(\.name), controllerConnected: controller?.connected == true)
+        OtherDevices(
+            unmatched: unmatchedDevices.map(\.name),
+            ownPorts: devices.compactMap { device in device.partOf.map { (name: device.name, of: $0) } },
+            controllerConnected: controller?.connected == true
+        )
     }
 
     /// The status in Syndicate's words.
@@ -94,6 +98,8 @@ struct StatusPanel: View {
     var setDemo: (Bool) -> Void = { _ in }
     /// The deck picker (#66): a deck for the controller at an index.
     var setDeck: (_ deck: Int, _ controller: Int) -> Void = { _, _ in }
+    /// Opens the capture window with a device preselected (#200).
+    var helpAdd: (String) -> Void = { _ in }
     @Environment(\.openWindow) private var openWindow
     /// Quit asks inside the panel while feedback is live (#131): a dialog on a menu-bar window may never show.
     @State var quitFlow = QuitFlow()
@@ -103,7 +109,7 @@ struct StatusPanel: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Theme.Step.x4) {
                 blocks(presentation)
-                StatusCard(status: status, presentation: presentation)
+                StatusCard(status: status, presentation: presentation, helpAdd: helpAdd)
                 if let dropout = presentation.lastDropout {
                     CaptionValue(caption: dropout.caption, value: dropout.value)
                 }
@@ -179,6 +185,7 @@ struct StatusPanel: View {
 private struct StatusCard: View {
     let status: BridgeStatus
     let presentation: StatusPresentation
+    var helpAdd: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -211,6 +218,7 @@ private struct StatusCard: View {
                     StatusLightView(light: highlighted)
                         .help(status.unmatchedDevices.first { $0.name == highlighted.label }?.note ?? "")
                 }
+                if let offer = others.offer { CaptureOfferRow(offer: offer) { helpAdd(offer.device) } }
                 if let summary = others.summary { OtherDevicesList(summary: summary, rows: others.rows) }
             }
             .padding([.horizontal, .bottom], Theme.Step.x3)
@@ -387,6 +395,26 @@ struct OtherDevicesList: View {
                     Text(row).font(Theme.ui(12)).foregroundStyle(Theme.caption).padding(.leading, 12)
                 }
             }
+        }
+    }
+}
+
+/// "DDJ-FLX4 isn't supported yet." with Help add it…, under its NO PROFILE row (#200).
+private struct CaptureOfferRow: View {
+    let offer: CaptureOffer
+    let action: () -> Void
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        HStack(spacing: Theme.Step.x2) {
+            Text(offer.text).font(Theme.ui(12)).foregroundStyle(Theme.caption)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(offer.action) {
+                action()
+                openWindow(id: CaptureWindow.id)
+            }
+            .buttonStyle(PillButtonStyle(small: true))
         }
     }
 }

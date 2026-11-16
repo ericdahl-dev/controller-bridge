@@ -3,6 +3,8 @@ public enum DiagnosticsTab: String, CaseIterable, Sendable {
     case monitor = "MIDI Monitor"
     case sweep = "LED Sweep"
     case osc = "OSC Log"
+    /// The jog display simulator (#221): what the LC6000's jog display shows, drawn by the upload's renderer.
+    case jog = "Jog display"
 
     /// The line shown in an empty list, so "nothing yet" never looks like "broken".
     /// What Save… suggests (#162), such as "DeckBridge OSC Log.txt". The app passes its display name.
@@ -15,6 +17,9 @@ public enum DiagnosticsTab: String, CaseIterable, Sendable {
         case .monitor: controllerConnected ? "Press any button on the controller." : "No controller connected."
         case .sweep: "Press Start Sweep. Watch the pads and ring."
         case .osc: "Nothing sent or received yet."
+        case .jog: controllerConnected
+            ? "Nothing on the jog display yet. Turn on Jog display in Settings, then load a track."
+            : "No LC6000 connected. The jog display preview shows what DeckBridge sends it."
         }
     }
 

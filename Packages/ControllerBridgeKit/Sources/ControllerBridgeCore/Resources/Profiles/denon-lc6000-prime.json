@@ -128,10 +128,12 @@
       "beat_pulse": "off",
       "pulse_ms": 100,
       "stale_idle": "dim",
-      "levels": { "full": 127, "dim": 1, "off": 0 }
+      "levels": { "full": 127, "dim": 1, "off": 0 },
+      "color_table": "rgb222"
     },
     "pads": {
-      "roll_sizes": ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]
+      "roll_sizes": ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"],
+      "mode_select": "buttons"
     }
   }
 }

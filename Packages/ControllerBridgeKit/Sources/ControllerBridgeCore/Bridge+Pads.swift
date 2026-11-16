@@ -1,8 +1,14 @@
 // Pads, pad modes and cue colors (#18), as in the Python bridge.
 
 /// What the pads do.
-enum PadMode {
+enum PadMode: CaseIterable {
     case hotCue, roll, loop, slicer
+
+    /// The next mode for a cycling button (#198): Hot Cue → Roll → Loop → Slicer → Hot Cue.
+    var next: PadMode {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
 }
 
 extension Bridge {
@@ -42,6 +48,15 @@ extension Bridge {
             self.padMode = mode
             self.refreshLEDs()
         }
+    }
+
+    /// The one cycling mode button (#198), for a profile whose `pads.mode_select` is "cycle"; with the LC6000's four
+    /// buttons it does nothing. Like a mode button, it first releases any held pad.
+    func padModeCycle(_ pressed: Bool) {
+        guard pressed, mapping.pads.modeSelect == .cycle else { return }
+        releasePads()
+        padMode = padMode.next
+        refreshLEDs()
     }
 
     /// The pad a note plays, and on a profile with notes per mode (#225) the mode that note belongs to.
@@ -105,6 +120,7 @@ extension Bridge {
     func padLEDs() {
         let modes: [(String, PadMode)] = [("mode_hotcue", .hotCue), ("mode_roll", .roll), ("mode_loop", .loop), ("mode_slicer", .slicer)]
         for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
+        cycleButtonLED()
         // With notes per mode (#225), the current mode's notes carry the colors and the other modes' go dark.
         for (note, velocity) in zip(padNotes(for: padMode), padColors()) { padLED(note, velocity) }
         if let modeNotes = mapping.pads.modeNotes {
@@ -114,6 +130,19 @@ extension Bridge {
             }
         }
         ringLED()
+    }
+
+    /// The cycling button's own LED (#198): the profile's velocity for the current mode. With none, it's left alone.
+    private func cycleButtonLED() {
+        guard mapping.pads.modeSelect == .cycle, let levels = mapping.pads.modeCycleVelocities,
+              let note = mapping.notes.buttons["mode_cycle"] else { return }
+        let velocity = switch padMode {
+        case .hotCue: levels.hotcue
+        case .roll: levels.roll
+        case .loop: levels.loop
+        case .slicer: levels.slicer
+        }
+        led(note, UInt8(clamping: velocity))
     }
 
     /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad in the roll color.
@@ -127,10 +156,10 @@ extension Bridge {
                 let color = palette[slot] ?? [255, 255, 255]
                 // A held hot cue shows the brightest version of its color, so you can see which one is sounding.
                 // Held, it's vivid too (#151), so the sounding cue stands out in its hue, not whiter.
-                return held.contains(.pad(index)) ? ringVelocity(Self.brightest(color)) : Self.velocity(color)
+                return held.contains(.pad(index)) ? ringVelocity(Self.brightest(color)) : velocity(color)
             }
-        case .loop: return cues.map { $0 == 0 ? Self.off : Self.velocity(leds.loopPadColor) }
-        case .roll: return Array(repeating: Self.velocity(leds.rollPadColor), count: cues.count)
+        case .loop: return cues.map { $0 == 0 ? Self.off : velocity(leds.loopPadColor) }
+        case .roll: return Array(repeating: velocity(leds.rollPadColor), count: cues.count)
         case .slicer: return Array(repeating: Self.off, count: cues.count)
         }
     }
@@ -141,22 +170,15 @@ extension Bridge {
         return rgb.map { $0 * 255 / top }
     }
 
-    /// A vivid velocity (#151) for an [r, g, b] color: the ring, and a held pad.
-    static func vividVelocity(_ rgb: [Int]) -> UInt8 {
-        guard rgb.count == 3 else { return off }
-        return ControllerBridgeCore.vividVelocity(rgb[0], rgb[1], rgb[2])
-    }
-
-    /// The ring's and a held pad's velocity, by the Settings mapping (#151).
+    /// The ring's and a held pad's velocity, by the Settings mapping (#151), through the profile's color table (#197).
     func ringVelocity(_ rgb: [Int]) -> UInt8 {
-        ringColors == .vivid ? Self.vividVelocity(rgb) : Self.velocity(rgb)
+        ringColors == .vivid ? mapping.leds.colorTable.vivid(for: rgb) : velocity(rgb)
     }
 
-    /// A pad or ring velocity for an [r, g, b] color.
-    static func velocity(_ rgb: [Int]) -> UInt8 {
-        // A user mapping can hold any list here until the mapping check (#24) refuses it.
-        guard rgb.count == 3 else { return off }
-        return rgbToVelocity(rgb[0], rgb[1], rgb[2])
+    /// A pad or ring velocity for an [r, g, b] color, through the profile's color table (#197). Not three values
+    /// (a user mapping the check didn't see): off.
+    func velocity(_ rgb: [Int]) -> UInt8 {
+        mapping.leds.colorTable.velocity(for: rgb)
     }
 }
 

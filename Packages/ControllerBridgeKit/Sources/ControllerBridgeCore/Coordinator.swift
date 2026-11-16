@@ -15,6 +15,35 @@ public final class Coordinator {
     /// Devices matching more than one profile, already logged.
     private var loggedAmbiguous: Set<MIDIEndpoint.ID> = []
     private var bridges: [Bridge] { controllers.map(\.bridge) }
+    /// Profiles chosen by hand per device name (#200), as profile ids.
+    private var profileChoices: [String: String] = [:]
+
+    /// The profile for a device: the one chosen for it by hand, if that profile exists, else the one its name matches.
+    private func resolvedProfile(_ deviceName: String) -> ControllerProfile? {
+        if let id = profileChoices[deviceName], let chosen = profiles.first(where: { $0.id == id }) { return chosen }
+        return ControllerProfile.matching(deviceName, in: profiles)
+    }
+
+    /// The profiles chosen by hand per device name (#200). A controller whose device now resolves to another profile,
+    /// or to none, reconnects; one with no device tries again, so a device no profile named can now run.
+    public func setProfileChoices(_ choices: [String: String]) {
+        guard choices != profileChoices else { return }
+        profileChoices = choices
+        var resync = false
+        for index in controllers.indices {
+            if let source = controllers[index].source {
+                guard resolvedProfile(source.name)?.id != controllers[index].profile.id else { continue }
+                disconnect(index, reason: .deviceChanged)
+            }
+            if connect(index) {
+                controllers[index].bridge.start()
+                resync = true
+            }
+        }
+        refreshDevices()
+        if resync { requestResend() }
+    }
+
     /// The source the capture window (#186) is recording, whose MIDI drives nothing meanwhile.
     private var capturing: MIDIEndpoint.ID?
     /// Deck colors from Syndicate's palette, the defaults until one arrives (#123).
@@ -125,6 +154,15 @@ public final class Coordinator {
 
     /// The LC6000's jog display, when the app found its WD port.
     private var jogDisplay: JogDisplayDriver?
+    /// Settings' "Show the deck on the jog display". Off until a hardware check passes (#165): while off, nothing goes
+    /// to the display's ports, not even the hello.
+    private var jogDisplayEnabled = false
+
+    /// Turns the jog display on (hello, then the deck in front) or off (goodbye, then nothing).
+    public func setJogDisplay(enabled: Bool) {
+        jogDisplayEnabled = enabled
+        updateJogDisplay()
+    }
     /// The marker: the master clock's hand while the deck in front plays, else where the platter left it.
     private var jogMarker = JogMarker()
     private var masterBPM: Double?
@@ -191,11 +229,13 @@ public final class Coordinator {
     private func updateJogDisplay() {
         guard let driver = jogDisplay else { return }
         let connected = controllers.indices.filter { controllers[$0].source != nil }
-        guard let first = connected.first else { return driver.disconnect() }
+        guard jogDisplayEnabled, let first = connected.first else { return driver.disconnect() }
         let front = connected.first { status.controllers[$0].activeLayer } ?? first
         let deck = status.controllers[front].deck
+        let track = controllers[front].bridge.track
         driver.connect()
-        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255]))
+        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255], title: track?.title,
+                                      artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType))
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -264,6 +304,7 @@ public final class Coordinator {
         if destination == nil || !controllers.contains(where: { $0.destination?.id == destination?.id }) { bridge.output?.close() }
         bridge.output = nil
         status.controllers[index].profile = nil
+        status.controllers[index].device = nil
         status.controllers[index].lastDisconnect = reason
         let detail: String? = switch reason {
         case .sendFailed: "MIDI send failed"
@@ -297,12 +338,14 @@ public final class Coordinator {
             let claimed = Set(controllers.indices.filter { $0 != index && !sharesLayers(index, with: $0) }
                 .compactMap { controllers[$0].source?.id })
             let free = sources.filter { !claimed.contains($0.id) }
-            let known = controllers[index].knownSourceID.flatMap { id in free.first { $0.id == id } }
-            source = known ?? free.first { ControllerProfile.matching($0.name, in: profiles) != nil }
+            // The last device it ran on comes first, while a profile still resolves for it (#200: not after a choice
+            // made by hand for it is taken back).
+            let known = controllers[index].knownSourceID.flatMap { id in free.first { $0.id == id && resolvedProfile($0.name) != nil } }
+            source = known ?? free.first { resolvedProfile($0.name) != nil }
         }
         guard let source else { return false }
         // A device picked in Settings runs even if no profile names it: then it keeps the current profile.
-        let matchedProfile = ControllerProfile.matching(source.name, in: profiles)
+        let matchedProfile = resolvedProfile(source.name)
         guard let profile = matchedProfile ?? (controllers[index].chosenInput != nil ? controllers[index].profile : nil) else {
             return false
         }
@@ -320,6 +363,7 @@ public final class Coordinator {
         controllers[index].source = source
         controllers[index].knownSourceID = source.id
         status.controllers[index].profile = profile.name
+        status.controllers[index].device = source.name
         status.controllers[index].lastProfile = profile.name
         openOutput(index, for: source, profile: profile)
         report(index, "Connected \(source.name)")
@@ -362,12 +406,19 @@ public final class Coordinator {
     /// Lists every MIDI source with the profile it matches. A source that matches none is listed, not bridged.
     private func refreshDevices() {
         status.devices = midiSystem.sources.map { source in
-            if let profile = ControllerProfile.matching(source.name, in: profiles) {
+            if let profile = resolvedProfile(source.name) {
+                if profileChoices[source.name] == profile.id { return DeviceStatus(name: source.name, profile: profile.name, note: nil) }
                 let names = ControllerProfile.candidates(source.name, in: profiles).map(\.profile.name)
                 if names.count > 1, loggedAmbiguous.insert(source.id).inserted {
                     log.log("\(source.name) matches \(names.joined(separator: " and ")); using \(profile.name), whose hint is longest.")
                 }
                 return DeviceStatus(name: source.name, profile: profile.name, note: nil)
+            }
+            let lowered = source.name.lowercased()
+            if let owner = profiles.first(where: { $0.excludeHints.contains { lowered.contains($0.lowercased()) } }) {
+                return DeviceStatus(
+                    name: source.name, profile: nil, note: "\(source.name) is another port of the \(owner.name).", partOf: owner.name
+                )
             }
             let note = "No controller profile matches \(source.name), so it isn't bridged."
             if loggedUnmatched.insert(source.id).inserted { log.log(note) }
@@ -539,6 +590,10 @@ public final class Coordinator {
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
+        // What the display shows may have changed (a load, a key or BPM change); equal content draws nothing.
+        if message.address.lowercased().hasSuffix("/trackinfo") || message.address.lowercased().hasSuffix("/loaded") {
+            updateJogDisplay()
+        }
         disconnectFailedOutputs()
     }
 

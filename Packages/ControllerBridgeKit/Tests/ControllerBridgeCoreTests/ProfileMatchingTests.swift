@@ -38,6 +38,23 @@ struct ProfileMatchingTests {
         #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
     }
 
+    @Test("A profile's own other port, like the LC6000's WD port, is listed as part of that controller, not as unsupported (#200)")
+    func ownOtherPort() throws {
+        let wd = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME WD")
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.lc6000, wd])
+        rig.coordinator.start()
+
+        #expect(rig.midi.connected == [Self.lc6000.id])
+        #expect(rig.coordinator.status.devices == [
+            DeviceStatus(name: "DENON LC6000 PRIME", profile: "Denon LC6000 PRIME", note: nil),
+            DeviceStatus(
+                name: "DENON LC6000 PRIME WD", profile: nil, note: "DENON LC6000 PRIME WD is another port of the Denon LC6000 PRIME.",
+                partOf: "Denon LC6000 PRIME"
+            ),
+        ])
+        #expect(!rig.log.lines.contains { $0.hasPrefix("No controller profile matches") })
+    }
+
     static let other = MIDIEndpoint(id: 1002, name: "Some Other Controller")
 
     @Test("With no matching device nothing is bridged: the device is listed with a plain message, and logged")
@@ -162,5 +179,75 @@ struct ProfileMatchingTests {
             ControllerSettings(deck: 2, input: nil, output: nil),
         ])
         #expect(rig.midi.connected == [Self.controls.id])
+    }
+
+    // MARK: A profile chosen by hand (#200)
+
+    static let mystery = MIDIEndpoint(id: 1006, name: "Mystery DJ 2")
+
+    @Test("A device no profile names runs once the DJ chooses a profile for it, and stops when they go back to Automatic")
+    func chosenByHand() throws {
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.mystery])
+        rig.coordinator.start()
+        #expect(rig.midi.connected == [])
+
+        rig.coordinator.setProfileChoices(["Mystery DJ 2": "denon-lc6000-prime"])
+        #expect(rig.midi.connected == [Self.mystery.id])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
+        #expect(rig.coordinator.status.devices == [DeviceStatus(name: "Mystery DJ 2", profile: "Denon LC6000 PRIME", note: nil)])
+        rig.osc.sent.removeAll()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Self.mystery.id)
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
+
+        rig.coordinator.setProfileChoices([:])
+        #expect(rig.midi.connected == [])
+        #expect(rig.coordinator.status.devices.map(\.profile) == [nil])
+    }
+
+    @Test("A choice beats the name: a TP-1 Pad set to the LC6000 profile runs as an LC6000")
+    func choiceBeatsHints() throws {
+        let testPad = try ControllerProfile(decoding: ProfileTests.testPadFile())
+        let pad = MIDIEndpoint(id: 1004, name: "TP-1 Pad")
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled() + [testPad], sources: [pad])
+        rig.coordinator.start()
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Test Pad"])
+
+        rig.coordinator.setProfileChoices(["TP-1 Pad": "denon-lc6000-prime"])
+        #expect(rig.midi.connected == [pad.id])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
+    }
+
+    @Test("A choice naming a profile that no longer exists is Automatic")
+    func unknownChoiceIsAutomatic() throws {
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.lc6000])
+        rig.coordinator.start()
+        rig.coordinator.setProfileChoices(["DENON LC6000 PRIME": "gone-controller"])
+        #expect(rig.midi.connected == [Self.lc6000.id])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
+    }
+
+    @Test("Each controller's status names the device it runs on, so Settings can offer a profile for it; none while unplugged")
+    func controllerNamesItsDevice() throws {
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.iac, Self.lc6000])
+        rig.coordinator.start()
+        #expect(rig.coordinator.status.controllers.map(\.device) == ["DENON LC6000 PRIME"])
+        rig.midi.sources = [Self.iac]
+        rig.coordinator.devicesChanged()
+        #expect(rig.coordinator.status.controllers.map(\.device) == [nil])
+    }
+
+    @Test("Back to Automatic with an LC6000 plugged in meanwhile: the controller moves to the LC6000, not left on the unknown device")
+    func automaticMovesToTheMatch() throws {
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.mystery])
+        rig.coordinator.start()
+        rig.coordinator.setProfileChoices(["Mystery DJ 2": "denon-lc6000-prime"])
+        rig.midi.sources = [Self.mystery, Self.lc6000]
+        rig.midi.destinations = [Self.mystery, Self.lc6000].map { MIDIEndpoint(id: $0.id + 1000, name: $0.name) }
+        rig.coordinator.devicesChanged()
+        #expect(rig.midi.connected == [Self.mystery.id])
+
+        rig.coordinator.setProfileChoices([:])
+        #expect(rig.midi.connected == [Self.lc6000.id])
+        #expect(rig.coordinator.status.controllers.map(\.device) == ["DENON LC6000 PRIME"])
     }
 }

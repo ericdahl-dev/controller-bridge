@@ -4,6 +4,7 @@
 import AppKit
 import ControllerBridgeCapture
 import ControllerBridgeCore
+import ControllerBridgeRender
 import ControllerBridgePresentation
 import SwiftUI
 
@@ -87,6 +88,16 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
+            // The LC6000 and its WD port (#200): the WD is listed as part of it, never offered for capture.
+            ("connected-wd", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", device: "LC6000 PRIME")]
+                $0.devices = [
+                    DeviceStatus(name: "LC6000 PRIME", profile: "Denon LC6000 PRIME", note: nil),
+                    DeviceStatus(name: "LC6000 PRIME WD", profile: nil, note: nil, partOf: "Denon LC6000 PRIME"),
+                ]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
             ("port-in-use", {
                 $0.bridges = [ControllerStatus(deck: 3, connected: true, profile: "Denon LC6000 PRIME")]
                 $0.feedback = .portInUse(port: 9096)
@@ -157,6 +168,25 @@ enum Snapshots {
         }
         write(buttonStates, to: "\(directory)/buttons.png")
         write(siteStyles, to: "\(directory)/site-styles.png")
+        // The jog display's image (#165), design B, upright, 198×198, for review before any hardware send. The deck
+        // colors are the designer's sample ones; the app uses Syndicate's.
+        let daybreak = JogDisplayContent(deck: 1, color: [255, 49, 93], title: "Daybreak", artist: "Bill Hamel, Jeremus", key: "A#m",
+                                         bpm: 128, playerType: "track")
+        let ten = JogDisplayContent(deck: 4, color: [148, 92, 255], title: "Ten (Original Club Mix)",
+                                    artist: "Mark Knight, Underworld, Sander Van Doorn", key: "A#m", bpm: 128, playerType: "track")
+        let clip = JogDisplayContent(deck: 2, color: [255, 194, 71], playerType: "osc")
+        let emptyDeck = JogDisplayContent(deck: 3, color: [32, 224, 196])
+        let cases: [(String, JogDisplayContent, Int?, Double?)] = [
+            ("deck1-track", daybreak, nil, nil), ("deck4-long-title", ten, nil, nil), ("deck2-osc-clip", clip, nil, nil),
+            ("deck3-empty", emptyDeck, nil, nil),
+            // As the simulator would show the unit: beat 2 lit and the marker at 126°.
+            ("deck4-beat2-marker-simulated", ten, 2, 126.0 / 360),
+        ]
+        for (name, content, beat, marker) in cases {
+            let rgba = JogDisplayRenderer.render(content, litBeat: beat, marker: marker)
+            let png = JogImage.png(rgba: rgba, width: JogImage.size, height: JogImage.size)
+            do { try Data(png).write(to: URL(fileURLWithPath: "\(directory)/jog-display-\(name).png")) } catch { print("Couldn't write: \(error)") }
+        }
         write(siteStyles.environment(\.forcesIncreasedContrast, true), to: "\(directory)/site-styles-increased-contrast.png")
         for (name, configure) in states {
             let status = BridgeStatus()
@@ -195,6 +225,11 @@ enum Snapshots {
         bad.syndicateHost = ""
         writeAppKit(SettingsView(model: BridgeModel(preview: bad), snapshotTab: .syndicate, problems: bad.fieldProblems),
                     to: "\(directory)/settings-syndicate-refused.png")
+        // The Controller picker (#200) for an unsupported device, and with nothing connected.
+        let unsupported = BridgeModel(preview: defaults)
+        unsupported.status.bridges = [ControllerStatus(deck: 1, connected: false)]
+        unsupported.status.devices = [DeviceStatus(name: "DDJ-FLX4", profile: nil, note: nil)]
+        writeAppKit(SettingsView(model: unsupported, snapshotTab: .controller), to: "\(directory)/settings-controller-unsupported.png")
         let stopped = BridgeModel(preview: nil)
         stopped.status.problem = "Couldn't start CoreMIDI"
         writeAppKit(SettingsView(model: stopped), to: "\(directory)/settings-stopped.png")
@@ -236,6 +271,25 @@ enum Snapshots {
             )
             writeAppKit(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png", width: 720)
         }
+        // The Jog display tab (#221): deck 1 playing on beat 2 with its upload accepted, deck 2 paused and refused.
+        let jog = JogSimulatorLog()
+        let at = Date(timeIntervalSinceReferenceDate: 784_000_000)
+        jog.apply(.connected, at: at)
+        jog.apply(.uploadStarted(slot: 2, content: JogDisplayContent(deck: 2, color: [255, 255, 0], title: "Night Drive",
+                                                                    artist: "Coastal", key: "Fm", bpm: 124, playerType: "track"),
+                                 bytes: 9_406), at: at)
+        jog.apply(.failed(refusal: 3), at: at)
+        jog.apply(.uploadStarted(slot: 1, content: JogDisplayContent(deck: 1, color: [255, 0, 0], title: "Daybreak",
+                                                                    artist: "Untitled", key: "A#m", bpm: 128, playerType: "track"),
+                                 bytes: 14_812), at: at)
+        jog.apply(.shown(slot: 1), at: at)
+        jog.apply(.playLight(true), at: at)
+        jog.apply(.marker(pitchBend: 6_000), at: at)
+        let jogWindow = DiagnosticsWindow(
+            log: log, status: connected, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            jogSimulator: jog, tab: .jog, scrolls: false
+        )
+        writeAppKit(jogWindow.frame(width: 720, height: 460), to: "\(directory)/diagnostics-jog-display-live.png", width: 720)
         // The OSC log filtered to deck 1, received only, and paused (#218).
         log.deck = 1
         log.direction = .received

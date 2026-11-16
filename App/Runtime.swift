@@ -3,6 +3,7 @@
 import Dispatch
 import Foundation
 import ControllerBridgeCore
+import ControllerBridgeRender
 import os
 
 /// Makes the Coordinator inside one task and runs the Engine loop there, so that loop is the only code that ever
@@ -11,9 +12,19 @@ import os
 enum BridgeHost {
     static func run(
         profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, log: any LogSink, status: BridgeStatus,
-        diagnostics: DiagnosticsLog, controllers: [ControllerSettings], ledsEnabled: Bool, events: AsyncStream<PipeEvent>
+        diagnostics: DiagnosticsLog, jogSimulator: JogSimulatorLog, controllers: [ControllerSettings], ledsEnabled: Bool, jogDisplay: (any JogDisplayPort)?,
+        events: AsyncStream<PipeEvent>
     ) async {
         let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
+        // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe.
+        if let jogDisplay {
+            let driver = JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log) { content in
+                JogDisplayRenderer.uploadImage(content)
+            }
+            // The Diagnostics simulator (#221) hears what the driver does: uploads, the unit's answers, the marker.
+            driver.onEvent = jogSink(jogSimulator)
+            coordinator.attachJogDisplay(driver)
+        }
         // Straight onto the saved devices, decks, layers and LEDs switch: nothing unchosen, even for a moment (#105).
         coordinator.start(controllers: controllers, ledsEnabled: ledsEnabled)
         // The demo controller (#64) runs the profile running now (an imported mapping too, #98) against an in-process
@@ -30,6 +41,14 @@ enum BridgeHost {
     /// Hands each Diagnostics line to the window, one main-actor hop per line. Only called while the window is open.
     private nonisolated static func diagnosticsSink(_ log: DiagnosticsLog) -> @Sendable (DiagnosticEvent) -> Void {
         { event in Task { @MainActor in log.append(event) } }
+    }
+
+    /// Hands each jog display event to the simulator, one main-actor hop each (#221).
+    private nonisolated static func jogSink(_ simulator: JogSimulatorLog) -> @Sendable (JogDisplayEvent) -> Void {
+        { event in
+            let now = Date.now
+            Task { @MainActor in simulator.apply(event, at: now) }
+        }
     }
 
     /// Copies each Coordinator status change into the menu's status, with one main-actor hop per change. Made here,

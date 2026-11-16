@@ -77,6 +77,33 @@ struct SettingsTests {
         #expect(loaded.customDeckColors == .defaults)
     }
 
+    @Test("A controller chosen by hand for a device (#200) loads back; settings saved before it load with none: Automatic")
+    func profileChoices() throws {
+        #expect(Self.defaults.profileChoices == [:])
+        let store = MemoryStore()
+        var changed = Self.defaults
+        changed.profileChoices = ["Mystery DJ 2": "denon-lc6000-prime"]
+        try changed.save(to: store)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).profileChoices == ["Mystery DJ 2": "denon-lc6000-prime"])
+
+        store.values[BridgeSettings.storageKey] = Data(#"""
+            {"controllers":[{"deck":1}],"syndicateHost":"127.0.0.1","syndicatePort":9090,"feedbackPort":9096,
+             "feedbackListen":"thisMac","ledsEnabled":true}
+            """#.utf8)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).profileChoices == [:])
+    }
+
+    @Test("A controller choice made in Settings survives a panel deck change while Settings is open (#200)")
+    func profileChoiceRebased() {
+        var draft = Self.defaults
+        draft.profileChoices = ["Mystery DJ 2": "denon-lc6000-prime"]
+        var saved = Self.defaults
+        saved.controllers[0].deck = 2
+        let out = BridgeSettings.rebased(draft: draft, base: Self.defaults, onto: saved)
+        #expect(out.profileChoices == ["Mystery DJ 2": "denon-lc6000-prime"])
+        #expect(out.controllers[0].deck == 2)
+    }
+
     @Test("Nothing saved, or saved data that can't be read, loads the defaults")
     func missingOrCorruptLoadsDefaults() {
         let store = MemoryStore()

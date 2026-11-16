@@ -23,7 +23,10 @@ struct ControllerBridgeApp: App {
     var body: some Scene {
         // Window style, not .menu, so it carries the dark panel.
         MenuBarExtra {
-            StatusPanel(status: model.status, setDemo: model.setDemo, setDeck: { model.setDeck($0, controller: $1) })
+            StatusPanel(
+                status: model.status, setDemo: model.setDemo, setDeck: { model.setDeck($0, controller: $1) },
+                helpAdd: { model.captureDevice = $0 }
+            )
                 .environment(\.deckColors, model.status.deckColors)
         } label: {
             MenuBarLabel(status: model.status)
@@ -34,7 +37,7 @@ struct ControllerBridgeApp: App {
             DiagnosticsWindow(
                 log: model.diagnostics, status: model.status, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
                 startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep,
-                hiddenNotes: model.profiles.first?.mapping.midi.ignoreNotes ?? []
+                hiddenNotes: model.profiles.first?.mapping.midi.ignoreNotes ?? [], jogSimulator: model.jogSimulator
             )
             .environment(\.deckColors, model.status.deckColors)
         }

@@ -70,6 +70,8 @@ struct DiagnosticsWindow: View {
     /// Notes the profile drops before the monitor, such as the LC6000's heartbeat (#103), named so a quiet monitor
     /// doesn't look dead.
     var hiddenNotes: [Int] = []
+    /// What the Jog display tab shows (#221).
+    var jogSimulator = JogSimulatorLog()
     @State var tab = Tab.monitor
     /// Off only for snapshots: ImageRenderer draws no ScrollView content.
     var scrolls = true
@@ -129,6 +131,13 @@ struct DiagnosticsWindow: View {
             SegmentedPills(options: Tab.allCases, title: \.rawValue, selection: $tab)
                 .background { tabShortcuts }
             Spacer(minLength: 0)
+            if tab != .jog { logActions }
+        }
+    }
+
+    /// The log tabs' actions; the Jog display tab has no lines to pause, copy, save or clear.
+    @ViewBuilder private var logActions: some View {
+        HStack(spacing: Theme.Step.x1) {
             // Pause freezes the lists while capture carries on (#218); VoiceOver hears the new state.
             Button(log.paused ? "Resume" : "Pause") {
                 log.togglePause()
@@ -157,7 +166,7 @@ struct DiagnosticsWindow: View {
         }
     }
 
-    /// ⌘1, ⌘2 and ⌘3 pick the tabs (#67), from hidden buttons behind the pills.
+    /// ⌘1 to ⌘4 pick the tabs (#67), from hidden buttons behind the pills.
     private var tabShortcuts: some View {
         ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, item in
             Button(item.rawValue) { tab = item }
@@ -216,6 +225,9 @@ struct DiagnosticsWindow: View {
             // Syndicate subscriptions that are off, each with what it breaks, as the panel says (#211).
             if !status.missingSubscriptions.isEmpty, let help = status.help { explain(help.text) }
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
+        case .jog:
+            explain("What the LC6000's jog display shows, drawn by the same renderer as the upload, with the beat and marker.")
+            JogDisplayPane(log: jogSimulator, empty: tab.emptyText(controllerConnected: connected), animates: scrolls)
         }
     }
 

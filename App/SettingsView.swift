@@ -22,6 +22,8 @@ struct SettingsView: View {
     /// The settings the draft started from, to tell the DJ's edits from changes made elsewhere (#90).
     @State private var base: BridgeSettings?
     @State private var sources: [MIDIEndpoint] = []
+    /// Bumped after Controller not found?, which chooses nothing, so the Controller menu redraws (#200).
+    @State private var profileMenuRedraw = 0
     @State private var destinations: [MIDIEndpoint] = []
     /// Problems from the last Apply, shown under their fields; the rest (such as the bridge not running) below.
     @State private var fieldProblems: [SettingsProblem] = []
@@ -179,6 +181,8 @@ struct SettingsView: View {
         }
         section(nil) {
             switchRow("Controller LEDs", isOn: settings.ledsEnabled)
+            switchRow("Show the deck on the jog display", hint: "LC6000 only. Off until tested on hardware.",
+                      isOn: settings.jogDisplay)
             ForEach(settings.wrappedValue.warnings, id: \.self) { note($0, color: Theme.attention) }
             if settings.wrappedValue.controllers.count < 4 {
                 Button("Add controller") {
@@ -186,9 +190,6 @@ struct SettingsView: View {
                 }
                 .buttonStyle(PillButtonStyle(kind: .quiet))
             }
-            // Until #200's "Controller not found?" in the controller picker replaces it.
-            Button("Help add a controller…") { openWindow(id: CaptureWindow.id) }
-                .buttonStyle(PillButtonStyle(kind: .quiet))
         }
         mappingSection
     }
@@ -299,6 +300,7 @@ struct SettingsView: View {
             if !following { deckRow(controller.wrappedValue.deck, index) }
             row("MIDI input") { devicePicker(selection: controller.input, devices: sources) }
             fieldError(.device(controller: index))
+            profileRow(settings, controller.wrappedValue)
             row("MIDI output") { devicePicker(selection: controller.output, devices: destinations) }
             // Deck and channel come from the controller's layers while it follows them (#79).
             if !following { channelRow(controller, index) }
@@ -368,6 +370,46 @@ struct SettingsView: View {
             Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.switch).tint(Self.on)
         }
     }
+
+    /// The Controller picker (#200): Automatic or a profile, saved for the card's device on Apply, and
+    /// Controller not found?, which opens the capture window for that device.
+    private func profileRow(_ settings: Binding<BridgeSettings>, _ entry: ControllerSettings) -> some View {
+        let single = settings.wrappedValue.controllers.count == 1
+        let picker = ProfilePicker(
+            chosenInput: entry.input?.name,
+            connectedDevice: single ? model.status.bridges.compactMap(\.device).first : nil,
+            unsupported: model.status.otherDevices.offer?.device,
+            profiles: model.profiles.map { (id: $0.id, name: $0.name) },
+            choices: settings.wrappedValue.profileChoices
+        )
+        let selection = Binding<String?>(
+            get: { picker.selected },
+            set: { id in
+                if id == Self.notFoundTag {
+                    model.captureDevice = picker.device
+                    openWindow(id: CaptureWindow.id)
+                    // Nothing was chosen: redraw the menu so it shows the saved choice again, not this item.
+                    profileMenuRedraw += 1
+                } else if let device = picker.device {
+                    settings.wrappedValue.profileChoices[device] = id
+                }
+            }
+        )
+        return row("Controller", hint: picker.hint) {
+            Picker("Controller", selection: selection) {
+                ForEach(picker.options, id: \.self) { Text($0.title).tag($0.id) }
+                Divider()
+                Text(ProfilePicker.notFoundTitle).tag(String?.some(Self.notFoundTag))
+            }
+            .labelsHidden()
+            .fixedSize()
+            .id(profileMenuRedraw)
+            .disabled(!picker.enabled)
+        }
+    }
+
+    /// The picker's tag for Controller not found?, which opens the capture window instead of choosing.
+    private static let notFoundTag = "controller-not-found"
 
     private func devicePicker(selection: Binding<MIDIEndpoint?>, devices: [MIDIEndpoint]) -> some View {
         Picker("Device", selection: selection) {
@@ -448,7 +490,10 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 hint("On the LC6000")
                 RoundedRectangle(cornerRadius: Theme.Radius.small)
-                    .fill(Color(RGB(deckColor: DeckColors.ledPreview(shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors))))
+                    .fill(Color(RGB(deckColor: DeckColors.ledPreview(
+                        shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors,
+                        table: model.profiles.first?.mapping.leds.colorTable ?? .rgb222
+                    ))))
                     .frame(width: 26, height: 26)
                     .accessibilityLabel("Deck \(deck) on the LC6000")
             }

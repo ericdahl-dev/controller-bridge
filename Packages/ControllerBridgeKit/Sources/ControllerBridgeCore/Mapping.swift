@@ -35,6 +35,9 @@ public struct Mapping: Equatable, Sendable, Codable {
         notes = try c.decode(Notes.self, forKey: .notes)
         leds = try c.decode(LEDs.self, forKey: .leds)
         pads = try c.decodeIfPresent(Pads.self, forKey: .pads) ?? Pads()
+        if pads.modeSelect == .cycle, notes.buttons["mode_cycle"] == nil {
+            throw ShapeError("pads: mode_select is cycle, but notes has no mode_cycle button")
+        }
         // Notes per pad mode (#225): one note per pad in every mode.
         for (name, notes) in pads.modeNotes?.named ?? [] where notes.count != self.notes.pads.count {
             throw ShapeError("pads.mode_notes.\(name): \(notes.count) notes, but there are \(self.notes.pads.count) pads (notes.pads)")
@@ -92,16 +95,54 @@ public struct Mapping: Equatable, Sendable, Codable {
 
         public var modeNotes: ModeNotes?
 
+        /// How the pad mode is chosen (#198): the LC6000's four mode buttons, or one button that cycles them.
+        public enum ModeSelect: String, CaseIterable, Equatable, Sendable, Codable {
+            /// `mode_hotcue`, `mode_roll`, `mode_loop` and `mode_slicer`, one per mode.
+            case buttons
+            /// One `mode_cycle` button: Hot Cue → Roll → Loop → Slicer → Hot Cue.
+            case cycle
+        }
+
+        public var modeSelect: ModeSelect
+
+        /// The velocity the `mode_cycle` button's own LED shows in each mode (#198), when it has one: a level or a
+        /// color, as the controller reads it. Left out, DeckBridge leaves that LED alone.
+        public struct ModeVelocities: Equatable, Sendable, Codable {
+            public var hotcue: Int
+            public var roll: Int
+            public var loop: Int
+            public var slicer: Int
+
+            public init(hotcue: Int, roll: Int, loop: Int, slicer: Int) {
+                self.hotcue = hotcue
+                self.roll = roll
+                self.loop = loop
+                self.slicer = slicer
+            }
+        }
+
+        public var modeCycleVelocities: ModeVelocities?
+
         /// The LC6000's: 1/32 of a beat on pad 1 up to 4 beats on pad 8.
         public static let lc6000RollSizes = RollSize.allCases.map(\.rawValue)
 
-        public init(rollSizes: [String] = Self.lc6000RollSizes) { self.rollSizes = rollSizes }
+        public init(rollSizes: [String] = Self.lc6000RollSizes, modeSelect: ModeSelect = .buttons,
+                    modeCycleVelocities: ModeVelocities? = nil) {
+            self.rollSizes = rollSizes
+            self.modeSelect = modeSelect
+            self.modeCycleVelocities = modeCycleVelocities
+        }
 
-        enum CodingKeys: String, CodingKey { case rollSizes = "roll_sizes", channel, modeNotes = "mode_notes" }
+        enum CodingKeys: String, CodingKey {
+            case rollSizes = "roll_sizes", channel, modeNotes = "mode_notes"
+            case modeSelect = "mode_select", modeCycleVelocities = "mode_cycle_velocities"
+        }
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? Self.lc6000RollSizes
+            modeSelect = try c.decodeIfPresent(ModeSelect.self, forKey: .modeSelect) ?? .buttons
+            modeCycleVelocities = try c.decodeIfPresent(ModeVelocities.self, forKey: .modeCycleVelocities)
             channel = try c.decodeIfPresent(Int.self, forKey: .channel)
             modeNotes = try c.decodeIfPresent(ModeNotes.self, forKey: .modeNotes)
         }
@@ -463,6 +504,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var staleIdle: StaleIdle
         /// The velocities a button LED takes for full, dim and off (#194).
         public var levels: LEDLevels
+        /// How a pad or ring color becomes a velocity (#197): the LC6000's rgb222 unless a profile lists its own.
+        public var colorTable: ColorTable
         /// Light a button's shifted note (#226) with the button's own state, on a controller where it has its own LED.
         public var mirrorShifted: Bool
 
@@ -486,15 +529,18 @@ public struct Mapping: Equatable, Sendable, Codable {
             case pulseMs = "pulse_ms"
             case staleIdle = "stale_idle"
             case levels
+            case colorTable = "color_table"
             case mirrorShifted = "mirror_shifted"
         }
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
             beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000,
+            colorTable: ColorTable = .rgb222,
             mirrorShifted: Bool = false
         ) {
             self.levels = levels
+            self.colorTable = colorTable
             self.mirrorShifted = mirrorShifted
             self.ringFollowsDeck = ringFollowsDeck
             self.pitchCenter = pitchCenter
@@ -521,6 +567,7 @@ public struct Mapping: Equatable, Sendable, Codable {
                 staleIdle: try c.decode(StaleIdle.self, forKey: .staleIdle),
                 ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true,
                 levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000,
+                colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? .rgb222,
                 mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? false
             )
         }

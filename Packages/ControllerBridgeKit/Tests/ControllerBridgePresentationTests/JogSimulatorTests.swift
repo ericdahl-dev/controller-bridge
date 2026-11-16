@@ -1,0 +1,135 @@
+import ControllerBridgePresentation
+import Foundation
+import Testing
+
+/// The jog display simulator's words (#221), apart from the SwiftUI and the renderer.
+@Suite("Jog display simulator")
+struct JogSimulatorTests {
+    @Test("VoiceOver hears each deck's display as one sentence: deck, title, key, BPM and beat")
+    func spokenSummary() {
+        #expect(JogDeckSummary(deck: 1, title: "Daybreak", key: "A#m", bpm: 128, beat: 2).spoken
+            == "Deck 1, Daybreak, A#m, 128 BPM, beat 2")
+        #expect(JogDeckSummary(deck: 3, title: "Night Drive", key: nil, bpm: 127.5, beat: nil).spoken
+            == "Deck 3, Night Drive, 127.5 BPM")
+        #expect(JogDeckSummary(deck: 2, title: nil, key: nil, bpm: nil, beat: nil).spoken == "Deck 2, no track loaded")
+        #expect(JogDeckSummary(deck: 4, title: "", key: "C", bpm: 0, beat: 1).spoken == "Deck 4, no track loaded",
+                "an empty title is an empty deck, as Syndicate sends it")
+    }
+
+    @Test("Each preview's readout: the slot, the size, when it was uploaded and the unit's answer; or why there's none")
+    func readout() {
+        let utc = TimeZone(identifier: "UTC")!
+        let noon = Date(timeIntervalSince1970: 1_763_294_671)  // 2025-11-16 12:04:31 UTC
+        #expect(JogUploadStatus.uploaded(slot: 2, bytes: 14_812, at: noon, accepted: true).readout(timeZone: utc)
+            == "Slot 2 · 14,812 bytes · 12:04:31 · Accepted")
+        #expect(JogUploadStatus.uploaded(slot: 1, bytes: 980, at: noon, accepted: false).readout(timeZone: utc)
+            == "Slot 1 · 980 bytes · 12:04:31 · Refused")
+        #expect(JogUploadStatus.notUploaded.readout(timeZone: utc) == "Nothing uploaded yet")
+        #expect(JogUploadStatus.notConnected.readout(timeZone: utc) == "No LC6000 connected: preview only")
+    }
+
+    @Test("The marker redraws at most 30 times a second, and a burst still ends on its latest value")
+    func markerLimiter() {
+        var limiter = RedrawLimiter<Int>(interval: 1.0 / 30)
+        // The first value draws at once.
+        #expect(limiter.offer(10, at: 0.000) == 10)
+        // Within 1/30 s (0.0333…) nothing draws; the newest value waits.
+        #expect(limiter.offer(11, at: 0.010) == nil)
+        #expect(limiter.offer(12, at: 0.020) == nil)
+        // The tick after the interval draws the waiting value, the newest one.
+        #expect(limiter.tick(at: 0.030) == nil)
+        #expect(limiter.tick(at: 0.034) == 12)
+        // Nothing waiting: a tick draws nothing.
+        #expect(limiter.tick(at: 0.100) == nil)
+        // A value long after the last draw draws at once.
+        #expect(limiter.offer(13, at: 0.200) == 13)
+    }
+
+    @Test("The marker's pitch bend is a fraction of a turn: 0 is 12 o'clock, 4096 a quarter turn clockwise (provisional, #165)")
+    func markerAngle() {
+        #expect(JogMarkerAngle.degrees(pitchBend: 0) == 0)
+        #expect(JogMarkerAngle.degrees(pitchBend: 4096) == 90)
+        #expect(JogMarkerAngle.degrees(pitchBend: 8192) == 180)
+        #expect(JogMarkerAngle.degrees(pitchBend: 12288) == 270)
+        #expect(JogMarkerAngle.degrees(pitchBend: 16383) == 359.978_027_343_75)
+    }
+
+    // The simulator's state from the display driver's events (#221), mapped by the App one to one.
+
+    static let utc = TimeZone(identifier: "UTC")!
+    static let noon = Date(timeIntervalSince1970: 1_763_294_671)  // 12:04:31 UTC
+
+    @Test("Before the unit answers, every deck reads Not connected; once connected, Nothing uploaded yet")
+    func connection() {
+        var sim = JogSimulator()
+        #expect(sim.status(deck: 1) == .notConnected)
+        sim.apply(.connected)
+        #expect(sim.status(deck: 1) == .notUploaded)
+        sim.apply(.disconnected)
+        #expect(sim.status(deck: 3) == .notConnected)
+    }
+
+    @Test("An upload the unit shows reads Accepted for its deck, which comes to the front; a refused one reads Refused")
+    func uploads() {
+        var sim = JogSimulator()
+        sim.apply(.connected)
+        sim.apply(.uploadStarted(slot: 2, deck: 1, bytes: 14_812, at: Self.noon))
+        #expect(sim.front == 1)
+        sim.apply(.shown(slot: 2))
+        #expect(sim.status(deck: 1).readout(timeZone: Self.utc) == "Slot 2 · 14,812 bytes · 12:04:31 · Accepted")
+        sim.apply(.uploadStarted(slot: 1, deck: 2, bytes: 980, at: Self.noon))
+        sim.apply(.failed)
+        #expect(sim.front == 2)
+        #expect(sim.status(deck: 2).readout(timeZone: Self.utc) == "Slot 1 · 980 bytes · 12:04:31 · Refused")
+        #expect(sim.status(deck: 1).readout(timeZone: Self.utc) == "Slot 2 · 14,812 bytes · 12:04:31 · Accepted")
+    }
+
+    @Test("The marker and play light belong to the deck in front; the others keep theirs")
+    func markerFollowsFront() {
+        var sim = JogSimulator()
+        sim.apply(.connected)
+        sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 100, at: Self.noon))
+        sim.apply(.marker(pitchBend: 4096))
+        sim.apply(.playing(true))
+        sim.apply(.uploadStarted(slot: 2, deck: 3, bytes: 100, at: Self.noon))
+        sim.apply(.marker(pitchBend: 8192))
+        #expect(sim.marker(deck: 1) == 4096)
+        #expect(sim.playing(deck: 1))
+        #expect(sim.marker(deck: 3) == 8192)
+        #expect(!sim.playing(deck: 3))
+    }
+
+    @Test("A marker with no deck in front yet goes nowhere")
+    func markerBeforeUpload() {
+        var sim = JogSimulator()
+        sim.apply(.marker(pitchBend: 4096))
+        #expect(sim.front == nil)
+        #expect(sim.marker(deck: 1) == 0)
+    }
+
+    @Test("While its deck plays, the lit beat agrees with the hand: a quarter turn per beat from 12 o'clock; paused, none")
+    func litBeat() {
+        var sim = JogSimulator()
+        sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 100, at: Self.noon))
+        sim.apply(.marker(pitchBend: 4096 + 100))
+        #expect(sim.litBeat(deck: 1) == nil, "not playing")
+        sim.apply(.playing(true))
+        #expect(sim.litBeat(deck: 1) == 2)
+        sim.apply(.marker(pitchBend: 0))
+        #expect(sim.litBeat(deck: 1) == 1)
+        sim.apply(.marker(pitchBend: 16383))
+        #expect(sim.litBeat(deck: 1) == 4)
+        #expect(sim.markerTurns(deck: 1) == 16383.0 / 16384)
+        sim.apply(.playing(false))
+        #expect(sim.litBeat(deck: 1) == nil)
+    }
+
+    @Test("Diagnostics has a Jog display tab, last; before the unit shows anything it says how to turn it on")
+    func tab() {
+        #expect(DiagnosticsTab.allCases.map(\.rawValue) == ["MIDI Monitor", "LED Sweep", "OSC Log", "Jog display"])
+        #expect(DiagnosticsTab.jog.emptyText(controllerConnected: true)
+            == "Nothing on the jog display yet. Turn on Jog display in Settings, then load a track.")
+        #expect(DiagnosticsTab.jog.emptyText(controllerConnected: false)
+            == "No LC6000 connected. The jog display preview shows what DeckBridge sends it.")
+    }
+}
