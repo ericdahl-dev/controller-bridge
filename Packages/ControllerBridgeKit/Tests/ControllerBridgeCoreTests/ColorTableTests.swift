@@ -140,3 +140,22 @@ struct ColorTableCoordinatorTests {
         #expect([rig.leds[32], rig.leds[35]] == [48, 12])
     }
 }
+
+/// Settings' deck color swatch (#197): what the running profile's table shows, not always rgb222.
+@Suite("Color table preview")
+struct ColorTablePreviewTests {
+    static let table = ColorTable.list([.init(rgb: [255, 0, 0], value: 5), .init(rgb: [0, 255, 0], value: 9),
+                                        .init(rgb: [0, 0, 255], value: 13), .init(rgb: [255, 255, 255], value: 20)])
+
+    @Test("On a list, the swatch is the chosen entry's color: dark red shows red, pale pink shows white, vivid pink red")
+    func list() {
+        #expect(DeckColors.ledPreview([200, 30, 30], mode: .exact, table: Self.table) == [255, 0, 0])
+        #expect(DeckColors.ledPreview([255, 180, 180], mode: .exact, table: Self.table) == [255, 255, 255])
+        #expect(DeckColors.ledPreview([255, 180, 180], mode: .vivid, table: Self.table) == [255, 0, 0])
+    }
+
+    @Test("On rgb222, as before")
+    func rgb222() {
+        #expect(DeckColors.ledPreview([236, 207, 101], mode: .exact, table: .rgb222) == [255, 170, 85])
+    }
+}

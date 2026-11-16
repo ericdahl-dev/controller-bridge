@@ -119,6 +119,17 @@ public enum ColorTable: Equatable, Sendable, Codable {
         }
     }
 
+    /// The color a velocity shows, as RGB: rgb222 read back, or the first list entry with that value (black if none).
+    public func shown(_ velocity: UInt8) -> [Int] {
+        switch self {
+        case .rgb222:
+            let v = Int(velocity)
+            return [v >> 4 & 3, v >> 2 & 3, v & 3].map { $0 * 85 }
+        case .list(let entries):
+            return entries.first { $0.value == Int(velocity) && $0.rgb.count == 3 }?.rgb ?? [0, 0, 0]
+        }
+    }
+
     /// In a profile: the name "rgb222", or the list of entries.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
