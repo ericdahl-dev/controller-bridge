@@ -36,4 +36,12 @@ extension Bridge {
         duration = old.duration
         reportedTempo = old.reportedTempo
     }
+
+    /// The bridge's own state (#115): Key Lock, Slip and the pad mode. Shift and held controls aren't carried: the
+    /// swap released them.
+    func carryOwnState(from old: Bridge) {
+        keyLockOn = old.keyLockOn
+        slipOn = old.slipOn
+        padMode = old.padMode
+    }
 }
