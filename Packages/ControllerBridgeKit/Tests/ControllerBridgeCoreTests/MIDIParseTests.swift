@@ -1,5 +1,5 @@
 import Testing
-import LC6000Core
+import ControllerBridgeCore
 
 @Suite struct MIDIParseTests {
     // UMP type 2, group 0, status 0x90 (note on, MIDI channel 1 = nibble 0), note 0x01, velocity 0x7F.

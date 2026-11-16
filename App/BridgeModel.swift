@@ -1,5 +1,5 @@
 import AppKit
-import LC6000Core
+import ControllerBridgeCore
 import Observation
 
 /// What the menu shows. A main-actor copy: the adapters report into it, and nothing reads the Coordinator from here.

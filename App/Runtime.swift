@@ -1,8 +1,8 @@
-// Wires the adapters to the Kit. Not unit-tested: the Engine and Coordinator are tested in LC6000Kit, the rest by
+// Wires the adapters to the Kit. Not unit-tested: the Engine and Coordinator are tested in ControllerBridgeKit, the rest by
 // the smoke script.
 import Dispatch
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import os
 
 /// Makes the Coordinator inside one task and runs the Engine loop there, so that loop is the only code that ever
@@ -26,7 +26,7 @@ final class Ticker: Sendable {
     }
 
     private nonisolated static func makeTimer(_ producer: EventPipe.Producer) -> any DispatchSourceTimer {
-        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "dev.ericdahl.LC6000Bridge.tick"))
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "dev.ericdahl.ControllerBridge.tick"))
         // Leeway lets the system batch wakeups.
         timer.schedule(deadline: .now(), repeating: .milliseconds(10), leeway: .milliseconds(5))
         timer.setEventHandler { producer.tick() }
@@ -36,13 +36,13 @@ final class Ticker: Sendable {
     func stop() { timer.cancel() }
 }
 
-struct SystemClock: LC6000Core.Clock {
+struct SystemClock: ControllerBridgeCore.Clock {
     var now: Double { Double(DispatchTime.now().uptimeNanoseconds) / 1e9 }
 }
 
 /// The Coordinator's log goes to the unified log (and to stdout when run from a terminal, for the smoke script).
 struct UnifiedLogSink: LogSink {
-    private static let logger = Logger(subsystem: "dev.ericdahl.LC6000Bridge", category: "bridge")
+    private static let logger = Logger(subsystem: "dev.ericdahl.ControllerBridge", category: "bridge")
     func log(_ line: String) {
         Self.logger.info("\(line, privacy: .public)")
         print(line)

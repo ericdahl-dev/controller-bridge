@@ -1,5 +1,5 @@
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// Expected values are typed from lc6000_bridge/default_mapping.toml, the Python default mapping, except

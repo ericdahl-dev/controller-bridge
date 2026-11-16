@@ -1,4 +1,4 @@
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 /// Expected OSC comes from the Python bridge and its tests: triggers fire only on a press, holds send 1 then 0.

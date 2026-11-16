@@ -1,8 +1,8 @@
-import LC6000Core
+import ControllerBridgeCore
 import SwiftUI
 
 @main
-struct LC6000BridgeApp: App {
+struct ControllerBridgeApp: App {
     @State private var model = BridgeModel()
 
     var body: some Scene {

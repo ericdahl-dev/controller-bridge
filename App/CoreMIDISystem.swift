@@ -1,6 +1,6 @@
 // The CoreMIDI adapter. Not unit-tested: the smoke script (scripts/smoke.sh) covers it.
 import CoreMIDI
-import LC6000Core
+import ControllerBridgeCore
 import Synchronization
 
 enum CoreMIDIError: Error {
@@ -28,7 +28,7 @@ final class CoreMIDISystem: MIDISystem {
     init(producer: EventPipe.Producer, onChange: @escaping @Sendable ([String]) -> Void) throws {
         let relay = ChangeRelay()
         var client = MIDIClientRef()
-        try check("MIDIClientCreateWithBlock", MIDIClientCreateWithBlock("LC6000Bridge" as CFString, &client, Self.notifyBlock(relay)))
+        try check("MIDIClientCreateWithBlock", MIDIClientCreateWithBlock("ControllerBridge" as CFString, &client, Self.notifyBlock(relay)))
         var input = MIDIPortRef()
         try check("MIDIInputPortCreateWithProtocol",
                   MIDIInputPortCreateWithProtocol(client, "Controller in" as CFString, ._1_0, &input, Self.receiveBlock(producer)))

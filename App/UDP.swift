@@ -1,7 +1,7 @@
 // The UDP transport. Not unit-tested: the smoke script (scripts/smoke.sh) covers it.
 import Darwin
 import Dispatch
-import LC6000Core
+import ControllerBridgeCore
 
 /// Sends each OSC message as one datagram to Syndicate. Loopback only, so there is no local-network prompt.
 final class UDPOSCSender: OSCSender {
@@ -43,7 +43,7 @@ final class FeedbackListener: Sendable {
             close(fd)
             throw .errno("bind", code)
         }
-        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "dev.ericdahl.LC6000Bridge.feedback"))
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "dev.ericdahl.ControllerBridge.feedback"))
         // Made here, outside any actor: written in main-actor code, this handler traps on its queue (#14 spike).
         source.setEventHandler {
             var buffer = [UInt8](repeating: 0, count: 65_536)

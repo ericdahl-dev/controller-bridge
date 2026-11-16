@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   kit:
-    name: LC6000Kit tests
+    name: Kit tests
     # Standard GitHub-hosted runner: free for public repositories. Avoid -large/-xlarge (always billed).
     runs-on: macos-26
     timeout-minutes: 20
@@ -25,7 +25,7 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Package tests
-        working-directory: Packages/LC6000Kit
+        working-directory: Packages/ControllerBridgeKit
         run: swift test
 
   app:
@@ -41,11 +41,11 @@ jobs:
       # Release: a Debug ad-hoc build drops the hardened runtime, so it wouldn't check what ships.
       - name: Build (ad-hoc signed)
         run: |
-          xcodebuild -project LC6000Bridge.xcodeproj -scheme LC6000Bridge -configuration Release \
+          xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configuration Release \
             -derivedDataPath build CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build
       - name: Check the signature
         run: |
-          app=build/Build/Products/Release/LC6000Bridge.app
+          app=build/Build/Products/Release/ControllerBridge.app
           info=$(codesign -dv "$app" 2>&1); echo "$info"
           [[ "$info" == *"flags="*"runtime"* ]] || { echo "hardened runtime missing"; exit 1; }
           ents=$(codesign -d --entitlements - --xml "$app" 2>/dev/null)

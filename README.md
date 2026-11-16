@@ -1,4 +1,4 @@
-# lc6000-osc-bridge
+# controller-bridge
 
 Use a **Denon LC6000 PRIME** with **[Untitled Audio Syndicate](https://untitledaudiosyndicate.com)** through Syndicate's OSC API, with LED feedback.
 
@@ -86,12 +86,12 @@ Copy `default_mapping.toml`, edit it, and run with `--config my_mapping.toml`. O
 
 ### The Mac app (in progress)
 
-A native, sandboxed menu-bar app is replacing the Python bridge (#12). `Packages/LC6000Kit` holds the logic and its tests. `App/` holds the menu-bar shell and the CoreMIDI and UDP adapters. The Xcode project is generated from `project.yml` and isn't committed.
+A native, sandboxed menu-bar app is replacing the Python bridge (#12). `Packages/ControllerBridgeKit` holds the logic and its tests. `App/` holds the menu-bar shell and the CoreMIDI and UDP adapters. The Xcode project is generated from `project.yml` and isn't committed.
 
 ```sh
-(cd Packages/LC6000Kit && swift test)
+(cd Packages/ControllerBridgeKit && swift test)
 brew install xcodegen && xcodegen generate
-xcodebuild -project LC6000Bridge.xcodeproj -scheme LC6000Bridge -configuration Release \
+xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configuration Release \
   -derivedDataPath build CODE_SIGN_IDENTITY=- build
 scripts/smoke.sh   # required before a PR: a virtual LC6000 and a fake Syndicate check Play out and the Play LED back
 ```

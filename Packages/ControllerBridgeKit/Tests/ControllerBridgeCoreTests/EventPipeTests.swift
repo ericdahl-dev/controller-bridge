@@ -1,5 +1,5 @@
 import Foundation
-import LC6000Core
+import ControllerBridgeCore
 import Testing
 
 @Suite struct EventPipeTests {
