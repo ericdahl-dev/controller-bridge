@@ -34,6 +34,8 @@ let package = Package(
         // A draft controller profile from a capture file plus docs facts (#189): developer tooling, so it may join
         // Capture and Core. The capture wins over the docs; whatever neither knows is a TODO, never a guess.
         .target(name: "ControllerBridgeDraft", dependencies: ["ControllerBridgeCapture", "ControllerBridgeCore"]),
+        // scripts/capture_to_profile: the draft tool's command line, a thin shell over ControllerBridgeDraft.
+        .executableTarget(name: "capture-to-profile", dependencies: ["ControllerBridgeDraft", "ControllerBridgeCapture"]),
         .testTarget(name: "ControllerBridgeDraftTests", dependencies: ["ControllerBridgeDraft", "ControllerBridgeCapture", "ControllerBridgeCore"]),
     ]
 )
