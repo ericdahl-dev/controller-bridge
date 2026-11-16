@@ -104,6 +104,8 @@ final class BridgeModel {
     func setDiagnostics(open: Bool) { producer?.diagnostics(open: open) }
     func startLEDSweep(delay: Double) { producer?.ledSweep(delay: delay) }
     func stopLEDSweep() { producer?.stopLEDSweep() }
+    /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
+    func setJogPreviewDeck(_ deck: Int?) { producer?.setJogPreviewDeck(deck) }
     /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.
     func setDemo(_ on: Bool) { producer?.demo(on: on) }
     /// Pauses (a source) or gives back (nil) a controller while the capture window records it (#186).
