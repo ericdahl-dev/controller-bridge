@@ -327,7 +327,9 @@ public final class Coordinator {
             let claimed = Set(controllers.indices.filter { $0 != index && !sharesLayers(index, with: $0) }
                 .compactMap { controllers[$0].source?.id })
             let free = sources.filter { !claimed.contains($0.id) }
-            let known = controllers[index].knownSourceID.flatMap { id in free.first { $0.id == id } }
+            // The last device it ran on comes first, while a profile still resolves for it (#200: not after a choice
+            // made by hand for it is taken back).
+            let known = controllers[index].knownSourceID.flatMap { id in free.first { $0.id == id && resolvedProfile($0.name) != nil } }
             source = known ?? free.first { resolvedProfile($0.name) != nil }
         }
         guard let source else { return false }
