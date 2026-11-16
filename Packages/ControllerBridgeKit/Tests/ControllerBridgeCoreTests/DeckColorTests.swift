@@ -129,13 +129,15 @@ struct DeckColorTests {
     }
 
     // #151: the ring is vivid. Take out the white (the smallest channel), scale the strongest to level 3, drop a channel
-    // under 35 % of it, quantize. A near-grey (saturation under 20 %) keeps the exact mapping.
+    // under 30 % of it, quantize. A near-grey (saturation under 20 %) keeps the exact mapping.
     static let vividCases: [([Int32], UInt8)] = [
         ([255, 0, 0], 48),                      // red, unchanged
-        ([128, 0, 255], 35),                    // purple: 50 % ≥ 35 %, so (2, 0, 3)
+        ([128, 0, 255], 35),                    // purple: 50 % ≥ 30 %, so (2, 0, 3)
         ([0, 200, 180], 15),                    // teal-ish: (0, 3, 3)
         ([255, 180, 180], 48),                  // pastel: the white comes out, (3, 0, 0)
         ([0x6C, 0x72, 0x77], 21),               // near-grey: exact, (1, 1, 1)
+        ([255, 140, 0], 56),                    // orange stays orange, never red: (3, 2, 0)
+        ([0xC5, 0x75, 0x4E], 52),               // a muted orange: green is 33 % ≥ 30 %, so (3, 1, 0), not red
     ]
 
     @Test("Vivid ring colors from Syndicate's palette (slot 1, deck 1)", arguments: vividCases)
