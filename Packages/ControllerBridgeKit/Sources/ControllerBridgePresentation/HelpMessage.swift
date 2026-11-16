@@ -13,7 +13,18 @@ public struct HelpMessage: Equatable, Sendable {
     public init?(_ state: BridgeState) {
         // A bridge that couldn't start comes first. The raw error is for Diagnostics, not the panel (#66).
         if state.stopped {
-            self.init(text: "The bridge couldn't open MIDI. Quit and reopen it. If that doesn't help, restart the Mac.", showsGuide: false)
+            switch state.stopReason {
+            case .midi:
+                self.init(text: "The bridge couldn't open MIDI. Quit and reopen it. If that doesn't help, restart the Mac.", showsGuide: false)
+            // The sender is built at launch only, so a fixed host takes effect after a restart (#88).
+            case .oscSender:
+                self.init(
+                    text: "The bridge couldn't reach Syndicate's address. Check the Syndicate host in Settings, click Apply, then quit and reopen.",
+                    showsGuide: false
+                )
+            case .profiles:
+                self.init(text: "The bridge couldn't load its controller profiles. Reinstall the app.", showsGuide: false)
+            }
             return
         }
         // Two short lines each (#66).

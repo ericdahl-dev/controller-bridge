@@ -292,4 +292,33 @@ struct StatusPresentationTests {
             #expect(BridgeState.Controller(connected: false, profile: nil, lastProfile: nil, lastDisconnect: reason) == .notConnected)
         }
     }
+
+    // #88: a stopped bridge says which part failed, shows no MASTER, and offers no demo.
+
+    @Test("Stopped with master set: no MASTER light and no MASTER in the line")
+    func stoppedHidesMaster() {
+        let status = StatusPresentation(BridgeState(
+            controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 2, stopped: true, master: true
+        ))
+        #expect(status.master == nil)
+        #expect(status.line == "BRIDGE ● STOPPED · DECK [2]")
+    }
+
+    @Test("The stopped header names the bridge problem, not \"No controller\"", arguments: [
+        (BridgeState.StopReason.midi, "Couldn't open MIDI"),
+        (.oscSender, "Couldn't reach Syndicate"),
+        (.profiles, "Couldn't load profiles"),
+    ])
+    func stoppedHeader(reason: BridgeState.StopReason, subtitle: String) {
+        let status = StatusPresentation(BridgeState(
+            controller: .notConnected, feedback: .starting, deck: 1, stopped: true, stopReason: reason
+        ))
+        #expect(status.header == StatusHeader(title: "Bridge stopped", subtitle: subtitle))
+    }
+
+    @Test("The demo toggle is offered only while the bridge runs: stopped, there's nothing to switch it on with")
+    func demoToggleHiddenWhenStopped() {
+        #expect(StatusPresentation(BridgeState(controller: .notConnected, feedback: .starting, deck: 1)).showsDemoToggle)
+        #expect(!StatusPresentation(BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true)).showsDemoToggle)
+    }
 }
