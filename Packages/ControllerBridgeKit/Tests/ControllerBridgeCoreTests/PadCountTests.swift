@@ -20,3 +20,47 @@ struct PadCountMappingTests {
         #expect(mapping.pads.rollSizes == ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"])
     }
 }
+
+/// The Coordinator seam (#196). Velocities from the 0b00RRGGBB table by hand: Syndicate's default slot 1 is red
+/// (255, 0, 0) → 48, slot 4 green (0, 255, 0) → 12.
+@Suite("Pad count at the Coordinator")
+struct PadCountCoordinatorTests {
+    static let fourPads = #"{ "notes": { "pads": [32, 33, 34, 35] }, "pads": { "roll_sizes": ["Quarter", "Half", "One", "Two"] } }"#
+
+    static func started(_ override: String?) throws -> Rig {
+        let rig = try Rig(override: override)
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    /// Cues for slots 1-8, each cue in its own slot's color.
+    static let eightCues = OSCMessage("/Syndicate/Deck/1/Cues", (1...8).flatMap { [OSCArgument.int(Int32($0)), .string("c\($0)")] })
+
+    static func hold(_ rig: Rig, _ note: UInt8) -> [OSCMessage] {
+        rig.osc.sent.removeAll()
+        PadsTests.press(rig, note)
+        return rig.osc.sent
+    }
+
+    @Test("Four pads: pad 4 holds hot cue 4, Roll pad 1 plays the profile's Quarter, Loop pad 3 sets cue loop 3")
+    func fourPadOSC() throws {
+        let rig = try Self.started(Self.fourPads)
+        #expect(Self.hold(rig, 35) == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(4), .int(1)]),
+                                       OSCMessage("/Syndicate/Deck/1/HotCue", [.int(4), .int(0)])])
+        PadsTests.press(rig, PadsTests.modeRoll)
+        #expect(Self.hold(rig, 32) == [OSCMessage("/Syndicate/Deck/1/SlipLoop/Quarter", [.int(1)]),
+                                       OSCMessage("/Syndicate/Deck/1/SlipLoop/Quarter", [.int(0)])])
+        PadsTests.press(rig, PadsTests.modeLoop)
+        #expect(Self.hold(rig, 34) == [OSCMessage("/Syndicate/Deck/1/SetCueLoop", [.int(3)])])
+    }
+
+    @Test("Four pads light from an 8-slot Cues: pads 1-4 in slots 1-4's colors, and notes 36-39 are never written")
+    func fourPadLEDs() throws {
+        let rig = try Self.started(Self.fourPads)
+        rig.coordinator.feedback(Self.eightCues)
+        #expect(rig.leds[32] == 48)
+        #expect(rig.leds[35] == 12)
+        #expect([36, 37, 38, 39].map { rig.leds[$0] } == [nil, nil, nil, nil])
+    }
+}
