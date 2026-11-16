@@ -47,7 +47,7 @@ struct DemoTests {
         #expect(rig.session.status.feedback == .live)
         #expect(rig.session.status.controllers.map(\.connected) == [true])
         // Play dim (stopped), Cue lit (loaded and stopped), pads 1-2 in cue colors red 48 and orange 56, ring 11.
-        #expect([rig.led[1], rig.led[2], rig.led[32], rig.led[33], rig.led[34], rig.led[40]] == [1, 127, 48, 56, 0, 21])
+        #expect([rig.led[1], rig.led[2], rig.led[32], rig.led[33], rig.led[34], rig.led[40]] == [1, 127, 48, 56, 0, 48])
     }
 
     @Test("The first seconds of the script: Play, a pitch fader move from center, a jog nudge, as literal OSC")

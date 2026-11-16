@@ -147,9 +147,10 @@ struct DeckColorTests {
         #expect(rig.leds[40] == velocity)
     }
 
-    @Test("Switching ring colors to Exact repaints at once: deck 2's yellow goes from vivid 56 to exact 57, and back")
+    @Test("Switching ring colors to Exact repaints at once: deck 2 at #ECCF65 goes from vivid 56 to exact 57, and back")
     func ringColorsSwitch() throws {
         let rig = try Self.onDeck(2)
+        Self.palette(rig, slot: 3, 0xEC, 0xCF, 0x65)
         #expect(rig.leds[40] == 56)
         rig.coordinator.setRingColors(.exact)
         #expect(rig.leds[40] == 57)
@@ -162,5 +163,10 @@ struct DeckColorTests {
         #expect(DeckColors.ledPreview([236, 207, 101], mode: .exact) == [255, 170, 85])
         #expect(DeckColors.ledPreview([236, 207, 101], mode: .vivid) == [255, 170, 0])
         #expect(DeckColors.ledPreview([255, 180, 180], mode: .vivid) == [255, 0, 0])
+    }
+
+    @Test("The default deck colors are Syndicate's factory cue palette slots 1, 3, 5 and 7: red, yellow, cyan, purple")
+    func defaultsAreFactorySlots() {
+        #expect(DeckColors.defaults == DeckColors(rgb: [1: [255, 0, 0], 2: [255, 255, 0], 3: [0, 255, 255], 4: [128, 0, 255]]))
     }
 }
