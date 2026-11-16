@@ -85,9 +85,17 @@ def find_build(http, bundle_id, version, build_number, sleep, timeout=PROCESSING
 
 
 def what_to_test(doc):
-    """The What to Test text: everything after the doc's first "---" rule."""
+    """The What to Test text: everything after the doc's first "---" rule. TestFlight keeps line breaks, so a line
+    wrapped in the doc joins the one before it; blank lines and new bullets ("- ") start a new line."""
     _, _, text = doc.partition("\n---\n")
-    return text.strip()
+    lines = []
+    for raw in text.strip().splitlines():
+        line = raw.strip()
+        if lines and line and lines[-1] and not line.startswith("- "):
+            lines[-1] += " " + line
+        else:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 def set_what_to_test(http, build, text, locale="en-US"):

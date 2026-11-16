@@ -146,6 +146,11 @@ class WhatToTestTests(unittest.TestCase):
     def test_the_text_is_everything_after_the_rule(self):
         self.assertEqual(td.what_to_test(DOC), "DeckBridge 1.0.1 has a new look.\n\n- Try Settings.")
 
+    def test_wrapped_lines_join_so_testers_see_whole_sentences(self):
+        # TestFlight keeps line breaks; the doc is wrapped at 120 columns with indented continuations.
+        doc = "# T\n\n---\n\nFirst paragraph\nwraps here.\n\n- A bullet that\n  wraps too.\n- Short.\n"
+        self.assertEqual(td.what_to_test(doc), "First paragraph wraps here.\n\n- A bullet that wraps too.\n- Short.")
+
     def test_creates_the_en_us_text_when_the_build_has_none(self):
         api = FakeASC()
         td.set_what_to_test(api.http, "build1", "New look.")
