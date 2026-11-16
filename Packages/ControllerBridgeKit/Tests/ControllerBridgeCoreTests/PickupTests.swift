@@ -103,4 +103,14 @@ struct PickupTests {
         Self.fader(rig, 0x60)
         #expect(rig.osc.sent == [Self.tempo(0.50009)])
     }
+
+    @Test("A resync (unplug and replug) re-arms pickup")
+    func resyncRearms() throws {
+        let rig = try Self.pickedUp()
+        RecoveryTests.unplug(rig)
+        RecoveryTests.replug(rig)
+        rig.osc.sent.removeAll()
+        Self.fader(rig, 0x70)
+        #expect(rig.osc.sent == [])
+    }
 }
