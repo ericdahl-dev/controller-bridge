@@ -74,6 +74,21 @@ public struct StatusLight: Equatable, Sendable {
     }
 }
 
+/// One part of the status bar: "LABEL ● WORD", or a bare word such as "DECK [1]" or "MASTER".
+public struct StatusLinePart: Equatable, Sendable {
+    public var label: String?
+    public var word: String
+    public var tone: StatusLight.Tone
+
+    public init(label: String?, word: String, tone: StatusLight.Tone) {
+        self.label = label
+        self.word = word
+        self.tone = tone
+    }
+
+    public var text: String { label.map { "\($0) ● \(word)" } ?? word }
+}
+
 /// The menu-bar icon's state dot.
 public enum IconState: Equatable, Sendable {
     case ok
@@ -85,13 +100,18 @@ public enum IconState: Equatable, Sendable {
 public struct StatusPresentation: Equatable, Sendable {
     public var lights: [StatusLight]
     public var line: String
+    /// The parts of `line`, for the status bar to draw in their tones.
+    public var lineParts: [StatusLinePart]
     public var icon: IconState
     /// The orange MASTER light, apart from `lights` so it never counts toward the icon (#53).
     public var master: StatusLight?
     /// "LAST DROPOUT: …" for the panel, once Syndicate's feedback has stopped at least once (#21).
     public var lastDropout: String?
 
-    public init(_ state: BridgeState) {
+    /// How many characters the panel's status bar holds without truncating (360 pt, 10 pt semibold caps).
+    public static let lineBudget = 60
+
+    public init(_ state: BridgeState, lineBudget: Int = StatusPresentation.lineBudget) {
         let controller: StatusLight = switch state.controller {
         case .connected(let profile): StatusLight(label: profile, word: "CONNECTED", tone: .live)
         case .notConnected: StatusLight(label: "CONTROLLER", word: "NOT CONNECTED", tone: .idle)
@@ -110,12 +130,39 @@ public struct StatusPresentation: Equatable, Sendable {
             + (state.demo ? [StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention)] : [])
             + [controller, feedback]
         master = state.master ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
-        line = lights.map { "\($0.label) ● \($0.word)" }.joined(separator: " · ") + " · DECK [\(state.deck)]"
-            + (state.master ? " · MASTER" : "")
+        // The status bar: each light, then the deck, then MASTER, cut to whole parts that fit (#66).
+        let parts = lights.map { (StatusLinePart(label: $0.label, word: $0.word, tone: $0.tone), Self.priority(of: $0, controller: controller)) }
+            + [(StatusLinePart(label: nil, word: "DECK [\(state.deck)]", tone: .idle), 4)]
+            + (state.master ? [(StatusLinePart(label: nil, word: "MASTER", tone: .attention), 3)] : [])
+        lineParts = Self.fit(parts, budget: lineBudget)
+        line = lineParts.map(\.text).joined(separator: Self.separator)
         icon = if lights.contains(where: { $0.tone == .error }) { .error }
             else if lights.allSatisfy({ $0.tone == .live }) { .ok }
             else { .attention }
         lastDropout = state.lastDropout.map { "LAST DROPOUT: " + $0 }
+    }
+
+    static let separator = " · "
+
+    /// Lower keeps longer: DEMO and error lights, then the controller, feedback, MASTER, and DECK last.
+    private static func priority(of light: StatusLight, controller: StatusLight) -> Int {
+        if light.tone == .error || light.label == "DEMO" { return 0 }
+        return light == controller ? 1 : 2
+    }
+
+    /// Drops whole parts, lowest priority first, until the line fits. The most important part always stays whole,
+    /// even over the budget: a word is never cut.
+    private static func fit(_ parts: [(StatusLinePart, Int)], budget: Int) -> [StatusLinePart] {
+        var kept = parts
+        func length(_ parts: [(StatusLinePart, Int)]) -> Int {
+            parts.map(\.0.text.count).reduce(0, +) + max(0, parts.count - 1) * separator.count
+        }
+        while kept.count > 1, length(kept) > budget {
+            // The last of the lowest-priority parts goes first.
+            let worst = kept.indices.max { kept[$0].1 < kept[$1].1 || (kept[$0].1 == kept[$1].1 && $0 < $1) }!
+            kept.remove(at: worst)
+        }
+        return kept.map(\.0)
     }
 }
 
