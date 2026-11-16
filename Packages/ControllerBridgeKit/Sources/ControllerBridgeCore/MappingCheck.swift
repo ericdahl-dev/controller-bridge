@@ -196,6 +196,11 @@ extension Mapping {
         // The pads' own MIDI channel (#224), for the deck and for each deck layer.
         "pads.channel": .number(0, isInteger: true),
         "midi.layers[].pad_channel": .number(0, isInteger: true),
+        // Each pad mode's own notes (#225).
+        "pads.mode_notes": .object([
+            ("hotcue", .array([.number(0, isInteger: true)])), ("roll", .array([.number(0, isInteger: true)])),
+            ("loop", .array([.number(0, isInteger: true)])), ("slicer", .array([.number(0, isInteger: true)])),
+        ]),
     ]
 
     /// An optional key's expected kind by its path, a list element's index written as `[]`.
@@ -211,6 +216,8 @@ extension Mapping {
             "midi.layers[].channel": 1...16,
             "midi.layers[].deck": 1...4,
             "midi.layers[].pad_channel": 1...16, "pads.channel": 1...16,
+            "pads.mode_notes.hotcue[]": 0...127, "pads.mode_notes.roll[]": 0...127,
+            "pads.mode_notes.loop[]": 0...127, "pads.mode_notes.slicer[]": 0...127,
             "midi.layer_note": 0...127,
             "notes.pads[]": 0...127,
             "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127, "jog.relative_cc": 0...127, "jog.relative_edge_cc": 0...127,
