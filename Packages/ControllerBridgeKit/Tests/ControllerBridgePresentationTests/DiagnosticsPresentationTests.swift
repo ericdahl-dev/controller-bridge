@@ -118,6 +118,32 @@ struct DiagnosticsPresentationTests {
         ])
     }
 
+    @Test("Shown, streaming values collapse: each stretch of them shows each address once, at its latest value, with how many arrived (#218)")
+    func collapseStreaming() {
+        var lines = DiagnosticsLines()
+        lines.hideStreaming = false
+        for message in [
+            "OSC <- /Syndicate/Deck/1/Playing 1",
+            "OSC <- /Syndicate/Deck/3/Position 48.89",
+            "OSC <- /Syndicate/Deck/3/BarRamp 0.40",
+            "OSC <- /Syndicate/Deck/3/Position 48.90",
+            "OSC <- /Syndicate/Deck/3/BarRamp 0.41",
+            "OSC <- /Syndicate/Deck/3/Position 48.91",
+            "OSC <- /Syndicate/Deck/3/Cues 1",
+            "OSC <- /Syndicate/Deck/3/Position 49.00",
+        ] { lines.append(to: .osc, message: message) }
+        #expect(lines.collapseStreaming)
+        #expect(lines.shown(.osc).map(\.message) == [
+            "OSC <- /Syndicate/Deck/1/Playing 1",
+            "OSC <- /Syndicate/Deck/3/BarRamp 0.41 ×2",
+            "OSC <- /Syndicate/Deck/3/Position 48.91 ×3",
+            "OSC <- /Syndicate/Deck/3/Cues 1",
+            "OSC <- /Syndicate/Deck/3/Position 49.00",
+        ])
+        lines.collapseStreaming = false
+        #expect(lines.shown(.osc).count == 8)
+    }
+
     @Test("Hidden streaming lines can't push the rest out: after 20,100 of them, the Playing line is still shown (#97)")
     func hiddenLinesDontEvict() {
         var lines = DiagnosticsLines()
@@ -128,6 +154,7 @@ struct DiagnosticsPresentationTests {
         // Unticking the box shows everything in arrival order, newest 20,000: the Progress list kept its newest 20,000
         // (0.101 to 0.20100), and with Playing that is 20,001 lines, so the oldest of them (Playing) is past the limit.
         lines.hideStreaming = false
+        lines.collapseStreaming = false
         let all = lines.shown(.osc)
         #expect(all.count == 20_000)
         #expect(all.first?.message == "OSC <- /Syndicate/Deck/1/Progress 0.101")

@@ -117,6 +117,9 @@ public struct DiagnosticsLines: Equatable, Sendable {
     public var hideStreaming = true
     /// What the window narrows the lists to (#218). Display only: nothing is dropped from the history.
     public var filter = DiagnosticsFilter()
+    /// While streaming values are shown, each stretch of them shows each address once, at its latest value, with how
+    /// many arrived ("…/Position 48.91 ×3"), so a playing deck reads as a few updating lines (#218). Display only.
+    public var collapseStreaming = true
     private var lists: [DiagnosticsTab: Ring] = [:]
     /// The OSC tab's streaming lines, kept apart so their flood can't push the other lines out (#97).
     private var streaming = Ring()
@@ -143,7 +146,33 @@ public struct DiagnosticsLines: Equatable, Sendable {
     /// What a tab shows, oldest first: its kept lines, through the streaming toggle and the filter.
     public func shown(_ tab: DiagnosticsTab) -> [Line] {
         let kept = kept(tab)
-        return filter.isEmpty ? kept : kept.filter(filter.matches)
+        let filtered = filter.isEmpty ? kept : kept.filter(filter.matches)
+        guard tab == .osc, !hideStreaming, collapseStreaming else { return filtered }
+        return Self.collapsed(filtered)
+    }
+
+    /// Each stretch of streaming lines (no other line between them) as one line per address, in the order each address
+    /// last arrived, carrying its latest value and, past one, " ×count".
+    private static func collapsed(_ lines: [Line]) -> [Line] {
+        var out: [Line] = []
+        out.reserveCapacity(lines.count)
+        var stretch: [Substring: (line: Line, count: Int)] = [:]
+        func flush() {
+            for (line, count) in stretch.values.sorted(by: { $0.line.id < $1.line.id }) {
+                out.append(count == 1 ? line : Line(id: line.id, message: line.message + " ×\(count)", label: line.label, isUnmapped: line.isUnmapped))
+            }
+            stretch.removeAll(keepingCapacity: true)
+        }
+        for line in lines {
+            guard let address = streamingAddress(line.text) else {
+                flush()
+                out.append(line)
+                continue
+            }
+            stretch[address] = (line, (stretch[address]?.count ?? 0) + 1)
+        }
+        flush()
+        return out
     }
 
     /// A tab's kept lines, with or without the streaming ones, oldest first.
@@ -199,9 +228,12 @@ public struct DiagnosticsLines: Equatable, Sendable {
 
     /// "OSC <- /Syndicate/Deck/3/Position 48.91": feedback whose address ends in a streaming name. Only feedback: what
     /// DeckBridge sends is never a flood.
-    private static func isStreaming(_ text: String) -> Bool {
-        guard text.hasPrefix("OSC <- ") else { return false }
-        let address = text.dropFirst(7).split(separator: " ").first ?? ""
-        return address.split(separator: "/").last.map { streamingNames.contains($0.lowercased()) } ?? false
+    private static func isStreaming(_ text: String) -> Bool { streamingAddress(text) != nil }
+
+    /// The address of a streaming feedback line, or nil for any other line.
+    private static func streamingAddress(_ text: String) -> Substring? {
+        guard text.hasPrefix("OSC <- "), let address = text.dropFirst(7).split(separator: " ").first,
+              let last = address.split(separator: "/").last, streamingNames.contains(last.lowercased()) else { return nil }
+        return address
     }
 }
