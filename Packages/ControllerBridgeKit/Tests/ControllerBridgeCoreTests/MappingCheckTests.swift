@@ -85,4 +85,26 @@ struct MappingCheckTests {
             "leds.stale_idle: \"dark\" isn't one of dim, off",
         ])
     }
+
+    @Test("A note used twice is named where the user wrote it, with the other use; defaults count too")
+    func duplicateNotes() {
+        // The default has cue = 2.
+        #expect(Self.problems(#"{"notes": {"play": 2}}"#) == ["notes.play: note 2 is also notes.cue"])
+        #expect(Self.problems(#"{"notes": {"pads": [32, 33, 34, 35, 36, 37, 38, 1]}}"#) == ["notes.pads[7]: note 1 is also notes.play"])
+        // Needle touch is a note too.
+        #expect(Self.problems(#"{"needle": {"touch_note": 21}}"#) == ["needle.touch_note: note 21 is also notes.master"])
+    }
+
+    @Test("A CC used by two features is a duplicate; jog listing two different CCs is fine")
+    func duplicateCCs() {
+        #expect(Self.problems(#"{"needle": {"cc": 8}}"#) == ["needle.cc: CC 8 is also pitch.msb_cc"])
+        #expect(Self.problems(#"{"jog": {"ccs": [55, 54]}}"#) == [])
+        #expect(Self.problems(#"{"jog": {"ccs": [55, 55]}}"#) == ["jog.ccs[1]: CC 55 is also jog.ccs[0]"])
+    }
+
+    @Test("Notes, CCs and LED notes are separate: the same number in two of them is fine")
+    func namespaces() {
+        // platter_touch = 40 (note), pitch.lsb_cc = 40 (CC) and leds.ring = 40 (LED) all ship in the default.
+        #expect(Self.problems(#"{"notes": {"platter_touch": 40}, "pitch": {"lsb_cc": 40}, "leds": {"ring": 40}}"#) == [])
+    }
 }

@@ -14,7 +14,113 @@ extension Mapping {
         }
         var out: [String] = []
         walk(document, schema: schema, path: "", into: &out)
+        out += duplicates(in: merge(schema, known(document, schema: schema)), written: Set(leafPaths(document)))
+        // Document order: by where the problem's path first appears in what the user wrote.
+        let order = Dictionary(leafPaths(document).enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return out.enumerated().sorted { a, b in
+            let (pa, pb) = (order[path(of: a.element)] ?? Int.max, order[path(of: b.element)] ?? Int.max)
+            return pa == pb ? a.offset < b.offset : pa < pb
+        }.map(\.element)
+    }
+
+    private static func path(of problem: String) -> String { String(problem.prefix { $0 != ":" }) }
+
+    /// Every path in a document, objects and lists included, in document order.
+    private static func leafPaths(_ value: OrderedJSON, _ path: String = "") -> [String] {
+        switch value {
+        case .object(let pairs):
+            return (path.isEmpty ? [] : [path]) + pairs.flatMap { leafPaths($0.value, path.isEmpty ? $0.key : "\(path).\($0.key)") }
+        case .array(let items):
+            return [path] + items.enumerated().flatMap { leafPaths($1, "\(path)[\($0)]") }
+        default:
+            return [path]
+        }
+    }
+
+    /// The document without unknown keys or values of the wrong kind, already reported, so they can't also show
+    /// up as duplicates.
+    private static func known(_ value: OrderedJSON, schema: OrderedJSON) -> OrderedJSON {
+        switch (value, schema) {
+        case let (.object(pairs), .object):
+            return .object(pairs.compactMap { pair in
+                guard let expected = schema[pair.key], kindProblem(pair.value, expected: expected) == nil else { return nil }
+                return (pair.key, known(pair.value, schema: expected))
+            })
+        case let (.array(items), .array(schemaItems)):
+            guard let element = schemaItems.first else { return value }
+            // Null, not dropped, so the other items keep their indices.
+            return .array(items.map { kindProblem($0, expected: element) == nil ? $0 : .null })
+        default:
+            return value
+        }
+    }
+
+    /// The Python merge on ordered JSON: objects merge key by key, keeping the base's order; anything else replaces.
+    static func merge(_ base: OrderedJSON, _ override: OrderedJSON) -> OrderedJSON {
+        guard case .object(var pairs) = base, case .object(let overrides) = override else { return override }
+        for (key, value) in overrides {
+            if let index = pairs.firstIndex(where: { $0.key == key }) {
+                pairs[index].value = merge(pairs[index].value, value)
+            } else {
+                pairs.append((key, value))
+            }
+        }
+        return .object(pairs)
+    }
+
+    /// Where each kind of MIDI number is used. Notes and CCs are separate namespaces; LED notes aren't checked, as
+    /// an LED may share its button's note.
+    private static func uses(_ merged: OrderedJSON) -> (notes: [(String, Double)], ccs: [(String, Double)]) {
+        var notes: [(String, Double)] = [], ccs: [(String, Double)] = []
+        for path in leafPaths(merged) {
+            guard case .number(let n, _)? = value(at: path, in: merged) else { continue }
+            let pattern = path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
+            if pattern.hasPrefix("notes.") || pattern == "needle.touch_note" {
+                notes.append((path, n))
+            } else if ["jog.ccs[]", "pitch.msb_cc", "pitch.lsb_cc", "needle.cc", "browse.select_turn_cc",
+                       "browse.auto_loop_size_cc"].contains(pattern) {
+                ccs.append((path, n))
+            }
+        }
+        return (notes, ccs)
+    }
+
+    /// A number used twice in one namespace, reported at the path the user wrote (the later one if they wrote both).
+    private static func duplicates(in merged: OrderedJSON, written: Set<String>) -> [String] {
+        let (notes, ccs) = uses(merged)
+        var out: [String] = []
+        for (kind, list) in [("note", notes), ("CC", ccs)] {
+            var firstUse: [Double: String] = [:]
+            var reported: [Double: [String]] = [:]
+            for (path, n) in list {
+                guard let other = firstUse[n] else { firstUse[n] = path; continue }
+                reported[n, default: [other]].append(path)
+            }
+            for (n, paths) in reported {
+                guard let at = paths.last(where: written.contains) else { continue }
+                let others = paths.filter { $0 != at }.joined(separator: " and ")
+                out.append("\(at): \(kind) \(Int(n)) is also \(others)")
+            }
+        }
         return out
+    }
+
+    private static func value(at path: String, in document: OrderedJSON) -> OrderedJSON? {
+        var current: OrderedJSON? = document
+        for part in path.split(separator: ".") {
+            var name = Substring(part)
+            var indices: [Int] = []
+            while let open = name.lastIndex(of: "["), name.hasSuffix("]") {
+                indices.insert(Int(name[name.index(after: open)..<name.index(before: name.endIndex)])!, at: 0)
+                name = name[..<open]
+            }
+            current = current?[String(name)]
+            for i in indices {
+                guard case .array(let items)? = current, items.indices.contains(i) else { return nil }
+                current = items[i]
+            }
+        }
+        return current
     }
 
     /// The default mapping body, the schema every import is checked against.
