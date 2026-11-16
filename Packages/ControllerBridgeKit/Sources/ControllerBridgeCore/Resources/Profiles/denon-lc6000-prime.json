@@ -46,6 +46,7 @@
       "require_touch": false
     },
     "pitch": {
+      "bits": 14,
       "msb_cc": 8,
       "lsb_cc": 40,
       "invert": false,

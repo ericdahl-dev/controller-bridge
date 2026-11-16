@@ -64,6 +64,9 @@ Checked on hardware (2026-11-15, see #12 and #103):
 - `midi.ignore_notes`: the unit sends note 52 about every 0.3 s while idle, a heartbeat. It's dropped, and the
   Diagnostics monitor says so.
 - `pitch`: 14-bit on CC 8/40, with the fader's top at 0, so `invert` stays false.
+- `pitch.bits` (#195): 14 on the LC6000. A controller with a 7-bit pitch fader sets 7: the fader is then `msb_cc`
+  alone and `lsb_cc` may be left out. 64 is the exact center (below it a step is 1/64, above it 1/63), so a centered
+  fader reads 0; `invert`, `dead_zone` and pickup work as on 14-bit.
 - `midi.encoder_format` (#193): the browse knob (CC 6) and the Auto Loop knob (CC 3) send two's complement:
   0x01–0x3F turn forward, 0x7F is one tick back. Another controller's profile can say `"offset_64"` (0x40 is still,
   0x41 one forward) or `"sign_magnitude"` (bit 6 is back, the low six bits how far). Left out, it's

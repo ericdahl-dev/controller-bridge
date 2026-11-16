@@ -201,6 +201,12 @@ public struct Mapping: Equatable, Sendable, Codable {
     }
 
     /// A jog that can't tell how the platter reports movement (#204), in plain words.
+    /// A profile body whose shape the decoder can't use (#195), in the words the DJ sees.
+    public struct ShapeError: Error, Equatable, CustomStringConvertible {
+        public let description: String
+        public init(_ description: String) { self.description = description }
+    }
+
     public enum JogError: Error, Equatable, CustomStringConvertible {
         case needsPairOrRelative
         case missing(String)
@@ -214,8 +220,11 @@ public struct Mapping: Equatable, Sendable, Codable {
     }
 
     public struct Pitch: Equatable, Sendable, Codable {
+        /// 14 for an MSB/LSB pair (the LC6000), or 7 for one CC, `msbCC` (#195).
+        public var bits: Int
         public var msbCC: Int
-        public var lsbCC: Int
+        /// The pair's LSB; a 7-bit fader has none.
+        public var lsbCC: Int?
         public var invert: Bool
         public var deadZone: Double
         /// After a load or an outside tempo change, ignore the fader until it meets Syndicate's slider (#22).
@@ -224,6 +233,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var pickupTolerance: Double
 
         enum CodingKeys: String, CodingKey {
+            case bits
             case msbCC = "msb_cc"
             case lsbCC = "lsb_cc"
             case invert
@@ -232,7 +242,10 @@ public struct Mapping: Equatable, Sendable, Codable {
             case pickupTolerance = "pickup_tolerance"
         }
 
-        public init(msbCC: Int, lsbCC: Int, invert: Bool, deadZone: Double, pickup: Bool, pickupTolerance: Double) {
+        public init(
+            msbCC: Int, lsbCC: Int?, invert: Bool, deadZone: Double, pickup: Bool, pickupTolerance: Double, bits: Int = 14
+        ) {
+            self.bits = bits
             self.msbCC = msbCC
             self.lsbCC = lsbCC
             self.invert = invert
@@ -242,14 +255,17 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
 
         /// `pickup` and `pickup_tolerance` may be left out of a profile or mapping file: they default to on and 0.02.
+        /// `bits` defaults to 14; a 7-bit fader may leave out `lsb_cc` (#195).
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            bits = try container.decodeIfPresent(Int.self, forKey: .bits) ?? 14
             msbCC = try container.decode(Int.self, forKey: .msbCC)
-            lsbCC = try container.decode(Int.self, forKey: .lsbCC)
+            lsbCC = try container.decodeIfPresent(Int.self, forKey: .lsbCC)
             invert = try container.decode(Bool.self, forKey: .invert)
             deadZone = try container.decode(Double.self, forKey: .deadZone)
             pickup = try container.decodeIfPresent(Bool.self, forKey: .pickup) ?? true
             pickupTolerance = try container.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? 0.02
+            if bits == 14, lsbCC == nil { throw ShapeError("pitch: lsb_cc is missing (or set bits to 7)") }
         }
     }
 
@@ -435,6 +451,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         do {
             return try JSONDecoder().decode(Mapping.self, from: json)
         } catch let error as JogError {
+            throw MappingError.invalid([error.description])
+        } catch let error as ShapeError {
             throw MappingError.invalid([error.description])
         } catch let error as DecodingError {
             // The check runs first, so this shouldn't happen; if it does, the DJ still gets words, not a dump (#92).

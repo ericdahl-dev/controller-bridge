@@ -26,6 +26,16 @@ func tempoSlider(from value14: Int, invert: Bool, deadZone: Double) -> Double {
     return min(1, max(-1, t))
 }
 
+/// A 7-bit pitch fader's value as Syndicate's TempoSlider, -1...+1 (#195). 64 is the exact center, so a centered
+/// fader reads 0: below it each step is 1/64, above it 1/63, so 0 and 127 reach the ends.
+func tempoSlider(from7Bit value: UInt8, invert: Bool, deadZone: Double) -> Double {
+    let v = Double(value & 0x7F) - 64
+    var t = v < 0 ? v / 64 : v / 63
+    if invert { t = -t }
+    if abs(t) < deadZone { t = 0 }
+    return min(1, max(-1, t))
+}
+
 /// A vivid LC6000 color velocity that keeps the hue (#151), for the platter ring and a held pad. rgb222 rounding on
 /// its own lands a color's weaker channels on level 1-2, which adds white and washes the color out on the unit. So:
 /// take out the white (the smallest channel), scale the strongest channel to level 3, drop any channel under 30 % of
