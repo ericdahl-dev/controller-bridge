@@ -79,3 +79,89 @@ public enum EncoderFormat: String, CaseIterable, Equatable, Sendable, Codable {
         }
     }
 }
+
+/// How a controller turns a color into a pad or ring velocity (#197).
+public enum ColorTable: Equatable, Sendable, Codable {
+    /// The LC6000's 64 colors: 2 bits per channel, 0b00RRGGBB.
+    case rgb222
+    /// Explicit entries; a color takes the nearest entry's value.
+    case list([Entry])
+
+    public struct Entry: Equatable, Sendable, Codable {
+        public var rgb: [Int]
+        public var value: Int
+
+        public init(rgb: [Int], value: Int) {
+            self.rgb = rgb
+            self.value = value
+        }
+    }
+
+    /// The velocity for an [r, g, b] color. Black is off. A dim color that would land on black lights instead: rgb222
+    /// at its strongest channel's lowest level, a list at the nearest entry that isn't black.
+    public func velocity(for rgb: [Int]) -> UInt8 {
+        guard rgb.count == 3 else { return 0 }
+        switch self {
+        case .rgb222: return rgbToVelocity(rgb[0], rgb[1], rgb[2])
+        case .list(let entries): return Self.nearest(rgb, in: entries)
+        }
+    }
+
+    /// The vivid velocity (#151) for the ring and a held pad: the LC6000's own on rgb222; on a list, the vivid color's
+    /// nearest entry.
+    public func vivid(for rgb: [Int]) -> UInt8 {
+        guard rgb.count == 3 else { return 0 }
+        switch self {
+        case .rgb222: return vividVelocity(rgb[0], rgb[1], rgb[2])
+        case .list(let entries):
+            let v = vividVelocity(rgb[0], rgb[1], rgb[2])
+            return Self.nearest([Int(v) >> 4 & 3, Int(v) >> 2 & 3, Int(v) & 3].map { $0 * 85 }, in: entries)
+        }
+    }
+
+    /// The color a velocity shows, as RGB: rgb222 read back, or the first list entry with that value (black if none).
+    public func shown(_ velocity: UInt8) -> [Int] {
+        switch self {
+        case .rgb222:
+            let v = Int(velocity)
+            return [v >> 4 & 3, v >> 2 & 3, v & 3].map { $0 * 85 }
+        case .list(let entries):
+            return entries.first { $0.value == Int(velocity) && $0.rgb.count == 3 }?.rgb ?? [0, 0, 0]
+        }
+    }
+
+    /// In a profile: the name "rgb222", or the list of entries.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let name = try? container.decode(String.self) {
+            guard name == "rgb222" else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown color table \"\(name)\"")
+            }
+            self = .rgb222
+        } else {
+            self = .list(try container.decode([Entry].self))
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .rgb222: try container.encode("rgb222")
+        case .list(let entries): try container.encode(entries)
+        }
+    }
+
+    private static func nearest(_ rgb: [Int], in entries: [Entry]) -> UInt8 {
+        let isBlack = { (color: [Int]) in color.allSatisfy { $0 == 0 } }
+        if isBlack(rgb) { return 0 }
+        func distance(_ entry: Entry) -> Int {
+            zip(rgb, entry.rgb).map { ($0 - $1) * ($0 - $1) }.reduce(0, +)
+        }
+        // The first of equally near entries wins.
+        let ordered = entries.filter { $0.rgb.count == 3 }
+        guard let best = ordered.min(by: { distance($0) < distance($1) }) else { return 0 }
+        guard isBlack(best.rgb) else { return UInt8(clamping: best.value) }
+        // Dim fallback: a color shouldn't go dark by rounding.
+        return ordered.filter { !isBlack($0.rgb) }.min(by: { distance($0) < distance($1) }).map { UInt8(clamping: $0.value) } ?? 0
+    }
+}

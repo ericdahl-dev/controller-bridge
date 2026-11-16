@@ -156,10 +156,10 @@ extension Bridge {
                 let color = palette[slot] ?? [255, 255, 255]
                 // A held hot cue shows the brightest version of its color, so you can see which one is sounding.
                 // Held, it's vivid too (#151), so the sounding cue stands out in its hue, not whiter.
-                return held.contains(.pad(index)) ? ringVelocity(Self.brightest(color)) : Self.velocity(color)
+                return held.contains(.pad(index)) ? ringVelocity(Self.brightest(color)) : velocity(color)
             }
-        case .loop: return cues.map { $0 == 0 ? Self.off : Self.velocity(leds.loopPadColor) }
-        case .roll: return Array(repeating: Self.velocity(leds.rollPadColor), count: cues.count)
+        case .loop: return cues.map { $0 == 0 ? Self.off : velocity(leds.loopPadColor) }
+        case .roll: return Array(repeating: velocity(leds.rollPadColor), count: cues.count)
         case .slicer: return Array(repeating: Self.off, count: cues.count)
         }
     }
@@ -170,22 +170,15 @@ extension Bridge {
         return rgb.map { $0 * 255 / top }
     }
 
-    /// A vivid velocity (#151) for an [r, g, b] color: the ring, and a held pad.
-    static func vividVelocity(_ rgb: [Int]) -> UInt8 {
-        guard rgb.count == 3 else { return off }
-        return ControllerBridgeCore.vividVelocity(rgb[0], rgb[1], rgb[2])
-    }
-
-    /// The ring's and a held pad's velocity, by the Settings mapping (#151).
+    /// The ring's and a held pad's velocity, by the Settings mapping (#151), through the profile's color table (#197).
     func ringVelocity(_ rgb: [Int]) -> UInt8 {
-        ringColors == .vivid ? Self.vividVelocity(rgb) : Self.velocity(rgb)
+        ringColors == .vivid ? mapping.leds.colorTable.vivid(for: rgb) : velocity(rgb)
     }
 
-    /// A pad or ring velocity for an [r, g, b] color.
-    static func velocity(_ rgb: [Int]) -> UInt8 {
-        // A user mapping can hold any list here until the mapping check (#24) refuses it.
-        guard rgb.count == 3 else { return off }
-        return rgbToVelocity(rgb[0], rgb[1], rgb[2])
+    /// A pad or ring velocity for an [r, g, b] color, through the profile's color table (#197). Not three values
+    /// (a user mapping the check didn't see): off.
+    func velocity(_ rgb: [Int]) -> UInt8 {
+        mapping.leds.colorTable.velocity(for: rgb)
     }
 }
 

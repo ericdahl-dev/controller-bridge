@@ -490,7 +490,10 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 hint("On the LC6000")
                 RoundedRectangle(cornerRadius: Theme.Radius.small)
-                    .fill(Color(RGB(deckColor: DeckColors.ledPreview(shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors))))
+                    .fill(Color(RGB(deckColor: DeckColors.ledPreview(
+                        shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors,
+                        table: model.profiles.first?.mapping.leds.colorTable ?? .rgb222
+                    ))))
                     .frame(width: 26, height: 26)
                     .accessibilityLabel("Deck \(deck) on the LC6000")
             }

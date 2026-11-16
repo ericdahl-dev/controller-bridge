@@ -47,8 +47,9 @@ extension Mapping {
         case let (.object(pairs), .object):
             return .object(pairs.compactMap { pair in
                 let childPath = path.isEmpty ? pair.key : "\(path).\(pair.key)"
-                guard let expected = schema[pair.key] ?? optionalKey(childPath),
-                      kindProblem(pair.value, expected: expected) == nil else { return nil }
+                guard let given = schema[pair.key] ?? optionalKey(childPath) else { return nil }
+                let expected = alternative(pair.value, at: childPath) ?? given
+                guard kindProblem(pair.value, expected: expected) == nil else { return nil }
                 return (pair.key, known(pair.value, schema: expected, path: childPath))
             })
         case let (.array(items), .array(schemaItems)):
@@ -140,7 +141,8 @@ extension Mapping {
     /// The default mapping body, the schema every import is checked against.
     public static func defaultMappingJSON() throws -> Data { try defaultJSON() }
 
-    private static func walk(_ value: OrderedJSON, schema: OrderedJSON, path: String, into out: inout [String]) {
+    private static func walk(_ value: OrderedJSON, schema given: OrderedJSON, path: String, into out: inout [String]) {
+        let schema = alternative(value, at: path) ?? given
         if let problem = kindProblem(value, expected: schema) {
             out.append("\(path): \(problem)")
             return
@@ -189,6 +191,18 @@ extension Mapping {
         return "expected \(wanted), got \(describe(value))"
     }
 
+    /// Keys that take another kind than the default's too, with an example of it: the color table is "rgb222" or a
+    /// list of entries (#197).
+    private static let alternatives: [String: OrderedJSON] = [
+        "leds.color_table": .array([.object([("rgb", .array([.number(0, isInteger: true)])), ("value", .number(0, isInteger: true))])]),
+    ]
+
+    /// The alternative schema at `path` when the value is of its kind.
+    private static func alternative(_ value: OrderedJSON, at path: String) -> OrderedJSON? {
+        guard let other = alternatives[path], kindProblem(value, expected: other) == nil else { return nil }
+        return other
+    }
+
     /// Keys a profile may add that the LC6000's default leaves out (#204), with an example of each one's kind.
     private static let optionalKeys: [String: OrderedJSON] = [
         "jog.relative_cc": .number(0, isInteger: true),
@@ -233,6 +247,7 @@ extension Mapping {
             "browse.select_turn_cc": 0...127, "browse.auto_loop_size_cc": 0...127,
             "leds.pitch_center": 0...127, "leds.ring": 0...127,
             "leds.levels.full": 0...127, "leds.levels.dim": 0...127, "leds.levels.off": 0...127,
+            "leds.color_table[].rgb[]": 0...255, "leds.color_table[].value": 0...127,
             "pads.mode_cycle_velocities.hotcue": 0...127, "pads.mode_cycle_velocities.roll": 0...127,
             "pads.mode_cycle_velocities.loop": 0...127, "pads.mode_cycle_velocities.slicer": 0...127,
             "jog.counts_per_rev": 1...16384, "jog.beats_per_rev": 1...16, "jog.seek_seconds_per_rev": 0...60,
@@ -246,7 +261,7 @@ extension Mapping {
         return table
     }()
 
-    private static let colors: Set<String> = ["leds.ring_color", "leds.roll_pad_color", "leds.loop_pad_color"]
+    private static let colors: Set<String> = ["leds.ring_color", "leds.roll_pad_color", "leds.loop_pad_color", "leds.color_table[].rgb"]
 
     /// Numbers that are one of a few values, not a range (#195).
     private static let numberChoices: [String: [Double]] = [
@@ -259,6 +274,7 @@ extension Mapping {
         "pads.roll_sizes[]": Pads.RollSize.allRawValues,
         "pads.mode_select": Pads.ModeSelect.allRawValues,
         "midi.encoder_format": EncoderFormat.allRawValues,
+        "leds.color_table": ["rgb222"],
     ]
 
     /// A range, count or choice problem with a value of the right kind; nil when it's fine.
@@ -276,6 +292,8 @@ extension Mapping {
             }
         case .array(let items) where colors.contains(pattern) && items.count != 3:
             return "expected 3 values, got \(items.count)"
+        case .array(let items) where pattern == "leds.color_table" && items.isEmpty:
+            return "expected at least one entry"
         case .array(let items) where pattern == "notes.pads" && !(1...16).contains(items.count):
             // 4, 8 or 16 pads, or anything between (#196).
             return "expected 1-16 pads, got \(items.count)"
