@@ -229,6 +229,14 @@ public struct DiagnosticsLines: Equatable, Sendable {
         shown(tab).map { $0.text + "\n" }.joined()
     }
 
+    /// Everything a tab has kept, as plain text for Save… (#218): streaming lines too, in arrival order, ignoring the
+    /// filter, Pause and collapsing.
+    public func historyText(_ tab: DiagnosticsTab) -> String {
+        let list = lists[tab, default: Ring()].lines
+        let all = tab == .osc ? Self.merged(list, streaming.lines) : list
+        return all.map { $0.text + "\n" }.joined()
+    }
+
     /// The feedback Syndicate streams while playing, by the address's last part (#218): Position ~100/s per deck,
     /// BarRamp ~200/s, Meter ~100/s per channel (captures on #209), and the clocks and progress values like them.
     static let streamingNames: Set<String> = ["position", "barramp", "meter", "clock", "currentstep", "sampleprogress", "progress", "time"]

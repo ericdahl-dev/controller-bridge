@@ -164,6 +164,27 @@ struct DiagnosticsPresentationTests {
         #expect(lines.shown(.monitor).count == 2)
     }
 
+    @Test("Copy takes the visible lines; Save takes the whole history: streaming, filtered-out and post-pause lines too, uncollapsed (#218)")
+    func copyVisibleSaveAll() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 1")
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Position 1.0")
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Position 1.1")
+        lines.append(to: .osc, message: "OSC -> /Syndicate/Deck/2/PlayPause 1")
+        lines.filter.deck = 1
+        lines.pause()
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 0")
+        #expect(lines.plainText(.osc) == "OSC <- /Syndicate/Deck/1/Playing 1\n")
+        #expect(lines.historyText(.osc) == """
+            OSC <- /Syndicate/Deck/1/Playing 1
+            OSC <- /Syndicate/Deck/1/Position 1.0
+            OSC <- /Syndicate/Deck/1/Position 1.1
+            OSC -> /Syndicate/Deck/2/PlayPause 1
+            OSC <- /Syndicate/Deck/1/Playing 0
+
+            """)
+    }
+
     @Test("Hidden streaming lines can't push the rest out: after 20,100 of them, the Playing line is still shown (#97)")
     func hiddenLinesDontEvict() {
         var lines = DiagnosticsLines()
