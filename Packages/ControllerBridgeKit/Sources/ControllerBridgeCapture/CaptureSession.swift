@@ -131,7 +131,8 @@ public struct CaptureSession: Sendable {
             steps.append(recordedStep)
         }
         return CaptureFile(
-            appVersion: appVersion, device: device, ports: ports, note: note, prompts: prompts, noise: noise, steps: steps
+            appVersion: appVersion, device: device, ports: ports, note: note, prompts: prompts, noise: noise, steps: steps,
+            layers: CaptureLayers.infer(prompts: prompts, steps: steps)
         )
     }
 

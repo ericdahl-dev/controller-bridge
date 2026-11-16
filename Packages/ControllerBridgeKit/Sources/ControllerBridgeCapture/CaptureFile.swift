@@ -19,14 +19,18 @@ public struct CaptureFile: Codable, Equatable, Sendable {
     /// Messages that aren't credited to any step, as their status and first data byte ("90 34").
     public var noise: [[UInt8]]
     public var steps: [CaptureStep]
+    /// What the steps say about the deck layers (#217). Written only when there's a layer step, so format 1 readers
+    /// without it are unaffected.
+    public var layers: [LayerFacts]
 
     /// The format this version writes and reads.
     public static let currentFormat = 1
 
     public init(
         format: Int = currentFormat, appVersion: String, device: String, ports: CapturePorts, note: String? = nil,
-        prompts: [CapturePrompt], noise: [[UInt8]] = [], steps: [CaptureStep] = []
+        prompts: [CapturePrompt], noise: [[UInt8]] = [], steps: [CaptureStep] = [], layers: [LayerFacts] = []
     ) {
+        self.layers = layers
         self.format = format
         self.appVersion = appVersion
         self.device = device
@@ -38,7 +42,7 @@ public struct CaptureFile: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case format, appVersion = "app_version", device, ports, note, prompts, noise, steps
+        case format, appVersion = "app_version", device, ports, note, prompts, noise, steps, layers
     }
 
     public init(from decoder: any Decoder) throws {
@@ -52,6 +56,7 @@ public struct CaptureFile: Codable, Equatable, Sendable {
         prompts = try c.decode([CapturePrompt].self, forKey: .prompts)
         noise = try c.decode([String].self, forKey: .noise).map(Hex.bytes)
         steps = try c.decode([CaptureStep].self, forKey: .steps)
+        layers = try c.decodeIfPresent([LayerFacts].self, forKey: .layers) ?? []
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -64,6 +69,7 @@ public struct CaptureFile: Codable, Equatable, Sendable {
         try c.encode(prompts, forKey: .prompts)
         try c.encode(noise.map(Hex.string), forKey: .noise)
         try c.encode(steps, forKey: .steps)
+        if !layers.isEmpty { try c.encode(layers, forKey: .layers) }
     }
 
     public static func decode(_ data: Data) throws -> CaptureFile {

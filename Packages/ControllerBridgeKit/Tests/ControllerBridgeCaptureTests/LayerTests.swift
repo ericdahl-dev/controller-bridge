@@ -1,4 +1,5 @@
 import ControllerBridgeCapture
+import Foundation
 import Testing
 
 /// Deck layer variants (#217): the layer button, the indicator the controller sends, and how deck 2's controls differ
@@ -79,5 +80,27 @@ struct LayerTests {
         let noPlay = CaptureLayers.infer(prompts: Self.prompts, steps: Self.file(select: Self.lc6000Select, deck2Play: nil).steps)
         #expect(noPlay.first?.channelOffset == nil)
         #expect(noPlay.first?.numberOffset == nil)
+    }
+
+    @Test("The file carries a layers block, pinned by a literal; a capture with no layer steps leaves the key out")
+    func fileBlock() throws {
+        let file = Self.file(select: Self.lc6000Select, deck2Play: [[0x91, 1, 0x7F], [0x81, 1, 0x00]])
+        let object = try #require(try JSONSerialization.jsonObject(with: file.encoded()) as? [String: Any])
+        let layers = object["layers"] as? NSArray
+        let literal = try JSONSerialization.jsonObject(with: Data("""
+            [{ "layer": 2, "with_shift": true, "channel_offset": 1, "number_offset": 0,
+               "select": { "kind": "note", "port": 0, "channel": 16, "number": 55, "release": "note_off",
+                           "first": 127, "last": 127, "min": 127, "max": 127 },
+               "indicator": { "kind": "note", "port": 0, "channel": 2, "number": 51,
+                              "first": 127, "last": 127, "min": 127, "max": 127 } }]
+            """.utf8)) as? NSArray
+        #expect(layers != nil)
+        #expect(layers == literal)
+        #expect(try CaptureFile.decode(file.encoded()).layers == file.layers)
+
+        var plain = CaptureSession(appVersion: "1.2.0", device: "Test", ports: CapturePorts(input: [], output: []), prompts: [Self.prompts[0]])
+        plain.skip()
+        let plainObject = try #require(try JSONSerialization.jsonObject(with: plain.file.encoded()) as? [String: Any])
+        #expect(plainObject["layers"] == nil)
     }
 }
