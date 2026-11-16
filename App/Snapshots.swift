@@ -285,6 +285,9 @@ enum Snapshots {
         jog.apply(.shown(slot: 1), at: at)
         jog.apply(.playLight(true), at: at)
         jog.apply(.marker(pitchBend: 6_000), at: at)
+        // Decks 3 and 4 from Syndicate only: previewed, not on the unit (#221).
+        jog.apply(.preview(JogDisplayContent(deck: 3, color: [0, 255, 255], title: "Sunrise", artist: "Ward", key: "C", bpm: 122,
+                                             playerType: "track")), at: at)
         let jogWindow = DiagnosticsWindow(
             log: log, status: connected, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
             jogSimulator: jog, tab: .jog, scrolls: false

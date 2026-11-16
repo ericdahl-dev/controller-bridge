@@ -46,6 +46,9 @@ public enum JogDisplayEvent: Equatable, Sendable {
     case failed(refusal: UInt8?)
     case marker(pitchBend: Int)
     case playLight(Bool)
+    /// What a deck's display would show (#221): every deck, live, for the simulator; only the deck in front is
+    /// uploaded. Nothing is sent for it.
+    case preview(JogDisplayContent)
 }
 
 public final class JogDisplayDriver {
@@ -76,6 +79,8 @@ public final class JogDisplayDriver {
     /// The slot shown; the next upload goes into the other one.
     private var shownSlot: UInt8 = 2
     /// The last content drawn and its image (#221): what the preview drew goes to the unit when it connects, unredrawn.
+    /// Each deck's last previewed content.
+    private var previews: [Int: JogDisplayContent] = [:]
     private var drawn: (content: JogDisplayContent, image: [UInt8])?
     private var upload: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)?
 
@@ -134,6 +139,13 @@ public final class JogDisplayDriver {
         lastPlayLight = on
         if connected { port?.sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
         onEvent?(.playLight(on))
+    }
+
+    /// A deck's content for the simulator (#221), reported on change; nothing is sent to the unit.
+    public func preview(_ content: JogDisplayContent) {
+        guard previews[content.deck] != content else { return }
+        previews[content.deck] = content
+        onEvent?(.preview(content))
     }
 
     /// A message from the WD port.
