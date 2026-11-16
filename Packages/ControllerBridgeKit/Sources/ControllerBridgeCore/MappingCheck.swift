@@ -4,14 +4,15 @@ extension Mapping {
     /// Every problem in a mapping body (a whole mapping, or a partial one to merge over the default), named by key
     /// path, in document order (#24). The bundled default mapping is the schema. An empty list means it's usable.
     public static func problems(in json: Data) -> [String] {
-        let document: OrderedJSON
-        let schema: OrderedJSON
         do {
-            document = try OrderedJSON(parsing: json)
-            schema = try OrderedJSON(parsing: defaultJSON())
+            return problems(in: try OrderedJSON(parsing: json))
         } catch {
             return ["\(error)"]
         }
+    }
+
+    static func problems(in document: OrderedJSON) -> [String] {
+        guard let schema = try? OrderedJSON(parsing: defaultJSON()) else { return ["The default mapping can't be read."] }
         if let problem = kindProblem(document, expected: schema) { return ["mapping: \(problem)"] }
         var out: [String] = []
         walk(document, schema: schema, path: "", into: &out)
@@ -157,7 +158,7 @@ extension Mapping {
     }
 
     /// What's wrong with a value's kind, measured against the default's value at the same path; nil when it fits.
-    private static func kindProblem(_ value: OrderedJSON, expected: OrderedJSON) -> String? {
+    static func kindProblem(_ value: OrderedJSON, expected: OrderedJSON) -> String? {
         let fits = switch (value, expected) {
         case (.object, .object), (.array, .array), (.string, .string), (.bool, .bool): true
         // A setting whose default is whole takes only whole numbers (2.0 is whole); a fractional one takes any.
