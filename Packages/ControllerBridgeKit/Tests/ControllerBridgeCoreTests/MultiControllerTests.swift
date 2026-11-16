@@ -45,4 +45,18 @@ struct MultiControllerTests {
         #expect(rig.coordinator.status.controllers.map(\.connected) == [true, true])
         #expect(Set(rig.midi.connected) == [Rig.lc6000.id, Self.unitB.id])
     }
+
+    @Test("One feedback stream fans out: deck 2's Playing lights only unit B; a deck nobody drives changes no LEDs")
+    func feedbackFansOut() throws {
+        let rig = try Self.twoUnits()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        #expect(Self.leds(rig, Self.unitBOut)[1] == 127)
+        #expect(Self.leds(rig, Rig.lc6000Out)[1] == 1)
+
+        let sentA = rig.midi.outputs[Rig.lc6000Out.id]?.sent.count
+        let sentB = rig.midi.outputs[Self.unitBOut.id]?.sent.count
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Playing", [.int(1)]))
+        #expect(rig.midi.outputs[Rig.lc6000Out.id]?.sent.count == sentA)
+        #expect(rig.midi.outputs[Self.unitBOut.id]?.sent.count == sentB)
+    }
 }
