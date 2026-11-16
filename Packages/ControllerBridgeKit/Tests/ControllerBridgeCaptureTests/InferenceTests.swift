@@ -106,4 +106,14 @@ struct InferenceTests {
             ControlFacts(kind: .cc, channel: 1, number: 64, lsb: 65, encoding: .absolute, first: 2000, last: 9000, min: 2000, max: 9000),
         ])
     }
+
+    @Test("Riders interleaved with the jog don't steal its pair: 17 pairs with 49, and 54 and 55 are reported on their own")
+    func ridersDontStealPair() {
+        let controls = Self.controls(LC6000Traffic.jogWithRiders, gesture: .turn)
+        #expect(controls.first == ControlFacts(
+            kind: .cc, channel: 1, number: 17, lsb: 49, encoding: .absolute, first: 8000, last: 8080, min: 8000, max: 8080
+        ))
+        #expect(controls.map(\.number) == [17, 54, 55])
+        #expect(controls.map(\.lsb) == [49, nil, nil])
+    }
 }

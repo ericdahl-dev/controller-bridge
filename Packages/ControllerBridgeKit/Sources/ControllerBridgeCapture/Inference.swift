@@ -90,33 +90,44 @@ enum Inference {
         return (first.channel + 1, first.number)
     }
 
-    /// 14-bit pairs, MSB to LSB: two CCs on one channel whose messages arrive side by side. The MSB is the lower of
-    /// n and n+32 (the MIDI convention); otherwise, as on the LC6000's Needle Drop (64 and 65), the one sent first.
+    /// 14-bit pairs, MSB to LSB, on one channel. CC n and n+32 pair first (the MIDI convention), when both came about
+    /// as often. Two other CCs pair when their messages come side by side, as on the LC6000's Needle Drop (64 and
+    /// 65), and the one sent first is the MSB. A CC is in one pair at most; ties go to the lower numbers.
     private static func pairs(_ voices: [Voice]) -> [ControlKey: ControlKey] {
         let ccs = voices.filter { $0.kind == .cc }.map(\.control)
         var counts: [ControlKey: Int] = [:]
         for key in ccs { counts[key, default: 0] += 1 }
+        func similar(_ a: ControlKey, _ b: ControlKey) -> Bool {
+            let x = Double(counts[a] ?? 0), y = Double(counts[b] ?? 0)
+            return min(x, y) >= 0.8 * max(x, y)
+        }
+
+        var candidates: [(msb: ControlKey, lsb: ControlKey, convention: Bool, count: Int)] = []
+        for key in counts.keys where key.number < 32 {
+            let lsb = ControlKey(kind: .cc, channel: key.channel, number: key.number + 32)
+            if counts[lsb] != nil, similar(key, lsb) { candidates.append((key, lsb, true, counts[key] ?? 0)) }
+        }
         var adjacent: [[ControlKey]: Int] = [:]
-        var index = 0
-        while index + 1 < ccs.count {
-            let a = ccs[index], b = ccs[index + 1]
-            if a.channel == b.channel, a.number != b.number {
-                adjacent[[a, b], default: 0] += 1
-                index += 2
-            } else {
-                index += 1
+        for (a, b) in zip(ccs, ccs.dropFirst()) where a.channel == b.channel && a.number != b.number {
+            adjacent[[a, b], default: 0] += 1
+        }
+        for (keys, count) in adjacent {
+            let fewer = min(counts[keys[0]] ?? 0, counts[keys[1]] ?? 0)
+            if Double(count) >= 0.8 * Double(fewer), similar(keys[0], keys[1]) {
+                candidates.append((keys[0], keys[1], false, count))
             }
         }
+        candidates.sort {
+            if $0.convention != $1.convention { return $0.convention }
+            if $0.count != $1.count { return $0.count > $1.count }
+            return ($0.msb.channel, $0.msb.number, $0.lsb.number) < ($1.msb.channel, $1.msb.number, $1.lsb.number)
+        }
+
         var lsbOf: [ControlKey: ControlKey] = [:]
         var taken: Set<ControlKey> = []
-        for (keys, count) in adjacent.sorted(by: { $0.value > $1.value }) {
-            let a = keys[0], b = keys[1]
-            guard !taken.contains(a), !taken.contains(b) else { continue }
-            let fewer = min(counts[a] ?? 0, counts[b] ?? 0)
-            guard Double(count) >= 0.8 * Double(fewer) else { continue }
-            let (msb, lsb) = b.number < 32 && a.number == b.number + 32 ? (b, a) : (a, b)
-            lsbOf[msb] = lsb
-            taken.formUnion([a, b])
+        for candidate in candidates where !taken.contains(candidate.msb) && !taken.contains(candidate.lsb) {
+            lsbOf[candidate.msb] = candidate.lsb
+            taken.formUnion([candidate.msb, candidate.lsb])
         }
         return lsbOf
     }

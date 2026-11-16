@@ -39,6 +39,16 @@ enum LC6000Traffic {
     static let needleTouchSlide: Take = [(0.0, [0x90, 70, 0x7F])] + pairs(msb: 64, lsb: 65, values: [2000, 9000]).map { ($0.time + 0.05, $0.bytes) }
         + [(0.2, [0x80, 70, 0x00])]
 
+    /// The jog's edge spun with an unknown pair of CCs (54 and 55) riding interleaved: 17, 54, 49, 55. Seen next to the
+    /// jog in earlier traffic; what they are is unconfirmed, so they're reported, not dropped.
+    static let jogWithRiders: Take = [8000, 8040, 8080].enumerated().flatMap { index, value -> Take in
+        let time = Double(index) * 0.01
+        return [
+            (time, [0xB0, 17, UInt8(value >> 7)]), (time + 0.001, [0xB0, 54, 0x01]),
+            (time + 0.002, [0xB0, 49, UInt8(value & 0x7F)]), (time + 0.003, [0xB0, 55, 0x02]),
+        ]
+    }
+
     /// The pitch fader moved from the bottom to the top: CC 8 (MSB) and CC 40 (LSB), 16383 down to 0, since up is 0.
     static let pitchUp: Take = pairs(msb: 8, lsb: 40, values: [16383, 12288, 8192, 4096, 0])
 
