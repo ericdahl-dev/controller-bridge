@@ -1,5 +1,6 @@
 // The Syndicate-style theme (#34): named colors, fonts and the reusable views every window uses. The logic behind it
 // (palette contrast, deck badges, status words) lives in ControllerBridgePresentation and is tested there.
+import ControllerBridgeCore
 import ControllerBridgePresentation
 import CoreText
 import SwiftUI
@@ -83,9 +84,11 @@ enum Theme {
 /// A deck number on its colored square.
 struct DeckBadgeView: View {
     let deck: Int
+    /// The deck colors in use (#123): Syndicate's palette, the user's, or the defaults.
+    @Environment(\.deckColors) private var colors
 
     var body: some View {
-        let badge = DeckBadge(deck: deck)
+        let badge = colors[deck].map { DeckBadge(fill: RGB(deckColor: $0)) } ?? DeckBadge(deck: deck)
         Text("\(deck)")
             .font(Theme.data(15, .semibold))
             .foregroundStyle(Color(badge.digit))
@@ -270,5 +273,18 @@ extension View {
     /// A 2 pt ring in the text color just outside the view, for keyboard focus.
     func focusRing(_ shown: Bool, shape: some InsettableShape) -> some View {
         overlay(shape.inset(by: -3).stroke(Theme.text, lineWidth: 2).opacity(shown ? 1 : 0))
+    }
+}
+
+extension EnvironmentValues {
+    /// The deck colors the badges draw (#123), from the Coordinator's status.
+    @Entry var deckColors: DeckColors = .defaults
+}
+
+extension RGB {
+    /// From Core's [r, g, b], 0-255.
+    init(deckColor rgb: [Int]) {
+        let channel = { (index: Int) in UInt32(clamping: rgb.indices.contains(index) ? max(0, min(255, rgb[index])) : 0) }
+        self.init(hex: channel(0) << 16 | channel(1) << 8 | channel(2))
     }
 }
