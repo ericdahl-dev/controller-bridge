@@ -78,6 +78,10 @@ final class Bridge {
     var padMode = PadMode.hotCue
     var held = HeldControls()
     var keyLockOn = false
+    /// Lines for the log, taken by the Coordinator after each event (#114).
+    var notices: [String] = []
+    /// The pitch-range notice was logged already.
+    var pitchRangeNoted = false
     var slipOn = false
 
     // Pitch, jog and Needle Drop state (Bridge+Continuous.swift).

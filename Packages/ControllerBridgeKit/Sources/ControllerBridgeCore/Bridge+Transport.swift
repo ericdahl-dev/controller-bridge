@@ -16,12 +16,20 @@ extension Bridge {
 
     /// Pitch Bend − (#114): nudges the tempo down while held.
     func pitchMinus(_ pressed: Bool) {
-        holdButton(.phaseMinus, "PhaseMinus", pressed: pressed)
+        if shift { pitchRange(pressed) } else { holdButton(.phaseMinus, "PhaseMinus", pressed: pressed) }
     }
 
     /// Pitch Bend + (#114): nudges the tempo up while held.
     func pitchPlus(_ pressed: Bool) {
-        holdButton(.phasePlus, "PhasePlus", pressed: pressed)
+        if shift { pitchRange(pressed) } else { holdButton(.phasePlus, "PhasePlus", pressed: pressed) }
+    }
+
+    /// Shift + Pitch Bend is the LC6000's pitch range. Syndicate has no OSC route for the slider's range, so it sends
+    /// nothing and says so once in the log (#114).
+    private func pitchRange(_ pressed: Bool) {
+        guard pressed, !pitchRangeNoted else { return }
+        pitchRangeNoted = true
+        notices.append("Pitch range (Shift + Pitch Bend) isn't available in Syndicate")
     }
 
     func shiftButton(_ pressed: Bool) {

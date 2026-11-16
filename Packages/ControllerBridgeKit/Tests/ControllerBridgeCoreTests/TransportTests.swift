@@ -98,6 +98,18 @@ struct TransportTests {
         #expect(rig.osc.sent.filter { $0.address.hasSuffix("PhasePlus") }.count == 1)
     }
 
+    @Test("Shift + Pitch Bend (pitch range) sends nothing; the log says once that Syndicate has no route for it")
+    func shiftPitchBendIsNotAvailable() throws {
+        let rig = try Self.started()
+        Self.press(rig, 26)   // Shift down
+        Self.press(rig, 24)
+        Self.release(rig, 24)
+        Self.press(rig, 25)
+        Self.release(rig, 25)
+        #expect(rig.osc.sent == [])
+        #expect(rig.log.lines.filter { $0.contains("Pitch range") } == ["Pitch range (Shift + Pitch Bend) isn't available in Syndicate"])
+    }
+
     @Test("Key Lock toggles on each press: PitchPreserve 1, then 0, and its LED follows")
     func keyLockToggles() throws {
         let rig = try Self.started()
