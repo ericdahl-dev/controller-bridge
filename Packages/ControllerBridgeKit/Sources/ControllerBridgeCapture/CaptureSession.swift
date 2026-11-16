@@ -67,7 +67,7 @@ public struct CaptureSession: Sendable {
 
     /// The capture so far.
     public var file: CaptureFile {
-        let noise = idleNoise + repeatedNoise.filter { !idleNoise.contains($0) }
+        let noise = unique(idleNoise + repeatedNoise + realtimeNoise)
         var steps: [CaptureStep] = []
         for recorded in finished {
             var recordedStep = step(recorded.prompt, recorded.status, recorded.take, noise: Set(noise), before: steps)
@@ -82,6 +82,11 @@ public struct CaptureSession: Sendable {
     /// Noise keys heard during confirmed idle steps, in the order first heard.
     private var idleNoise: [[UInt8]] {
         unique(finished.filter { $0.status == .confirmed && $0.prompt.gesture == .idle }.flatMap { $0.take.compactMap { Inference.noiseKey($0.bytes) } })
+    }
+
+    /// Real-time messages (clock, active sensing) heard anywhere: never credited to a step.
+    private var realtimeNoise: [[UInt8]] {
+        unique(finished.flatMap(\.take).map(\.bytes).filter(Inference.isRealtime))
     }
 
     /// Noise keys heard in every confirmed step, for a capture without a confirmed idle step. It takes three steps at
@@ -103,7 +108,8 @@ public struct CaptureSession: Sendable {
 
     /// A step as the file shows it: noise left out, the controls inferred, and the Shift layer against `before`.
     private func step(_ prompt: CapturePrompt, _ status: StepStatus, _ take: Take, noise: Set<[UInt8]>, before: [CaptureStep]) -> CaptureStep {
-        let kept = prompt.gesture == .idle ? take : take.filter { Inference.noiseKey($0.bytes).map { !noise.contains($0) } ?? true }
+        let heard = take.filter { !Inference.isRealtime($0.bytes) }
+        let kept = prompt.gesture == .idle ? heard : heard.filter { Inference.noiseKey($0.bytes).map { !noise.contains($0) } ?? true }
         let bytes = kept.map(\.bytes)
         var controls = prompt.gesture == .idle ? [] : Inference.controls(in: bytes, gesture: prompt.gesture)
         var shift: ShiftLayer?

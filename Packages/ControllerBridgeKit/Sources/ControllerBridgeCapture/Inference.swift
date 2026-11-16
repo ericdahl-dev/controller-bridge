@@ -45,8 +45,10 @@ struct ControlKey: Hashable {
 
 enum Inference {
     /// Which control a message comes from, for noise: the status with note-off folded into note-on, and the number
-    /// ("90 34" for note 52 on channel 1). Pitch bend is its status alone. Nil for anything else.
+    /// ("90 34" for note 52 on channel 1). Pitch bend is its status alone, and a real-time message its one byte ("F8").
+    /// Nil for anything else.
     static func noiseKey(_ bytes: [UInt8]) -> [UInt8]? {
+        if isRealtime(bytes) { return bytes }
         guard let voice = Voice(bytes) else { return nil }
         let channel = UInt8(voice.channel)
         return switch voice.kind {
@@ -78,6 +80,9 @@ enum Inference {
         case .pitchBend: pitchBendFacts(key, voices)
         }
     }
+
+    /// A one-byte system real-time message (clock, start, stop, active sensing, reset): never a control.
+    static func isRealtime(_ bytes: [UInt8]) -> Bool { bytes.count == 1 && bytes[0] >= 0xF8 }
 
     /// The Shift button in a step repeated with Shift held: the step's first message is a note-on, and that note is
     /// still down when another control's first message arrives. When it's let go doesn't matter. Nil otherwise.

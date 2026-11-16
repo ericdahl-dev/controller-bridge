@@ -85,4 +85,17 @@ struct NoiseTests {
         #expect(session.file.noise == [[0x90, 0x34], [0x91, 0x34]])
         #expect(session.file.steps[3].controls.compactMap(\.number) == [1, 17])
     }
+
+    @Test("Clock and active sensing are never a control: left out of every step, timed from the first real message, listed as noise")
+    func realtime() {
+        var session = Self.session([Self.play])
+        let clock: Take = (0..<6).map { (Double($0) * 0.04, [0xF8]) } + [(0.01, [0xFE])]
+        Self.feed(&session, Self.merged(clock, LC6000Traffic.play.map { ($0.time + 0.1, $0.bytes) }))
+        session.confirm()
+        let file = session.file
+        #expect(file.steps[0].messages == [
+            CaptureMessage(t: 0, bytes: [0x90, 0x01, 0x7F]), CaptureMessage(t: 120, bytes: [0x80, 0x01, 0x00]),
+        ])
+        #expect(file.noise == [[0xF8], [0xFE]])
+    }
 }
