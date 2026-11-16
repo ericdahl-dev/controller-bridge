@@ -80,16 +80,30 @@ test("Clock and active sensing are never credited to a step, and are listed as n
   assert.deepEqual(plain(file.noise), ["F8", "FE"]);
 });
 
-test("Tails: a release whose press came before the step, and the last step's controls in its first half-second, are dropped", () => {
+test("Tails are kept, flagged (#229): a release whose press came before the step, and the last step's controls in its first half-second", () => {
   const s = session([play, cue]);
   s.receive([0x90, 0x0b, 0x7f], 1);
   s.confirm(2);
-  s.receive([0x90, 0x0b, 0x00], 2.1);   // Play's release, after the step changed
+  s.receive([0x90, 0x0b, 0x00], 2.1);   // Play's release, after the step changed: a tail
   s.receive([0xb0, 0x11, 0x41], 2.2);   // not a control of the last take: kept
+  assert.equal(s.hasTake(), true);
   s.receive([0x90, 0x0c, 0x7f], 2.3);
   s.receive([0x80, 0x0c, 0x00], 2.4);
   s.confirm(3);
-  assert.deepEqual(plain(s.file().steps[1].messages.map((m) => m.midi)), ["B0 11 41", "90 0C 7F", "80 0C 00"]);
+  assert.deepEqual(plain(s.file().steps[1].messages), [
+    { t: 0, port: 0, midi: "90 0B 00", tail: true },
+    { t: 100, port: 0, midi: "B0 11 41" },
+    { t: 200, port: 0, midi: "90 0C 7F" },
+    { t: 300, port: 0, midi: "80 0C 00" },
+  ]);
+});
+
+test("A tail alone isn't a take: Next stays off until the step's own control is heard", () => {
+  const s = session([play, cue]);
+  s.receive([0x90, 0x0b, 0x7f], 1);
+  s.confirm(2);
+  s.receive([0x90, 0x0b, 0x00], 2.1);
+  assert.equal(s.hasTake(), false);
 });
 
 test("Redo throws the take away; Skip records the step skipped with nothing; the list ends", () => {

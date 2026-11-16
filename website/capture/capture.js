@@ -5,7 +5,8 @@
    session keeps at receive time:
    - what arrives during the idle step is noise from then on; clock and active sensing are never credited;
    - a release whose press came before the step is a tail; so is, for half a second after a step starts, anything from
-     the controls of the take before it (a jog still spinning).
+     the controls of the take before it (a jog still spinning). Tails are kept in the file, flagged, and credited to
+     nothing (#229).
    Nothing here touches the network. Tested by scripts/test_capture.mjs. */
 (function (root) {
   "use strict";
@@ -50,17 +51,16 @@
     function receive(bytes, time, port) {
       port = port || 0;
       if (!current()) return;
-      var key = noiseKey(bytes);
+      var key = noiseKey(bytes), tail = false;
       if (key && !isRealtime(bytes)) {
         var pk = portKey(port, key);
-        if ((key[0] & 0xf0) === 0x90) {
-          var release = (bytes[0] & 0xf0) === 0x80 || bytes[2] === 0;
-          if (release && !pressed[pk]) return;
-          if (!release) pressed[pk] = true;
-        }
-        if (stepStart !== null && time - stepStart < TAIL_WINDOW && tailKeys[pk]) return;
+        var note = (key[0] & 0xf0) === 0x90;
+        var release = note && ((bytes[0] & 0xf0) === 0x80 || bytes[2] === 0);
+        if (release && !pressed[pk]) tail = true;
+        if (stepStart !== null && time - stepStart < TAIL_WINDOW && tailKeys[pk]) tail = true;
+        if (note && !release && !tail) pressed[pk] = true;
       }
-      take.push({ time: time, port: port, bytes: bytes.slice() });
+      take.push({ time: time, port: port, bytes: bytes.slice(), tail: tail });
     }
 
     function startStep(time, previous) {
@@ -83,7 +83,7 @@
       var keys = [];
       finished.forEach(function (f) {
         if (f.status === "confirmed" && f.prompt.gesture === "idle") {
-          f.take.forEach(function (m) { var k = noiseKey(m.bytes); if (k) keys.push(k); });
+          f.take.forEach(function (m) { var k = !m.tail && noiseKey(m.bytes); if (k) keys.push(k); });
         }
       });
       return unique(keys);
@@ -94,7 +94,7 @@
       if (finished.some(function (f) { return f.status === "confirmed" && f.prompt.gesture === "idle"; })) return [];
       var takes = finished.filter(function (f) {
         return f.status === "confirmed" && f.prompt.gesture !== "idle" && !f.prompt.shifted_of;
-      }).map(function (f) { return f.take; });
+      }).map(function (f) { return f.take.filter(function (m) { return !m.tail; }); });
       if (takes.length < 3) return [];
       var sets = takes.map(function (t) {
         var s = {}; t.forEach(function (m) { var k = noiseKey(m.bytes); if (k) s[keyString(k)] = true; }); return s;
@@ -122,7 +122,11 @@
         var start = kept.length ? kept[0].time : 0;
         return {
           prompt: f.prompt.id, status: f.status,
-          messages: kept.map(function (m) { return { t: Math.round((m.time - start) * 1000), port: m.port, midi: hex(m.bytes) }; }),
+          messages: kept.map(function (m) {
+            var message = { t: Math.round((m.time - start) * 1000), port: m.port, midi: hex(m.bytes) };
+            if (m.tail) message.tail = true;   // written only when true, as the app does
+            return message;
+          }),
           controls: [], leds: [],
         };
       });
@@ -139,7 +143,9 @@
       hasTake: function () {
         var noise = {};
         idleNoise().forEach(function (k) { noise[keyString(k)] = true; });
-        return take.some(function (m) { var k = noiseKey(m.bytes); return !isRealtime(m.bytes) && !(k && noise[keyString(k)]); });
+        return take.some(function (m) {
+          var k = noiseKey(m.bytes); return !m.tail && !isRealtime(m.bytes) && !(k && noise[keyString(k)]);
+        });
       },
     };
   }
