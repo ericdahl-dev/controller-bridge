@@ -17,4 +17,32 @@ struct ProfileTests {
         #expect(lc6000.mapping.notes.buttons["play"] == 1)
         #expect(lc6000.mapping.leds.ring == 40)
     }
+
+    /// A test-only profile for a made-up controller: MIDI channel 2, Play on note 60.
+    static func testPadFile() throws -> Data {
+        let url = try #require(Bundle.module.url(forResource: "test-pad", withExtension: "json", subdirectory: "Resources"))
+        return try Data(contentsOf: url)
+    }
+
+    @Test("A new controller is a new profile file: Test Pad decodes with its own id, name, hints and mapping")
+    func secondProfileIsAFile() throws {
+        let testPad = try ControllerProfile(decoding: Self.testPadFile())
+        #expect(testPad.id == "test-pad")
+        #expect(testPad.name == "Test Pad")
+        #expect(testPad.deviceHints == ["TP-1"])
+        #expect(testPad.mapping.midi.channel == 2)
+        #expect(testPad.mapping.notes.buttons["play"] == 60)
+    }
+
+    @Test("A profile whose mapping breaks a rule is refused with the same readable error as a mapping")
+    func badProfileRefused() throws {
+        var profile = try #require(try JSONSerialization.jsonObject(with: Self.testPadFile()) as? [String: Any])
+        var mapping = try #require(profile["mapping"] as? [String: Any])
+        mapping["midi"] = ["input": "TP-1", "output": "TP-1", "channel": 0]
+        profile["mapping"] = mapping
+        let data = try JSONSerialization.data(withJSONObject: profile)
+        #expect(throws: MappingError.invalid(["midi.channel: 0 is out of range, expected 1-16"])) {
+            try ControllerProfile(decoding: data)
+        }
+    }
 }

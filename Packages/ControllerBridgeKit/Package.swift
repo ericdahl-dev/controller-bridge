@@ -11,6 +11,7 @@ let package = Package(
         // All bridge logic: the Coordinator, the Bridge, the mapping and the OSC codec.
         // Pure Swift: no CoreMIDI, no Network framework, no UI.
         .target(name: "ControllerBridgeCore", resources: [.copy("Resources/Profiles")]),
-        .testTarget(name: "ControllerBridgeCoreTests", dependencies: ["ControllerBridgeCore"]),
+        // Resources holds test-only profiles, such as a second controller that ships in no app.
+        .testTarget(name: "ControllerBridgeCoreTests", dependencies: ["ControllerBridgeCore"], resources: [.copy("Resources")]),
     ]
 )
