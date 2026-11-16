@@ -29,6 +29,21 @@ extension Bridge {
 
     // MARK: Pickup
 
+    /// Sets Syndicate's tempo slider to 0.0, then waits for the fader to come back to 0.0 so it doesn't jump the tempo
+    /// back to where the fader sits (#114). A synced follower's slider is disabled, and Syndicate ignores TempoSlider
+    /// then, so nothing is sent.
+    func resetTempo() {
+        guard sliderEnabled else { return }
+        rearmPickup()
+        reportedTempo = 0
+        tempoWaitUntil = nil
+        // Syndicate's answer is the echo of this send, not an outside change.
+        recentTempoSends.removeAll { clock.now - $0.time > Self.echoWindow }
+        recentTempoSends.append((clock.now, 0))
+        sendDeck("TempoSlider", .float(0))
+        refreshLEDs()
+    }
+
     /// How long after a send its echo may still come back from Syndicate.
     static let echoWindow = 0.5
 

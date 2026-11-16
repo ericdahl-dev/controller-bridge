@@ -265,6 +265,8 @@ public final class Coordinator {
         for index in controllers.indices where controllers[index].source?.id == source {
             layerSignal(event, controller: index)
             controllers[index].bridge.handle(event)
+            for notice in controllers[index].bridge.notices { log.log(notice) }
+            controllers[index].bridge.notices.removeAll()
         }
         disconnectFailedOutputs()
     }
