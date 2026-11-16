@@ -10,6 +10,9 @@ final class Bridge {
     static var buttonHandlers: [String: (Bridge) -> (Bool) -> Void] {
         [
             "play": { $0.play },
+            // Browse, loops and jumps (Bridge+Browse.swift).
+            "track_prev": { $0.trackPrevious },
+            "track_next": { $0.trackNext },
         ]
     }
 
