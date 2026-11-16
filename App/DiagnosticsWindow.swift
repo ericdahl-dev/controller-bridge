@@ -12,9 +12,26 @@ import UniformTypeIdentifiers
 final class DiagnosticsLog {
     private(set) var lines = DiagnosticsLines()
 
-    /// Kept apart from `lines`, so the checkbox doesn't redraw the window on every new line (#162).
+    /// Kept apart from `lines`, so the controls don't redraw the window on every new line (#162). Each one sets the
+    /// matching DiagnosticsLines setting (#218), where the filtering is done and tested.
     var hideStreaming = true {
         didSet { lines.hideStreaming = hideStreaming }
+    }
+    var filterText = "" {
+        didSet { lines.filter.text = filterText }
+    }
+    var direction = DiagnosticsDirection.both {
+        didSet { lines.filter.direction = direction }
+    }
+    var deck: Int? {
+        didSet { lines.filter.deck = deck }
+    }
+    private(set) var paused = false
+
+    /// Freezes the lists, or catches them up; capture carries on either way.
+    func togglePause() {
+        paused.toggle()
+        if paused { lines.pause() } else { lines.resume() }
     }
 
     func append(_ event: DiagnosticEvent) {
@@ -27,10 +44,14 @@ final class DiagnosticsLog {
         lines.append(to: tab, message: parts.message, label: parts.label, isUnmapped: parts.isUnmapped)
     }
 
-    func shown(_ tab: DiagnosticsTab) -> [DiagnosticsLines.Line] { lines.shown(tab) }
+    /// What the window draws: the newest 2,000 of the tab's shown lines (#218).
+    func drawn(_ tab: DiagnosticsTab) -> [DiagnosticsLines.Line] { lines.drawn(tab) }
 
-    /// The tab's lines as plain text, to copy or save (#162).
+    /// Every line the tab shows, as plain text to copy (#162, #218).
     func plainText(_ tab: DiagnosticsTab) -> String { lines.plainText(tab) }
+
+    /// Everything the tab has kept, as plain text to save (#218).
+    func historyText(_ tab: DiagnosticsTab) -> String { lines.historyText(tab) }
 
     /// Clears the tab you're on; the other lists stay.
     func clear(_ tab: DiagnosticsTab) { lines.clear(tab) }
@@ -79,7 +100,7 @@ struct DiagnosticsWindow: View {
         .task(id: tab) {
             visible = nil
             while !Task.isCancelled {
-                let lines = log.shown(tab)
+                let lines = log.drawn(tab)
                 if lines != visible { visible = lines }
                 try? await Task.sleep(for: .milliseconds(100))
             }
@@ -108,18 +129,27 @@ struct DiagnosticsWindow: View {
             SegmentedPills(options: Tab.allCases, title: \.rawValue, selection: $tab)
                 .background { tabShortcuts }
             Spacer(minLength: 0)
-            // Copy and save what the tab shows, with its filter (#162), so it can be shared.
-            Button("Copy log") {
+            // Pause freezes the lists while capture carries on (#218); VoiceOver hears the new state.
+            Button(log.paused ? "Resume" : "Pause") {
+                log.togglePause()
+                AccessibilityNotification.Announcement(log.paused ? "Log paused" : "Log resumed").post()
+            }
+            .buttonStyle(PillButtonStyle(kind: .quiet, small: true))
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+            .accessibilityLabel(log.paused ? "Resume the log" : "Pause the log")
+            .accessibilityValue(log.paused ? "Paused" : "Live")
+            // Copy what the tab shows, with its filter (#162, #218); Save… writes everything it has kept.
+            Button("Copy visible") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(log.plainText(tab), forType: .string)
             }
             .buttonStyle(PillButtonStyle(kind: .quiet, small: true))
             .keyboardShortcut("c", modifiers: [.command, .shift])
-            .accessibilityLabel("Copy the \(tab.rawValue)")
+            .accessibilityLabel("Copy the visible lines of the \(tab.rawValue)")
             Button("Save…") { save(tab) }
                 .buttonStyle(PillButtonStyle(kind: .quiet, small: true))
                 .keyboardShortcut("s", modifiers: .command)
-                .accessibilityLabel("Save the \(tab.rawValue) to a file")
+                .accessibilityLabel("Save the whole \(tab.rawValue) to a file")
             Button("Clear log") { log.clear(tab) }
                 .buttonStyle(PillButtonStyle(small: true))
                 .keyboardShortcut("k", modifiers: .command)
@@ -138,9 +168,10 @@ struct DiagnosticsWindow: View {
 
     // MARK: Tabs
 
-    /// Saves the tab's plain text through the save panel (#162); the user picks the place, so the sandbox allows it.
+    /// Saves the tab's whole history through the save panel (#162, #218); the user picks the place, so the sandbox
+    /// allows it.
     private func save(_ tab: Tab) {
-        let text = log.plainText(tab)
+        let text = log.historyText(tab)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = tab.exportFileName(appName: AppInfo.displayName)
         panel.allowedContentTypes = [.plainText]
@@ -154,12 +185,13 @@ struct DiagnosticsWindow: View {
 
     @ViewBuilder private var content: some View {
         // Snapshots draw once, with no task running, so they read the log directly.
-        let lines = scrolls ? (visible ?? log.shown(tab)) : log.shown(tab)
+        let lines = scrolls ? (visible ?? log.drawn(tab)) : log.drawn(tab)
         let connected = status.controller?.connected == true
         switch tab {
         case .monitor:
             explain("Every MIDI message from the controller, with its mapping name or UNMAPPED.")
             if let hint = Tab.hiddenNotesHint(hiddenNotes) { explain(hint) }
+            filterField
             columnHeader
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         case .sweep:
@@ -180,14 +212,45 @@ struct DiagnosticsWindow: View {
             explain("Pads and ring through all 64 colors, then every other note at full, dim and off.")
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         case .osc:
-            Toggle(isOn: Bindable(log).hideStreaming) {
-                Text("Hide streaming values").font(Theme.ui(12)).foregroundStyle(Theme.text)
-            }
-            .toggleStyle(.checkbox)
+            oscFilters
             // Syndicate subscriptions that are off, each with what it breaks, as the panel says (#211).
             if !status.missingSubscriptions.isEmpty, let help = status.help { explain(help.text) }
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         }
+    }
+
+    /// Narrows the list to lines containing the text (#218). Display only: nothing is dropped.
+    private var filterField: some View {
+        TextField("Filter", text: Bindable(log).filterText, prompt: Text("Filter: TrackInfo, Deck/2…"))
+            .textFieldStyle(.roundedBorder)
+            .font(Theme.ui(12))
+            .frame(maxWidth: 260)
+            .accessibilityLabel("Filter lines")
+    }
+
+    /// The OSC log's filters (#218): text, streaming values, direction and deck.
+    private var oscFilters: some View {
+        HStack(spacing: Theme.Step.x3) {
+            filterField
+            Toggle(isOn: Bindable(log).hideStreaming) {
+                Text("Hide streaming values").font(Theme.ui(12)).foregroundStyle(Theme.text)
+            }
+            .toggleStyle(.checkbox)
+            .help("Position, BarRamp, Meter, Header/Clock, CurrentStep, SampleProgress, Progress and Time")
+            Picker("Direction", selection: Bindable(log).direction) {
+                ForEach(DiagnosticsDirection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.menu).fixedSize()
+            .accessibilityLabel("Direction")
+            Picker("Deck", selection: Bindable(log).deck) {
+                Text("All decks").tag(Int?.none)
+                ForEach(1...4, id: \.self) { Text("Deck \($0)").tag(Int?.some($0)) }
+            }
+            .pickerStyle(.menu).fixedSize()
+            .accessibilityLabel("Deck")
+            Spacer(minLength: 0)
+        }
+        .font(Theme.ui(12))
     }
 
     /// Lines up with the monitor's monospaced columns.
