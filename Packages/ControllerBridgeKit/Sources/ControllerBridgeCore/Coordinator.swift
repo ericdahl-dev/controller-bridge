@@ -390,12 +390,14 @@ public final class Coordinator {
         controller.channel = entry.channel
         controller.followsLayers = entry.followLayers == true
         controllers.append(controller)
+        status.controllers[index].followsLayers = controller.followsLayers
         controllers[index].bridge = makeBridge(first, for: index)
         setDevices(input: entry.input, output: entry.output, controller: index)
     }
 
     private func update(_ index: Int, to entry: ControllerSettings) {
         controllers[index].followsLayers = entry.followLayers == true
+        status.controllers[index].followsLayers = controllers[index].followsLayers
         setDeck(entry.deck, controller: index)
         if entry.channel != controllers[index].channel {
             controllers[index].channel = entry.channel

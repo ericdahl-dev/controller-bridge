@@ -162,4 +162,26 @@ struct LayersTests {
         rig.coordinator.setControllers(ControllerSettings.expanded([automatic, automatic], layers: Self.lc6000Layers))
         #expect(rig.coordinator.status.controllers.map(\.connected) == [true, true, true, true, false, false, false, false])
     }
+
+    @Test("For the menu, a unit's layers fold into one controller: the active layer's, marked as following layers")
+    func statusFoldsLayers() throws {
+        let rig = try Self.layered()
+        #expect(rig.coordinator.status.controllers.map(\.followsLayers) == [true, true, true, true])
+        // Before any layer signal, the first layer stands for the unit.
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [1])
+
+        Self.switchLayer(rig, from: 1, to: 2)
+        let folded = rig.coordinator.status.collapsingLayers().controllers
+        #expect(folded.count == 1)
+        #expect(folded.first?.deck == 2)
+        #expect(folded.first?.followsLayers == true)
+        #expect(folded.first?.connected == true)
+    }
+
+    @Test("Controllers that don't follow layers are left as they are")
+    func plainControllersUnfolded() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        #expect(rig.coordinator.status.collapsingLayers() == rig.coordinator.status)
+    }
 }
