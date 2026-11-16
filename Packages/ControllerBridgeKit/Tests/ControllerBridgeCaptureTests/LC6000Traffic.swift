@@ -18,6 +18,9 @@ enum LC6000Traffic {
     /// Needle Drop slid left to right: a 14-bit position on CC 64 (MSB) and CC 65 (LSB). Not an n / n+32 pair.
     static let needleSlide: Take = pairs(msb: 64, lsb: 65, values: [0, 4096, 8192, 12288, 16383])
 
+    /// The pitch fader moved from the bottom to the top: CC 8 (MSB) and CC 40 (LSB), 16383 down to 0, since up is 0.
+    static let pitchUp: Take = pairs(msb: 8, lsb: 40, values: [16383, 12288, 8192, 4096, 0])
+
     /// The browse knob turned right three clicks, then left two: CC 6, two's complement (0x01 forward, 0x7F back).
     static let browseTurn: Take = cc(6, [0x01, 0x01, 0x01, 0x7F, 0x7F])
 

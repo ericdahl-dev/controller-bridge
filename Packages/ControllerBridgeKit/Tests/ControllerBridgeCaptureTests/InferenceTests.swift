@@ -75,4 +75,12 @@ struct InferenceTests {
     func slowAbsoluteKnob() {
         #expect(Self.controls(OtherTraffic.knob, gesture: .turn).map(\.encoding) == [.absolute])
     }
+
+    @Test("A fader keeps its values in order, so the prompt's gesture gives its direction: LC6000 pitch, bottom to top, ends at 0")
+    func pitchDirection() {
+        let pitch = Self.controls(LC6000Traffic.pitchUp, gesture: .move)
+        #expect(pitch == [
+            ControlFacts(kind: .cc, channel: 1, number: 8, lsb: 40, encoding: .absolute, first: 16383, last: 0, min: 0, max: 16383),
+        ])
+    }
 }
