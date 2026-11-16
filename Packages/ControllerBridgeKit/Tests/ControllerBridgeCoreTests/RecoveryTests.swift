@@ -146,4 +146,22 @@ struct RecoveryTests {
         #expect(rig.midi.connected == [])
         #expect(rig.log.lines.last == "Disconnected DENON LC6000 PRIME (MIDI input failed)")
     }
+
+    @Test("Going to sleep releases held controls; waking re-checks the devices")
+    func sleepAndWake() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)   // Cue held
+        rig.osc.sent.removeAll()
+
+        rig.coordinator.willSleep()
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
+
+        // Unplugged while asleep: waking notices, with nothing left to release.
+        rig.midi.sources = [Self.iac]
+        rig.midi.destinations = []
+        rig.coordinator.didWake()
+        #expect(rig.osc.sent.count == 1)
+        #expect(rig.coordinator.status.controllers.map(\.connected) == [false])
+    }
 }

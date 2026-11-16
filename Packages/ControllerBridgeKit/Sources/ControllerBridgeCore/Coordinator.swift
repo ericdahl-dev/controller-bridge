@@ -106,6 +106,16 @@ public final class Coordinator {
         for bridge in bridges { bridge.releaseAll() }
     }
 
+    /// The Mac is about to sleep: release everything held, since the controller may be gone on wake.
+    public func willSleep() {
+        for bridge in bridges { bridge.releaseAll() }
+    }
+
+    /// The Mac woke: the devices may have changed while it slept.
+    public func didWake() {
+        devicesChanged()
+    }
+
     /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
     public func tick() {
         for bridge in bridges { bridge.tick() }
