@@ -8,7 +8,12 @@ import SwiftUI
 
 @MainActor
 enum Snapshots {
+    /// SNAPSHOT_APPEARANCE=light renders the light theme (#127); dark by default.
+    static let scheme: ColorScheme = ProcessInfo.processInfo.environment["SNAPSHOT_APPEARANCE"] == "light" ? .light : .dark
+
     static func render(to name: String) {
+        // Theme colors resolve against the app's appearance, so set it to match.
+        NSApplication.shared.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(name).path
         for font in ["Inter-Regular", "Inter-SemiBold", "Inter-Bold", "IBMPlexMono", "IBMPlexMono-Medm", "IBMPlexMono-SmBld"] {
             print("\(font): \(NSFont(name: font, size: 12) == nil ? "MISSING" : "ok")")
@@ -195,8 +200,8 @@ enum Snapshots {
 
     /// Renders through a hosting view's display cache, which draws AppKit-backed controls (pickers, text fields).
     private static func writeAppKit(_ view: some View, to path: String) {
-        let host = NSHostingView(rootView: view.environment(\.colorScheme, .dark))
-        host.appearance = NSAppearance(named: .darkAqua)
+        let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme))
+        host.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         // Lay out tall first, so the fitting height is the whole form, then shrink to it.
         host.frame = NSRect(x: 0, y: 0, width: 440, height: 2000)
         host.layoutSubtreeIfNeeded()
@@ -209,7 +214,7 @@ enum Snapshots {
     }
 
     private static func write(_ view: some View, to path: String) {
-        let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark))
+        let renderer = ImageRenderer(content: view.environment(\.colorScheme, scheme))
         // 2 by default; SNAPSHOT_SCALE=4 renders big enough for Mac App Store screenshots (#29).
         renderer.scale = Double(ProcessInfo.processInfo.environment["SNAPSHOT_SCALE"] ?? "") ?? 2
         guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,

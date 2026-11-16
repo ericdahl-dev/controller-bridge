@@ -182,7 +182,6 @@ struct StatusPanel: View {
         }
         .frame(width: 360)
         .background(Theme.background)
-        .environment(\.colorScheme, .dark)
         .confirmationDialog("Quit? The controller stops sending to Syndicate.", isPresented: $confirmingQuit) {
             Button("Quit", role: .destructive) { NSApplication.shared.terminate(nil) }
             Button("Cancel", role: .cancel) {}

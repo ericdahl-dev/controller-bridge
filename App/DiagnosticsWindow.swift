@@ -63,8 +63,7 @@ struct DiagnosticsWindow: View {
         }
         .frame(minWidth: 640, minHeight: 420)
         .background(Theme.background)
-        .preferredColorScheme(.dark)
-        .tint(Color(Palette.live))
+        .tint(Theme.live)
         // Only while this window is open does the bridge build anything for it.
         .onAppear { setOpen(true) }
         .onDisappear { setOpen(false) }

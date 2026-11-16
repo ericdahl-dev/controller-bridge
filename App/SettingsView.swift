@@ -39,7 +39,6 @@ struct SettingsView: View {
         .frame(width: 440, alignment: .leading)
         .background(Theme.background)
         .foregroundStyle(Theme.text)
-        .preferredColorScheme(.dark)
         // Brings this window, not whichever window was open before, to the front (#62).
         .background(FrontWindow())
         .onAppear(perform: load)
@@ -121,6 +120,15 @@ struct SettingsView: View {
             }
 
             heading("Login")
+            row("Appearance") {
+                // Syndicate's LIGHT MODE can't be read over OSC, so pick it here to match (#127).
+                Picker("Appearance", selection: settings.appearance) {
+                    Text("Match macOS").tag(Appearance.matchMacOS)
+                    Text("Dark").tag(Appearance.dark)
+                    Text("Light").tag(Appearance.light)
+                }
+                .labelsHidden().fixedSize()
+            }
             row("Start") {
                 Toggle("Start at login", isOn: $startAtLogin)
                     .font(Theme.ui(Theme.Size.label))
@@ -346,7 +354,7 @@ struct SettingsView: View {
 
     /// A switch that's on reads as live, in Syndicate's green, not the system blue (#68). Toggles only: on pickers the
     /// tint would color their text green and read as "live".
-    private static let on = Color(Palette.live)
+    private static let on = Theme.live
 
     /// A new entry on the first deck no controller drives yet, with automatic devices.
     private static func newEntry(after entries: [ControllerSettings]) -> ControllerSettings {

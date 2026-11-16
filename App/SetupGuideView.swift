@@ -64,7 +64,6 @@ struct SetupGuideView: View {
         .padding(Theme.Space.xxl)
         .frame(width: 460)
         .background(Theme.background)
-        .preferredColorScheme(.dark)
     }
 
     private var feedbackLive: Bool {
