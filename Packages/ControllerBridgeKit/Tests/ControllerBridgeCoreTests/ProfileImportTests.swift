@@ -61,4 +61,15 @@ struct ProfileImportTests {
             try Self.importing(#"{"device_hints": ["LC6000", " "]}"#)
         }
     }
+
+    @Test("Keys Settings owns (OSC addresses, Deck, Channel) aren't applied from a file, and are named so the DJ knows (#93)")
+    func settingsOwnedKeys() throws {
+        let file = #"{"mapping": {"osc": {"port": 9191, "root": "/Syndicate/"}, "deck": {"number": 3}, "notes": {"play": 60}}}"#
+        let profile = try Self.importing(file)
+        #expect(profile.mapping.osc.port == 9090)
+        #expect(profile.mapping.deck.number == 1)
+        #expect(profile.mapping.notes.buttons["play"] == 60)
+        #expect(ControllerProfile.settingsOwnedKeys(in: Data(file.utf8)) == ["mapping.osc.port", "mapping.deck.number"])
+        #expect(ControllerProfile.settingsOwnedKeys(in: Data(#"{"mapping": {"notes": {"play": 60}}}"#.utf8)) == [])
+    }
 }

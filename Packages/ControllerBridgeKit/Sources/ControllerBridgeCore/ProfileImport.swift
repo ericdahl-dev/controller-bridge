@@ -50,7 +50,7 @@ extension ControllerProfile {
         }
         if let mapping = document["mapping"] {
             let base = try OrderedJSON(parsing: mappingJSON(of: bundledFile(id)))
-            profile.mapping = try Mapping.checked(Mapping.merge(base, mapping).data())
+            profile.mapping = try Mapping.checked(Mapping.merge(base, mapping.removing(settingsOwned)).data())
         }
         return profile
     }
@@ -122,5 +122,38 @@ extension OrderedJSON {
     private static func quoted(_ s: String) -> String {
         let data = (try? JSONSerialization.data(withJSONObject: s, options: .fragmentsAllowed)) ?? Data("\"\"".utf8)
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+extension ControllerProfile {
+    /// Mapping keys Settings owns (#93): the OSC addresses and ports, the deck and the MIDI channel. A file's values
+    /// for them would silently lose to Settings, so an import doesn't apply them and an export doesn't write them.
+    static let settingsOwned: [[String]] = [
+        ["osc", "host"], ["osc", "port"], ["osc", "feedback_host"], ["osc", "feedback_port"], ["deck", "number"], ["midi", "channel"],
+    ]
+
+    /// The Settings-owned keys a file sets, as "mapping.osc.port", in document order, so the import can say they
+    /// weren't applied.
+    public static func settingsOwnedKeys(in data: Data) -> [String] {
+        guard let document = try? OrderedJSON(parsing: data), let mapping = document["mapping"] else { return [] }
+        var found: [String] = []
+        if case .object(let sections) = mapping {
+            for (section, value) in sections {
+                guard case .object(let keys) = value else { continue }
+                for (key, _) in keys where settingsOwned.contains([section, key]) { found.append("mapping.\(section).\(key)") }
+            }
+        }
+        return found
+    }
+}
+
+extension OrderedJSON {
+    /// The object without the given section.key paths; anything else unchanged.
+    func removing(_ paths: [[String]]) -> OrderedJSON {
+        guard case .object(let sections) = self else { return self }
+        return .object(sections.map { section, value in
+            guard case .object(let keys) = value else { return (section, value) }
+            return (section, .object(keys.filter { !paths.contains([section, $0.key]) }))
+        })
     }
 }
