@@ -44,6 +44,8 @@ enum BridgeHost {
                     status.lastDropoutTime = Date.now.formatted(date: .omitted, time: .shortened)
                 }
                 status.syndicateFeedback = coordinatorStatus.feedback
+                status.noDeckData = coordinatorStatus.noDeckData
+                status.missingSubscriptions = coordinatorStatus.missingSubscriptions
                 status.lastDropout = coordinatorStatus.lastDropout
                 status.sweeping = coordinatorStatus.sweeping
                 status.demo = coordinatorStatus.demo
