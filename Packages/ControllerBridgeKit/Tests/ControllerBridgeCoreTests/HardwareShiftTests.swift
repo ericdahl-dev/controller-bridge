@@ -105,3 +105,31 @@ struct HardwareShiftLC6000Tests {
         #expect(HardwareShiftCoordinatorTests.press(rig, 110) == [])
     }
 }
+
+/// The import check (#226), in plain words: a shifted note is checked like any note.
+@Suite("Hardware Shift in the import check")
+struct HardwareShiftImportTests {
+    static func importing(_ shifted: String) throws {
+        _ = try ControllerProfile.importing(Data(#"{"mapping": {"notes": {"shifted": \#(shifted)}}}"#.utf8),
+                                            bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+    }
+
+    @Test("A misspelled button is named")
+    func unknownButton() {
+        #expect(throws: MappingError.invalid(["mapping.notes.shifted.paly: unknown key"])) { try Self.importing(#"{"paly": 110}"#) }
+    }
+
+    @Test("A shifted note is 0-127")
+    func range() {
+        #expect(throws: MappingError.invalid(["mapping.notes.shifted.play: 200 is out of range, expected 0-127"])) {
+            try Self.importing(#"{"play": 200}"#)
+        }
+    }
+
+    @Test("A shifted note can't be another button's note: the LC6000's 4 is Beat Jump Forward")
+    func collision() {
+        #expect(throws: MappingError.invalid(["mapping.notes.shifted.play: note 4 is also notes.beat_jump_forward"])) {
+            try Self.importing(#"{"play": 4}"#)
+        }
+    }
+}
