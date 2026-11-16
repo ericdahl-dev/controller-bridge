@@ -65,4 +65,11 @@ struct DiagnosticsPresentationTests {
         #expect(all.first?.message == "OSC <- /Syndicate/Deck/1/Progress 0.101")
         #expect(all.last?.message == "OSC <- /Syndicate/Deck/1/Progress 0.600")
     }
+
+    @Test("The monitor says which notes it hides, so a quiet port doesn't look dead; with none hidden it says nothing")
+    func hiddenNotesHint() {
+        #expect(DiagnosticsTab.hiddenNotesHint([52]) == "Note 52, the controller's idle heartbeat, is hidden.")
+        #expect(DiagnosticsTab.hiddenNotesHint([52, 53]) == "Notes 52 and 53, which the controller sends on its own, are hidden.")
+        #expect(DiagnosticsTab.hiddenNotesHint([]) == nil)
+    }
 }
