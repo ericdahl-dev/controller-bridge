@@ -19,6 +19,17 @@ class DistributeError(Exception):
     """A step that can't go on, with what to do about it."""
 
 
+class TestInformationMissing(DistributeError):
+    """External testing needs the app's Test Information, a one-time step for the account holder in App Store
+    Connect: it holds their contact details, so this script never fills it in."""
+
+    def __init__(self, missing):
+        super().__init__(
+            f"External testing needs Test Information in App Store Connect ({missing}). Fill it in once under "
+            "TestFlight > Test Information (Beta App Description, Feedback Email, and Beta App Review contact "
+            "details), then re-run this workflow with workflow_dispatch for this version and build.")
+
+
 def send(http, method, path, body):
     status, response = http(method, path, body, None)
     if status >= 400:
@@ -104,6 +115,46 @@ def add_to_group(http, app, build, name):
         raise DistributeError(f'Couldn\'t add the build to "{name}": {status} {detail(response)}')
     else:
         print(f'Added to "{name}".')
+
+
+REVIEW_CONTACT = {"contactFirstName": "first name", "contactLastName": "last name", "contactPhone": "phone",
+                  "contactEmail": "email"}
+
+
+def check_test_information(http, app, locale="en-US"):
+    """External review needs the beta description and feedback email, and the review contact. Checked first, so
+    a missing one says what to fill in instead of failing on the submission."""
+    contact = get(http, f"/apps/{app}/betaAppReviewDetail")["data"]["attributes"]
+    missing = [label for key, label in REVIEW_CONTACT.items() if not contact.get(key)]
+    if missing:
+        raise TestInformationMissing("Beta App Review contact " + ", ".join(missing))
+    localizations = [l["attributes"] for l in get(http, f"/apps/{app}/betaAppLocalizations")["data"]]
+    localization = next((l for l in localizations if l.get("locale") == locale), {})
+    if not localization.get("description"):
+        raise TestInformationMissing(f"Beta App Description, {locale}")
+    if not localization.get("feedbackEmail"):
+        raise TestInformationMissing(f"Feedback Email, {locale}")
+
+
+def submit_for_review(http, app, build):
+    """Submits the build for Beta App Review, once. Already submitted, by an earlier run or by hand, is done."""
+    check_test_information(http, app)
+    existing = get(http, f"/builds/{build}/betaAppReviewSubmission")["data"]
+    if existing:
+        print(f"Already submitted for Beta App Review ({existing['attributes'].get('betaReviewState', 'submitted')}).")
+        return
+    status, response = http("POST", "/betaAppReviewSubmissions", {"data": {
+        "type": "betaAppReviewSubmissions", "relationships": {"build": {"data": {"type": "builds", "id": build}}}}}, None)
+    if status < 400:
+        print("Submitted for Beta App Review.")
+        return
+    text = detail(response)
+    if "review information" in text.lower() or "contact" in text.lower() or "test information" in text.lower():
+        raise TestInformationMissing(text)
+    if status == 409 and "already" in text.lower():
+        print("Already submitted for Beta App Review.")
+        return
+    raise DistributeError(f"Couldn't submit for Beta App Review: {status} {text}")
 
 
 if __name__ == "__main__":

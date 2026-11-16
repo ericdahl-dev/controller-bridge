@@ -21,9 +21,27 @@ class FakeASC:
         self.groups = {"Internal": "g-int", "Syndicate": "g-ext", "Syndicate Friends": "g-other"}
         self.in_group = set()
         self.group_conflict = False
+        self.review_detail = {"contactFirstName": "A", "contactLastName": "B", "contactPhone": "+1 555 0100",
+                              "contactEmail": "beta@example.com"}
+        self.app_localizations = [{"locale": "en-US", "description": "A bridge.", "feedbackEmail": "beta@example.com"}]
+        self.submission = None
+        self.submit_reply = None  # (status, body) to answer the POST with, instead of creating one
 
     def http(self, method, path, body=None, query=None):
         self.calls.append((method, path, body, query))
+        if method == "GET" and path == "/apps/app1/betaAppReviewDetail":
+            return 200, {"data": {"id": "app1", "attributes": self.review_detail}}
+        if method == "GET" and path == "/apps/app1/betaAppLocalizations":
+            return 200, {"data": [{"id": f"al{i}", "attributes": a} for i, a in enumerate(self.app_localizations)]}
+        if method == "GET" and path == "/builds/build1/betaAppReviewSubmission":
+            return 200, {"data": self.submission}
+        if method == "POST" and path == "/betaAppReviewSubmissions":
+            assert body == {"data": {"type": "betaAppReviewSubmissions",
+                                     "relationships": {"build": {"data": {"type": "builds", "id": "build1"}}}}}
+            if self.submit_reply:
+                return self.submit_reply
+            self.submission = {"id": "sub1", "attributes": {"betaReviewState": "WAITING_FOR_REVIEW"}}
+            return 201, {"data": self.submission}
         if method == "GET" and path == "/betaGroups":
             assert query["filter[app]"] == "app1"
             # The API's name filter matches partly, as App Store Connect's does.
@@ -157,6 +175,48 @@ class GroupTests(unittest.TestCase):
         api = FakeASC()
         api.group_conflict = True
         td.add_to_group(api.http, "app1", "build1", "Internal")
+
+
+class ReviewTests(unittest.TestCase):
+    def posts(self, api):
+        return [c for c in api.calls if c[0] == "POST" and c[1] == "/betaAppReviewSubmissions"]
+
+    def test_submits_the_build_for_beta_app_review(self):
+        api = FakeASC()
+        td.submit_for_review(api.http, "app1", "build1")
+        self.assertEqual(api.submission["attributes"]["betaReviewState"], "WAITING_FOR_REVIEW")
+        self.assertEqual(len(self.posts(api)), 1)
+
+    def test_a_build_already_submitted_is_not_submitted_again(self):
+        api = FakeASC()
+        api.submission = {"id": "sub0", "attributes": {"betaReviewState": "IN_REVIEW"}}
+        td.submit_for_review(api.http, "app1", "build1")
+        self.assertEqual(self.posts(api), [])
+
+    def test_a_conflict_saying_already_submitted_counts_as_done(self):
+        api = FakeASC()
+        api.submit_reply = (409, {"errors": [{"code": "ENTITY_ERROR.STATE_ERROR", "detail": "Build already submitted for review."}]})
+        td.submit_for_review(api.http, "app1", "build1")
+
+    def test_missing_contact_details_stop_before_submitting_and_say_what_to_fill_in(self):
+        api = FakeASC()
+        api.review_detail = dict(api.review_detail, contactPhone=None)
+        with self.assertRaisesRegex(td.TestInformationMissing, "Test Information"):
+            td.submit_for_review(api.http, "app1", "build1")
+        self.assertEqual(self.posts(api), [])
+
+    def test_a_missing_beta_description_or_feedback_email_stops_too(self):
+        api = FakeASC()
+        api.app_localizations = [{"locale": "en-US", "description": "", "feedbackEmail": "beta@example.com"}]
+        with self.assertRaisesRegex(td.TestInformationMissing, "Beta App Description"):
+            td.submit_for_review(api.http, "app1", "build1")
+
+    def test_an_api_error_about_the_review_details_gets_the_same_message(self):
+        api = FakeASC()
+        api.submit_reply = (422, {"errors": [{"code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
+                                              "detail": "Beta App Review Information is missing a contact email."}]})
+        with self.assertRaisesRegex(td.TestInformationMissing, "Test Information"):
+            td.submit_for_review(api.http, "app1", "build1")
 
 
 if __name__ == "__main__":
