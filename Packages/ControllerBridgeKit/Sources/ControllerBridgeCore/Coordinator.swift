@@ -103,9 +103,9 @@ public final class Coordinator {
         endpoints.first { $0.name.lowercased().contains(wanted.lowercased()) }
     }
 
-    /// A MIDI message from a connected source.
+    /// A MIDI message from a source. Only the controller connected to that source handles it.
     public func midi(_ event: MIDIEvent, source: MIDIEndpoint.ID) {
-        for bridge in bridges { bridge.handle(event) }
+        for controller in controllers where controller.source?.id == source { controller.bridge.handle(event) }
     }
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.

@@ -58,4 +58,19 @@ struct RecoveryTests {
         rig.coordinator.devicesChanged()
         #expect(rig.osc.sent.count == 2)
     }
+
+    @Test("LED writes while the controller is unplugged are dropped without error, and MIDI from a source that isn't connected is ignored")
+    func ledsDroppedWhileUnplugged() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        Self.unplug(rig)
+        rig.osc.sent.removeAll()
+        let before = rig.midi.outputs[Rig.lc6000Out.id]?.sent.count
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.coordinator.midi(.noteOn(channel: 0, note: 22, velocity: 127), source: Rig.lc6000.id)  // a stray Key Lock
+        #expect(rig.midi.outputs[Rig.lc6000Out.id]?.sent.count == before)
+        #expect(rig.osc.sent == [])
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Self.iac.id)  // Play on another device
+        #expect(rig.osc.sent == [])
+    }
 }
