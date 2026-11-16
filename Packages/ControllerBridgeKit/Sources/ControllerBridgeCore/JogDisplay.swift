@@ -55,4 +55,32 @@ public enum JogDisplay {
     public static func show(slot: UInt8) -> [UInt8] {
         frame(0x0A, [0x01, 0x00, slot, 0x0D])
     }
+
+    /// The most image bytes in one 0D: their 7-bit form (n × 8 / 7 + 1) plus a 3-byte offset fits the 14-bit length.
+    static let chunk = 14332
+
+    /// One image upload into a slot, as verified on hardware (#165): `start`, then `body` (wait for `expectedAcks`
+    /// accepted acks; a refusal is ack 06), then `finish` (an identity request and the 10 commit, which the unit
+    /// answers 01 10 10), then `show`.
+    public struct Upload: Equatable, Sendable {
+        public var start: [[UInt8]]
+        public var body: [[UInt8]]
+        public var finish: [[UInt8]]
+        public var show: [UInt8]
+        /// Each body message but the first (the 0A) is acked.
+        public var expectedAcks: Int { body.count - 1 }
+
+        public init(image: [UInt8], slot: UInt8) {
+            start = [[0x90, 0x01, 0x00]]
+            var body = [JogDisplay.frame(0x0A, [0x01, 0x00, 0x06, 0x0D]), JogDisplay.frame(0x0C, JogDisplay.u21(image.count))]
+            for offset in stride(from: 0, to: image.count, by: JogDisplay.chunk) {
+                let piece = Array(image[offset..<min(offset + JogDisplay.chunk, image.count)])
+                body.append(JogDisplay.frame(0x0D, JogDisplay.u21(offset) + JogDisplay.bits7(piece)))
+            }
+            body.append(JogDisplay.frame(0x0E, JogDisplay.checksum(image, slot: slot)))
+            self.body = body
+            finish = [[0xF0, 0x7E, 0x00, 0x06, 0x01, 0xF7], JogDisplay.frame(0x10, [])]
+            show = JogDisplay.show(slot: slot)
+        }
+    }
 }
