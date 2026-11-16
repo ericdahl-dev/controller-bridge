@@ -19,6 +19,11 @@ final class Bridge {
             "shift": { $0.shiftButton },
             "key_lock": { $0.keyLock },
             "slip": { $0.slip },
+            // Pad modes (Bridge+Pads.swift).
+            "mode_hotcue": { $0.padModeButton(.hotCue) },
+            "mode_roll": { $0.padModeButton(.roll) },
+            "mode_loop": { $0.padModeButton(.loop) },
+            "mode_slicer": { $0.padModeButton(.slicer) },
             "platter_touch": { $0.platterTouch },
             // Browse, loops and jumps (Bridge+Browse.swift).
             "track_prev": { $0.trackPrevious },
@@ -64,6 +69,7 @@ final class Bridge {
 
     // Controller state.
     var shift = false
+    var padMode = PadMode.hotCue
     var held = HeldControls()
     var keyLockOn = false
     var slipOn = false
@@ -90,6 +96,10 @@ final class Bridge {
     var synced = false
     var sliderEnabled = true
     var looping = false
+    /// Each hot cue's color slot, 0 for an empty cue.
+    var cues = [Int](repeating: 0, count: 8)
+    /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
+    var palette = Bridge.defaultPalette
 
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
@@ -134,6 +144,7 @@ final class Bridge {
     }
 
     private func handleNote(_ note: Int, pressed: Bool) {
+        if let pad = mapping.notes.pads.firstIndex(of: note) { return handlePad(pad, pressed: pressed) }
         if note == mapping.needle.touchNote {
             needleTouched = pressed
             return
@@ -152,6 +163,8 @@ final class Bridge {
     func handle(_ message: OSCMessage) {
         // Syndicate matches addresses without regard to case, so feedback is read the same way.
         let address = message.address.lowercased()
+        // Cue colors are for every deck, so they come before the deck check.
+        if address == (root + "ColorPalette").lowercased() { return colorPalette(message.arguments) }
         let deckPrefix = (root + "Deck/\(mapping.deck.number)/").lowercased()
         guard address.hasPrefix(deckPrefix) else { return }
         let key = address.dropFirst(deckPrefix.count)
@@ -164,6 +177,7 @@ final class Bridge {
         case "sync": synced = value
         case "temposliderenabled": sliderEnabled = value
         case "loop": looping = value
+        case "cues": cues = Self.cueSlots(message.arguments)
         case "trackinfo":
             // Title, artist, key, BPM, length in seconds, …: only the length is used, for jog seeking.
             guard message.arguments.count >= 5 else { return }
@@ -184,6 +198,7 @@ final class Bridge {
         buttonLED("play", on: playing)
         refreshTransportLEDs()
         loopLEDs()
+        padLEDs()
         led(mapping.leds.pitchCenter, lastTempo == 0 ? Self.full : Self.off)
     }
 
