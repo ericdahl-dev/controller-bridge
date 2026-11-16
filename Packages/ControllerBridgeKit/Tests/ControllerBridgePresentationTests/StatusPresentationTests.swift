@@ -32,14 +32,6 @@ struct StatusPresentationTests {
         #expect(status.icon == .error)
     }
 
-    @Test("A device with no matching profile (#43): an orange NO PROFILE light under the device's name")
-    func noProfile() {
-        let status = StatusPresentation(BridgeState(controller: .noProfile(device: "DDJ-FLX4"), feedback: .live(port: 9096), deck: 1))
-        #expect(status.line == "CONTROLLER ● NO PROFILE · FEEDBACK ● LIVE · DECK [1]")
-        #expect(status.lights.first == StatusLight(label: "CONTROLLER", word: "NO PROFILE", tone: .attention))
-        #expect(status.icon == .attention)
-    }
-
     @Test("Feedback still starting is a gray STARTING; a listener that failed for another reason is a red FAILED")
     func feedbackStartingAndFailed() {
         let starting = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .starting, deck: 1))
@@ -202,8 +194,6 @@ struct StatusPresentationTests {
         // Unplugged with its name no longer known: say what happened, not "No controller".
         #expect(StatusPresentation(BridgeState(controller: .unplugged(profile: nil), feedback: .live(port: 9096), deck: 1)).header.title
             == "Controller unplugged")
-        #expect(StatusPresentation(BridgeState(controller: .noProfile(device: "DDJ-FLX4"), feedback: .live(port: 9096), deck: 1)).header
-            == StatusHeader(title: "DDJ-FLX4", subtitle: "No controller profile matches it"))
     }
 
     @Test("Two controllers (#25): a block each with its own header, light and deck; the line lists both decks")
@@ -251,5 +241,55 @@ struct StatusPresentationTests {
         #expect(picker(demo: true) == .disabled(reason: "Demo controller is on, so the deck stays put."))
         // A stopped bridge has nothing to switch.
         #expect(picker(stopped: true) == .hidden)
+    }
+
+    // #91: what the controller's status means for the panel, from the values Core reports. lastEvent texts are the
+    // Coordinator's own.
+
+    @Test("Connected uses the profile in use")
+    func mapConnected() {
+        #expect(BridgeState.Controller(connected: true, profile: "Denon LC6000 PRIME", lastProfile: "Denon LC6000 PRIME", lastDisconnect: nil)
+            == .connected(profile: "Denon LC6000 PRIME"))
+    }
+
+    @Test("An unplug keeps the controller's name: the header still says Denon LC6000 PRIME")
+    func mapUnplugged() {
+        let controller = BridgeState.Controller(connected: false, profile: nil, lastProfile: "Denon LC6000 PRIME", lastDisconnect: .unplugged)
+        #expect(controller == .unplugged(profile: "Denon LC6000 PRIME"))
+        let status = StatusPresentation(BridgeState(
+            controller: controller, feedback: .live(port: 9096), deck: 1, lastEvent: "Disconnected DENON LC6000 PRIME"
+        ))
+        #expect(status.header == StatusHeader(title: "Denon LC6000 PRIME", subtitle: "Disconnected DENON LC6000 PRIME"))
+        #expect(status.lights.first == StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention))
+    }
+
+    @Test("A send or read failure is MIDI ERROR, not UNPLUGGED, and the help says what to check first")
+    func mapFailed() {
+        for reason: BridgeState.Disconnect in [.sendFailed, .inputFailed] {
+            let controller = BridgeState.Controller(connected: false, profile: nil, lastProfile: "Denon LC6000 PRIME", lastDisconnect: reason)
+            #expect(controller == .failed(profile: "Denon LC6000 PRIME"))
+            let state = BridgeState(controller: controller, feedback: .live(port: 9096), deck: 1,
+                                    lastEvent: "Disconnected DENON LC6000 PRIME (MIDI send failed)")
+            #expect(StatusPresentation(state).lights.first == StatusLight(label: "CONTROLLER", word: "MIDI ERROR", tone: .attention))
+            #expect(HelpMessage(state) == HelpMessage(
+                text: "Lost contact with the controller. Check the USB cable, then unplug and replug.", showsGuide: false
+            ))
+        }
+    }
+
+    @Test("After a device change in Settings it's a gray WAITING, not a problem")
+    func mapWaiting() {
+        let controller = BridgeState.Controller(connected: false, profile: nil, lastProfile: "Denon LC6000 PRIME", lastDisconnect: .deviceChanged)
+        #expect(controller == .waiting(profile: "Denon LC6000 PRIME"))
+        let state = BridgeState(controller: controller, feedback: .live(port: 9096), deck: 1)
+        #expect(StatusPresentation(state).lights.first == StatusLight(label: "CONTROLLER", word: "WAITING", tone: .idle))
+        #expect(HelpMessage(state) == HelpMessage(text: "Waiting for the device chosen in Settings.", showsGuide: false))
+    }
+
+    @Test("Never connected, removed in Settings, or stopped: NOT CONNECTED")
+    func mapNotConnected() {
+        for reason: BridgeState.Disconnect? in [nil, .removed, .stopped] {
+            #expect(BridgeState.Controller(connected: false, profile: nil, lastProfile: nil, lastDisconnect: reason) == .notConnected)
+        }
     }
 }

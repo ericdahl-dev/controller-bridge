@@ -62,6 +62,10 @@ public struct ControllerStatus: Equatable, Sendable {
     public var master: Bool
     /// The controller's LED output is open, so the LED sweep can run (#70).
     public var outputOpen: Bool
+    /// The profile's name from the last connection, kept after a disconnect so the panel can still name it (#91).
+    public var lastProfile: String?
+    /// Why it last disconnected, if it has (#91).
+    public var lastDisconnect: DisconnectReason?
     /// This entry is a deck layer the controller has switched to (#79): its layer note came in at velocity 127.
     public var activeLayer: Bool
     /// This entry is one deck layer of a controller that follows its own layers (#79).
@@ -69,8 +73,10 @@ public struct ControllerStatus: Equatable, Sendable {
 
     public init(
         deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false, outputOpen: Bool = false,
-        activeLayer: Bool = false, followsLayers: Bool = false
+        lastProfile: String? = nil, lastDisconnect: DisconnectReason? = nil, activeLayer: Bool = false, followsLayers: Bool = false
     ) {
+        self.lastProfile = lastProfile
+        self.lastDisconnect = lastDisconnect
         self.deck = deck
         self.connected = connected
         self.lastEvent = lastEvent
@@ -105,4 +111,20 @@ public enum FeedbackState: Equatable, Sendable {
     case live
     /// Stopped: it didn't answer a resend request. Syndicate's LEDs show idle until it comes back.
     case stale
+}
+
+/// Why a controller disconnected (#91): only an unplug is an unplug.
+public enum DisconnectReason: Equatable, Sendable {
+    /// Its MIDI source went away.
+    case unplugged
+    /// Sending to its LEDs failed.
+    case sendFailed
+    /// Reading from it failed.
+    case inputFailed
+    /// Settings chose other devices for it.
+    case deviceChanged
+    /// Its controller entry was removed in Settings.
+    case removed
+    /// The bridge stopped (quit).
+    case stopped
 }

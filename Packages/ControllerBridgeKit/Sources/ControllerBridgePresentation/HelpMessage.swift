@@ -31,7 +31,11 @@ public struct HelpMessage: Equatable, Sendable {
                 self.init(text: "No controller connected. Plug it in over USB; the bridge finds it.", showsGuide: false)
             case .unplugged:
                 self.init(text: "The controller was unplugged. Plug it back in; the bridge picks it up again.", showsGuide: false)
-            case .connected, .noProfile:
+            case .failed:
+                self.init(text: "Lost contact with the controller. Check the USB cable, then unplug and replug.", showsGuide: false)
+            case .waiting:
+                self.init(text: "Waiting for the device chosen in Settings.", showsGuide: false)
+            case .connected:
                 return nil
             }
         }

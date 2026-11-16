@@ -2,7 +2,7 @@
 
 A Mac menu-bar app that lets you use a **Denon LC6000 PRIME** with **[Untitled Audio Syndicate](https://untitledaudiosyndicate.com)** through Syndicate's OSC API, with LED feedback.
 
-Syndicate's own MIDI mapping (0.3.7) can't handle the LC6000's relative jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10. The app reads the LC6000's MIDI, converts it, and sends it to Syndicate's fixed OSC addresses. It also listens to Syndicate's OSC feedback to light the controller.
+Syndicate's own MIDI mapping (0.3.7) can't handle the LC6000's 14-bit jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10. The app reads the LC6000's MIDI, converts it, and sends it to Syndicate's fixed OSC addresses. It also listens to Syndicate's OSC feedback to light the controller.
 
 ```
 LC6000 ──USB MIDI──▶  Controller Bridge  ──OSC :9090──▶ Syndicate
@@ -83,9 +83,9 @@ The numbers come from Denon's *LC6000 PRIME MIDI Specification v1.0*. A few coul
 - **OSC Log** shows what goes to Syndicate and what comes back.
 
 Things to look for:
-- **Jog CCs:** the spec lists CC 55 and 54. If one turn shows up on both, keep only one in `jog.ccs`.
+- **Jog feel:** `jog.seek_seconds_per_rev` and `jog.beats_per_rev` set how far one platter turn seeks or skips while paused.
 - **Pitch direction:** set `pitch.invert` to `true` if the fader works the wrong way.
-- **Colors:** the app assumes the color velocity is 2 bits each of red, green and blue (`0b00RRGGBB`).
+- **Colors:** the color velocity is 2 bits each of red, green and blue (`0b00RRGGBB`), confirmed on a unit. LED Sweep shows it on yours.
 - **Channel:** the spec only documents channel 1. Pick another in Settings if your unit uses one.
 
 ## Mapping overrides

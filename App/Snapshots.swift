@@ -60,7 +60,19 @@ enum Snapshots {
             }),
             // Connected earlier, then pulled mid-set: orange UNPLUGGED (#66).
             ("unplugged", {
-                $0.bridges = [ControllerStatus(deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME")]
+                $0.bridges = [ControllerStatus(
+                    deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME",
+                    lastProfile: "Denon LC6000 PRIME", lastDisconnect: .unplugged
+                )]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
+            // A failed send or read (#91): MIDI ERROR, with what to check first.
+            ("midi-error", {
+                $0.bridges = [ControllerStatus(
+                    deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME (MIDI send failed)",
+                    lastProfile: "Denon LC6000 PRIME", lastDisconnect: .sendFailed
+                )]
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
@@ -113,11 +125,11 @@ enum Snapshots {
         let log = DiagnosticsLog()
         let monitor: [MIDIEvent] = [
             .noteOn(channel: 0, note: 1, velocity: 127), .noteOff(channel: 0, note: 1, velocity: 0),
-            .noteOn(channel: 0, note: 32, velocity: 127), .controlChange(channel: 0, controller: 55, value: 1),
+            .noteOn(channel: 0, note: 32, velocity: 127), .controlChange(channel: 0, controller: 17, value: 10),
             .controlChange(channel: 0, controller: 99, value: 64),
         ]
         for (index, event) in monitor.enumerated() {
-            log.append(.midiIn(event, label: ["play", "play", "pad1", "jog", "UNMAPPED"][index], at: 1234.5 + Double(index) * 0.1))
+            log.append(.midiIn(event, label: ["play", "play", "pad1", "jog_msb", "UNMAPPED"][index], at: 1234.5 + Double(index) * 0.1))
         }
         for line in ["Color sweep: velocity shown on every pad and the ring. Note what each looks like.",
                      "  velocity  0 (0x00) = rgb222 r0 g0 b0", "  velocity  1 (0x01) = rgb222 r0 g0 b1"] {
@@ -136,7 +148,7 @@ enum Snapshots {
             let name = tab.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")
             let window = DiagnosticsWindow(
                 log: log, status: connected, sweeping: tab == .sweep, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
-                tab: tab, scrolls: false
+                hiddenNotes: [52], tab: tab, scrolls: false
             )
             write(window.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name).png")
             let blank = DiagnosticsWindow(

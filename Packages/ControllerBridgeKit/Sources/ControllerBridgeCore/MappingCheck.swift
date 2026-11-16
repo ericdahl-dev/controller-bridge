@@ -79,7 +79,7 @@ extension Mapping {
             let pattern = path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
             if pattern.hasPrefix("notes.") || pattern == "needle.touch_note" {
                 notes.append((path, n))
-            } else if ["jog.ccs[]", "pitch.msb_cc", "pitch.lsb_cc", "needle.cc", "browse.select_turn_cc",
+            } else if ["jog.msb_cc", "jog.lsb_cc", "pitch.msb_cc", "pitch.lsb_cc", "needle.msb_cc", "needle.lsb_cc", "browse.select_turn_cc",
                        "browse.auto_loop_size_cc"].contains(pattern) {
                 ccs.append((path, n))
             }
@@ -195,16 +195,17 @@ extension Mapping {
             "midi.layers[].deck": 1...4,
             "midi.layer_note": 0...127,
             "notes.pads[]": 0...127,
-            "jog.ccs[]": 0...127,
+            "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127,
             "pitch.msb_cc": 0...127, "pitch.lsb_cc": 0...127,
-            "needle.cc": 0...127, "needle.touch_note": 0...127,
+            "needle.msb_cc": 0...127, "needle.lsb_cc": 0...127, "needle.touch_note": 0...127,
+            "midi.ignore_notes[]": 0...127,
             "browse.select_turn_cc": 0...127, "browse.auto_loop_size_cc": 0...127,
             "leds.pitch_center": 0...127, "leds.ring": 0...127,
-            "jog.seek_fallback_ticks_per_beat": 1...1000,
+            "jog.counts_per_rev": 1...16384, "jog.beats_per_rev": 1...16, "jog.seek_seconds_per_rev": 0...60,
             // Every other number, so no imported value can be absurd (#92).
             "osc.port": 1...65535, "osc.feedback_port": 1...65535,
             "osc.feedback_quiet_ms": 0...60000, "osc.feedback_answer_ms": 0...60000, "leds.pulse_ms": 0...60000,
-            "jog.bend_release_ms": 1...5000, "jog.seek_seconds_per_tick": 0...10,
+            "jog.bend_release_ms": 1...5000,
             "pitch.dead_zone": 0...1, "pitch.pickup_tolerance": 0...1,
         ]
         for color in ["ring_color", "roll_pad_color", "loop_pad_color"] { table["leds.\(color)[]"] = 0...255 }

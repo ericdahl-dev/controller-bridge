@@ -42,6 +42,9 @@ struct DiagnosticsWindow: View {
     let setOpen: (Bool) -> Void
     let startSweep: (Double) -> Void
     let stopSweep: () -> Void
+    /// Notes the profile drops before the monitor, such as the LC6000's heartbeat (#103), named so a quiet monitor
+    /// doesn't look dead.
+    var hiddenNotes: [Int] = []
     @State var tab = Tab.monitor
     /// Off only for snapshots: ImageRenderer draws no ScrollView content.
     var scrolls = true
@@ -109,6 +112,7 @@ struct DiagnosticsWindow: View {
         switch tab {
         case .monitor:
             explain("Every MIDI message from the controller, with its mapping name or UNMAPPED.")
+            if let hint = Tab.hiddenNotesHint(hiddenNotes) { explain(hint) }
             columnHeader
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         case .sweep:

@@ -42,7 +42,10 @@ struct RecoveryTests {
         rig.coordinator.start()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
         rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)    // Cue held
-        rig.coordinator.midi(.controlChange(channel: 0, controller: 55, value: 1), source: Rig.lc6000.id)  // nudge
+        for lsb in [UInt8(0), 8] {   // nudge: the platter turning forward (#103)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: 7), source: Rig.lc6000.id)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
+        }
         rig.osc.sent.removeAll()
 
         Self.unplug(rig)
@@ -52,7 +55,9 @@ struct RecoveryTests {
         ])
         #expect(rig.midi.connected == [])
         #expect(rig.midi.outputs[Rig.lc6000Out.id]?.closed == true)
-        #expect(rig.coordinator.status.controllers == [ControllerStatus(deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME")])
+        #expect(rig.coordinator.status.controllers == [ControllerStatus(
+            deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME", lastProfile: "Custom mapping", lastDisconnect: .unplugged
+        )])
         #expect(rig.log.lines.last == "Disconnected DENON LC6000 PRIME")
 
         rig.coordinator.devicesChanged()
@@ -97,7 +102,11 @@ struct RecoveryTests {
         #expect(repainted.contains(.noteOn(channel: 0, note: 42, velocity: 0)))    // pitch center
         #expect(rig.osc.sent == [Self.resend])
         #expect(rig.midi.connected == [Rig.lc6000.id])
-        #expect(rig.coordinator.status.controllers == [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true)])
+        // lastDisconnect stays as history; connected says it's back (#91).
+        #expect(rig.coordinator.status.controllers == [ControllerStatus(
+            deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true,
+            lastProfile: "Custom mapping", lastDisconnect: .unplugged
+        )])
 
         rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))

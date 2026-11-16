@@ -22,6 +22,9 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var output: String
         /// 1-16.
         public var channel: Int
+        /// Notes the controller sends on its own, such as the LC6000's idle heartbeat on note 52 (#103): dropped
+        /// before anything sees them.
+        public var ignoreNotes: [Int]
         /// The controller's own deck layers (#79): each MIDI channel drives a Syndicate deck. Empty for a controller
         /// without layers.
         public var layers: [Layer]
@@ -30,25 +33,30 @@ public struct Mapping: Equatable, Sendable, Codable {
 
         enum CodingKeys: String, CodingKey {
             case input, output, channel, layers
+            case ignoreNotes = "ignore_notes"
             case layerNote = "layer_note"
         }
 
-        public init(input: String, output: String, channel: Int, layers: [Layer] = [], layerNote: Int? = nil) {
+        public init(
+            input: String, output: String, channel: Int, ignoreNotes: [Int] = [], layers: [Layer] = [], layerNote: Int? = nil
+        ) {
             self.input = input
             self.output = output
             self.channel = channel
+            self.ignoreNotes = ignoreNotes
             self.layers = layers
             self.layerNote = layerNote
         }
 
+        /// `ignore_notes`, `layers` and `layer_note` may be left out: nothing ignored, no layers.
         public init(from decoder: any Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            input = try c.decode(String.self, forKey: .input)
-            output = try c.decode(String.self, forKey: .output)
-            channel = try c.decode(Int.self, forKey: .channel)
-            // Optional, so a profile or import without layers still reads.
-            layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
-            layerNote = try c.decodeIfPresent(Int.self, forKey: .layerNote)
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            input = try container.decode(String.self, forKey: .input)
+            output = try container.decode(String.self, forKey: .output)
+            channel = try container.decode(Int.self, forKey: .channel)
+            ignoreNotes = try container.decodeIfPresent([Int].self, forKey: .ignoreNotes) ?? []
+            layers = try container.decodeIfPresent([Layer].self, forKey: .layers) ?? []
+            layerNote = try container.decodeIfPresent(Int.self, forKey: .layerNote)
         }
     }
 
@@ -104,26 +112,40 @@ public struct Mapping: Equatable, Sendable, Codable {
         public init(number: Int) { self.number = number }
     }
 
+    /// The jog wheel as a 14-bit platter position that counts up going forward and wraps at 16384 (#103). Movement
+    /// is the change in position, scaled per platter revolution.
     public struct Jog: Equatable, Sendable, Codable {
-        public var ccs: [Int]
+        public var msbCC: Int
+        public var lsbCC: Int
+        /// Position counts in one full platter turn. PROVISIONAL until measured on hardware.
+        public var countsPerRev: Int
         public var bendReleaseMs: Int
-        public var seekSecondsPerTick: Double
-        public var seekFallbackTicksPerBeat: Int
+        /// While paused, how far one platter turn moves the playhead.
+        public var seekSecondsPerRev: Double
+        /// While paused with no track length, how many beats one platter turn skips.
+        public var beatsPerRev: Double
         public var requireTouch: Bool
 
         enum CodingKeys: String, CodingKey {
-            case ccs
+            case msbCC = "msb_cc"
+            case lsbCC = "lsb_cc"
+            case countsPerRev = "counts_per_rev"
             case bendReleaseMs = "bend_release_ms"
-            case seekSecondsPerTick = "seek_seconds_per_tick"
-            case seekFallbackTicksPerBeat = "seek_fallback_ticks_per_beat"
+            case seekSecondsPerRev = "seek_seconds_per_rev"
+            case beatsPerRev = "beats_per_rev"
             case requireTouch = "require_touch"
         }
 
-        public init(ccs: [Int], bendReleaseMs: Int, seekSecondsPerTick: Double, seekFallbackTicksPerBeat: Int, requireTouch: Bool) {
-            self.ccs = ccs
+        public init(
+            msbCC: Int, lsbCC: Int, countsPerRev: Int, bendReleaseMs: Int, seekSecondsPerRev: Double, beatsPerRev: Double,
+            requireTouch: Bool
+        ) {
+            self.msbCC = msbCC
+            self.lsbCC = lsbCC
+            self.countsPerRev = countsPerRev
             self.bendReleaseMs = bendReleaseMs
-            self.seekSecondsPerTick = seekSecondsPerTick
-            self.seekFallbackTicksPerBeat = seekFallbackTicksPerBeat
+            self.seekSecondsPerRev = seekSecondsPerRev
+            self.beatsPerRev = beatsPerRev
             self.requireTouch = requireTouch
         }
     }
@@ -168,19 +190,23 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
     }
 
+    /// The Needle Drop strip: a 14-bit position on an MSB/LSB CC pair (#103), and its touch note.
     public struct Needle: Equatable, Sendable, Codable {
-        public var cc: Int
+        public var msbCC: Int
+        public var lsbCC: Int
         public var touchNote: Int
         public var requireTouch: Bool
 
         enum CodingKeys: String, CodingKey {
-            case cc
+            case msbCC = "msb_cc"
+            case lsbCC = "lsb_cc"
             case touchNote = "touch_note"
             case requireTouch = "require_touch"
         }
 
-        public init(cc: Int, touchNote: Int, requireTouch: Bool) {
-            self.cc = cc
+        public init(msbCC: Int, lsbCC: Int, touchNote: Int, requireTouch: Bool) {
+            self.msbCC = msbCC
+            self.lsbCC = lsbCC
             self.touchNote = touchNote
             self.requireTouch = requireTouch
         }
