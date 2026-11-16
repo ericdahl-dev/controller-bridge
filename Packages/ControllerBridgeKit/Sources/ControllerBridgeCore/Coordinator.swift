@@ -17,6 +17,8 @@ public final class Coordinator {
     private struct Controller {
         let bridge: Bridge
         var source: MIDIEndpoint?
+        /// The unique id of the last source this controller used, so a replug finds the same unit first.
+        var knownSourceID: MIDIEndpoint.ID?
     }
 
     public init(mapping: Mapping, midi: any MIDISystem, osc: any OSCSender, clock: any Clock, log: any LogSink) {
@@ -65,7 +67,9 @@ public final class Coordinator {
     /// Opens the controller's ports if a matching device is present. Returns whether its input is connected.
     private func connect(_ index: Int) -> Bool {
         let bridge = controllers[index].bridge
-        guard let source = Self.match(midiSystem.sources, bridge.mapping.midi.input) else { return false }
+        let sources = midiSystem.sources
+        let known = controllers[index].knownSourceID.flatMap { id in sources.first { $0.id == id } }
+        guard let source = known ?? Self.match(sources, bridge.mapping.midi.input) else { return false }
         do {
             try midiSystem.connect(source: source)
         } catch {
@@ -73,6 +77,7 @@ public final class Coordinator {
             return false
         }
         controllers[index].source = source
+        controllers[index].knownSourceID = source.id
         if let destination = Self.match(midiSystem.destinations, bridge.mapping.midi.output) {
             do { bridge.output = try midiSystem.openOutput(destination: destination) } catch {
                 log.log("Couldn't open MIDI output \(destination.name): \(error)")

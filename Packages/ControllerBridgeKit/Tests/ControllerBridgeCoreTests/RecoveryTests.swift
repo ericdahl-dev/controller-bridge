@@ -102,4 +102,16 @@ struct RecoveryTests {
         rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
     }
+
+    @Test("Replug prefers the device with the controller's saved unique id over another with the same name")
+    func replugPrefersSavedID() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        Self.unplug(rig)
+        let twin = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME")
+        rig.midi.sources = [Self.iac, twin, Rig.lc6000]
+        rig.midi.destinations = [Rig.lc6000Out]
+        rig.coordinator.devicesChanged()
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+    }
 }
