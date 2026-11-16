@@ -27,6 +27,7 @@ final class Bridge {
         [
             // Browse, loops and jumps (Bridge+Browse.swift).
             "select_turn": { $0.selectTurn },
+            "auto_loop_size": { $0.autoLoopSize },
         ]
     }
 

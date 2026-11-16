@@ -101,4 +101,16 @@ struct BrowseTests {
             OSCMessage("/Syndicate/Deck/1/Loop", [.int(1)]),
         ])
     }
+
+    @Test("Turning the auto loop knob doubles the loop forward (LoopOut) and halves it back (LoopIn), once per turn")
+    func autoLoopSizeKnob() throws {
+        let rig = try Self.startedRig()
+        Self.turn(rig, cc: 3, 0x03)
+        Self.turn(rig, cc: 3, 0x7E)
+        Self.turn(rig, cc: 3, 0x00)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/LoopOut", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/LoopIn", [.int(1)]),
+        ])
+    }
 }

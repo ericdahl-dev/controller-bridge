@@ -42,4 +42,10 @@ extension Bridge {
     func autoLoop(_ pressed: Bool) {
         if pressed { sendDeck("Loop", .int(1)) }
     }
+
+    /// While looping, Syndicate's LoopOut doubles the loop and LoopIn halves it. One step per turn, however fast.
+    func autoLoopSize(_ value: UInt8) {
+        let ticks = relativeTicks(value)
+        if ticks != 0 { sendDeck(ticks > 0 ? "LoopOut" : "LoopIn", .int(1)) }
+    }
 }
