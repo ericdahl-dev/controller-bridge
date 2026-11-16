@@ -444,4 +444,13 @@ struct LayersTests {
         #expect((midi.outputs[Self.controlsOut.id]?.sent ?? []).last { if case .noteOn(_, 1, _) = $0 { true } else { false } }
             == .noteOn(channel: 0, note: 1, velocity: 127))   // normal mode: on ch1, where the controls are
     }
+
+    @Test("If the controls' output doesn't share its input's name, the LEDs still never go to a port the profile excludes (WD)")
+    func excludedPortNeverGetsLEDs() throws {
+        let renamedOut = MIDIEndpoint(id: 15, name: "LC6000 PRIME Controller")
+        let (coordinator, midi) = try Self.realUnit(destinations: [Self.wdOut, renamedOut])
+        coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        #expect(midi.outputs[Self.wdOut.id]?.sent ?? [] == [])
+        #expect((midi.outputs[renamedOut.id]?.sent ?? []).contains(.noteOn(channel: 0, note: 1, velocity: 127)))
+    }
 }

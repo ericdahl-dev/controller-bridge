@@ -233,7 +233,11 @@ public final class Coordinator {
         let freeDestinations = controllers[index].chosenInput == nil ? destinations.filter { !taken.contains($0.id) } : destinations
         // The LEDs go back to the port the controls came from: same name first, then the name hint (#99).
         let sameName = freeDestinations.first { $0.name == source.name }
-        if let destination = chosenOutput ?? sameName ?? Self.match(freeDestinations, bridge.mapping.midi.output) {
+        // Never a port the profile excludes, such as the LC6000's jog display (WD): its "LC6000" matches the hint too.
+        let allowed = freeDestinations.filter { destination in
+            !profile.excludeHints.contains { destination.name.lowercased().contains($0.lowercased()) }
+        }
+        if let destination = chosenOutput ?? sameName ?? Self.match(allowed, bridge.mapping.midi.output) {
             do {
                 bridge.output = try midiSystem.openOutput(destination: destination)
                 controllers[index].destination = destination
