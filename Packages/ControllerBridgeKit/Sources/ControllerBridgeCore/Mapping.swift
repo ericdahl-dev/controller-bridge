@@ -38,6 +38,10 @@ public struct Mapping: Equatable, Sendable, Codable {
         if pads.modeSelect == .cycle, notes.buttons["mode_cycle"] == nil {
             throw ShapeError("pads: mode_select is cycle, but notes has no mode_cycle button")
         }
+        // Notes per pad mode (#225): one note per pad in every mode.
+        for (name, notes) in pads.modeNotes?.named ?? [] where notes.count != self.notes.pads.count {
+            throw ShapeError("pads.mode_notes.\(name): \(notes.count) notes, but there are \(self.notes.pads.count) pads (notes.pads)")
+        }
     }
 
     /// The pads' Roll mode (#196): pad N plays `rollSizes[N - 1]`, by Syndicate's SlipLoop names. A pad past the list
@@ -50,6 +54,46 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
 
         public var rollSizes: [String]
+        /// The MIDI channel (1-16) the pads use (#224), when not the deck's: the DDJ-400/FLX4's deck 1 pads are on 8.
+        /// Left out (the LC6000), the pads are on the deck's channel.
+        public var channel: Int?
+
+        /// Each pad mode's own notes, one per pad (#225), on controllers whose pads send a different note range per
+        /// mode, as Pioneer's do. Left out (the LC6000), `notes.pads` serves every mode and DeckBridge tracks the mode.
+        public struct ModeNotes: Equatable, Sendable, Codable {
+            public var hotcue: [Int]
+            public var roll: [Int]
+            public var loop: [Int]
+            public var slicer: [Int]
+
+            public init(hotcue: [Int], roll: [Int], loop: [Int], slicer: [Int]) {
+                self.hotcue = hotcue
+                self.roll = roll
+                self.loop = loop
+                self.slicer = slicer
+            }
+            enum CodingKeys: String, CodingKey, CaseIterable { case hotcue, roll, loop, slicer }
+
+            /// All four modes are listed; one left out is named.
+            public init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                func list(_ key: CodingKeys) throws -> [Int] {
+                    guard let notes = try c.decodeIfPresent([Int].self, forKey: key) else {
+                        throw ShapeError("pads.mode_notes: \(key.rawValue) is missing (list all four modes)")
+                    }
+                    return notes
+                }
+                hotcue = try list(.hotcue)
+                roll = try list(.roll)
+                loop = try list(.loop)
+                slicer = try list(.slicer)
+            }
+
+            /// Each mode's list with its name, in mode order.
+            var named: [(String, [Int])] { [("hotcue", hotcue), ("roll", roll), ("loop", loop), ("slicer", slicer)] }
+        }
+
+        public var modeNotes: ModeNotes?
 
         /// How the pad mode is chosen (#198): the LC6000's four mode buttons, or one button that cycles them.
         public enum ModeSelect: String, CaseIterable, Equatable, Sendable, Codable {
@@ -90,7 +134,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
 
         enum CodingKeys: String, CodingKey {
-            case rollSizes = "roll_sizes", modeSelect = "mode_select", modeCycleVelocities = "mode_cycle_velocities"
+            case rollSizes = "roll_sizes", channel, modeNotes = "mode_notes"
+            case modeSelect = "mode_select", modeCycleVelocities = "mode_cycle_velocities"
         }
 
         public init(from decoder: any Decoder) throws {
@@ -98,6 +143,8 @@ public struct Mapping: Equatable, Sendable, Codable {
             rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? Self.lc6000RollSizes
             modeSelect = try c.decodeIfPresent(ModeSelect.self, forKey: .modeSelect) ?? .buttons
             modeCycleVelocities = try c.decodeIfPresent(ModeVelocities.self, forKey: .modeCycleVelocities)
+            channel = try c.decodeIfPresent(Int.self, forKey: .channel)
+            modeNotes = try c.decodeIfPresent(ModeNotes.self, forKey: .modeNotes)
         }
     }
 
@@ -155,10 +202,18 @@ public struct Mapping: Equatable, Sendable, Codable {
     public struct Layer: Equatable, Sendable, Codable {
         public var channel: Int
         public var deck: Int
+        /// The channel this layer's pads use (#224), when not `channel`: the DDJ-400/FLX4's deck 2 pads are on 10.
+        public var padChannel: Int?
 
-        public init(channel: Int, deck: Int) {
+        enum CodingKeys: String, CodingKey {
+            case channel, deck
+            case padChannel = "pad_channel"
+        }
+
+        public init(channel: Int, deck: Int, padChannel: Int? = nil) {
             self.channel = channel
             self.deck = deck
+            self.padChannel = padChannel
         }
     }
 
