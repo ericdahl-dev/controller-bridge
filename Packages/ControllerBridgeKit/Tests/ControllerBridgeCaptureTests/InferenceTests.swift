@@ -83,4 +83,11 @@ struct InferenceTests {
             ControlFacts(kind: .cc, channel: 1, number: 8, lsb: 40, encoding: .absolute, first: 16383, last: 0, min: 0, max: 16383),
         ])
     }
+
+    @Test("Pitch bend is its own kind, with a channel, 14-bit values and no number")
+    func pitchBend() {
+        #expect(Self.controls(OtherTraffic.pitchBend, gesture: .move) == [
+            ControlFacts(kind: .pitchBend, channel: 2, first: 8192, last: 16383, min: 8192, max: 16383),
+        ])
+    }
 }

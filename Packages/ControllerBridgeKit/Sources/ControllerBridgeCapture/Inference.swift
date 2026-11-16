@@ -2,7 +2,7 @@
 
 /// One channel voice message, cut down to what inference needs. Channels are 0-based here.
 struct Voice {
-    enum Kind { case noteOn, noteOff, cc }
+    enum Kind { case noteOn, noteOff, cc, pitchBend }
     var kind: Kind
     var channel: Int
     var number: Int
@@ -17,12 +17,24 @@ struct Voice {
         case 0x80: kind = .noteOff
         case 0x90: kind = .noteOn
         case 0xB0: kind = .cc
+        case 0xE0:
+            // LSB first on the wire; one 14-bit value, no number.
+            kind = .pitchBend
+            value = Int(bytes[2] & 0x7F) << 7 | Int(bytes[1] & 0x7F)
+            number = 0
         default: return nil
         }
     }
 
     /// Which control sent it: note-on and note-off of one note are the same control.
-    var control: ControlKey { ControlKey(kind: kind == .cc ? .cc : .note, channel: channel, number: number) }
+    var control: ControlKey {
+        let controlKind: ControlKind = switch kind {
+        case .noteOn, .noteOff: .note
+        case .cc: .cc
+        case .pitchBend: .pitchBend
+        }
+        return ControlKey(kind: controlKind, channel: channel, number: number)
+    }
 }
 
 struct ControlKey: Hashable {
@@ -51,7 +63,7 @@ enum Inference {
         switch key.kind {
         case .note: noteFacts(key, voices)
         case .cc: ccFacts(key, lsb: lsb, gesture: gesture, voices)
-        case .pitchBend: nil
+        case .pitchBend: pitchBendFacts(key, voices)
         }
     }
 
@@ -117,6 +129,15 @@ enum Inference {
         return ControlFacts(
             kind: .note, channel: key.channel + 1, number: key.number, release: release,
             first: first, last: last, min: presses.min() ?? first, max: presses.max() ?? first
+        )
+    }
+
+    private static func pitchBendFacts(_ key: ControlKey, _ voices: [Voice]) -> ControlFacts? {
+        let values = voices.map(\.value)
+        guard let first = values.first, let last = values.last else { return nil }
+        return ControlFacts(
+            kind: .pitchBend, channel: key.channel + 1, first: first, last: last,
+            min: values.min() ?? first, max: values.max() ?? first
         )
     }
 

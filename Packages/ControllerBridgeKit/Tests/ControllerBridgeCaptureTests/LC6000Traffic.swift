@@ -51,5 +51,10 @@ enum OtherTraffic {
     /// An encoder turned one way only, 0x41 each click: offset-64 forward or sign-magnitude back, so it can't be told.
     static let oneWayTurn = LC6000Traffic.cc(30, [0x41, 0x41, 0x41])
 
+    /// A pitch fader on pitch bend, channel 2, moved from the middle to the top: 14-bit, LSB first on the wire.
+    static let pitchBend: [(time: Double, bytes: [UInt8])] = [8192, 12288, 16383].enumerated().map {
+        (Double($0) * 0.01, [0xE1, UInt8($1 & 0x7F), UInt8($1 >> 7)])
+    }
+
     static let noteOnZeroRelease: [(time: Double, bytes: [UInt8])] = [(0.00, [0x92, 0x0B, 0x7F]), (0.10, [0x92, 0x0B, 0x00])]
 }
