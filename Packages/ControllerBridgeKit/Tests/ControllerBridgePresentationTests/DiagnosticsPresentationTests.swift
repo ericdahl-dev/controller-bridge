@@ -144,6 +144,26 @@ struct DiagnosticsPresentationTests {
         #expect(lines.shown(.osc).count == 8)
     }
 
+    @Test("Pause freezes what a list shows while lines keep arriving; Resume shows them all (#218)")
+    func pause() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 1")
+        lines.append(to: .monitor, message: "       1.500  ch1  note_on channel=0 note=1 velocity=127 time=0 ", label: "play")
+        #expect(!lines.isPaused)
+        lines.pause()
+        #expect(lines.isPaused)
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 0")
+        lines.append(to: .monitor, message: "       1.600  ch1  note_off channel=0 note=1 velocity=0 time=0 ", label: "play")
+        #expect(lines.shown(.osc).map(\.message) == ["OSC <- /Syndicate/Deck/1/Playing 1"])
+        #expect(lines.shown(.monitor).count == 1)
+        lines.filter.text = "Playing 1"
+        #expect(lines.shown(.osc).count == 1, "the filter still works on the frozen lines")
+        lines.filter.text = ""
+        lines.resume()
+        #expect(lines.shown(.osc).map(\.message) == ["OSC <- /Syndicate/Deck/1/Playing 1", "OSC <- /Syndicate/Deck/1/Playing 0"])
+        #expect(lines.shown(.monitor).count == 2)
+    }
+
     @Test("Hidden streaming lines can't push the rest out: after 20,100 of them, the Playing line is still shown (#97)")
     func hiddenLinesDontEvict() {
         var lines = DiagnosticsLines()

@@ -120,6 +120,12 @@ public struct DiagnosticsLines: Equatable, Sendable {
     /// While streaming values are shown, each stretch of them shows each address once, at its latest value, with how
     /// many arrived ("…/Position 48.91 ×3"), so a playing deck reads as a few updating lines (#218). Display only.
     public var collapseStreaming = true
+    /// While paused, the lists show only what had arrived when Pause was pressed; capture carries on behind (#218).
+    private var pausedAt: Int?
+    public var isPaused: Bool { pausedAt != nil }
+
+    public mutating func pause() { pausedAt = nextID }
+    public mutating func resume() { pausedAt = nil }
     private var lists: [DiagnosticsTab: Ring] = [:]
     /// The OSC tab's streaming lines, kept apart so their flood can't push the other lines out (#97).
     private var streaming = Ring()
@@ -145,7 +151,8 @@ public struct DiagnosticsLines: Equatable, Sendable {
 
     /// What a tab shows, oldest first: its kept lines, through the streaming toggle and the filter.
     public func shown(_ tab: DiagnosticsTab) -> [Line] {
-        let kept = kept(tab)
+        var kept = kept(tab)
+        if let pausedAt, let firstNewer = kept.firstIndex(where: { $0.id > pausedAt }) { kept.removeSubrange(firstNewer...) }
         let filtered = filter.isEmpty ? kept : kept.filter(filter.matches)
         guard tab == .osc, !hideStreaming, collapseStreaming else { return filtered }
         return Self.collapsed(filtered)
