@@ -25,7 +25,7 @@ struct SubscriptionsPresentationTests {
         let state = BridgeState(controller: Self.connected, feedback: .noDeckData(port: 9096), deck: 1,
                                 requiredSubscriptions: Self.required)
         #expect(HelpMessage(state) == HelpMessage(
-            text: "Syndicate isn't sending deck info. In Syndicate › Settings › OSC FEEDBACK, turn on the subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.",
+            text: "Syndicate isn't sending deck info. In Syndicate › Settings › OSC FEEDBACK, turn on the subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider and TempoSliderEnabled, Cues, BPM and Sync and Loop.",
             showsGuide: true
         ))
     }
@@ -38,7 +38,7 @@ struct SubscriptionsPresentationTests {
         #expect(HelpMessage(state) == HelpMessage(
             text: "Turn this on in Syndicate › OSC Feedback, then Save and Close:",
             showsGuide: true,
-            subscriptions: [SubscriptionRow(name: "TempoSlider/TempoSliderEnabled", consequence: "The pitch fader can jump")]
+            subscriptions: [SubscriptionRow(name: "TempoSlider and TempoSliderEnabled", consequence: "The pitch fader can jump")]
         ))
     }
 
@@ -50,7 +50,7 @@ struct SubscriptionsPresentationTests {
             text: "Turn these on in Syndicate › OSC Feedback, then Save and Close:",
             showsGuide: true,
             subscriptions: [
-                SubscriptionRow(name: "TempoSlider/TempoSliderEnabled", consequence: "The pitch fader can jump"),
+                SubscriptionRow(name: "TempoSlider and TempoSliderEnabled", consequence: "The pitch fader can jump"),
                 SubscriptionRow(name: "Cues", consequence: "Hot cue pads stay dark"),
             ]
         ))
@@ -62,7 +62,7 @@ struct SubscriptionsPresentationTests {
                                 missingSubscriptions: Self.missing(.tempoSlider, .cues))
         let help = HelpMessage(state)
         #expect(help?.subscriptionsLabel == "2 subscriptions off. Turn these on in Syndicate › OSC Feedback, then Save and Close.")
-        #expect(help?.subscriptions.map(\.spoken) == ["TempoSlider/TempoSliderEnabled: the pitch fader can jump",
+        #expect(help?.subscriptions.map(\.spoken) == ["TempoSlider and TempoSliderEnabled: the pitch fader can jump",
                                                        "Cues: hot cue pads stay dark"])
     }
 
