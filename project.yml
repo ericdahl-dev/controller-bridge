@@ -24,7 +24,7 @@ targets:
       - path: App
         excludes:
           - Fonts
-      # Inter (UI) and IBM Plex Mono (numbers), both SIL OFL 1.1; their licenses ship alongside (#34).
+      # Geist (UI) and Geist Mono (labels and numbers), SIL OFL 1.1, as on the site; the license ships alongside (#171).
       - path: App/Fonts
         type: folder
         buildPhase: resources

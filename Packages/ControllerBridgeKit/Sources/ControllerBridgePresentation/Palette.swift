@@ -73,3 +73,14 @@ public enum Palette {
         onAccent: RGB(hex: 0x111111)      // --on-signal
     )
 }
+
+extension Palette {
+    /// A chip's fill: its tone's color at this opacity over what it sits on (#171).
+    public static let chipTint = 0.14
+
+    /// A chip's word color: the text color, since a tone's color on its own tint misses AA (agent2's review of
+    /// #174). The tone shows in the dot and the tint; the word carries the meaning.
+    public static func chipWord(in palette: ThemePalette) -> RGB {
+        palette.text
+    }
+}

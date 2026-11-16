@@ -29,10 +29,34 @@ struct PaletteTests {
             ("attention orange on surface", p.attention, p.surface),
             ("error red on surface", p.error, p.surface),
             ("ink on the accent pill", p.onAccent, p.accent),
+            // #174: the selected segment is the window color on a text-color fill; a hovered tonal pill is the text
+            // color at 14% over the raised fill
+            ("window color on the selected segment", p.panel, p.text),
+            ("text on a hovered tonal pill", p.text, p.text.over(p.buttonRaised, opacity: 0.14)),
         ]
     }
 
     static let themes: [(String, ThemePalette)] = [("dark", Palette.dark), ("light", Palette.light)]
+
+    /// A chip (UNMAPPED, #171): its word on its tone's tint, composited over the window and over a card.
+    @Test("A chip's word reaches 4.5:1 on its own tint, for every tone, on the window and on a card, in both themes",
+          arguments: themes.indices)
+    func chipContrast(theme: Int) {
+        let (themeName, palette) = Self.themes[theme]
+        for tone in [StatusLight.Tone.live, .idle, .attention, .error] {
+            for (surfaceName, surface) in [("window", palette.panel), ("card", palette.surface)] {
+                let tint = tone.color(in: palette).over(surface, opacity: Palette.chipTint)
+                let ratio = Contrast.ratio(Palette.chipWord(in: palette), tint)
+                #expect(ratio >= 4.5, "\(themeName) \(tone) chip on the \(surfaceName): \(ratio)")
+            }
+        }
+    }
+
+    @Test("Compositing: a color at an opacity over another, rounded per channel")
+    func over() {
+        #expect(RGB(hex: 0xFFFFFF).over(RGB(hex: 0x000000), opacity: 0.5) == RGB(hex: 0x808080))
+        #expect(RGB(hex: 0x00FF48).over(RGB(hex: 0x1B1B1B), opacity: 0) == RGB(hex: 0x1B1B1B))
+    }
 
     @Test("Every text and surface pair the theme uses reaches 4.5:1, in both themes (#127)", arguments: themes.indices)
     func aaContrast(theme: Int) {

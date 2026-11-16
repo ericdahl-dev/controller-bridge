@@ -11,13 +11,18 @@ enum Snapshots {
     /// SNAPSHOT_APPEARANCE=light renders the light theme (#127); dark by default.
     static let scheme: ColorScheme = ProcessInfo.processInfo.environment["SNAPSHOT_APPEARANCE"] == "light" ? .light : .dark
 
+    static let fonts = ["Geist-Regular", "Geist-Medium", "Geist-SemiBold", "Geist-Bold", "GeistMono-Regular", "GeistMono-Medium", "GeistMono-SemiBold"]
+    static var missingFonts: Bool { fonts.contains { NSFont(name: $0, size: 12) == nil } }
+
     static func render(to name: String) {
         // Theme colors resolve against the app's appearance, so set it to match.
         NSApplication.shared.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(name).path
-        for font in ["Inter-Regular", "Inter-SemiBold", "Inter-Bold", "IBMPlexMono", "IBMPlexMono-Medm", "IBMPlexMono-SmBld"] {
+        for font in fonts {
             print("\(font): \(NSFont(name: font, size: 12) == nil ? "MISSING" : "ok")")
         }
+        // A missing font would render in the system font and look almost right: stop instead (#171).
+        if missingFonts { print("A bundled font is missing; no snapshots."); exit(1) }
         let states: [(String, (BridgeStatus) -> Void)] = [
             ("layers", {
                 // The LC6000 following its own layers (#79), switched to layer 2.
@@ -131,6 +136,8 @@ enum Snapshots {
             print("Couldn't create \(directory): \(error)"); return
         }
         write(buttonStates, to: "\(directory)/buttons.png")
+        write(siteStyles, to: "\(directory)/site-styles.png")
+        write(siteStyles.environment(\.forcesIncreasedContrast, true), to: "\(directory)/site-styles-increased-contrast.png")
         for (name, configure) in states {
             let status = BridgeStatus()
             configure(status)
@@ -205,6 +212,35 @@ enum Snapshots {
         }
         .padding(Theme.Space.xl)
         .frame(width: 360)
+        .background(Theme.panel)
+    }
+
+    /// The site's components (#171): pills normal, focused and disabled, a segmented control, a chip on a card.
+    private static var siteStyles: some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x4) {
+            HStack(spacing: Theme.Step.x2) {
+                Button("Done: feedback live") {}.buttonStyle(PillButtonStyle(kind: .primary))
+                Button("Settings…") {}.buttonStyle(PillButtonStyle())
+                Button("Quit") {}.buttonStyle(PillButtonStyle(kind: .quiet))
+            }
+            HStack(spacing: Theme.Step.x3) {
+                Button("Focused") {}.buttonStyle({ var style = PillButtonStyle(kind: .primary); style.showsFocusForSnapshot = true; return style }())
+                Button("Focused") {}.buttonStyle({ var style = PillButtonStyle(); style.showsFocusForSnapshot = true; return style }())
+                Button("Apply") {}.buttonStyle(PillButtonStyle(kind: .primary)).disabled(true)
+            }
+            SegmentedPills(options: ["MIDI Monitor", "LED Sweep", "OSC Log"], title: { $0 }, selection: .constant("MIDI Monitor"))
+            VStack(alignment: .leading, spacing: Theme.Step.x2) {
+                Text("Controller").font(Theme.labelFont).foregroundStyle(Theme.caption)
+                HStack {
+                    ToneChip(word: "UNMAPPED", tone: .attention, spoken: "Unmapped")
+                    Spacer()
+                }
+            }
+            .padding(Theme.Step.x3)
+            .card()
+        }
+        .padding(Theme.Step.x6)
+        .frame(width: 400)
         .background(Theme.panel)
     }
 
