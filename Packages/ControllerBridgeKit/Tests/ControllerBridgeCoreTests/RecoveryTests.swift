@@ -29,4 +29,33 @@ struct RecoveryTests {
         #expect(rig.coordinator.status.controllers.map(\.connected) == [true])
         #expect(rig.log.lines.last == "Connected DENON LC6000 PRIME")
     }
+
+    static func unplug(_ rig: Rig) {
+        rig.midi.sources = [Self.iac]
+        rig.midi.destinations = []
+        rig.coordinator.devicesChanged()
+    }
+
+    @Test("Unplugging releases every held control exactly once, closes the ports, and logs and shows it")
+    func unplugReleasesOnce() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)    // Cue held
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 55, value: 1), source: Rig.lc6000.id)  // nudge
+        rig.osc.sent.removeAll()
+
+        Self.unplug(rig)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)]),
+            OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]),
+        ])
+        #expect(rig.midi.connected == [])
+        #expect(rig.midi.outputs[Rig.lc6000Out.id]?.closed == true)
+        #expect(rig.coordinator.status.controllers == [ControllerStatus(deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME")])
+        #expect(rig.log.lines.last == "Disconnected DENON LC6000 PRIME")
+
+        rig.coordinator.devicesChanged()
+        #expect(rig.osc.sent.count == 2)
+    }
 }

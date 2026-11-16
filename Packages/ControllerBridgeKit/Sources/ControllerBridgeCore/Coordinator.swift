@@ -41,9 +41,25 @@ public final class Coordinator {
 
     /// The MIDI devices changed. Re-reads them, connecting controllers that appeared.
     public func devicesChanged() {
-        for index in controllers.indices where controllers[index].source == nil {
-            if connect(index) { controllers[index].bridge.start() }
+        for index in controllers.indices {
+            if let source = controllers[index].source {
+                if !midiSystem.sources.contains(where: { $0.id == source.id }) { disconnect(index) }
+            } else if connect(index) {
+                controllers[index].bridge.start()
+            }
         }
+    }
+
+    /// Releases everything the controller held, exactly once, and closes its ports.
+    private func disconnect(_ index: Int) {
+        guard let source = controllers[index].source else { return }
+        let bridge = controllers[index].bridge
+        bridge.releaseAll()
+        midiSystem.disconnect(source: source)
+        bridge.output?.close()
+        bridge.output = nil
+        controllers[index].source = nil
+        report(index, "Disconnected \(source.name)")
     }
 
     /// Opens the controller's ports if a matching device is present. Returns whether its input is connected.

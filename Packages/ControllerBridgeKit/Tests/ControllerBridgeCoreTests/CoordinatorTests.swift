@@ -7,7 +7,9 @@ import Testing
 final class Rig {
     final class FakeOutput: MIDIOutput, @unchecked Sendable {
         var sent: [MIDIEvent] = []
+        var closed = false
         func send(_ event: MIDIEvent) { sent.append(event) }
+        func close() { closed = true }
     }
 
     final class FakeMIDISystem: MIDISystem, @unchecked Sendable {
