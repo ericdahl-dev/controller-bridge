@@ -250,3 +250,22 @@ struct JogDisplayContentTests {
         #expect(shown.contents == [JogDisplayContent(deck: 1, color: [255, 0, 0])])
     }
 }
+
+/// The jog display's switch and the unit's answers come through the pipe, in order with everything else (#165).
+@Suite("Jog display through the pipe")
+struct JogDisplayPipeTests {
+    @Test("setJogDisplay(enabled: true) from the pipe says hello; a reply from the pipe reaches the driver")
+    func throughThePipe() async throws {
+        let rig = try Rig()
+        let port = JogDisplayDriverTests.FakePort()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1) { _ in [0, 0, 0, 255] })
+        rig.coordinator.start()
+        let pipe = EventPipe()
+        pipe.producer.setJogDisplay(enabled: true)
+        pipe.producer.jogDisplayReply(JogDisplayDriverTests.refused)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        #expect(port.controller == JogDisplay.hello)
+        #expect(rig.log.lines.contains("The jog display refused the image (ack 06); it keeps what it showed"))
+    }
+}
