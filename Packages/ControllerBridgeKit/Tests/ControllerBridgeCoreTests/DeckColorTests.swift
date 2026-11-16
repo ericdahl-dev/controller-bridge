@@ -154,4 +154,11 @@ struct DeckColorTests {
         rig.coordinator.setRingColors(.vivid)
         #expect(rig.leds[40] == 56)
     }
+
+    @Test("The LC6000 preview follows the ring mode: Syndicate's yellow is (255, 170, 85) exact, (255, 170, 0) vivid")
+    func previewFollowsMode() {
+        #expect(DeckColors.ledPreview([236, 207, 101], mode: .exact) == [255, 170, 85])
+        #expect(DeckColors.ledPreview([236, 207, 101], mode: .vivid) == [255, 170, 0])
+        #expect(DeckColors.ledPreview([255, 180, 180], mode: .vivid) == [255, 0, 0])
+    }
 }

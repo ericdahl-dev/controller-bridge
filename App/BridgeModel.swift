@@ -207,6 +207,7 @@ final class BridgeModel {
         if new.followSyndicateDeckColors != old.followSyndicateDeckColors || new.customDeckColors != old.customDeckColors {
             producer.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors)
         }
+        if new.ringColors != old.ringColors { producer.setRingColors(new.ringColors) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
 
@@ -297,6 +298,7 @@ final class BridgeModel {
         }
         // The saved deck colors (#123), queued behind the Coordinator's start.
         pipe.producer.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors)
+        pipe.producer.setRingColors(settings.ringColors)
 
     }
 

@@ -289,6 +289,17 @@ struct SettingsView: View {
                  ? "Cue palette slots 1, 3, 5 and 7 in Syndicate's CUE COLORS, as they change"
                  : "Your own colors, for the app's badges and the LC6000's ring")
         }
+        row("Ring colors") {
+            // Vivid keeps a color's hue on the LC6000's 64 colors; Exact rounds each channel (#151).
+            Picker("Ring colors", selection: settings.ringColors) {
+                Text("Vivid").tag(RingColors.vivid)
+                Text("Exact").tag(RingColors.exact)
+            }
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            hint(settings.wrappedValue.ringColors == .vivid
+                 ? "Strong colors on the ring and a held pad, keeping each hue"
+                 : "Each channel rounded, as the pads' cue colors are; softer colors look paler")
+        }
         ForEach(1...4, id: \.self) { deck in
             row("Deck \(deck)") {
                 HStack(spacing: Theme.Space.m) {
@@ -300,7 +311,7 @@ struct SettingsView: View {
                     // What the LC6000's ring will show: rgb222, so a subtle color may come out plainer.
                     let shown = settings.wrappedValue.followSyndicateDeckColors ? deckColors[deck] : settings.wrappedValue.customDeckColors[deck]
                     RoundedRectangle(cornerRadius: Theme.corner)
-                        .fill(Color(RGB(deckColor: DeckColors.ledPreview(shown ?? [0, 0, 0]))))
+                        .fill(Color(RGB(deckColor: DeckColors.ledPreview(shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors))))
                         .frame(width: 26, height: 26)
                         .accessibilityLabel("Deck \(deck) on the LC6000")
                     hint("On the LC6000")
