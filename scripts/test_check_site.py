@@ -69,6 +69,10 @@ class CheckSiteTests(unittest.TestCase):
         root = self.site({"style.css": '/* set --photo to url(...) or url(https://x.example/a.png) */ body { color: #fff; }'})
         self.assertEqual(check_site.problems(root), [])
 
+    def test_an_svg_data_uri_and_its_own_references_are_not_links(self):
+        root = self.site({"style.css": """.grain { background: url("data:image/svg+xml,%3Csvg%3E%3Crect filter='url(%23n)'/%3E%3C/svg%3E"); }"""})
+        self.assertEqual(check_site.problems(root), [])
+
     def test_external_resources_fail_but_external_links_dont(self):
         root = self.site({
             "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">',

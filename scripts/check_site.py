@@ -88,11 +88,12 @@ class Page(HTMLParser):
 
 CSS_REFS = re.compile(r"""url\(\s*['"]?([^'")\s]+)['"]?\s*\)|@import\s+['"]([^'"]+)['"]""")
 CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+CSS_DATA_URI = re.compile(r"""url\(\s*(['"])data:.*?\1\s*\)""", re.DOTALL)  # an inline picture, with its own url(#id)s
 
 
 def css_refs(css):
-    """The url() and @import references a stylesheet makes, leaving out what sits in its comments."""
-    return [a or b for a, b in CSS_REFS.findall(CSS_COMMENT.sub("", css))]
+    """The url() and @import references a stylesheet makes, leaving out its comments and inline data: pictures."""
+    return [a or b for a, b in CSS_REFS.findall(CSS_DATA_URI.sub("", CSS_COMMENT.sub("", css)))]
 
 
 def resolves(root, file, url):
