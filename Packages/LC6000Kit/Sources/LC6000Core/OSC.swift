@@ -45,8 +45,24 @@ public struct OSCPacket: Equatable, Sendable {
     public var messages: [OSCMessage]
 
     public init(decoding bytes: [UInt8]) throws(OSCError) {
-        var reader = OSCReader(bytes[...])
-        messages = [try reader.message()]
+        messages = try Self.messages(in: bytes[...], depth: 0)
+    }
+
+    /// Feedback arrives as untrusted UDP, so nesting is capped and every element size is checked.
+    static let maxBundleDepth = 8
+    private static let bundleTag = Array("#bundle\0".utf8)
+
+    private static func messages(in bytes: ArraySlice<UInt8>, depth: Int) throws(OSCError) -> [OSCMessage] {
+        var reader = OSCReader(bytes)
+        guard bytes.starts(with: bundleTag) else { return [try reader.message()] }
+        guard depth < maxBundleDepth else { throw .malformed("bundles nested too deep") }
+        _ = try reader.take(bundleTag.count + 8)   // the tag and the time tag
+        var out: [OSCMessage] = []
+        while !reader.bytes.isEmpty {
+            let size = Int(try reader.uint32())
+            out += try messages(in: try reader.take(size), depth: depth + 1)
+        }
+        return out
     }
 }
 
@@ -66,12 +82,19 @@ private struct OSCReader {
         let tags = try string()
         guard tags.hasPrefix(",") else { throw .malformed("missing type tag string") }
         var arguments: [OSCArgument] = []
-        for tag in tags.utf8.dropFirst() {
-            switch tag {
-            case UInt8(ascii: "i"): arguments.append(.int(Int32(bitPattern: try uint32())))
-            case UInt8(ascii: "f"): arguments.append(.float(Float(bitPattern: try uint32())))
-            case UInt8(ascii: "s"): arguments.append(.string(try string()))
-            default: throw .malformed("unsupported type tag")
+        tags: for tag in tags.utf8.dropFirst() {
+            switch Character(UnicodeScalar(tag)) {
+            case "i": arguments.append(.int(Int32(bitPattern: try uint32())))
+            case "f": arguments.append(.float(Float(bitPattern: try uint32())))
+            case "s": arguments.append(.string(try string()))
+            // Not used by Syndicate: skipped by their size so the arguments after them stay aligned.
+            case "h", "d", "t": _ = try take(8)
+            case "c", "r", "m": _ = try take(4)
+            case "S": _ = try string()
+            case "b": _ = try take((Int(try uint32()) + 3) & ~3)
+            case "T", "F", "N", "I": break
+            // Its size is unknown, so nothing after it can be read.
+            default: break tags
             }
         }
         return OSCMessage(address, arguments)

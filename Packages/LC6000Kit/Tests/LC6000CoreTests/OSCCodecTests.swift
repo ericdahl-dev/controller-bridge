@@ -92,4 +92,66 @@ struct OSCCodecTests {
             ]),
         ])
     }
+
+    @Test("Skips unsupported OSC 1.0 tags by their size: h (8), T (none), b (sized blob), d (8)")
+    func skipsSizedTags() throws {
+        let packet = Self.bytes("""
+            2f610000
+            2c685462 64690000
+            00000000 0000002a
+            00000003 01020300
+            3ff00000 00000000
+            00000007
+            """)
+        #expect(try OSCPacket(decoding: packet).messages == [OSCMessage("/a", [.int(7)])])
+    }
+
+    @Test("An unknown tag ends the arguments: the ones before it are kept")
+    func stopsAtUnknownTag() throws {
+        let packet = Self.bytes("""
+            2f610000
+            2c695869 00000000
+            00000001 00000002
+            """)
+        #expect(try OSCPacket(decoding: packet).messages == [OSCMessage("/a", [.int(1)])])
+    }
+
+    @Test("A bundle with a message and a nested bundle decodes to both messages in order")
+    func bundle() throws {
+        let packet = Self.bytes("""
+            2362756e 646c6500 00000000 00000001
+            0000000c
+              2f610000 2c690000 00000001
+            00000020
+              2362756e 646c6500 00000000 00000001
+              0000000c
+                2f620000 2c690000 00000002
+            """)
+        #expect(try OSCPacket(decoding: packet).messages == [
+            OSCMessage("/a", [.int(1)]),
+            OSCMessage("/b", [.int(2)]),
+        ])
+    }
+
+    @Test("A bundle element that claims more bytes than remain is refused")
+    func bundleElementTooLong() {
+        let packet = Self.bytes("""
+            2362756e 646c6500 00000000 00000001
+            ffffffff
+            2f610000 2c690000 00000001
+            """)
+        #expect(throws: OSCError.truncated) { try OSCPacket(decoding: packet) }
+    }
+
+    @Test("Bundles nested deeper than 8 are refused, so a hostile packet can't recurse without bound")
+    func bundleDepthLimit() throws {
+        // Wraps an element in a bundle header (immediate time tag) and its size prefix.
+        func wrap(_ element: [UInt8]) -> [UInt8] {
+            Self.bytes("2362756e 646c6500 00000000 00000001") + [0, 0, 0, UInt8(element.count)] + element
+        }
+        let message = Self.bytes("2f610000 2c690000 00000001")
+        let eight = (0..<8).reduce(message) { inner, _ in wrap(inner) }
+        #expect(try OSCPacket(decoding: eight).messages == [OSCMessage("/a", [.int(1)])])
+        #expect(throws: OSCError.malformed("bundles nested too deep")) { try OSCPacket(decoding: wrap(eight)) }
+    }
 }
