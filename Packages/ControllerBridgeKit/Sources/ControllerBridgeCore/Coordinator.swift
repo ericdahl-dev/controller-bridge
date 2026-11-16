@@ -312,32 +312,45 @@ public final class Coordinator {
     public func setControllers(_ entries: [ControllerSettings]) {
         // At least one controller always runs, so start() and the status have someone to show.
         guard !entries.isEmpty else { return }
-        while controllers.count > entries.count {
-            let last = controllers.count - 1
-            controllers[last].bridge.releaseAll()
-            disconnect(last)
-            controllers.removeLast()
-            status.controllers.removeLast()
-        }
-        for (index, entry) in entries.enumerated() {
-            if index == controllers.count {
-                let first = profiles[0]
-                status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
-                controllers.append(Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first))
-                controllers[index].channel = entry.channel
-                controllers[index].bridge = makeBridge(first, for: index)
-                setDevices(input: entry.input, output: entry.output, controller: index)
-                continue
-            }
-            setDeck(entry.deck, controller: index)
-            if entry.channel != controllers[index].channel {
-                controllers[index].channel = entry.channel
-                setChannel(index)
-            }
-            if entry.input?.id != controllers[index].chosenInput || entry.output?.id != controllers[index].chosenOutput {
-                setDevices(input: entry.input, output: entry.output, controller: index)
+        while controllers.count > entries.count { removeLastController() }
+        for index in entries.indices {
+            if index < controllers.count {
+                update(index, to: entries[index])
+            } else {
+                addController(entries[index])
             }
         }
+    }
+
+    // Kept as separate small functions: Xcode 26.6's optimizer crashed (CopyPropagation) on one loop doing all three.
+
+    private func removeLastController() {
+        let last = controllers.count - 1
+        controllers[last].bridge.releaseAll()
+        disconnect(last)
+        controllers.removeLast()
+        status.controllers.removeLast()
+    }
+
+    private func addController(_ entry: ControllerSettings) {
+        let first = profiles[0]
+        let index = controllers.count
+        status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
+        var controller = Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first)
+        controller.channel = entry.channel
+        controllers.append(controller)
+        controllers[index].bridge = makeBridge(first, for: index)
+        setDevices(input: entry.input, output: entry.output, controller: index)
+    }
+
+    private func update(_ index: Int, to entry: ControllerSettings) {
+        setDeck(entry.deck, controller: index)
+        if entry.channel != controllers[index].channel {
+            controllers[index].channel = entry.channel
+            setChannel(index)
+        }
+        let devicesChanged = entry.input?.id != controllers[index].chosenInput || entry.output?.id != controllers[index].chosenOutput
+        if devicesChanged { setDevices(input: entry.input, output: entry.output, controller: index) }
     }
 
     /// Rebuilds the controller's Bridge on its new channel: held controls are released first, the ports stay open.
