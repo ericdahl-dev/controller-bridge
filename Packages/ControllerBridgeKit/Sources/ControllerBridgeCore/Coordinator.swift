@@ -16,6 +16,11 @@ public final class Coordinator {
     private var loggedAmbiguous: Set<MIDIEndpoint.ID> = []
     private var bridges: [Bridge] { controllers.map(\.bridge) }
 
+    /// When the last feedback message arrived, if any has (#21).
+    private var lastFeedbackAt: Double?
+    /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
+    private var resendSentAt: Double?
+
     /// What the menu shows. The app copies it after each call.
     public private(set) var status: CoordinatorStatus
 
@@ -59,6 +64,7 @@ public final class Coordinator {
             }
             controllers[index].bridge.start()
         }
+        requestResend()
     }
 
     /// The MIDI devices changed. Re-reads them, connecting controllers that appeared.
@@ -69,6 +75,7 @@ public final class Coordinator {
                 if !midiSystem.sources.contains(where: { $0.id == source.id }) { disconnect(index) }
             } else if connect(index) {
                 controllers[index].bridge.start()
+                requestResend()
             }
         }
         disconnectFailedOutputs()
@@ -168,6 +175,7 @@ public final class Coordinator {
     /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
     public func tick() {
         for bridge in bridges { bridge.tick() }
+        checkLiveness()
         disconnectFailedOutputs()
     }
 
@@ -184,6 +192,7 @@ public final class Coordinator {
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
     public func feedback(_ message: OSCMessage) {
+        feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         disconnectFailedOutputs()
     }
@@ -193,5 +202,58 @@ public final class Coordinator {
         for index in controllers.indices where controllers[index].bridge.outputFailed {
             disconnect(index, reason: "MIDI send failed")
         }
+    }
+
+    // MARK: Feedback liveness (#21)
+
+    // Syndicate sends feedback only when a value changes, so after a quiet spell the bridge asks for a resend: a live
+    // Syndicate answers with every subscribed value, and always ColorPalette (user guide §14.10).
+
+    /// The OSC settings are shared by every controller; the first one's mapping holds them until Settings (#19).
+    private var oscSettings: Mapping.OSC { controllers[0].bridge.mapping.osc }
+
+    private func feedbackArrived() {
+        let now = clock.now
+        let wasStale = status.feedback == .stale
+        // An answer to a Resend still in its answer window is the full state already.
+        let answering = resendSentAt.map { now - $0 < Double(oscSettings.feedbackAnswerMs) / 1000 } ?? false
+        lastFeedbackAt = now
+        resendSentAt = nil
+        status.feedback = .live
+        guard wasStale else { return }
+        log.log("Syndicate feedback is back")
+        for bridge in bridges { bridge.start() }
+        if !answering { requestResend() }
+    }
+
+    private func checkLiveness() {
+        let now = clock.now
+        if let last = lastFeedbackAt, resendSentAt == nil, now - last >= Double(oscSettings.feedbackQuietMs) / 1000 {
+            requestResend()
+        }
+        if status.feedback == .live, let sent = resendSentAt, now - sent >= Double(oscSettings.feedbackAnswerMs) / 1000 {
+            feedbackStopped()
+        }
+        // Not live: ask again every quiet period, so a Syndicate that comes back quietly is found.
+        if status.feedback != .live, let sent = resendSentAt, now - sent >= Double(oscSettings.feedbackQuietMs) / 1000 {
+            resendSentAt = nil
+            requestResend()
+        }
+    }
+
+    /// Syndicate didn't answer: show idle for its state until it's back.
+    private func feedbackStopped() {
+        let event = "Syndicate feedback stopped"
+        status.feedback = .stale
+        status.lastDropout = event
+        log.log(event)
+        for bridge in bridges { bridge.clearSyndicateState() }
+    }
+
+    /// The one place a Resend is sent. One already waiting for its answer isn't sent again.
+    private func requestResend() {
+        guard resendSentAt == nil else { return }
+        resendSentAt = clock.now
+        controllers[0].bridge.send("Feedback/Resend", .int(1))
     }
 }
