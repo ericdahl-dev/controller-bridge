@@ -175,4 +175,19 @@ struct CaptureFlowTests {
         flow.receive([0x90, 0x01, 0x7F], at: 111)
         #expect(flow.canNext(at: 111))
     }
+
+    @Test("Ending the capture early keeps the steps so far, leaves the rest out, and the summary says it's partial")
+    func endEarly() throws {
+        var flow = Self.started(at: 100)
+        flow.next(at: 105)
+        flow.receive([0x90, 0x01, 0x7F], at: 106)
+        flow.disconnected(at: 107)
+        _ = flow.takeAnnouncement()
+        flow.endCapture(at: 108)
+        #expect(flow.phase == .done)
+        let file = try #require(flow.file)
+        #expect(file.steps.map(\.prompt) == ["idle"])
+        #expect(file.summary.contains("Ended early: 1 of 3 steps"))
+        #expect(flow.takeAnnouncement() == "Capture ended early: 1 of 3 steps.")
+    }
 }

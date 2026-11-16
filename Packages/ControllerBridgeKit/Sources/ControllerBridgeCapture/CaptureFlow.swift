@@ -123,6 +123,15 @@ public struct CaptureFlow: Sendable {
         refresh()
     }
 
+    /// Ends the capture now, keeping the steps so far (#229). The rest of the prompts are left out of the file.
+    public mutating func endCapture(at time: Double) {
+        guard phase == .steps else { return }
+        isDisconnected = false
+        connectionNote = nil
+        phase = .done
+        refresh(at: time)
+    }
+
     /// The controller being captured went away (#229).
     public mutating func disconnected(at time: Double) {
         guard phase == .steps, !isDisconnected else { return }
@@ -155,6 +164,7 @@ public struct CaptureFlow: Sendable {
             guard !announcedDone else { return nil }
             announcedDone = true
             let steps = file?.steps ?? []
+            if steps.count < stepCount { return "Capture ended early: \(steps.count) of \(stepCount) steps." }
             let skipped = steps.filter { $0.status == .skipped }.count
             return "Capture finished: \(steps.count) steps, \(skipped) skipped."
         case .steps:
