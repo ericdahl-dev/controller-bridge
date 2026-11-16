@@ -48,16 +48,53 @@ public struct Mapping: Equatable, Sendable, Codable {
 
         public var rollSizes: [String]
 
+        /// How the pad mode is chosen (#198): the LC6000's four mode buttons, or one button that cycles them.
+        public enum ModeSelect: String, CaseIterable, Equatable, Sendable, Codable {
+            /// `mode_hotcue`, `mode_roll`, `mode_loop` and `mode_slicer`, one per mode.
+            case buttons
+            /// One `mode_cycle` button: Hot Cue → Roll → Loop → Slicer → Hot Cue.
+            case cycle
+        }
+
+        public var modeSelect: ModeSelect
+
+        /// The velocity the `mode_cycle` button's own LED shows in each mode (#198), when it has one: a level or a
+        /// color, as the controller reads it. Left out, DeckBridge leaves that LED alone.
+        public struct ModeVelocities: Equatable, Sendable, Codable {
+            public var hotcue: Int
+            public var roll: Int
+            public var loop: Int
+            public var slicer: Int
+
+            public init(hotcue: Int, roll: Int, loop: Int, slicer: Int) {
+                self.hotcue = hotcue
+                self.roll = roll
+                self.loop = loop
+                self.slicer = slicer
+            }
+        }
+
+        public var modeCycleVelocities: ModeVelocities?
+
         /// The LC6000's: 1/32 of a beat on pad 1 up to 4 beats on pad 8.
         public static let lc6000RollSizes = RollSize.allCases.map(\.rawValue)
 
-        public init(rollSizes: [String] = Self.lc6000RollSizes) { self.rollSizes = rollSizes }
+        public init(rollSizes: [String] = Self.lc6000RollSizes, modeSelect: ModeSelect = .buttons,
+                    modeCycleVelocities: ModeVelocities? = nil) {
+            self.rollSizes = rollSizes
+            self.modeSelect = modeSelect
+            self.modeCycleVelocities = modeCycleVelocities
+        }
 
-        enum CodingKeys: String, CodingKey { case rollSizes = "roll_sizes" }
+        enum CodingKeys: String, CodingKey {
+            case rollSizes = "roll_sizes", modeSelect = "mode_select", modeCycleVelocities = "mode_cycle_velocities"
+        }
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? Self.lc6000RollSizes
+            modeSelect = try c.decodeIfPresent(ModeSelect.self, forKey: .modeSelect) ?? .buttons
+            modeCycleVelocities = try c.decodeIfPresent(ModeVelocities.self, forKey: .modeCycleVelocities)
         }
     }
 
