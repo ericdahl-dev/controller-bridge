@@ -55,6 +55,14 @@ public struct CaptureSession: Sendable {
     }
 
     /// For a step repeated with Shift held, how its control differs from the step it repeats, so far (#229).
+    /// On a layer step (#217), what the layers say so far, with the current take counted as if confirmed.
+    public var currentLayer: LayerFacts? {
+        guard let current, let layer = current.layer else { return nil }
+        let finished = file.steps
+        let preview = Self.step(current, .confirmed, take, noise: Set(idleNoise), before: finished)
+        return CaptureLayers.infer(prompts: prompts, steps: finished + [preview]).first { $0.layer == layer }
+    }
+
     public var currentShift: ShiftLayer? {
         guard let current, current.shiftedOf != nil else { return nil }
         return Self.step(current, .confirmed, take, noise: Set(idleNoise), before: file.steps).shift

@@ -128,4 +128,22 @@ struct LayerTests {
         #expect(web.inferred().layers == app.layers)
         #expect(!app.layers.isEmpty)
     }
+
+    @Test("The window shows the layer readout live on each layer step, and VoiceOver hears it with the detection")
+    func liveReadout() {
+        var flow = CaptureFlow(prompts: Self.prompts, appVersion: "1.2.0")
+        flow.start(device: "LC6000 PRIME", ports: CapturePorts(input: [], output: []), at: 0)
+        flow.receive([0x90, 1, 0x7F], at: 1)
+        flow.receive([0x80, 1, 0x00], at: 1.2)
+        flow.next(at: 2)
+        #expect(flow.layerReadout == nil)
+        for (i, bytes) in Self.lc6000Select.enumerated() { flow.receive(bytes, at: 3 + Double(i) * 0.2) }
+        flow.tick(at: 5)
+        #expect(flow.layerReadout == "Layer 2: Shift + Note 55 on ch 16 · indicator Note 51 on ch 2")
+        flow.next(at: 6)
+        _ = flow.takeAnnouncement()
+        flow.receive([0x91, 1, 0x7F], at: 7)
+        #expect(flow.layerReadout == "Layer 2: channel +1")
+        #expect(flow.takeAnnouncement() == "Detected: Note 1 on channel 2. Layer 2: channel +1.")
+    }
 }
