@@ -17,4 +17,36 @@ struct DiagnosticsPresentationTests {
         #expect(SweepAvailability(outputOpen: true) == SweepAvailability(enabled: true, reason: nil))
         #expect(SweepAvailability(outputOpen: false) == SweepAvailability(enabled: false, reason: "No controller output. Plug in the controller."))
     }
+
+    @Test("Clear empties only the tab you're on")
+    func clearOneTab() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .monitor, message: "       1.500  ch1  note_on channel=0 note=1 velocity=127 time=0", label: "play")
+        lines.append(to: .osc, message: "OSC -> /Syndicate/Deck/1/PlayPause 1")
+        lines.append(to: .sweep, message: "pads+ring velocity 0x00 (0)")
+        lines.clear(.osc)
+        #expect(lines.shown(.osc).isEmpty)
+        #expect(lines.shown(.monitor).map(\.label) == ["play"])
+        #expect(lines.shown(.sweep).count == 1)
+    }
+
+    @Test("Each list keeps its newest 500 lines")
+    func limit() {
+        var lines = DiagnosticsLines()
+        for n in 1...501 { lines.append(to: .osc, message: "OSC -> /Syndicate/Browser/Down \(n)") }
+        let shown = lines.shown(.osc)
+        #expect(shown.count == 500)
+        #expect(shown.first?.message == "OSC -> /Syndicate/Browser/Down 2")
+    }
+
+    @Test("Progress and Time feedback are hidden by default, and shown when the box is unticked")
+    func hideProgressAndTime() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Progress 0.25")
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Time 61")
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 1")
+        #expect(lines.shown(.osc).map(\.message) == ["OSC <- /Syndicate/Deck/1/Playing 1"])
+        lines.hideProgressAndTime = false
+        #expect(lines.shown(.osc).count == 3)
+    }
 }
