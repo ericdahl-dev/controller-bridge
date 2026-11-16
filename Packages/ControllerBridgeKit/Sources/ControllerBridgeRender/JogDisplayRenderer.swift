@@ -52,6 +52,14 @@ public enum JogDisplayRenderer {
         return String(type.uppercased().prefix(4))
     }
 
+    /// What a deck with no title shows: "OSC clip" for an OSC clip, the player type's own name for another kind (an
+    /// Automation deck says "Automation"), "No track" when it's empty.
+    static func untitled(_ playerType: String?) -> (title: String, caption: String) {
+        guard let label = badge(playerType), label != "TRK" else { return ("No track", "Load a track") }
+        if label == "OSC" { return ("OSC clip", "no title") }
+        return (playerType!.prefix(1).uppercased() + playerType!.dropFirst().lowercased(), "no title")
+    }
+
     // MARK: Drawing
 
     /// The image the jog display upload sends (#165), before `JogImage.forUnit` turns it: no lit beat and no marker,
@@ -83,22 +91,29 @@ public enum JogDisplayRenderer {
         let title = content.title ?? ""
         let foot: Bool
         if title.isEmpty {
-            // No title: an OSC clip (or another clip) says what it is; an empty deck says so. Nothing invented.
-            let isClip = badge(content.playerType).map { $0 != "TRK" } ?? false
-            line(isClip ? "OSC clip" : "No track", font: "Geist-Bold", size: 26, lineHeight: 1.1, top: 66, color: text, in: context)
-            line(isClip ? "no title" : "Load a track", font: "Geist-Medium", size: 16, lineHeight: 1.1, top: 100,
-                 color: caption, in: context)
-            foot = isClip
+            // No title: the deck says what it holds, or that it's empty. Nothing invented.
+            let words = untitled(content.playerType)
+            line(words.title, font: "Geist-Bold", size: 26, lineHeight: 1.1, top: 66, color: text, in: context)
+            line(words.caption, font: "Geist-Medium", size: 16, lineHeight: 1.1, top: 100, color: caption, in: context)
+            foot = badge(content.playerType) != nil && badge(content.playerType) != "TRK"
         } else {
             let artistTop: CGFloat
-            if title.count <= 12 {
+            if titleSize(title) == 26 {
                 line(title, font: "Geist-Bold", size: 26, lineHeight: 1.15, top: 60, color: text, tracking: -0.01, in: context)
                 artistTop = 94
             } else {
-                let (first, second) = split(title)
-                line(first, font: "Geist-Bold", size: 22, lineHeight: 1.1, top: 54, color: text, in: context)
-                line(second, font: "Geist-Bold", size: 22, lineHeight: 1.1, top: 78, color: text, in: context)
-                artistTop = 103
+                // Wrapped at words; titleLines already fits both lines, so only line 2 can end in an ellipsis.
+                let lines = titleLines(title)
+                if lines.count > 1 {
+                    line(lines[0], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1, top: 54, color: text, in: context)
+                    line(lines[1], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1, top: 78, color: text, in: context)
+                    artistTop = 103
+                } else {
+                    // One line at 20 px: centered where the 26 px line sits (box center 75), the artist where it goes then.
+                    line(lines[0], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1, top: 75 - twoLineSize * 1.1 / 2,
+                         color: text, in: context)
+                    artistTop = 94
+                }
             }
             line(content.artist.flatMap { $0.isEmpty ? nil : $0 } ?? "—", font: "Geist-Medium", size: 16, lineHeight: 1.15,
                  top: artistTop, color: caption, in: context)
@@ -190,14 +205,56 @@ public enum JogDisplayRenderer {
 
     // MARK: Text
 
-    /// The title split at the word break nearest its middle, as the design does.
-    static func split(_ title: String) -> (String, String) {
+    /// The title's size: 26 px on one line when it fits there whole, else 20 px wrapped (#165 follow-up). Measured in
+    /// Geist itself: before registration CoreText would hand back (and keep) a fallback.
+    static func titleSize(_ title: String) -> CGFloat {
+        _ = fontsRegistered
+        let font = CTFontCreateWithName("Geist-Bold" as CFString, 26, nil)
+        let line = makeLine(title, font: font, color: text, tracking: -0.01)
+        let room = chord(top: 60, height: lineBoxHeight(font, lineHeight: 1.15))
+        return CTLineGetTypographicBounds(line, nil, nil, nil) <= room ? 26 : twoLineSize
+    }
+
+    /// The title as drawn: one line when it fits at 26 px (as the design); else at 20 px,
+    /// wrapped at words. Line 1 takes the whole words that fit its width on the round screen (a first word too long for
+    /// it is broken there); line 2 takes the rest, and only line 2 ends in an ellipsis when the rest doesn't fit.
+    static func titleLines(_ title: String) -> [String] {
+        guard titleSize(title) == twoLineSize else { return [title] }
+        _ = fontsRegistered
+        let font = CTFontCreateWithName("Geist-Bold" as CFString, twoLineSize, nil)
+        let height = lineBoxHeight(font, lineHeight: 1.1)
+        let first = chord(top: 54, height: height), second = chord(top: 78, height: height)
+        func fits(_ text: String, _ width: CGFloat) -> Bool {
+            CTLineGetTypographicBounds(makeLine(text, font: font, color: Self.text), nil, nil, nil) <= width
+        }
         let words = title.split(separator: " ").map(String.init)
-        guard words.count > 1 else { return (title, "") }
-        let half = Double(title.count) / 2
-        func offMiddle(_ cut: Int) -> Double { abs(Double(words[..<cut].joined(separator: " ").count) - half) }
-        let best = (1..<words.count).min { offMiddle($0) < offMiddle($1) }!
-        return (words[..<best].joined(separator: " "), words[best...].joined(separator: " "))
+        var count = 0
+        while count < words.count, fits(words[...count].joined(separator: " "), first) { count += 1 }
+        var line1: String, rest: String
+        if count == 0 {
+            // One word wider than line 1: as many of its characters as fit, the rest carries on.
+            var cut = words[0].count
+            while cut > 1, !fits(String(words[0].prefix(cut)), first) { cut -= 1 }
+            line1 = String(words[0].prefix(cut))
+            rest = ([String(words[0].dropFirst(cut))] + words.dropFirst()).joined(separator: " ")
+        } else {
+            line1 = words[..<count].joined(separator: " ")
+            rest = words[count...].joined(separator: " ")
+        }
+        guard !rest.isEmpty else { return [line1] }
+        if fits(rest, second) { return [line1, rest] }
+        var shown = rest
+        while !shown.isEmpty, !fits(shown.trimmingCharacters(in: .whitespaces) + "…", second) { shown.removeLast() }
+        return [line1, shown.trimmingCharacters(in: .whitespaces) + "…"]
+    }
+
+    /// A title on two lines is 20 px (the design had 22): "Ten (Original" then fits line 1 whole (#165 follow-up).
+    static let twoLineSize: CGFloat = 20
+
+    /// The safe circle's width at a line box's farther edge from the center.
+    private static func chord(top: CGFloat, height: CGFloat) -> CGFloat {
+        let dy = max(abs(top - center), abs(top + height - center))
+        return 2 * sqrt(max(0, safe * safe - dy * dy))
     }
 
     /// One centered line whose CSS line box starts at `top`, cut with an ellipsis to the safe circle's chord there.
