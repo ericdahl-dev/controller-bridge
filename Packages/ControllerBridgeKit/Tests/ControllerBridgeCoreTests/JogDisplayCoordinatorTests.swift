@@ -163,3 +163,54 @@ struct JogMarkerCoordinatorTests {
         #expect(Self.lights(port) == [[0x90, 0x01, 0x7F], [0x90, 0x01, 0x00], [0x90, 0x01, 0x7F]])
     }
 }
+
+/// What the display shows comes from Syndicate's TrackInfo (#165): title, artist, key, BPM and player type, from the
+/// real capture's argument order <title> <artist> <key> <bpm> <length> <bars> <beats> <player_type>. Redrawn only when
+/// it changes.
+@Suite("Jog display content")
+struct JogDisplayContentTests {
+    static func trackInfo(deck: Int = 1, title: String = "Daybreak", key: String = "A#m", bpm: Float = 128) -> OSCMessage {
+        OSCMessage("/Syndicate/Deck/\(deck)/TrackInfo", [
+            .string(title), .string("Bill Hamel, Jeremus"), .string(key), .float(bpm), .float(428.5), .int(229), .int(914), .string("track"),
+        ])
+    }
+
+    static let daybreak = JogDisplayContent(deck: 1, color: [255, 0, 0], title: "Daybreak", artist: "Bill Hamel, Jeremus",
+                                            key: "A#m", bpm: 128, playerType: "track")
+
+    @Test("A loaded track's TrackInfo shows its title, artist, key, BPM and player type")
+    func trackInfo() throws {
+        let rig = try Rig()
+        let (port, shown) = JogDisplayCoordinatorTests.attach(rig)
+        rig.coordinator.start()
+        JogDisplayCoordinatorTests.answer(rig, port)
+        rig.coordinator.feedback(Self.trackInfo())
+        #expect(shown.contents.last == Self.daybreak)
+    }
+
+    @Test("The same TrackInfo again draws nothing new; a key change redraws")
+    func onlyOnChange() throws {
+        let rig = try Rig()
+        let (port, shown) = JogDisplayCoordinatorTests.attach(rig)
+        rig.coordinator.start()
+        JogDisplayCoordinatorTests.answer(rig, port)
+        rig.coordinator.feedback(Self.trackInfo())
+        JogDisplayCoordinatorTests.answer(rig, port)
+        let drawn = shown.contents.count
+        rig.coordinator.feedback(Self.trackInfo())
+        rig.coordinator.tick()
+        #expect(shown.contents.count == drawn)
+        rig.coordinator.feedback(Self.trackInfo(key: "Bm"))
+        #expect(shown.contents.last?.key == "Bm")
+    }
+
+    @Test("Another deck's TrackInfo doesn't change what deck 1's display shows")
+    func otherDeck() throws {
+        let rig = try Rig()
+        let (port, shown) = JogDisplayCoordinatorTests.attach(rig)
+        rig.coordinator.start()
+        JogDisplayCoordinatorTests.answer(rig, port)
+        rig.coordinator.feedback(Self.trackInfo(deck: 2))
+        #expect(shown.contents == [JogDisplayContent(deck: 1, color: [255, 0, 0])])
+    }
+}

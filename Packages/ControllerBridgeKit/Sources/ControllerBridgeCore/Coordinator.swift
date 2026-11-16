@@ -194,8 +194,10 @@ public final class Coordinator {
         guard let first = connected.first else { return driver.disconnect() }
         let front = connected.first { status.controllers[$0].activeLayer } ?? first
         let deck = status.controllers[front].deck
+        let track = controllers[front].bridge.track
         driver.connect()
-        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255]))
+        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255], title: track?.title,
+                                      artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType))
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -539,6 +541,10 @@ public final class Coordinator {
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
+        // What the display shows may have changed (a load, a key or BPM change); equal content draws nothing.
+        if message.address.lowercased().hasSuffix("/trackinfo") || message.address.lowercased().hasSuffix("/loaded") {
+            updateJogDisplay()
+        }
         disconnectFailedOutputs()
     }
 
