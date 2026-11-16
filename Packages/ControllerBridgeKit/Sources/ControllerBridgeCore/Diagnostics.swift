@@ -5,6 +5,10 @@ import Foundation
 public enum DiagnosticEvent: Equatable, Sendable {
     /// A message from the controller, with its mapping name or "UNMAPPED", and when it arrived (monotonic seconds).
     case midiIn(MIDIEvent, label: String, at: Double)
+    /// OSC sent to Syndicate.
+    case oscOut(OSCMessage)
+    /// OSC feedback from Syndicate.
+    case oscIn(OSCMessage)
 
     /// The line as the Python bridge printed it, so a hardware check reads the same.
     public var text: String {
@@ -14,6 +18,9 @@ public enum DiagnosticEvent: Equatable, Sendable {
             let channel = String(event.channel + 1).padding(toLength: 2, withPad: " ", startingAt: 0)
             let message = event.midoText.padding(toLength: max(50, event.midoText.count), withPad: " ", startingAt: 0)
             return String(format: "%12.3f", time) + "  ch" + channel + " " + message + " " + label
+        // lc6000_bridge/cli.py --verbose: print("OSC ->", address, *args)
+        case .oscOut(let message): return (["OSC ->", message.address] + message.arguments.map(\.pythonText)).joined(separator: " ")
+        case .oscIn(let message): return (["OSC <-", message.address] + message.arguments.map(\.pythonText)).joined(separator: " ")
         }
     }
 }
@@ -53,5 +60,30 @@ extension Mapping {
             ]
             return named.first { $0.0 == cc }?.1 ?? "UNMAPPED"
         }
+    }
+}
+
+extension OSCArgument {
+    /// As Python prints the decoded value: an int, a float as its shortest round-trip repr ("0.25", "128.0"), a string.
+    var pythonText: String {
+        switch self {
+        case .int(let value): String(value)
+        case .float(let value): String(Double(value))
+        case .string(let value): value
+        }
+    }
+}
+
+/// Passes OSC on to the real sender, and to the OSC log while Diagnostics is open.
+final class OSCTap: OSCSender, @unchecked Sendable {
+    private let inner: any OSCSender
+    /// Set and read only on the Coordinator's one consumer.
+    var onSend: ((OSCMessage) -> Void)?
+
+    init(_ inner: any OSCSender) { self.inner = inner }
+
+    func send(_ message: OSCMessage) {
+        inner.send(message)
+        onSend?(message)
     }
 }

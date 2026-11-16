@@ -9,6 +9,7 @@ struct DiagnosticsTests {
     final class Events {
         var all: [DiagnosticEvent] = []
         var monitor: [String] { all.compactMap { if case .midiIn = $0 { $0.text } else { nil } } }
+        var osc: [String] { all.compactMap { if case .midiIn = $0 { nil } else { $0.text } } }
     }
 
     /// A started rig whose diagnostics are open (a sink is set).
@@ -45,6 +46,41 @@ struct DiagnosticsTests {
             "      12.346  ch1  " + pad("control_change channel=0 control=6 value=127 time=0") + " select_turn",
             "      12.346  ch1  " + pad("note_on channel=0 note=99 velocity=127 time=0") + " UNMAPPED",
             "      12.346  ch1  " + pad("control_change channel=0 control=99 value=64 time=0") + " UNMAPPED",
+        ])
+    }
+
+    @Test("The monitor shows every channel from the controller, even one the bridge ignores, as Python's did")
+    func monitorShowsEveryChannel() throws {
+        let (rig, events) = try Self.openRig()
+        rig.osc.sent.removeAll()
+        rig.coordinator.midi(.noteOn(channel: 1, note: 1, velocity: 127), source: Rig.lc6000.id)
+        #expect(events.monitor.count == 1)
+        #expect(events.monitor.first?.contains("  ch2  note_on channel=1 note=1 velocity=127 time=0") == true)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("Closing Diagnostics (clearing the sink) stops the events: nothing is built for a closed window")
+    func closingStopsEvents() throws {
+        let (rig, events) = try Self.openRig()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        rig.coordinator.diagnostics = nil
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        #expect(events.all.count == 2)   // the Play press: its MIDI in, and its PlayPause out
+    }
+
+    @Test("The OSC log shows what is sent and received, in the Python bridge's --verbose words")
+    func oscLog() throws {
+        let (rig, events) = try Self.openRig()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Progress", [.float(0.25)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [.string("Song"), .float(128), .int(8)]))
+        #expect(events.osc == [
+            "OSC -> /Syndicate/Deck/1/PlayPause 1",
+            "OSC <- /Syndicate/Deck/1/Playing 1",
+            "OSC <- /Syndicate/Deck/1/Progress 0.25",
+            "OSC <- /Syndicate/Deck/1/TrackInfo Song 128.0 8",
         ])
     }
 }

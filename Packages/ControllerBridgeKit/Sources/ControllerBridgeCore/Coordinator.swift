@@ -22,7 +22,9 @@ public final class Coordinator {
     private var resendSentAt: Double?
 
     /// Set while the Diagnostics window is open (#26); nil otherwise, so nothing is built for it during a set.
-    public var diagnostics: ((DiagnosticEvent) -> Void)?
+    public var diagnostics: ((DiagnosticEvent) -> Void)? {
+        didSet { (osc as? OSCTap)?.onSend = diagnostics.map { sink in { sink(.oscOut($0)) } } }
+    }
 
     /// What the menu shows. The app copies it after each call.
     public private(set) var status: CoordinatorStatus
@@ -42,12 +44,13 @@ public final class Coordinator {
     public init(profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, clock: any Clock, log: any LogSink) {
         precondition(!profiles.isEmpty, "A Coordinator needs at least one controller profile")
         self.midiSystem = midi
-        self.osc = osc
+        // Every Bridge sends through the tap, so the OSC log sees what goes out while Diagnostics is open.
+        self.osc = OSCTap(osc)
         self.clock = clock
         self.log = log
         self.profiles = profiles
         let first = profiles[0]
-        controllers = [Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first)]
+        controllers = [Controller(bridge: Bridge(mapping: first.mapping, osc: self.osc, clock: clock), profile: first)]
         status = CoordinatorStatus(controllers: [ControllerStatus(deck: first.mapping.deck.number, connected: false)])
     }
 
@@ -199,6 +202,7 @@ public final class Coordinator {
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
     public func feedback(_ message: OSCMessage) {
+        diagnostics?(.oscIn(message))
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         disconnectFailedOutputs()
