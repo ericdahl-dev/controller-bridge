@@ -2,15 +2,14 @@
 import AppKit
 import ControllerBridgePresentation
 
-/// The menu-bar icon: a generic template glyph that follows the menu bar's appearance, plus a small state mark that
+/// The menu-bar icon: the deck-ring template glyph, which follows the menu bar's appearance, plus a small state mark that
 /// is a shape, not a color (template images can't carry color). The words are in the accessibility label.
 enum MenuBarIcon {
     static func image(_ state: IconState) -> NSImage {
         let size = NSSize(width: 20, height: 16)
         let image = NSImage(size: size, flipped: false) { rect in
-            let symbol = NSImage(systemSymbolName: "slider.vertical.3", accessibilityDescription: nil)!
-                .withSymbolConfiguration(.init(pointSize: 13, weight: .regular))!
-            symbol.draw(in: NSRect(x: 0, y: (rect.height - symbol.size.height) / 2, width: symbol.size.width, height: symbol.size.height))
+            // The deck-ring jog wheel (#66 item 7), a 16 pt template drawn for 1x and 2x in the asset catalog.
+            NSImage(named: "MenuBarIcon")?.draw(in: NSRect(x: 0, y: 0, width: 16, height: 16))
             let dot = NSRect(x: rect.width - 6, y: 0, width: 6, height: 6)
             switch state {
             case .ok: break
