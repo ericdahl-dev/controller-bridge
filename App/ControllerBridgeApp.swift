@@ -40,8 +40,9 @@ struct ControllerBridgeApp: App {
         .defaultLaunchBehavior(.suppressed)
 
         // The first-run guide (#27): opens itself on first launch, and from the panel's "Setup guide…".
-        Window("Set up Syndicate", id: SetupGuideWindow.id) {
-            SetupGuideView(guide: model.status.setupGuide)
+        // "Setup Guide": the caption inside says SET UP SYNDICATE, so the title doesn't repeat it (#68).
+        Window("Setup Guide", id: SetupGuideWindow.id) {
+            SetupGuideView(guide: model.status.setupGuide, presentation: model.status.presentation)
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)

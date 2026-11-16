@@ -71,6 +71,13 @@ final class BridgeModel {
         AppDelegate.model = self
     }
 
+    #if DEBUG
+    /// Snapshots only (#68): settings to show, with no bridge, MIDI or network started. Nil shows the stopped state.
+    init(preview settings: BridgeSettings?) {
+        self.settings = settings
+    }
+    #endif
+
     /// Quit: release everything held in Syndicate, then call `done`. Calls it after one second at the latest, so a
     /// stuck engine can't stop the app from quitting.
     /// The Diagnostics window opened or closed: only while it's open does the engine build anything for it.
@@ -119,7 +126,12 @@ final class BridgeModel {
     /// Saves `new` and puts it into effect, or throws the problems and changes nothing. Deck and device changes go
     /// through the pipe, so the Coordinator releases held controls first.
     func apply(_ new: BridgeSettings) throws(SettingsError) {
-        guard let old = settings, let producer, let osc else { return }
+        // Never a silent success: with the bridge not running, nothing can be applied (#62).
+        guard let old = settings, let producer, let osc else {
+            throw .invalid(["The bridge isn't running, so settings can't be applied. Quit and reopen it."])
+        }
+        var new = new
+        new.syndicateHost = new.syndicateHost.trimmingCharacters(in: .whitespaces)
         let problems = new.problems
         guard problems.isEmpty else { throw .invalid(problems) }
         if new.syndicateHost != old.syndicateHost || new.syndicatePort != old.syndicatePort {
