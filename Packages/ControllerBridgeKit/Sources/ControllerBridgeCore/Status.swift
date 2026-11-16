@@ -7,6 +7,8 @@ public struct CoordinatorStatus: Equatable, Sendable {
     public var feedback: FeedbackState
     /// The last time feedback stopped, for the menu.
     public var lastDropout: String?
+    /// An LED sweep (#26) is running.
+    public var sweeping = false
 
     public init(
         controllers: [ControllerStatus], devices: [DeviceStatus] = [], feedback: FeedbackState = .waiting,

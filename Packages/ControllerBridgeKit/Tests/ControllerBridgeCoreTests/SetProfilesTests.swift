@@ -32,4 +32,31 @@ struct SetProfilesTests {
         // Same port: the LEDs still go to the controller's output.
         #expect(rig.midi.connected == [Rig.lc6000.id])
     }
+
+    @Test("Two controllers on the same profile both switch, each on its own deck, with one Resend for both")
+    func twoControllers() throws {
+        let rig = try Rig()
+        let unitB = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME")
+        rig.midi.sources.append(unitB)
+        rig.coordinator.start()
+        rig.coordinator.setControllers([
+            ControllerSettings(deck: 1, input: nil, output: nil),
+            ControllerSettings(deck: 2, input: nil, output: nil),
+        ])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)])) // answers the pending Resend
+        rig.osc.sent.removeAll()
+
+        var mapping = try Mapping.bundledDefault()
+        mapping.notes.buttons["play"] = 60
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)])
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Feedback/Resend", [.int(1)])])
+        rig.osc.sent.removeAll()
+
+        rig.coordinator.midi(.noteOn(channel: 0, note: 60, velocity: 127), source: Rig.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 0, note: 60, velocity: 127), source: unitB.id)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]),
+        ])
+    }
 }

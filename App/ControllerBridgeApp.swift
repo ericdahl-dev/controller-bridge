@@ -29,6 +29,16 @@ struct ControllerBridgeApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        Window("Diagnostics", id: "diagnostics") {
+            DiagnosticsWindow(
+                log: model.diagnostics, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
+                startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep
+            )
+        }
+        .defaultSize(width: 720, height: 480)
+        // Opens only from the panel's Diagnostics…, never by itself at launch.
+        .defaultLaunchBehavior(.suppressed)
+
         // The first-run guide (#27): opens itself on first launch, and from the panel's "Setup guide…".
         Window("Set up Syndicate", id: SetupGuideWindow.id) {
             SetupGuideView(guide: model.status.setupGuide)

@@ -4,14 +4,19 @@
 public struct Engine {
     private let coordinator: Coordinator
     private let log: any LogSink
+    private let onDiagnostic: (@Sendable (DiagnosticEvent) -> Void)?
     private let onStatus: (@Sendable (CoordinatorStatus) -> Void)?
 
     /// `onStatus` gets the Coordinator's status when the loop starts and again each time it changes, on the loop's
     /// task. The app hops it to the main actor once per change.
-    public init(coordinator: Coordinator, log: any LogSink, onStatus: (@Sendable (CoordinatorStatus) -> Void)? = nil) {
+    public init(
+        coordinator: Coordinator, log: any LogSink, onStatus: (@Sendable (CoordinatorStatus) -> Void)? = nil,
+        onDiagnostic: (@Sendable (DiagnosticEvent) -> Void)? = nil
+    ) {
         self.coordinator = coordinator
         self.log = log
         self.onStatus = onStatus
+        self.onDiagnostic = onDiagnostic
     }
 
     /// Returns when the pipe finishes, or right after a stop.
@@ -37,10 +42,16 @@ public struct Engine {
             case .devicesChanged: coordinator.devicesChanged()
             case .sleep: coordinator.willSleep()
             case .wake: coordinator.didWake()
+            // Only while the window is open does the Coordinator build anything for it.
+            case .diagnostics(let open):
+                if open, let sink = onDiagnostic { coordinator.diagnostics = { sink($0) } } else { coordinator.diagnostics = nil }
+            case .ledSweep(let delay): coordinator.startLEDSweep(delay: delay)
+            case .stopLEDSweep: coordinator.stopLEDSweep()
             case .setDeck(let deck, let controller): coordinator.setDeck(deck, controller: controller)
             case .setDevices(let input, let output, let controller):
                 coordinator.setDevices(input: input, output: output, controller: controller)
             case .setLEDs(let enabled): coordinator.setLEDs(enabled: enabled)
+            case .setControllers(let entries): coordinator.setControllers(entries)
             case .setProfiles(let profiles): coordinator.setProfiles(profiles)
             case .stop:
                 // Releases are sent synchronously, so they have all gone out once run() returns.

@@ -32,6 +32,8 @@ final class Rig {
         func connect(source: MIDIEndpoint) throws { connected.append(source.id) }
         func disconnect(source: MIDIEndpoint) { connected.removeAll { $0 == source.id } }
         func openOutput(destination: MIDIEndpoint) throws -> any MIDIOutput {
+            // Like CoreMIDI's one output port: controllers sharing a destination share what it was sent.
+            if let open = outputs[destination.id], !open.closed { return open }
             let output = FakeOutput()
             outputs[destination.id] = output
             return output

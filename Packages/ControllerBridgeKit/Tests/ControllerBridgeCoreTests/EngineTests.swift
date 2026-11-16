@@ -149,6 +149,49 @@ struct EngineTests {
     }
 
     /// Collects what a Sendable callback is given.
+    final class SeenDiagnostics: @unchecked Sendable {
+        var values: [DiagnosticEvent] = []
+        func append(_ event: DiagnosticEvent) { values.append(event) }
+    }
+
+    @Test("Diagnostics open and close through the pipe: events reach the window's sink only while it is open")
+    func diagnosticsThroughThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        let pipe = EventPipe()
+        let seen = SeenDiagnostics()
+
+        pipe.producer.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)   // closed: not shown
+        pipe.producer.diagnostics(open: true)
+        pipe.producer.midi(.noteOn(channel: 0, note: 99, velocity: 127), source: Rig.lc6000.id)
+        pipe.producer.diagnostics(open: false)
+        pipe.producer.midi(.noteOn(channel: 0, note: 98, velocity: 127), source: Rig.lc6000.id)   // closed again
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, onDiagnostic: { seen.append($0) }).run(pipe.events)
+
+        #expect(seen.values.map(\.text).map { $0.hasSuffix(" UNMAPPED") } == [true])
+    }
+
+    @Test("The LED sweep starts and stops through the pipe")
+    func sweepThroughThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        let pipe = EventPipe()
+        let seen = SeenDiagnostics()
+
+        pipe.producer.diagnostics(open: true)
+        pipe.producer.ledSweep(delay: 0.6)
+        pipe.producer.stopLEDSweep()
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, onDiagnostic: { seen.append($0) }).run(pipe.events)
+
+        #expect(seen.values.map(\.text) == [
+            "Color sweep: velocity shown on every pad and the ring. Note what each looks like.",
+            "  velocity  0 (0x00) = rgb222 r0 g0 b0",
+            "LED sweep stopped.",
+        ])
+    }
+
     final class Seen: @unchecked Sendable {
         var values: [CoordinatorStatus] = []
         func append(_ status: CoordinatorStatus) { values.append(status) }
@@ -173,6 +216,25 @@ struct EngineTests {
         #expect(rig.coordinator.status.controllers.map(\.deck) == [2])
         #expect(rig.midi.connected == [Rig.lc6000.id])
         #expect(rig.leds.values.allSatisfy { $0 == 0 })
+    }
+
+    @Test("A controller list from the pipe reaches the Coordinator")
+    func controllersFromThePipe() async throws {
+        let rig = try Rig()
+        let unitB = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME")
+        rig.midi.sources.append(unitB)
+        rig.coordinator.start()
+        let pipe = EventPipe()
+
+        pipe.producer.setControllers([
+            ControllerSettings(deck: 1, input: nil, output: nil),
+            ControllerSettings(deck: 2, input: nil, output: nil),
+        ])
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.coordinator.status.controllers.map(\.deck) == [1, 2])
+        #expect(rig.midi.connected == [Rig.lc6000.id, unitB.id])
     }
 
     @Test("An imported profile from the pipe reaches the Coordinator: Play moves to its new note")
