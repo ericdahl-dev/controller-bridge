@@ -82,4 +82,16 @@ struct DeckColorTests {
         rig.coordinator.setDeckColors(followSyndicate: true, custom: custom)
         #expect(rig.leds[40] == 48)
     }
+
+    @Test("A black palette slot keeps that deck's default color, so the ring never goes dark, and says so once in the log")
+    func blackPaletteSlotFallsBack() throws {
+        let rig = try Self.onDeck(2)
+        let before = rig.leds[40]
+        Self.palette(rig, slot: 3, 0, 0, 0)
+        Self.palette(rig, slot: 3, 0, 0, 0)
+        #expect(rig.leds[40] == before)
+        #expect(rig.coordinator.status.deckColors[2] == DeckColors.defaults[2])
+        #expect(rig.log.lines.filter { $0.contains("black") }
+            == ["Syndicate's deck 2 color is black, which the LC6000's ring can't show; using the default"])
+    }
 }

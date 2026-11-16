@@ -30,6 +30,19 @@ public final class Coordinator {
         return bridge
     }
 
+    private var loggedBlackDecks: Set<Int> = []
+
+    /// Logs once per deck when Syndicate's color for it is black, which DeckColors replaces with the default.
+    private func noteBlackSlot(_ numbers: [Int]) -> [Int] {
+        if numbers.count >= 4, numbers[0] % 2 == 1, (1...7).contains(numbers[0]), DeckColors.isBlack(numbers[1...3]) {
+            let deck = (numbers[0] + 1) / 2
+            if loggedBlackDecks.insert(deck).inserted {
+                log.log("Syndicate's deck \(deck) color is black, which the LC6000's ring can't show; using the default")
+            }
+        }
+        return numbers
+    }
+
     /// Gives every Bridge the deck colors in use; each repaints its ring.
     private func applyDeckColors() {
         status.deckColors = deckColors
@@ -368,7 +381,7 @@ public final class Coordinator {
     public func feedback(_ message: OSCMessage) {
         // Syndicate's deck colors are cue palette slots 1, 3, 5 and 7 (#123).
         if message.address.lowercased().hasSuffix("/colorpalette"),
-           let updated = syndicateDeckColors.updated(byPalette: message.arguments.compactMap(\.wholeNumber)) {
+           let updated = syndicateDeckColors.updated(byPalette: noteBlackSlot(message.arguments.compactMap(\.wholeNumber))) {
             syndicateDeckColors = updated
             applyDeckColors()
         }

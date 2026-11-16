@@ -137,6 +137,12 @@ extension BridgeSettings {
     /// The same problems, each with the field it belongs to, so Settings can show it there (#68).
     public var fieldProblems: [SettingsProblem] {
         var out: [SettingsProblem] = []
+        // Black is the one color the ring can't show; any other is lifted to at least its lowest level (#123).
+        for deck in 1...4 where customDeckColors[deck] == [0, 0, 0] {
+            out.append(SettingsProblem(
+                field: .deckColor(deck: deck), message: "Deck \(deck)'s color is black, which the LC6000's ring can't show. Pick a lighter one."
+            ))
+        }
         for (index, controller) in controllers.enumerated() where !(1...4).contains(controller.deck) {
             out.append(SettingsProblem(field: .deck(controller: index), message: "Deck \(controller.deck) is out of range, expected 1-4"))
         }
@@ -264,4 +270,5 @@ public enum SettingsField: Hashable, Sendable {
     case host
     case oscPort
     case feedbackPort
+    case deckColor(deck: Int)
 }

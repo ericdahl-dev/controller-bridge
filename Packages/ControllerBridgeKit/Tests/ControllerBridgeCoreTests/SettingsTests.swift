@@ -211,6 +211,17 @@ struct SettingsTests {
         #expect(rebased.customDeckColors[2] == [0, 0, 255])
     }
 
+    @Test("A black custom deck color is refused: the LC6000 ring would be off")
+    func blackDeckColorRefused() {
+        var settings = Self.defaults
+        settings.customDeckColors.rgb[3] = [0, 0, 0]
+        #expect(settings.fieldProblems == [SettingsProblem(
+            field: .deckColor(deck: 3), message: "Deck 3's color is black, which the LC6000's ring can't show. Pick a lighter one."
+        )])
+        settings.customDeckColors.rgb[3] = [10, 0, 0]   // dim, but the ring lifts it to its lowest red
+        #expect(settings.fieldProblems == [])
+    }
+
     @Test("A field the DJ also edited in Settings keeps the DJ's value")
     func editedFieldWins() {
         let base = Self.defaults

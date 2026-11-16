@@ -24,6 +24,9 @@ public struct DeckColors: Equatable, Sendable, Codable {
     /// [r, g, b] for a deck, or nil for a deck outside 1-4.
     public subscript(deck: Int) -> [Int]? { rgb[deck] }
 
+    /// Whether the color is black, the one color the LC6000's ring can't show.
+    public static func isBlack(_ rgb: some Collection<Int>) -> Bool { rgb.allSatisfy { $0 == 0 } }
+
     public static let defaults = DeckColors(rgb: [
         1: [0x6C, 0x72, 0x77],
         2: [0xEC, 0xCF, 0x65],
@@ -35,8 +38,10 @@ public struct DeckColors: Equatable, Sendable, Codable {
     /// Nil when the message isn't a deck's slot, so nothing needs repainting.
     public func updated(byPalette numbers: [Int]) -> DeckColors? {
         guard numbers.count >= 4, numbers[0] % 2 == 1, (1...7).contains(numbers[0]) else { return nil }
+        let deck = (numbers[0] + 1) / 2
         var out = self
-        out.rgb[(numbers[0] + 1) / 2] = Array(numbers[1...3])
+        // Black would turn the ring off: that deck keeps its default color.
+        out.rgb[deck] = Self.isBlack(numbers[1...3]) ? Self.defaults[deck] : Array(numbers[1...3])
         return out == self ? nil : out
     }
 }
