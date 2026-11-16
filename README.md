@@ -97,3 +97,9 @@ scripts/smoke.sh   # required before a PR: a virtual LC6000 and a fake Syndicate
 ```
 
 Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. The app binds its feedback listener to `127.0.0.1:9096`, so it never triggers the local-network prompt. Quit Syndicate or the Python bridge first, since the smoke check needs UDP 9090 and 9096.
+
+#### Look and fonts
+
+The menu-bar panel follows Syndicate's dark, flat style (#34). The colors were sampled from its public screenshots, and `ControllerBridgePresentation` tests every text color against WCAG AA. The app bundles two fonts under the [SIL Open Font License 1.1](https://openfontlicense.org): [Inter](https://github.com/rsms/inter) 4.1 for UI text and [IBM Plex Mono](https://github.com/IBM/plex) 2.5.0 for numbers. Their license files ship in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo).
+
+For PR screenshots, a Debug build can render the panel without a screen: `ControllerBridge.app/Contents/MacOS/ControllerBridge --render-snapshots snaps`. It prints where the PNGs went (inside the sandbox container). Release builds leave this out.

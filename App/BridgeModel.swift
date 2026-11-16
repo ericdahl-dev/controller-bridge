@@ -13,6 +13,8 @@ final class BridgeStatus {
     }
 
     var controllers: [String] = []
+    /// The Syndicate deck this controller drives.
+    var deck = 1
     var feedback: Feedback = .starting
     var problem: String?
 
@@ -45,6 +47,7 @@ final class BridgeModel {
             status.problem = "Couldn't load the mapping: \(error)"
             return
         }
+        status.deck = mapping.deck.number
         let pipe = EventPipe()
         let status = status
 
