@@ -184,6 +184,8 @@ struct DiagnosticsWindow: View {
                 Text("Hide Progress and Time messages").font(Theme.ui(12)).foregroundStyle(Theme.text)
             }
             .toggleStyle(.checkbox)
+            // Syndicate subscriptions that are off, each with what it breaks, as the panel says (#211).
+            if !status.missingSubscriptions.isEmpty, let help = status.help { explain(help.text) }
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         }
     }

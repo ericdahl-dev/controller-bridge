@@ -43,6 +43,17 @@ extension BridgeState.Controller {
     }
 }
 
+/// A Syndicate subscription that's off (#211): its name on Syndicate's OSC FEEDBACK screen, and what breaks without it.
+public struct MissingSubscription: Equatable, Sendable {
+    public var name: String
+    public var breaks: String
+
+    public init(name: String, breaks: String) {
+        self.name = name
+        self.breaks = breaks
+    }
+}
+
 public struct BridgeState: Equatable, Sendable {
     public enum Controller: Equatable, Sendable {
         case connected(profile: String)
@@ -107,13 +118,17 @@ public struct BridgeState: Equatable, Sendable {
 
     /// The first controller follows its own deck layers (#79).
     public var followsLayers = false
-    /// The LED subscriptions a loaded deck's feedback lacked (#150), by deck value name: "playing", "cues"…
-    public var missingSubscriptions: [String] = []
+    /// The subscriptions a loaded deck's feedback lacked (#150, #211), with what each breaks.
+    public var missingSubscriptions: [MissingSubscription] = []
+    /// The subscriptions the profile needs, by Syndicate's names, for the "turn them on" help (#211).
+    public var requiredSubscriptions: [String] = []
 
     public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil,
                 master: Bool = false, demo: Bool = false, lastEvent: String? = nil, others: [ControllerEntry] = [],
-                stopReason: StopReason = .midi, followsLayers: Bool = false, missingSubscriptions: [String] = []) {
+                stopReason: StopReason = .midi, followsLayers: Bool = false, missingSubscriptions: [MissingSubscription] = [],
+                requiredSubscriptions: [String] = []) {
         self.missingSubscriptions = missingSubscriptions
+        self.requiredSubscriptions = requiredSubscriptions
         self.stopReason = stopReason
         self.followsLayers = followsLayers
         self.demo = demo

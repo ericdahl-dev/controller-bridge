@@ -51,6 +51,13 @@ enum Snapshots {
                 $0.syndicateFeedback = .live
                 $0.missingSubscriptions = [.cues]
             }),
+            // The user's own Syndicate had TempoSlider off (#211): named, with what it breaks.
+            ("feedback-tempo-slider-missing", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.missingSubscriptions = [.tempoSlider, .cues]
+            }),
             // Syndicate stopped answering (#21): DROPPED, and the last dropout under the lights.
             ("feedback-dropped", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]

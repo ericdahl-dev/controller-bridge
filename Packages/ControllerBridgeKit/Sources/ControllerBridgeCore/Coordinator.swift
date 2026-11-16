@@ -130,6 +130,7 @@ public final class Coordinator {
             for (index, entry) in entries.enumerated() { configure(index, as: entry) }
         }
         for bridge in bridges { bridge.setLEDsEnabled(self.ledsEnabled) }
+        status.requiredSubscriptions = requiredSubscriptions
         refreshDevices()
         for index in controllers.indices {
             if !connect(index) {
@@ -479,11 +480,17 @@ public final class Coordinator {
         }
     }
 
+    /// What every controller's profile needs, in the guide's order (#211).
+    private var requiredSubscriptions: [Subscription] {
+        let needed = Set(bridges.flatMap { Subscription.required(for: $0.mapping) })
+        return Subscription.allCases.filter(needed.contains)
+    }
+
     /// Once a Resend's answer window closes, what the answer held shows which subscriptions are on (#150).
     private func checkSubscriptions() {
         guard let answer, clock.now - answer.sentAt >= Double(oscSettings.feedbackAnswerMs) / 1000 else { return }
         self.answer = nil
-        guard let check = SubscriptionCheck(answer: answer.messages) else { return }
+        guard let check = SubscriptionCheck(answer: answer.messages, required: requiredSubscriptions) else { return }
         status.noDeckData = check.noDeckData
         status.missingSubscriptions = check.missing
     }
