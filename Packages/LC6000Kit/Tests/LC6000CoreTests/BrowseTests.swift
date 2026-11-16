@@ -135,4 +135,16 @@ struct BrowseTests {
             OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(1)]),
         ])
     }
+
+    @Test("Loop In, Loop Out and Auto Loop light full (127) while Syndicate reports Loop, and dim (1) when it ends")
+    func loopLEDsFollowLoop() throws {
+        let rig = try Self.startedRig()
+        #expect([rig.leds[8], rig.leds[9], rig.leds[10]] == [1, 1, 1])
+
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loop", [.int(1)]))
+        #expect([rig.leds[8], rig.leds[9], rig.leds[10]] == [127, 127, 127])
+
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loop", [.int(0)]))
+        #expect([rig.leds[8], rig.leds[9], rig.leds[10]] == [1, 1, 1])
+    }
 }

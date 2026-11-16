@@ -51,6 +51,7 @@ final class Bridge {
 
     // Syndicate's state, from feedback.
     var playing = false
+    var looping = false
 
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
@@ -119,6 +120,7 @@ final class Bridge {
         let value = message.arguments.first?.isTrue ?? false
         switch key {
         case "playing": playing = value
+        case "loop": looping = value
         default: return
         }
         refreshLEDs()
@@ -128,6 +130,7 @@ final class Bridge {
 
     func refreshLEDs() {
         buttonLED("play", on: playing)
+        loopLEDs()
     }
 
     func buttonLED(_ name: String, on: Bool) {

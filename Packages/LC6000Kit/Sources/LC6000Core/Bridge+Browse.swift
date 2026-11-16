@@ -66,4 +66,11 @@ extension Bridge {
     func paramForward(_ pressed: Bool) {
         if pressed { sendDeck("BeatSkip", .int(1)) }
     }
+
+    // MARK: LEDs
+
+    /// The three loop buttons light together while Syndicate reports a loop.
+    func loopLEDs() {
+        for name in ["loop_in", "loop_out", "auto_loop"] { buttonLED(name, on: looping) }
+    }
 }
