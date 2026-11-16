@@ -80,6 +80,13 @@ Checked on hardware (2026-11-15, see #12 and #103):
   hot cue N, and in Roll mode plays `roll_sizes[N-1]`, by Syndicate's SlipLoop names (`ThirtySecond`, `Sixteenth`,
   `Eighth`, `Quarter`, `Half`, `One`, `Two`, `Four`); a pad past the list does nothing in Roll mode. Left out,
   `roll_sizes` is the LC6000's eight, shortest first. Syndicate sends 8 cue slots, so pads 9–16 stay dark.
+- `notes.shifted` (#226): Shift done in hardware. On controllers that send a different note for a button while Shift is
+  held (the DDJ-400, the MCX8000), each button's shifted note, such as `{ "beat_jump_back": 60 }`. That note acts as the
+  button pressed with Shift held, for that press only, so Shift + Beat Jump Back still jumps a bar. Keys are the
+  profile's button names, and each note is checked like any other (0–127, not another button's). Left out or empty
+  (the LC6000), the app works Shift out from the Shift button, and nothing extra is saved.
+- `leds.mirror_shifted` (#226): `false` on the LC6000. On a controller whose shifted note has its own LED, `true`
+  lights it with its button's state.
 - `leds.levels` (#194): a button LED's velocity at full, dim and off, 127, 1 and 0 on the LC6000. Another controller's
   profile can set any of them (each 0–127; one left out keeps the LC6000's). They drive the button and pitch-center
   LEDs, turning the LEDs off, and the LED sweep's button pass; pad and ring colors don't use them.
