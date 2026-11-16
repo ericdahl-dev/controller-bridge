@@ -23,7 +23,7 @@ jobs:
       - name: Site check tests
         run: python3 -I scripts/test_check_site.py
       - name: Site analytics tests
-        run: node --test scripts/test_analytics.mjs
+        run: node --test scripts/test_analytics.mjs scripts/test_capture.mjs
       - name: Site check
         run: python3 -I scripts/check_site.py website
 
