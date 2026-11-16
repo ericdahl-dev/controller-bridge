@@ -18,12 +18,12 @@ public struct DeckBadge: Equatable, Sendable {
         self.init(fill: fill, digit: Self.legibleDigit(on: fill))
     }
 
-    /// Sampled from Syndicate's deck headers.
+    /// Syndicate's factory deck colors (cue palette slots 1, 3, 5 and 7), pinned to Core's DeckColors.defaults.
     static let fills: [Int: RGB] = [
-        1: RGB(hex: 0x6C7277),
-        2: RGB(hex: 0xECCF65),
-        3: RGB(hex: 0xC5754E),
-        4: RGB(hex: 0x62929E),
+        1: RGB(hex: 0xFF0000),
+        2: RGB(hex: 0xFFFF00),
+        3: RGB(hex: 0x00FFFF),
+        4: RGB(hex: 0x8000FF),
     ]
 
     /// A deck outside 1-4. Badge colors are deck colors, not theme surfaces, so they don't change with the theme

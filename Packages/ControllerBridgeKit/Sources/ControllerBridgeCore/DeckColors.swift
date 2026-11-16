@@ -40,12 +40,11 @@ public struct DeckColors: Equatable, Sendable, Codable {
     /// Whether the color is black, the one color the LC6000's ring can't show.
     public static func isBlack(_ rgb: some Collection<Int>) -> Bool { rgb.allSatisfy { $0 == 0 } }
 
-    public static let defaults = DeckColors(rgb: [
-        1: [0x6C, 0x72, 0x77],
-        2: [0xEC, 0xCF, 0x65],
-        3: [0xC5, 0x75, 0x4E],
-        4: [0x62, 0x92, 0x9E],
-    ])
+    /// Before Syndicate's palette arrives: its factory deck colors, cue palette slots 1, 3, 5 and 7 of the same
+    /// factory table the pads use (red, yellow, cyan, purple).
+    public static let defaults = DeckColors(rgb: Dictionary(uniqueKeysWithValues: (1...4).map {
+        ($0, Bridge.defaultPalette[2 * $0 - 1] ?? [0, 0, 0])
+    }))
 
     /// After a ColorPalette message ([slot, r, g, b]): the deck whose slot it is (slot 2N−1 is deck N) takes the color.
     /// Nil when the message isn't a deck's slot, so nothing needs repainting.

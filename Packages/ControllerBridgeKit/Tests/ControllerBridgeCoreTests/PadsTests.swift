@@ -227,21 +227,21 @@ struct PadsTests {
         }
     }
 
-    @Test("The platter ring (note 40) lights in deck 1's badge color (#6C7277) while a track is loaded: 0b00_01_01_01 = 21")
+    @Test("The platter ring (note 40) lights in deck 1's default color, Syndicate's factory red, while a track is loaded: 48")
     func ringFollowsLoaded() throws {
         let rig = try Self.startedRig()
         #expect(rig.leds[40] == 0)
 
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
-        #expect(rig.leds[40] == 21)
+        #expect(rig.leds[40] == 48)
 
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         #expect(rig.leds[40] == 0)
     }
 
-    // #122, vivid since #151 (white out, strongest to 3, under 30 % dropped): deck 2 #ECCF65 → 3,2,0 = 56;
-    // deck 3 #C5754E → 3,1,0 = 52 (green is 33 % of red, so it stays orange); deck 4 #62929E → 0,2,3 = 11.
-    @Test("On decks 2, 3 and 4 the ring lights in that deck's badge color, vivid", arguments: [(2, UInt8(56)), (3, 52), (4, 11)])
+    // #122: the defaults are Syndicate's factory deck colors, cue palette slots 3, 5 and 7: yellow (255, 255, 0) =
+    // 3,3,0 = 60; cyan (0, 255, 255) = 0,3,3 = 15; purple (128, 0, 255) = 2,0,3 = 35.
+    @Test("On decks 2, 3 and 4 the ring lights in that deck's default color", arguments: [(2, UInt8(60)), (3, 15), (4, 35)])
     func ringInDeckColor(deck: Int, velocity: UInt8) throws {
         let rig = try Self.startedRig()
         rig.coordinator.setDeck(deck, controller: 0)
@@ -262,7 +262,7 @@ struct PadsTests {
         let rig = try Rig(override: #"{ "leds": { "ring_color": [255, 0, 0] } }"#)
         rig.coordinator.start()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
-        #expect(rig.leds[40] == 21)
+        #expect(rig.leds[40] == 48)
     }
 
     @Test("Cues and Loaded feedback for another deck leave this controller's pads and ring alone")
