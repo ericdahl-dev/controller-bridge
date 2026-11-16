@@ -48,4 +48,22 @@ extension Bridge {
         let ticks = relativeTicks(value)
         if ticks != 0 { sendDeck(ticks > 0 ? "LoopOut" : "LoopIn", .int(1)) }
     }
+
+    // MARK: Jumps
+
+    func beatJumpBack(_ pressed: Bool) {
+        if pressed { sendDeck("SkipBeatBack", .int(1)) }
+    }
+
+    func beatJumpForward(_ pressed: Bool) {
+        if pressed { sendDeck("SkipBeatForward", .int(1)) }
+    }
+
+    func paramBack(_ pressed: Bool) {
+        if pressed { sendDeck("BeatSkip", .int(-1)) }
+    }
+
+    func paramForward(_ pressed: Bool) {
+        if pressed { sendDeck("BeatSkip", .int(1)) }
+    }
 }

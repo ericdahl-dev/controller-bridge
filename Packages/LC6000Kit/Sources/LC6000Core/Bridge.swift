@@ -19,6 +19,10 @@ final class Bridge {
             "loop_in": { $0.loopIn },
             "loop_out": { $0.loopOut },
             "auto_loop": { $0.autoLoop },
+            "beat_jump_back": { $0.beatJumpBack },
+            "beat_jump_forward": { $0.beatJumpForward },
+            "param_back": { $0.paramBack },
+            "param_forward": { $0.paramForward },
         ]
     }
 

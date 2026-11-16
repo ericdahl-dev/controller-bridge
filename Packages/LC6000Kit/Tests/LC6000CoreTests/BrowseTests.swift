@@ -113,4 +113,26 @@ struct BrowseTests {
             OSCMessage("/Syndicate/Deck/1/LoopIn", [.int(1)]),
         ])
     }
+
+    @Test("Beat jump ◀ and ▶ skip a beat back and forward, on press only")
+    func beatJump() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, 3)
+        Self.press(rig, 4)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/SkipBeatBack", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/SkipBeatForward", [.int(1)]),
+        ])
+    }
+
+    @Test("Param ◀ and ▶ send BeatSkip -1 and 1, on press only")
+    func paramButtons() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, 68)
+        Self.press(rig, 69)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(-1)]),
+            OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(1)]),
+        ])
+    }
 }
