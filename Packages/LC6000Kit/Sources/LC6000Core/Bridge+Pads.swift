@@ -15,6 +15,7 @@ extension Bridge {
             guard pressed else { return }
             self.releasePads()
             self.padMode = mode
+            self.refreshLEDs()
         }
     }
 
@@ -33,5 +34,12 @@ extension Bridge {
         case .loop: sendDeck("SetCueLoop", .int(cue))
         case .slicer: break
         }
+    }
+
+    // MARK: LEDs
+
+    func padLEDs() {
+        let modes: [(String, PadMode)] = [("mode_hotcue", .hotCue), ("mode_roll", .roll), ("mode_loop", .loop), ("mode_slicer", .slicer)]
+        for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
     }
 }

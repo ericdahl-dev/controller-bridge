@@ -152,6 +152,7 @@ final class Bridge {
         buttonLED("play", on: playing)
         refreshTransportLEDs()
         loopLEDs()
+        padLEDs()
     }
 
     func buttonLED(_ name: String, on: Bool) {

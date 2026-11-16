@@ -121,4 +121,21 @@ struct PadsTests {
         Self.up(rig, 33)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/SlipLoop/Sixteenth", [.int(0)])])
     }
+
+    /// The mode button LEDs: Hot Cue, Roll, Slicer, Loop (notes 27-30).
+    static func modeLEDs(_ rig: Rig) -> [UInt8?] {
+        [rig.leds[27], rig.leds[28], rig.leds[29], rig.leds[30]]
+    }
+
+    @Test("The mode button LEDs show the current mode: full (127) for it, dim (1) for the rest")
+    func modeLEDsShowMode() throws {
+        let rig = try Self.startedRig()
+        #expect(Self.modeLEDs(rig) == [127, 1, 1, 1])
+
+        Self.press(rig, Self.modeRoll)
+        #expect(Self.modeLEDs(rig) == [1, 127, 1, 1])
+
+        Self.press(rig, Self.modeLoop)
+        #expect(Self.modeLEDs(rig) == [1, 1, 1, 127])
+    }
 }
