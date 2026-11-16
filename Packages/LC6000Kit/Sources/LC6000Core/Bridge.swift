@@ -110,6 +110,7 @@ final class Bridge {
     }
 
     private func handleNote(_ note: Int, pressed: Bool) {
+        if let pad = mapping.notes.pads.firstIndex(of: note) { return handlePad(pad, pressed: pressed) }
         guard let name = buttonNames[note], let handler = Self.buttonHandlers[name] else { return }
         handler(self)(pressed)
     }
