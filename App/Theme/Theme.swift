@@ -150,7 +150,11 @@ struct StatusLineView: View {
             line = line + Text("\(light.label.uppercased()) ").foregroundStyle(Theme.caption)
                 + Text("● \(light.word)").foregroundStyle(Color(light.tone.color)) + separator
         }
-        return line + Text("DECK [\(deck)]").foregroundStyle(Theme.caption)
+        line = line + Text("DECK [\(deck)]").foregroundStyle(Theme.caption)
+        if let master = presentation.master {
+            line = line + separator + Text(master.word).foregroundStyle(Color(master.tone.color))
+        }
+        return line
     }
 }
 

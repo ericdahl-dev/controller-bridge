@@ -17,11 +17,26 @@ enum Snapshots {
             ("connected", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
                 $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
+            ("connected-master-others", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", master: true)]
+                $0.devices = [
+                    DeviceStatus(name: "Denon LC6000 PRIME", profile: "Denon LC6000 PRIME", note: nil),
+                    DeviceStatus(name: "IAC Bus 1", profile: nil, note: nil),
+                    DeviceStatus(name: "loopMIDI Port", profile: nil, note: nil),
+                ]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
             }),
             ("not-connected", {
                 $0.bridges = [ControllerStatus(deck: 2, connected: false, lastEvent: "Unplugged Denon LC6000 PRIME at 21:14")]
-                $0.devices = [DeviceStatus(name: "DDJ-FLX4", profile: nil, note: "No controller profile matches DDJ-FLX4, so it isn't bridged.")]
+                $0.devices = [
+                    DeviceStatus(name: "DDJ-FLX4", profile: nil, note: "No controller profile matches DDJ-FLX4, so it isn't bridged."),
+                    DeviceStatus(name: "IAC Bus 1", profile: nil, note: nil),
+                ]
                 $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
             }),
             ("port-in-use", {
                 $0.bridges = [ControllerStatus(deck: 3, connected: true, profile: "Denon LC6000 PRIME")]

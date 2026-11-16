@@ -98,4 +98,16 @@ struct StatusPresentationTests {
         let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1))
         #expect(status.lastDropout == nil)
     }
+
+    @Test("Tempo master (#53): an orange MASTER light, \"· MASTER\" ends the status line, and the icon stays OK")
+    func master() {
+        let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1, master: true))
+        #expect(status.master == StatusLight(label: "TEMPO", word: "MASTER", tone: .attention))
+        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● LIVE · DECK [1] · MASTER")
+        #expect(status.icon == .ok)
+
+        let notMaster = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1))
+        #expect(notMaster.master == nil)
+        #expect(notMaster.line == "LC6000 ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
+    }
 }
