@@ -271,8 +271,8 @@ public final class Coordinator {
         if let diagnostics {
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
+        layerHandover(event, source: source)
         for index in controllers.indices where controllers[index].source?.id == source {
-            layerSignal(event, controller: index)
             controllers[index].bridge.handle(event)
             for notice in controllers[index].bridge.notices { log.log(notice) }
             controllers[index].bridge.notices.removeAll()
@@ -280,15 +280,38 @@ public final class Coordinator {
         disconnectFailedOutputs()
     }
 
-    /// The controller's own deck-layer switch (#79): its layer note on this entry's channel, 127 as the layer becomes
-    /// active and 0 as it stops being active.
-    private func layerSignal(_ event: MIDIEvent, controller index: Int) {
-        let mapping = controllers[index].bridge.mapping
-        guard let layerNote = mapping.midi.layerNote, case .noteOn(let channel, let note, let velocity) = event,
-              Int(note) == layerNote, Int(channel) + 1 == mapping.midi.channel else { return }
-        status.controllers[index].activeLayer = velocity > 0
-        // A hand still on Cue or a pad as the layer changes would leave it held on the old deck.
-        if velocity == 0 { controllers[index].bridge.releaseAll() } else { controllers[index].bridge.becameActiveLayer() }
+    /// The controller's own deck-layer switch (#79), as the LC6000 really sends it: note 51 at 127 on channel N makes
+    /// layer N the active one. Its note 51 at 0 always comes on ch1, whatever layer it leaves, so it means nothing.
+    /// And any other control on a layer's channel shows the unit is on that layer, so it takes over too: a long hold of
+    /// Shift + deck select changes layer with no note 51 at all.
+    private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) {
+        let layers = controllers.indices.filter { controllers[$0].source?.id == source && controllers[$0].followsLayers }
+        guard let first = layers.first else { return }
+        let (channel, note, velocity): (UInt8, UInt8?, UInt8) = switch event {
+        case .noteOn(let c, let n, let v): (c, n, v)
+        case .noteOff(let c, let n, _): (c, n, 0)
+        case .controlChange(let c, _, let v): (c, nil, v)
+        }
+        let isLayerNote = note.map { Int($0) == controllers[first].bridge.mapping.midi.layerNote } ?? false
+        if isLayerNote && velocity == 0 { return }
+        guard let target = layers.first(where: { controllers[$0].bridge.mapping.midi.channel == Int(channel) + 1 }) else { return }
+        let current = layers.first { status.controllers[$0].activeLayer } ?? first
+        // Traffic on the layer already in front changes nothing; the layer note always hands over (and repaints).
+        if !isLayerNote && target == current && status.controllers[target].activeLayer { return }
+        if !isLayerNote && target == current { status.controllers[target].activeLayer = true; return }
+        activateLayer(target, leaving: current, among: layers)
+    }
+
+    /// One handover: the layer left releases what it held and stops writing LEDs; the new one becomes the only active
+    /// layer, repaints and waits for the shared fader's pickup.
+    private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int]) {
+        if current != target { controllers[current].bridge.releaseAll() }
+        for index in layers where index != target {
+            status.controllers[index].activeLayer = false
+            controllers[index].bridge.layerShown = false
+        }
+        status.controllers[target].activeLayer = true
+        controllers[target].bridge.becameActiveLayer()
     }
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
@@ -468,7 +491,17 @@ public final class Coordinator {
         if let channel = controllers[index].channel { mapping.midi.channel = channel }
         let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
         bridge.setLEDsEnabled(ledsEnabled)
+        bridge.layerShown = layerInFront(index, channel: mapping.midi.channel, layers: profile.mapping.midi.layers)
         return bridge
+    }
+
+    /// Whether this controller's LEDs are the ones the unit shows (#79): any controller that doesn't follow layers;
+    /// the active layer; or, before any handover, the profile's first layer.
+    private func layerInFront(_ index: Int, channel: Int, layers: [Mapping.Layer]) -> Bool {
+        guard controllers[index].followsLayers else { return true }
+        if status.controllers[index].activeLayer { return true }
+        let anyActive = controllers.indices.contains { $0 != index && controllers[$0].followsLayers && status.controllers[$0].activeLayer }
+        return !anyActive && channel == layers.first?.channel
     }
 
     /// An imported mapping (#24): these profiles replace the current ones. A controller whose profile changed releases

@@ -122,9 +122,11 @@ struct LayersTests {
         rig.coordinator.midi(.controlChange(channel: channel - 1, controller: 8, value: msb), source: Rig.lc6000.id)
     }
 
+    /// Shift + deck select as the real unit sends it (the CoS's clean capture): note 51 vel 0 always on ch1, whatever
+    /// the old layer was, then note 51 vel 127 on the new layer's channel. `from` is kept for the reader.
     static func switchLayer(_ rig: Rig, from: UInt8, to: UInt8) {
         Self.note(rig, channel: 16, 55, 127)
-        Self.note(rig, channel: from, 51, 0)
+        Self.note(rig, channel: 1, 51, 0)
         Self.note(rig, channel: to, 51, 127)
     }
 
@@ -185,4 +187,84 @@ struct LayersTests {
         #expect(rig.coordinator.status.collapsingLayers() == rig.coordinator.status)
     }
 
+    static func off(_ rig: Rig, channel: UInt8, _ note: UInt8) {
+        rig.coordinator.midi(.noteOff(channel: channel - 1, note: note, velocity: 0), source: Rig.lc6000.id)
+    }
+
+    /// The user's long hold of Shift + deck select on the real LC6000 (the CoS's capture): no note 51 handover, a
+    /// ch2 note 54 instead, and the next Play still on ch1. The unit didn't change layer, so neither may the bridge.
+    static func longHoldCapture(_ rig: Rig) {
+        Self.note(rig, channel: 1, 26, 127)      // 13.166 Shift down
+        Self.note(rig, channel: 16, 55, 127)     // 14.629 deck select down
+        Self.off(rig, channel: 1, 26)            // 14.881 Shift up
+        Self.note(rig, channel: 2, 54, 127)      // 16.891 no note 51 this time
+        Self.off(rig, channel: 16, 55)           // 16.926 deck select up, held about 2.3 s
+    }
+
+    @Test("The long hold, from launch: the unit's own traffic says where it is; after ch1 Play it's deck 1, and Play went there")
+    func longHoldWithoutHandover() throws {
+        let rig = try Self.layered()
+        Self.longHoldCapture(rig)
+        Self.note(rig, channel: 1, 1, 127)       // 17.826 Play on ch1
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [1])
+    }
+
+    @Test("From layer 2 (an earlier short press), the long hold leaves the unit on ch1: the menu must not keep saying deck 2")
+    func longHoldFromLayerTwo() throws {
+        let rig = try Self.layered()
+        Self.switchLayer(rig, from: 1, to: 2)    // the earlier short press: a proper note 51 handover
+        Self.longHoldCapture(rig)
+        Self.note(rig, channel: 1, 1, 127)       // 17.826 Play on ch1: the unit is on layer 1 now
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [1])
+    }
+
+    @Test("The unit's real handovers (vel 0 always on ch1): 1→2, 2→1, 1→3, 3→4 each leave exactly the new layer active")
+    func realHandovers() throws {
+        let rig = try Self.layered()
+        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 2, 51, 127)     // 16.682 → layer 2
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, true, false, false])
+        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 1, 51, 127)     // 19.323 → layer 1
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
+        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 3, 51, 127)     // 21.655 → layer 3
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, false, true, false])
+        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 4, 51, 127)     // 24.426 → layer 4
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, false, false, true])
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [4])
+    }
+
+    @Test("Leaving layer 2 by a real handover releases Cue held on deck 2, once; nothing is released on deck 1")
+    func realHandoverReleasesTheLayerLeft() throws {
+        let rig = try Self.layered()
+        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 2, 51, 127)
+        Self.note(rig, channel: 2, 2, 127)                                           // Cue held on layer 2
+        rig.osc.sent.removeAll()
+        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 3, 51, 127)     // → layer 3
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/Cue", [.int(0)])])
+    }
+
+    static func channelsWritten(_ output: Rig.FakeOutput) -> Set<UInt8> {
+        Set(output.sent.compactMap { if case .noteOn(let c, _, _) = $0 { c + 1 } else { nil } })
+    }
+
+    @Test("Only the layer in front writes LEDs: layer 1 at launch; after a handover to 2, deck 1 feedback writes nothing")
+    func onlyTheShownLayerWritesLEDs() throws {
+        let rig = try Rig()
+        rig.coordinator.start(controllers: ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: Self.lc6000Layers
+        ))
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        #expect(Self.channelsWritten(output) == [1])
+        output.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))   // layer 2 isn't in front
+        #expect(output.sent.isEmpty)
+
+        Self.switchLayer(rig, from: 1, to: 2)
+        #expect(Self.channelsWritten(output) == [2])                                     // the repaint
+        output.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))   // the probe's ch1 writes
+        #expect(output.sent.isEmpty)
+    }
 }
