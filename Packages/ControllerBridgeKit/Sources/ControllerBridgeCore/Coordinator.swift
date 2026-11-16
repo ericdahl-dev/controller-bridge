@@ -15,6 +15,8 @@ public final class Coordinator {
     /// Devices matching more than one profile, already logged.
     private var loggedAmbiguous: Set<MIDIEndpoint.ID> = []
     private var bridges: [Bridge] { controllers.map(\.bridge) }
+    /// The source the capture window (#186) is recording, whose MIDI drives nothing meanwhile.
+    private var capturing: MIDIEndpoint.ID?
     /// Deck colors from Syndicate's palette, the defaults until one arrives (#123).
     private var syndicateDeckColors = DeckColors.defaults
     /// Settings' deck colors (#123): follow Syndicate, or the custom colors.
@@ -251,6 +253,7 @@ public final class Coordinator {
     /// Releases everything the controller held, exactly once, and closes its ports.
     private func disconnect(_ index: Int, reason: DisconnectReason) {
         guard let source = controllers[index].source else { return }
+        if capturing == source.id { capturing = nil }
         let bridge = controllers[index].bridge
         bridge.releaseAll()
         controllers[index].source = nil
@@ -379,6 +382,21 @@ public final class Coordinator {
         status.controllers[index].lastEvent = event
     }
 
+    /// Starts or ends the capture of a source (#186). While it's captured, its MIDI drives neither Syndicate nor its
+    /// LEDs, though its layers are still followed. Starting releases what its controllers held, like an unplug, forgets
+    /// the jog's position, so the first message after only seeds it, and re-arms the pitch pickup. `nil`, an unplug or
+    /// stop ends the capture.
+    public func setCapture(source: MIDIEndpoint.ID?) {
+        capturing = source
+        guard let source else { return }
+        for controller in controllers where controller.source?.id == source {
+            controller.bridge.releaseAll()
+            controller.bridge.jogPosition = nil
+            // The capture sweeps the pitch fader, so it waits for pickup after, instead of jumping the tempo.
+            controller.bridge.rearmPickup()
+        }
+    }
+
     /// Releases everything held in Syndicate. Safe to call again: a second call sends nothing.
     public func stop() {
         for index in controllers.indices {
@@ -423,6 +441,8 @@ public final class Coordinator {
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
         let routed = layerHandover(event, source: source)
+        // Captured (#186): the layers still follow the unit, so the right one is active after; nothing else runs.
+        if source == capturing { return }
         for index in controllers.indices where controllers[index].source?.id == source {
             controllers[index].bridge.handle(routed)
             for notice in controllers[index].bridge.notices { log.log(notice) }

@@ -12,18 +12,29 @@
 import CoreMIDI
 import Foundation
 
+// The same ids and words as the Kit's CapturePrompts.djController (#186), so the recording replays through it (#213).
+let hotcues: [(id: String, text: String)] = (1...8).map { ("deck1.hotcue\($0)", "In Hot Cue mode, press and release pad \($0) on deck 1.") }
 let prompts: [(id: String, text: String)] = [
     ("idle", "Don't touch anything for 5 seconds."),
     ("deck1.play", "Press and release Play on deck 1."),
     ("deck1.cue", "Press and release Cue on deck 1."),
-    ("deck1.shift", "Press and release Shift on deck 1."),
-    ("deck1.play.shift", "Hold Shift, press and release Play, then release Shift."),
+    ("deck1.sync", "Press and release Sync on deck 1."),
+] + hotcues + [
+    ("deck1.pitch", "Move the pitch fader slowly all the way from the top to the bottom."),
     ("deck1.jog.touch", "Touch the top of the jog wheel, turn it right a quarter turn, then left, then let go."),
     ("deck1.jog.edge", "Without touching the top, spin the jog wheel's edge right, then left."),
-    ("deck1.pitch", "Move the pitch fader slowly from the bottom to the top."),
-    ("deck1.needle", "Touch Needle Drop at the left and slide slowly to the right, then let go."),
-    ("deck1.browse", "Turn the browse knob right three clicks, then left three clicks."),
-    ("deck1.pad1", "Press and release pad 1."),
+    ("deck1.needle", "Touch the needle strip at the left, slide slowly to the right, then let go."),
+    ("deck1.loop_in", "Press and release Loop In on deck 1."),
+    ("deck1.loop_out", "Press and release Loop Out on deck 1."),
+    ("deck1.auto_loop", "Press and release Auto Loop on deck 1."),
+    ("deck1.browse.turn", "Turn the browse knob right three clicks, then left three clicks."),
+    ("deck1.browse.press", "Press and release the browse knob."),
+    ("deck1.shift", "Press and release Shift on deck 1."),
+    ("deck1.play.shift", "Hold Shift, press and release Play, then let go of Shift."),
+    ("deck1.cue.shift", "Hold Shift, press and release Cue, then let go of Shift."),
+    ("deck1.hotcue1.shift", "Hold Shift, press and release pad 1, then let go of Shift."),
+    ("layer2.select", "Switch the left side to deck 2 (its deck or layer button)."),
+    ("deck2.play", "Press and release Play on deck 2."),
 ]
 
 let match = CommandLine.arguments.dropFirst().first ?? "LC6000"
