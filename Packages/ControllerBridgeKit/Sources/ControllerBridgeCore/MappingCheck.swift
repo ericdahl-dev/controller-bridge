@@ -193,6 +193,8 @@ extension Mapping {
     private static let optionalKeys: [String: OrderedJSON] = [
         "jog.relative_cc": .number(0, isInteger: true),
         "jog.relative_edge_cc": .number(0, isInteger: true),
+        // The pads' own MIDI channel (#224).
+        "pads.channel": .number(0, isInteger: true),
     ]
 
     /// Ranges and choices, by key path. A list element's path ends in `[]`.
