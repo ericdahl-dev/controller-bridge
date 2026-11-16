@@ -1,0 +1,143 @@
+[
+  {
+    "gesture" : "idle",
+    "id" : "idle",
+    "text" : "Don't touch anything for 5 seconds."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.play",
+    "text" : "Press and release Play on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.cue",
+    "text" : "Press and release Cue on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.sync",
+    "text" : "Press and release Sync on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue1",
+    "text" : "In Hot Cue mode, press and release pad 1 on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue2",
+    "text" : "In Hot Cue mode, press and release pad 2 on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue3",
+    "text" : "In Hot Cue mode, press and release pad 3 on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue4",
+    "text" : "In Hot Cue mode, press and release pad 4 on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue5",
+    "text" : "In Hot Cue mode, press and release pad 5 on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue6",
+    "text" : "In Hot Cue mode, press and release pad 6 on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue7",
+    "text" : "In Hot Cue mode, press and release pad 7 on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue8",
+    "text" : "In Hot Cue mode, press and release pad 8 on deck 1."
+  },
+  {
+    "gesture" : "move",
+    "id" : "deck1.pitch",
+    "text" : "Move the pitch fader slowly all the way from the top to the bottom."
+  },
+  {
+    "gesture" : "turn",
+    "id" : "deck1.jog.touch",
+    "text" : "Touch the top of the jog wheel, turn it right a quarter turn, then left, then let go."
+  },
+  {
+    "gesture" : "turn",
+    "id" : "deck1.jog.edge",
+    "text" : "Without touching the top, spin the jog wheel's edge right, then left."
+  },
+  {
+    "gesture" : "move",
+    "id" : "deck1.needle",
+    "text" : "Touch the needle strip at the left, slide slowly to the right, then let go."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.loop_in",
+    "text" : "Press and release Loop In on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.loop_out",
+    "text" : "Press and release Loop Out on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.auto_loop",
+    "text" : "Press and release Auto Loop on deck 1."
+  },
+  {
+    "gesture" : "turn",
+    "id" : "deck1.browse.turn",
+    "text" : "Turn the browse knob right three clicks, then left three clicks."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.browse.press",
+    "text" : "Press and release the browse knob."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.shift",
+    "text" : "Press and release Shift on deck 1."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.play.shift",
+    "shifted_of" : "deck1.play",
+    "text" : "Hold Shift, press and release Play, then let go of Shift."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.cue.shift",
+    "shifted_of" : "deck1.cue",
+    "text" : "Hold Shift, press and release Cue, then let go of Shift."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck1.hotcue1.shift",
+    "shifted_of" : "deck1.hotcue1",
+    "text" : "Hold Shift, press and release pad 1, then let go of Shift."
+  },
+  {
+    "gesture" : "press",
+    "id" : "layer2.select",
+    "layer" : 2,
+    "text" : "Switch the left side to deck 2 (its deck or layer button)."
+  },
+  {
+    "gesture" : "press",
+    "id" : "deck2.play",
+    "layer" : 2,
+    "layer_of" : "deck1.play",
+    "text" : "Press and release Play on deck 2."
+  }
+]
