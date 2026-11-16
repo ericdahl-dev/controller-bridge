@@ -151,7 +151,7 @@ extension Mapping {
         case let (.object(pairs), _):
             for (key, child) in pairs {
                 let childPath = path.isEmpty ? key : "\(path).\(key)"
-                guard let expected = schema[key] else {
+                guard let expected = schema[key] ?? optionalKeys[childPath] else {
                     out.append("\(childPath): unknown key")
                     continue
                 }
@@ -186,6 +186,12 @@ extension Mapping {
         }
         return "expected \(wanted), got \(describe(value))"
     }
+
+    /// Keys a profile may add that the LC6000's default leaves out (#204), with an example of each one's kind.
+    private static let optionalKeys: [String: OrderedJSON] = [
+        "jog.relative_cc": .number(0, isInteger: true),
+        "jog.relative_edge_cc": .number(0, isInteger: true),
+    ]
 
     /// Ranges and choices, by key path. A list element's path ends in `[]`.
     private static let ranges: [String: ClosedRange<Double>] = {

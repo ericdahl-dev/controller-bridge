@@ -52,6 +52,8 @@ final class Bridge {
             "pitch_lsb": { $0.pitchLSB },
             "jog_msb": { $0.jogMSB },
             "jog_lsb": { $0.jogLSB },
+            "jog_relative": { $0.jogRelative },
+            "jog_relative_edge": { $0.jogRelativeEdge },
             "needle_msb": { $0.needleMSB },
             "needle_lsb": { $0.needleLSB },
         ]
