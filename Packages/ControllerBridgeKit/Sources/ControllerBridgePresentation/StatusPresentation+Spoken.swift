@@ -23,3 +23,11 @@ extension StatusPresentation {
         return sentences.joined(separator: ". ") + "."
     }
 }
+
+extension StatusPresentation {
+    /// The menu-bar icon's VoiceOver label: each light's label and word in caps, as since #67. Kept word for word
+    /// when the panel's words went natural case (#171).
+    public var iconAccessibilityLabel: String {
+        lights.map { "\($0.label) \($0.word)".uppercased() }.joined(separator: ", ")
+    }
+}

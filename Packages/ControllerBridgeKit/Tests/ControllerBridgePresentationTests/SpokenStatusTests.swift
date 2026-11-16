@@ -24,3 +24,14 @@ struct SpokenStatusTests {
         #expect(two.spokenLine == "Controller: connected. Feedback: waiting. Decks 1 and 2.")
     }
 }
+
+/// The menu-bar icon's VoiceOver label (#67), kept word for word through #171's change of case.
+@Suite("Menu-bar icon label")
+struct MenuBarIconLabelTests {
+    @Test("The icon reads each light's label and word, in caps, as it always has")
+    func iconLabel() {
+        let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .portInUse(port: 9096),
+                                                    deck: 1, demo: true))
+        #expect(status.iconAccessibilityLabel == "DEMO CONTROLLER, CONTROLLER CONNECTED, FEEDBACK PORT 9096 IN USE")
+    }
+}
