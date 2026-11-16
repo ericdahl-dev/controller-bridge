@@ -209,4 +209,67 @@ struct MixerTests {
         rig.coordinator.devicesChanged()
         #expect(rig.leds[86] == 127)
     }
+
+    // MARK: VU meters (#207): steps [0, 16, 32, 48, 64, 80, 96, 112], clip 127, hold 300 ms, at most 30 Hz
+
+    /// The meter CC values sent to the controller, in order.
+    static func meterSends(_ rig: Rig) -> [UInt8] {
+        (rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).compactMap {
+            if case .controlChange(0, 2, let value) = $0 { value } else { nil }
+        }
+    }
+
+    static func meter(_ rig: Rig, _ value: Float, at time: Double) {
+        rig.clock.now = time
+        Self.report(rig, "Meter", value)
+    }
+
+    static func tick(_ rig: Rig, at time: Double) {
+        rig.clock.now = time
+        rig.coordinator.tick()
+    }
+
+    @Test("Meter lights the steps for its level on the next tick, and above 1.0 the clip value")
+    func levels() throws {
+        let rig = try Self.started()
+        Self.meter(rig, 0.5, at: 10.0); Self.tick(rig, at: 10.01)
+        Self.meter(rig, 1.0, at: 10.10); Self.tick(rig, at: 10.11)
+        Self.meter(rig, 1.2, at: 10.20); Self.tick(rig, at: 10.21)
+        #expect(Self.meterSends(rig) == [48, 112, 127])
+    }
+
+    @Test("A peak holds for hold_ms, then the meter falls to the level now")
+    func peakHold() throws {
+        let rig = try Self.started()
+        Self.meter(rig, 0.9, at: 10.00); Self.tick(rig, at: 10.01)
+        Self.meter(rig, 0.1, at: 10.05); Self.tick(rig, at: 10.10)
+        Self.tick(rig, at: 10.25)
+        Self.tick(rig, at: 10.40)
+        #expect(Self.meterSends(rig) == [96, 0])
+    }
+
+    @Test("Syndicate's ~200 Hz meter reaches the controller at 30 Hz at most")
+    func rateLimited() throws {
+        let rig = try Self.started()
+        for i in 0..<200 {
+            let t = 10.0 + Double(i) * 0.005
+            Self.meter(rig, Float(i % 2 == 0 ? 0.2 : 0.7), at: t)
+            if i % 2 == 1 { Self.tick(rig, at: t) }
+        }
+        let sends = Self.meterSends(rig).count
+        #expect(sends >= 1)
+        #expect(sends <= 31)
+    }
+
+    @Test("Another channel's meter, and a profile with no meter, light nothing")
+    func noMeter() throws {
+        let rig = try Self.started()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH2/Meter", [.float(0.8)]))
+        Self.tick(rig, at: 10)
+        #expect(Self.meterSends(rig) == [])
+        let lc6000 = try Rig()
+        lc6000.coordinator.start()
+        Self.meter(lc6000, 0.8, at: 10); Self.tick(lc6000, at: 10.1)
+        #expect(Self.meterSends(lc6000) == [])
+    }
 }

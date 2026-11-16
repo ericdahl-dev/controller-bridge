@@ -424,6 +424,14 @@ final class Bridge {
         }
     }
 
+    /// An LED driven by a CC, such as a VU meter (#207): straight out, as the caller limits how often. False when held,
+    /// off or not shown, so nothing went out.
+    func ledCC(_ controller: UInt8, _ value: UInt8) -> Bool {
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, let output else { return false }
+        do { try output.send(.controlChange(channel: channel, controller: controller, value: value)) } catch { outputFailed = true }
+        return true
+    }
+
     /// A pad's LED (#224): on the pads' own channel when the profile gives one, else like any other LED.
     func padLED(_ note: Int, _ velocity: UInt8) {
         guard mapping.pads.channel != nil else { return led(note, velocity) }

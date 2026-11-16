@@ -14,6 +14,12 @@ struct MixerState {
     /// Controls waiting to meet Syndicate's value (pickup), and where each last was.
     var armed: Set<MixerValue> = []
     var position: [MixerValue: Double] = [:]
+    /// The meter: Syndicate's latest level, the peak being held and since when, and what the LEDs show.
+    var meterLevel: Double?
+    var meterPeak = 0.0
+    var meterPeakAt = -Double.infinity
+    var meterSentAt: Double?
+    var meterShown: UInt8?
 }
 
 extension Bridge {
@@ -61,6 +67,13 @@ extension Bridge {
     func mixerFeedback(_ kind: MixerValue, _ arguments: [OSCArgument]) {
         guard let value = arguments.first?.number else { return }
         if mixerControls.contains(where: { $0.value == kind }) { mixerReported(kind, value) }
+        if kind == .meter, let meter = mapping.mixer?.meter {
+            mixerState.meterLevel = value
+            if value >= mixerState.meterPeak || clock.now - mixerState.meterPeakAt > Double(meter.holdMs) / 1000 {
+                mixerState.meterPeak = value
+                mixerState.meterPeakAt = clock.now
+            }
+        }
         if mixerButtons.contains(where: { $0.value == kind }) {
             mixerState.reported[kind] = value
             mixerLEDs()
@@ -121,6 +134,32 @@ extension Bridge {
         guard near || crossed else { return false }
         mixerState.armed.remove(kind)
         return true
+    }
+}
+
+extension Bridge {
+    /// Puts the meter on its LEDs, at most `rate_hz` times a second: the peak while it holds, else the level now.
+    /// Syndicate sends Meter around 200 times a second, far more than the LEDs need or the port should carry.
+    func meterTick() {
+        guard let meter = mapping.mixer?.meter, let level = mixerState.meterLevel else { return }
+        if let sent = mixerState.meterSentAt, clock.now - sent < 1 / Double(max(1, meter.rateHz)) - 1e-9 { return }
+        if clock.now - mixerState.meterPeakAt > Double(meter.holdMs) / 1000 {
+            mixerState.meterPeak = level
+            mixerState.meterPeakAt = clock.now
+        }
+        let value = meterValue(max(level, mixerState.meterPeak), meter)
+        guard value != mixerState.meterShown else { return }
+        guard ledCC(UInt8(meter.cc), value) else { return }
+        mixerState.meterShown = value
+        mixerState.meterSentAt = clock.now
+    }
+
+    /// The meter CC value for a level: the step for the share of segments lit, or the clip value above 1.0.
+    private func meterValue(_ level: Double, _ meter: Mapping.Mixer.Meter) -> UInt8 {
+        guard let top = meter.steps.last else { return 0 }
+        if level > 1 { return UInt8(clamping: meter.clip ?? top) }
+        let index = min(meter.steps.count - 1, max(0, Int((level * Double(meter.steps.count - 1)).rounded(.down))))
+        return UInt8(clamping: meter.steps[index])
     }
 }
 
