@@ -68,20 +68,4 @@ public enum Palette {
         accent: RGB(hex: 0x00FF48),       // --signal
         onAccent: RGB(hex: 0x111111)      // --on-signal
     )
-
-    // The dark theme's colors by name, for code that doesn't follow the appearance yet.
-    public static let background = dark.background
-    public static let panel = dark.panel
-    public static let button = dark.button
-    public static let buttonRaised = dark.buttonRaised
-    public static let hairline = dark.hairline
-    public static let buttonEdge = dark.buttonEdge
-    public static let selectedBar = dark.selectedBar
-    public static let text = dark.text
-    public static let caption = dark.caption
-    public static let live = dark.live
-    public static let attention = dark.attention
-    public static let error = dark.error
-    public static let key = dark.key
-    public static let accent = dark.accent
 }

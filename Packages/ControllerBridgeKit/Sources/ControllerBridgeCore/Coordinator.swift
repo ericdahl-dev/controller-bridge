@@ -34,8 +34,7 @@ public final class Coordinator {
 
     /// Logs once per deck when Syndicate's color for it is black, which DeckColors replaces with the default.
     private func noteBlackSlot(_ numbers: [Int]) -> [Int] {
-        if numbers.count >= 4, numbers[0] % 2 == 1, (1...7).contains(numbers[0]), DeckColors.isBlack(numbers[1...3]) {
-            let deck = (numbers[0] + 1) / 2
+        if numbers.count >= 4, let deck = DeckColors.deck(forSlot: numbers[0]), DeckColors.isBlack(numbers[1...3]) {
             if loggedBlackDecks.insert(deck).inserted {
                 log.log("Syndicate's deck \(deck) color is black, which the LC6000's ring can't show; using the default")
             }

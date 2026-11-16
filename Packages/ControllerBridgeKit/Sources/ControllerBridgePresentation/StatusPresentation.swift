@@ -366,9 +366,6 @@ public struct StatusPresentation: Equatable, Sendable {
 }
 
 extension StatusLight.Tone {
-    /// The tone in the dark theme.
-    public var color: RGB { color(in: Palette.dark) }
-
     /// The tone in a theme (#127): each passes AA on that theme's surfaces.
     public func color(in palette: ThemePalette) -> RGB {
         switch self {
