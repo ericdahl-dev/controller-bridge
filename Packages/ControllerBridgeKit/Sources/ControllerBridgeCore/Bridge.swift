@@ -165,7 +165,7 @@ final class Bridge {
             if let edge { ccNames[edge] = "jog_relative_edge" }
         }
         ccNames[mapping.pitch.msbCC] = "pitch_msb"
-        ccNames[mapping.pitch.lsbCC] = "pitch_lsb"
+        if let lsb = mapping.pitch.lsbCC { ccNames[lsb] = "pitch_lsb" }
         ccNames[mapping.needle.msbCC] = "needle_msb"
         ccNames[mapping.needle.lsbCC] = "needle_lsb"
         ccNames[mapping.browse.selectTurnCC] = "select_turn"
