@@ -1,0 +1,160 @@
+// The Settings window (#19), in the Syndicate theme (#34). Not unit-tested: the settings model is tested in
+// ControllerBridgeKit; this view only edits a draft and hands it to BridgeModel.apply.
+import AppKit
+import ControllerBridgeCore
+import SwiftUI
+
+struct SettingsView: View {
+    let model: BridgeModel
+
+    @State private var draft: BridgeSettings?
+    @State private var sources: [MIDIEndpoint] = []
+    @State private var destinations: [MIDIEndpoint] = []
+    @State private var problems: [String] = []
+    @State private var saved = false
+    @State private var startAtLogin = LoginItem.isEnabled
+    @State private var loginProblem: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let binding = Binding($draft) {
+                form(binding)
+            } else {
+                Text("The bridge didn't start, so there is nothing to set.")
+                    .font(Theme.ui(12)).foregroundStyle(Theme.caption)
+            }
+        }
+        .padding(18)
+        .frame(width: 380, alignment: .leading)
+        .background(Theme.background)
+        .foregroundStyle(Theme.text)
+        .preferredColorScheme(.dark)
+        .onAppear(perform: load)
+    }
+
+    @ViewBuilder
+    private func form(_ settings: Binding<BridgeSettings>) -> some View {
+        let controller = settings.controllers[0]
+
+        section("Deck") {
+            Picker("Deck", selection: controller.deck) {
+                ForEach(1...4, id: \.self) { Text("\($0)").tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+
+        section("Controller") {
+            devicePicker("MIDI input", selection: controller.input, devices: sources)
+            devicePicker("MIDI output", selection: controller.output, devices: destinations)
+            Toggle("LEDs", isOn: settings.ledsEnabled).font(Theme.ui(12))
+        }
+
+        section("OSC") {
+            field("Host", text: settings.syndicateHost)
+            field("Port", value: settings.syndicatePort)
+        }
+
+        section("Feedback") {
+            field("Port", value: settings.feedbackPort)
+            Picker("Listen on", selection: settings.feedbackListen) {
+                Text("This Mac only").tag(FeedbackListen.thisMac)
+                Text("All networks").tag(FeedbackListen.allNetworks)
+            }
+            .font(Theme.ui(12))
+            if settings.wrappedValue.feedbackListen == .allNetworks {
+                note("For Syndicate on another Mac. macOS asks once for permission to use the local network; allow it, or no feedback arrives.")
+            }
+        }
+
+        section("Start") {
+            Toggle("Start at login", isOn: $startAtLogin)
+                .font(Theme.ui(12))
+                .onChange(of: startAtLogin) { _, enabled in setLogin(enabled) }
+            if let loginProblem { note(loginProblem, color: Theme.error) }
+        }
+
+        ForEach(problems, id: \.self) { note($0, color: Theme.error) }
+        if saved { note("Saved.") }
+
+        HStack {
+            Button("Revert") { load() }.buttonStyle(FlatButtonStyle())
+            Button("Apply") { apply(settings.wrappedValue) }.buttonStyle(FlatButtonStyle())
+        }
+    }
+
+    // MARK: Pieces
+
+    private func section(_ caption: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(caption.uppercased()).font(Theme.captionFont).foregroundStyle(Theme.caption)
+            content()
+        }
+    }
+
+    private func devicePicker(_ label: String, selection: Binding<MIDIEndpoint?>, devices: [MIDIEndpoint]) -> some View {
+        Picker(label, selection: selection) {
+            Text("Automatic").tag(MIDIEndpoint?.none)
+            ForEach(devices) { Text($0.name).tag(MIDIEndpoint?.some($0)) }
+            // A saved device that isn't plugged in stays selectable, so the choice isn't lost.
+            if let chosen = selection.wrappedValue, !devices.contains(chosen) {
+                Text("\(chosen.name) (not connected)").tag(MIDIEndpoint?.some(chosen))
+            }
+        }
+        .font(Theme.ui(12))
+    }
+
+    private func field(_ label: String, text: Binding<String>) -> some View {
+        LabeledContent(label) {
+            TextField(label, text: text).labelsHidden().font(Theme.data(13)).frame(width: 160)
+        }
+        .font(Theme.ui(12))
+    }
+
+    private func field(_ label: String, value: Binding<Int>) -> some View {
+        LabeledContent(label) {
+            TextField(label, value: value, format: .number.grouping(.never)).labelsHidden().font(Theme.data(13)).frame(width: 80)
+        }
+        .font(Theme.ui(12))
+    }
+
+    private func note(_ text: String, color: Color = Theme.caption) -> some View {
+        Text(text).font(Theme.ui(11)).foregroundStyle(color).fixedSize(horizontal: false, vertical: true)
+    }
+
+    // MARK: Actions
+
+    private func load() {
+        draft = model.settings
+        sources = model.sources
+        destinations = model.destinations
+        problems = []
+        saved = false
+        startAtLogin = LoginItem.isEnabled
+        // A menu-bar app has no Dock icon, so its windows open behind the front app unless it activates.
+        NSApp.activate()
+        DispatchQueue.main.async { NSApp.windows.first { $0.isVisible && $0.canBecomeKey }?.makeKeyAndOrderFront(nil) }
+    }
+
+    private func apply(_ settings: BridgeSettings) {
+        do {
+            try model.apply(settings)
+            problems = []
+            saved = true
+        } catch {
+            if case .invalid(let list) = error { problems = list }
+            saved = false
+        }
+    }
+
+    private func setLogin(_ enabled: Bool) {
+        guard enabled != LoginItem.isEnabled else { return }
+        do {
+            try LoginItem.set(enabled)
+            loginProblem = nil
+        } catch {
+            loginProblem = "Couldn't change start at login: \(error.localizedDescription)"
+            startAtLogin = LoginItem.isEnabled
+        }
+    }
+}
