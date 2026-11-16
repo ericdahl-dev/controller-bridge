@@ -59,4 +59,60 @@ struct ProfileMatchingTests {
         rig.coordinator.devicesChanged()
         #expect(rig.log.lines.filter { $0.hasPrefix("No controller profile matches") }.count == 1)
     }
+
+    @Test("Hints match without regard to case")
+    func hintIgnoresCase() throws {
+        let lower = MIDIEndpoint(id: 1003, name: "denon lc6000 prime")
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [lower])
+        rig.coordinator.start()
+        #expect(rig.midi.connected == [lower.id])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
+    }
+
+    @Test("A second controller is just a profile file: a TP-1 device gets Test Pad, and its own Play note sends PlayPause")
+    func secondProfileBridges() throws {
+        let testPad = try ControllerProfile(decoding: ProfileTests.testPadFile())
+        let pad = MIDIEndpoint(id: 1004, name: "TP-1 Pad")
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled() + [testPad], sources: [Self.iac, pad])
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+
+        #expect(rig.midi.connected == [pad.id])
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["Test Pad"])
+        // Test Pad's Play is note 60 on MIDI channel 2 (1 when 0-based); the LC6000's note 1 does nothing here.
+        rig.coordinator.midi(.noteOn(channel: 1, note: 1, velocity: 127), source: pad.id)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 60, velocity: 127), source: pad.id)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
+    }
+
+    @Test("If two profiles match one device, the one with the longest matching hint wins, and that is logged")
+    func longestHintWins() throws {
+        var mk2 = try ControllerProfile(decoding: ProfileTests.testPadFile())
+        mk2.name = "LC6000 MK2 (test)"
+        mk2.deviceHints = ["LC6000 PRIME MK2"]
+        let device = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME MK2")
+        // The shorter, bundled "LC6000" hint is listed first, so order alone wouldn't pick MK2.
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled() + [mk2], sources: [device])
+        rig.coordinator.start()
+
+        #expect(rig.coordinator.status.controllers.map(\.profile) == ["LC6000 MK2 (test)"])
+        #expect(rig.log.lines.contains(
+            "DENON LC6000 PRIME MK2 matches Denon LC6000 PRIME and LC6000 MK2 (test); using LC6000 MK2 (test), whose hint is longest."
+        ))
+    }
+
+    @Test("If two profiles' matching hints are equally long, the first listed profile wins")
+    func tieGoesToFirst() throws {
+        var a = try ControllerProfile(decoding: ProfileTests.testPadFile())
+        a.name = "Pad A"
+        a.deviceHints = ["PAD-X"]
+        var b = a
+        b.name = "Pad B"
+        let device = MIDIEndpoint(id: 1006, name: "PAD-X USB")
+        for (profiles, expected) in [([a, b], "Pad A"), ([b, a], "Pad B")] {
+            let rig = ProfileRig(profiles: profiles, sources: [device])
+            rig.coordinator.start()
+            #expect(rig.coordinator.status.controllers.map(\.profile) == [expected])
+        }
+    }
 }

@@ -19,13 +19,21 @@ public struct ControllerProfile: Equatable, Sendable {
     }
 
     /// The profile for a device name: the one whose matching hint is longest, so a more specific profile wins.
+    /// On a tie, the first listed profile wins.
     static func matching(_ deviceName: String, in profiles: [ControllerProfile]) -> ControllerProfile? {
-        let name = deviceName.lowercased()
-        let scored = profiles.compactMap { profile -> (ControllerProfile, Int)? in
-            let lengths = profile.deviceHints.filter { name.contains($0.lowercased()) }.map(\.count)
-            return lengths.max().map { (profile, $0) }
+        var best: (profile: ControllerProfile, hintLength: Int)?
+        for candidate in candidates(deviceName, in: profiles) where candidate.hintLength > (best?.hintLength ?? -1) {
+            best = candidate
         }
-        return scored.max { $0.1 < $1.1 }?.0
+        return best?.profile
+    }
+
+    /// Every profile with a hint in the device name (substring, ignoring case), with its longest matching hint's length.
+    static func candidates(_ deviceName: String, in profiles: [ControllerProfile]) -> [(profile: ControllerProfile, hintLength: Int)] {
+        let name = deviceName.lowercased()
+        return profiles.compactMap { profile in
+            profile.deviceHints.filter { name.contains($0.lowercased()) }.map(\.count).max().map { (profile, $0) }
+        }
     }
 
     /// The profiles that ship with the app, in Resources/Profiles.

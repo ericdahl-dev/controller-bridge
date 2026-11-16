@@ -12,6 +12,8 @@ public final class Coordinator {
     private let profiles: [ControllerProfile]
     /// Unmatched devices already logged, so a device-list change doesn't log them again.
     private var loggedUnmatched: Set<MIDIEndpoint.ID> = []
+    /// Devices matching more than one profile, already logged.
+    private var loggedAmbiguous: Set<MIDIEndpoint.ID> = []
     private var bridges: [Bridge] { controllers.map(\.bridge) }
 
     /// What the menu shows. The app copies it after each call.
@@ -127,6 +129,10 @@ public final class Coordinator {
     private func refreshDevices() {
         status.devices = midiSystem.sources.map { source in
             if let profile = ControllerProfile.matching(source.name, in: profiles) {
+                let names = ControllerProfile.candidates(source.name, in: profiles).map(\.profile.name)
+                if names.count > 1, loggedAmbiguous.insert(source.id).inserted {
+                    log.log("\(source.name) matches \(names.joined(separator: " and ")); using \(profile.name), whose hint is longest.")
+                }
                 return DeviceStatus(name: source.name, profile: profile.name, note: nil)
             }
             let note = "No controller profile matches \(source.name), so it isn't bridged."
