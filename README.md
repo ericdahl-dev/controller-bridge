@@ -96,7 +96,7 @@ To fix a PROVISIONAL value for your unit without a new build, use the **Mapping*
 2. Edit the values you need. The file only needs the keys you change.
 3. Choose **Import…** to load it.
 
-The import is merged over the bundled LC6000 profile and checked first. Unknown keys, wrong types, out-of-range numbers and duplicate assignments are all listed at once, and a rejected file leaves the working mapping as it was. An accepted import releases anything held, then repaints the LEDs. The app keeps the imported file and loads it at every launch. The Mapping section shows which mapping is in use. **Reset to default** goes back to the bundled profile.
+The import is merged over the bundled LC6000 profile and checked first. Deck, Channel and the OSC addresses come from Settings, so a file's values for them aren't applied (and Export leaves them out). Unknown keys, wrong types, out-of-range numbers and duplicate assignments are all listed at once, and a rejected file leaves the working mapping as it was. An accepted import releases anything held, then repaints the LEDs. The app keeps the imported file and loads it at every launch. The Mapping section shows which mapping is in use. **Reset to default** goes back to the bundled profile.
 
 ## Development
 

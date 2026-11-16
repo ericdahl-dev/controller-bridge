@@ -257,8 +257,14 @@ final class BridgeModel {
         profiles = MappingStore.replacing(imported, in: bundledProfiles)
         status.mappingInUse = "Imported: \(imported.name)"
         producer?.setProfiles(profiles)
+        lastImportNote = ControllerProfile.importNote(
+            file: url.lastPathComponent, settingsOwned: ControllerProfile.settingsOwnedKeys(in: data)
+        )
         return []
     }
+
+    /// What Settings says after the last good import: that Settings owns Deck, Channel and OSC (#93).
+    private(set) var lastImportNote: String?
 
     /// Writes the running profile, whole, so it can be edited and imported again.
     func exportMapping(to url: URL) throws {
