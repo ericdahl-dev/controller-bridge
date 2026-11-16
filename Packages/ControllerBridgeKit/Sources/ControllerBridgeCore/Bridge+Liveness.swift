@@ -16,6 +16,7 @@ extension Bridge {
         cues = [Int](repeating: 0, count: 8)
         progress = nil
         duration = nil
+        bpm = nil
         lastPulseTime = nil
         lastClockTime = nil
         feedbackStale = true

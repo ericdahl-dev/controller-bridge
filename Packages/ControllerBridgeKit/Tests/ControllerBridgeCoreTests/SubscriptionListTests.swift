@@ -4,12 +4,13 @@ import Testing
 /// The one list of Syndicate OSC FEEDBACK subscriptions (#211): the setup guide shows it and the check judges it.
 @Suite("Subscription list")
 struct SubscriptionListTests {
-    @Test("All eight, in the setup guide's order, by the names Syndicate's OSC FEEDBACK screen uses")
+    @Test("The eight, then BarRamp (#165), in the setup guide's order, by the names Syndicate's OSC FEEDBACK screen uses")
     func names() {
         #expect(Subscription.allCases.map(\.syndicateName) == [
-            "Playing", "PlayPending", "Loaded and TrackInfo", "Position/Progress", "TempoSlider/TempoSliderEnabled", "Cues",
-            "BPM/Sync", "Loop",
+            "Playing", "PlayPending", "Loaded and TrackInfo", "Position/Progress", "TempoSlider and TempoSliderEnabled", "Cues",
+            "BPM and Sync", "Loop", "BarRamp",
         ])
+        #expect(Subscription.always == [.playing, .playPending, .loaded, .progress, .tempoSlider, .cues, .sync, .loop])
     }
 
     @Test("Each says what breaks without it, in plain words")
@@ -88,7 +89,7 @@ struct EverySubscriptionTests {
 struct RequiredSubscriptionsTests {
     @Test("The LC6000 needs all eight")
     func lc6000() throws {
-        #expect(Subscription.required(for: try Mapping.bundledDefault()) == Subscription.allCases)
+        #expect(Subscription.required(for: try Mapping.bundledDefault()) == Subscription.always)
     }
 
     @Test("Only the required ones are judged: a deck with only Loaded, when only Cues is required, misses only Cues")
@@ -101,6 +102,19 @@ struct RequiredSubscriptionsTests {
     func reported() throws {
         let rig = try Rig()
         rig.coordinator.start()
-        #expect(rig.coordinator.status.requiredSubscriptions == Subscription.allCases)
+        #expect(rig.coordinator.status.requiredSubscriptions == Subscription.always)
+    }
+}
+
+/// Syndicate's OSC Feedback screen has a checkbox per value (the user's screenshot, #261): TempoSlider and
+/// TempoSliderEnabled are two boxes, as are BPM and Sync. Each subscription names its boxes.
+@Suite("Subscription checkboxes")
+struct SubscriptionCheckboxTests {
+    @Test("TempoSlider and TempoSliderEnabled, BPM and Sync: two boxes each, named as Syndicate labels them")
+    func boxes() {
+        #expect(Subscription.tempoSlider.checkboxes == ["TempoSlider", "TempoSliderEnabled"])
+        #expect(Subscription.sync.checkboxes == ["BPM", "Sync"])
+        #expect(Subscription.cues.checkboxes == ["Cues"])
+        #expect(Subscription.tempoSlider.syndicateName == "TempoSlider and TempoSliderEnabled")
     }
 }

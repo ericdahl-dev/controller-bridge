@@ -6,8 +6,8 @@ import Testing
 @Suite("Demo capture")
 struct DemoCaptureTests {
     /// Walks the whole standard list on demo traffic, a step every 10 seconds.
-    static func walked() -> (flow: CaptureFlow, detectedEachStep: [Bool]) {
-        var flow = CaptureFlow(appVersion: "1.2.0")
+    static func walked(ledTest: Bool = false) -> (flow: CaptureFlow, detectedEachStep: [Bool]) {
+        var flow = CaptureFlow(appVersion: "1.2.0", ledTest: ledTest)
         flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: 0)
         var detectedEachStep: [Bool] = []
         var now = 0.0
@@ -69,5 +69,37 @@ struct DemoCaptureTests {
         #expect(flow.file?.layers.first?.withShift == true)
         #expect(flow.file?.layers.first?.indicator?.summary == "Note 51 on ch 2")
         #expect(flow.file?.layers.first?.channelOffset == 1)
+    }
+
+    @Test("Demo end to end with the LED test (#187): every probe is answered, sent as note or CC, and all off at the end")
+    func ledTest() throws {
+        var flow = Self.walked(ledTest: true).flow
+        flow.startLEDs(scope: .full, at: 1000)
+        var sent: [[UInt8]] = []
+        var now = 1000.0
+        while flow.phase == .leds {
+            sent += flow.dueSends(at: now)
+            guard flow.canAnswerLED else { now += 0.1; continue }
+            let choice: CaptureFlow.LEDChoice = switch flow.ledProbe?.question {
+            case .lit: .lit(true)
+            case .level: .level(.dim)
+            default: .color("red")
+            }
+            flow.answerLED(choice, at: now)
+            now += 0.1
+        }
+        while flow.hasPendingSends {
+            sent += flow.dueSends(at: now)
+            now += 0.1
+        }
+        let file = try #require(flow.file)
+        // Play, Cue, Sync, pads 2-8, Loop In, Loop Out, Auto Loop, browse press, Shift: 15 lit; Play's level; 11 pad 1 colors.
+        #expect(flow.ledAnswerCount == 27)
+        #expect(file.summary.contains("27 LED answers"))
+        #expect(sent.allSatisfy { [0x90, 0xB0].contains($0[0] & 0xF0) })
+        // Each control lit is turned off again by the end.
+        var lit: Set<[UInt8]> = []
+        for message in sent { if message[2] == 0 { lit.remove(Array(message[0...1])) } else { lit.insert(Array(message[0...1])) } }
+        #expect(lit.isEmpty)
     }
 }

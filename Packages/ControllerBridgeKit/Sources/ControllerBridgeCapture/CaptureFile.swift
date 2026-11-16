@@ -306,26 +306,35 @@ public struct ShiftLayer: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey { case of, channelOffset = "channel_offset", numberOffset = "number_offset" }
 }
 
+/// How bright an LED lit at a low value (#187).
+public enum LEDLevel: String, Codable, Sendable {
+    case dim, bright
+}
+
 /// The owner's answer to one LED probe message.
 public struct LEDAnswer: Codable, Equatable, Sendable {
     public var sent: [UInt8]
     public var lit: Bool
     /// The color the owner named, if it lit.
     public var color: String?
+    /// For a low value: whether it lit dim or bright (#187).
+    public var level: LEDLevel?
 
-    public init(sent: [UInt8], lit: Bool, color: String? = nil) {
+    public init(sent: [UInt8], lit: Bool, color: String? = nil, level: LEDLevel? = nil) {
         self.sent = sent
         self.lit = lit
         self.color = color
+        self.level = level
     }
 
-    enum CodingKeys: String, CodingKey { case sent, lit, color }
+    enum CodingKeys: String, CodingKey { case sent, lit, color, level }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sent = try Hex.bytes(c.decode(String.self, forKey: .sent))
         lit = try c.decode(Bool.self, forKey: .lit)
         color = try c.decodeIfPresent(String.self, forKey: .color)
+        level = try c.decodeIfPresent(LEDLevel.self, forKey: .level)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -333,6 +342,7 @@ public struct LEDAnswer: Codable, Equatable, Sendable {
         try c.encode(Hex.string(sent), forKey: .sent)
         try c.encode(lit, forKey: .lit)
         try c.encodeIfPresent(color, forKey: .color)
+        try c.encodeIfPresent(level, forKey: .level)
     }
 }
 

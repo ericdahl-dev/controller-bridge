@@ -97,6 +97,13 @@ public struct CaptureSession: Sendable {
         leds.append(answer)
     }
 
+    /// The owner's answer to an LED probe about a finished step's control (#187), kept with that step. Ignored for a
+    /// step that isn't in the capture.
+    public mutating func answerLED(_ answer: LEDAnswer, forStep id: String) {
+        guard let index = finished.lastIndex(where: { $0.prompt.id == id }) else { return }
+        finished[index].leds.append(answer)
+    }
+
     /// Keeps the current take and moves to the next prompt, which starts at `time` (host seconds) when given.
     public mutating func confirm(at time: Double? = nil) {
         let kept = take
