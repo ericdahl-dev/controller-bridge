@@ -8,13 +8,13 @@
 .nav__logo img, .footer__mark img { width: 28px; height: 28px; margin-right: var(--s-2); border-radius: 7px; }
 
 /* ---------------------------------------------------------------- the app, as the real screenshots show it
-   Each picture is one of img/*.webp (pr-assets ff60571), cropped to its window by CSS; the files stay whole.
+   Each picture is one of img/*.webp (pr-assets 6d5a5bb; 5-settings still ff60571), cropped to its window by CSS; the files stay whole.
    --sw/--sh the window's size and --sx/--sy its corner, in the 1440x900 screenshot's pixels. */
 .db-crop { position: relative; display: block; overflow: hidden; aspect-ratio: var(--sw) / var(--sh); border-radius: 10px;
   box-shadow: 0 0 0 1px rgb(255 255 255 / .1), 0 30px 70px -30px rgb(0 0 0 / .8); background: #171717; }
 .db-crop > img { position: absolute; max-width: none; height: auto; width: calc(1440 / var(--sw) * 100%); left: calc(-100% * var(--sx) / var(--sw)); top: calc(-100% * var(--sy) / var(--sh)); }
 /* the hero: the panel rises out of the frame, its top rows above the fade */
-.db-heroshot .db-crop { width: 100%; }
+.db-heroshot .db-crop { width: min(100%, 520px); margin-inline: auto; }  /* the 6d5a5bb panel is tall: narrower, so its status rows clear the fade */
 /* a framed screenshot that fits its box whole (the setup guide, the feature panels) */
 .db-shot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--s-6); container-type: size; }
 .db-shot .db-crop { width: min(100cqw, 100cqh * var(--sw) / var(--sh)); }
