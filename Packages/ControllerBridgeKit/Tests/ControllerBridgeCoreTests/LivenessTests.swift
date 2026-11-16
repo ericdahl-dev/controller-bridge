@@ -164,4 +164,49 @@ struct LivenessTests {
         #expect(rig.coordinator.status.feedback == .live)
         #expect(rig.log.lines.contains("Syndicate feedback is back"))
     }
+
+    @Test("At launch, start sends one Resend; the first feedback is its answer and doesn't count as coming back")
+    func launchFirstFeedback() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        #expect(rig.osc.sent == [Self.resend])
+        #expect(rig.coordinator.status.feedback == .waiting)
+
+        rig.clock.now = 0.3
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(0), .int(0)]))
+        #expect(rig.osc.sent == [Self.resend])
+        #expect(rig.coordinator.status.feedback == .live)
+        #expect(!rig.log.lines.contains("Syndicate feedback is back"))
+    }
+
+    @Test("With no Syndicate at launch, the bridge waits and asks every 10 s; when it finally answers, that's no comeback")
+    func launchWithoutSyndicate() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        for time in [2.5, 9.9] { Self.tick(rig, at: time) }
+        #expect(rig.coordinator.status.feedback == .waiting)
+        #expect(rig.osc.sent == [Self.resend])
+        Self.tick(rig, at: 10.0)
+        Self.tick(rig, at: 20.0)
+        #expect(rig.osc.sent == [Self.resend, Self.resend, Self.resend])
+        #expect(rig.coordinator.status.lastDropout == nil)
+
+        rig.clock.now = 20.5
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(0), .int(0)]))
+        #expect(rig.coordinator.status.feedback == .live)
+        #expect(rig.osc.sent.count == 3)
+        #expect(!rig.log.lines.contains("Syndicate feedback is back"))
+    }
+
+    @Test("A replug while a probe is open sends no second Resend: one at a time")
+    func replugDuringProbe() throws {
+        let rig = try Self.liveRig()
+        Self.tick(rig, at: 10.5)                 // probe, open until 12.5
+        rig.midi.sources = []
+        rig.coordinator.devicesChanged()
+        rig.midi.sources = [Rig.lc6000]
+        rig.clock.now = 11.0
+        rig.coordinator.devicesChanged()         // replug: resync, but the probe is still waiting for its answer
+        #expect(rig.osc.sent.filter { $0 == Self.resend } == [Self.resend])
+    }
 }
