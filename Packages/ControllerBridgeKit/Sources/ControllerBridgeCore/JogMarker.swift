@@ -1,11 +1,14 @@
 // The jog display's marker (#165, #215): one hand on the platter display, moved by pitch bend on the WD port.
-// It shows Syndicate's master clock, one turn per bar of four beats, from Header/Clock and Header/BPM. While the
-// platter moves it follows the platter instead, and the next beat takes it back.
+// It shows the deck's own phase in the bar, one turn per bar of four beats, from the deck's BarRamp and BPM (the
+// user's pick: the needle is the deck, the lit ring segment is the master). The master-clock mode stays for #215.
+// While the platter moves it follows the platter instead, and the next ramp takes it back.
 
 public struct JogMarker: Equatable, Sendable {
     private enum Mode: Equatable, Sendable {
         /// The clock hand: `base` turns at `since`, running a quarter turn per beat at `bpm`, but never past the beat.
         case clock(base: Double, since: Double, bpm: Double)
+        /// The deck's phase: `phase` turns at `since`, running on at `bpm`, never more than a quarter turn past it.
+        case ramp(phase: Double, since: Double, bpm: Double)
         /// Where the platter left it.
         case held(Double)
     }
@@ -19,6 +22,11 @@ public struct JogMarker: Equatable, Sendable {
         mode = .clock(base: Double(max(1, min(4, beat)) - 1) / 4, since: time, bpm: bpm)
     }
 
+    /// The deck's BarRamp said it's `phase` (0..1) of the way through its bar, at `bpm`.
+    public mutating func ramp(_ phase: Double, bpm: Double, at time: Double) {
+        mode = .ramp(phase: phase, since: time, bpm: bpm)
+    }
+
     /// The platter moved by `counts` of `countsPerRev`: the hand moves with it, from where it is.
     public mutating func platter(counts: Int, countsPerRev: Int, at time: Double) {
         guard countsPerRev > 0 else { return }
@@ -29,7 +37,8 @@ public struct JogMarker: Equatable, Sendable {
     func angle(at time: Double) -> Double {
         switch mode {
         case .held(let angle): angle
-        case .clock(let base, let since, let bpm): base + min(max(0, time - since) * bpm / 240, 0.25)
+        case .clock(let base, let since, let bpm), .ramp(let base, let since, let bpm):
+            base + min(max(0, time - since) * bpm / 240, 0.25)
         }
     }
 
