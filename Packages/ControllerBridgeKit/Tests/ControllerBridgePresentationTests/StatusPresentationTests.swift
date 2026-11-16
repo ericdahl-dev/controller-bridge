@@ -239,4 +239,17 @@ struct StatusPresentationTests {
         #expect(!asks(.portInUse(port: 9096)))
         #expect(!asks(.starting))
     }
+
+    @Test("The deck picker: on normally; off with the reason in demo mode, so a click can't queue a jump for later (#90)")
+    func deckPicker() {
+        func picker(demo: Bool = false, stopped: Bool = false) -> DeckPickerState {
+            StatusPresentation(BridgeState(
+                controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1, stopped: stopped, demo: demo
+            )).deckPicker
+        }
+        #expect(picker() == .enabled)
+        #expect(picker(demo: true) == .disabled(reason: "Demo controller is on, so the deck stays put."))
+        // A stopped bridge has nothing to switch.
+        #expect(picker(stopped: true) == .hidden)
+    }
 }

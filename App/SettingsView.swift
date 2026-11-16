@@ -12,6 +12,8 @@ struct SettingsView: View {
 
     @Environment(\.openWindow) private var openWindow
     @State private var draft: BridgeSettings?
+    /// The settings the draft started from, to tell the DJ's edits from changes made elsewhere (#90).
+    @State private var base: BridgeSettings?
     @State private var sources: [MIDIEndpoint] = []
     @State private var destinations: [MIDIEndpoint] = []
     /// Problems from the last Apply, shown under their fields; the rest (such as the bridge not running) below.
@@ -40,6 +42,12 @@ struct SettingsView: View {
         .background(FrontWindow())
         .onAppear(perform: load)
         .onChange(of: draft) { _, _ in saved = false }
+        // A deck picked in the panel while Settings is open: keep it, and keep the DJ's own edits (#90).
+        .onChange(of: model.settings) { _, new in
+            guard let new, let draft, let base, new != base else { return }
+            self.draft = BridgeSettings.rebased(draft: draft, base: base, onto: new)
+            self.base = new
+        }
     }
 
     // MARK: Form
@@ -139,10 +147,11 @@ struct SettingsView: View {
         )
         heading(settings.wrappedValue.controllers.count > 1 ? "Controller \(index + 1)" : "Controller")
         row("Deck") {
-            DeckPicker(deck: controller.wrappedValue.deck) { deck in
-                // The deck applies at once, as in the panel; the draft follows so nothing looks unsaved.
+            DeckPicker(deck: controller.wrappedValue.deck, state: model.status.presentation.deckPicker,
+                       problem: model.status.deckProblem) { deck in
+                // The deck applies at once, as in the panel. A saved change reaches the draft through the rebase on
+                // model.settings; a refused one leaves the draft alone and shows why (#90).
                 model.setDeck(deck, controller: index)
-                controller.wrappedValue.deck = deck
             }
             fieldError(.deck(controller: index))
         }
@@ -292,6 +301,7 @@ struct SettingsView: View {
 
     private func load() {
         draft = model.settings
+        base = model.settings
         sources = model.sources
         destinations = model.destinations
         fieldProblems = []
@@ -313,6 +323,7 @@ struct SettingsView: View {
         do {
             try model.apply(settings)
             draft = model.settings
+            base = model.settings
             fieldProblems = []
             otherProblems = []
             saved = true
