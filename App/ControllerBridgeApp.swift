@@ -23,7 +23,7 @@ struct ControllerBridgeApp: App {
     var body: some Scene {
         // Window style, not .menu, so it carries the dark panel.
         MenuBarExtra {
-            StatusPanel(status: model.status)
+            StatusPanel(status: model.status, setDemo: model.setDemo)
         } label: {
             MenuBarLabel(status: model.status)
         }
