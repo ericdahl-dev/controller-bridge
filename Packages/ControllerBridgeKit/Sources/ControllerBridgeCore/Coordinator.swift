@@ -619,7 +619,6 @@ public final class Coordinator {
         requestResend()
     }
 
-    /// Settings (#19): the LEDs switch, for every controller.
     /// Settings' deck colors (#123): the ring repaints, and the status carries them to the badges.
     public func setDeckColors(followSyndicate: Bool, custom: DeckColors) {
         followSyndicateDeckColors = followSyndicate
@@ -628,6 +627,7 @@ public final class Coordinator {
         disconnectFailedOutputs()
     }
 
+    /// Settings (#19): the LEDs switch, for every controller.
     public func setLEDs(enabled: Bool) {
         ledsEnabled = enabled
         for bridge in bridges { bridge.setLEDsEnabled(enabled) }
