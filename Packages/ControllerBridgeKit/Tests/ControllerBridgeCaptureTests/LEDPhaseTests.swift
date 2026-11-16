@@ -43,8 +43,11 @@ struct LEDPhaseTests {
         #expect(flow.ledProbe?.question == .level)
         #expect(Self.drain(&flow, from: 11) == [[0x90, 1, 0], [0x90, 1, 1]])
         flow.answerLED(.level(.dim), at: 12)
+        _ = Self.drain(&flow, from: 12)
         flow.answerLED(.color("red"), at: 13)
+        _ = Self.drain(&flow, from: 13)
         flow.answerLED(.sameAsLast, at: 14)
+        _ = Self.drain(&flow, from: 14)
         flow.answerLED(.color(nil), at: 15)
         #expect(flow.ledProbe?.message == [0x90, 32, 24])
 
@@ -73,6 +76,7 @@ struct LEDPhaseTests {
         flow.startLEDs(scope: .quick, at: 10)
         var answers = 0
         while flow.phase == .leds {
+            _ = Self.drain(&flow, from: 10 + Double(answers))
             flow.answerLED(flow.ledProbe?.question == .lit ? .lit(true) : .color(nil), at: 10 + Double(answers))
             answers += 1
         }
@@ -81,5 +85,58 @@ struct LEDPhaseTests {
         let sent = Self.drain(&flow, from: 30)
         #expect(sent.last?[2] == 0)
         #expect(flow.ledAnswerCount == 13)
+    }
+
+    @Test("An answer counts only once the probe has actually lit: before its message has gone out, it's ignored")
+    func answerAfterShown() {
+        var flow = Self.captured()
+        flow.startLEDs(scope: .full, at: 10)
+        #expect(!flow.canAnswerLED)
+        flow.answerLED(.lit(true), at: 10)
+        #expect(flow.ledProbeNumber == 1)
+        _ = flow.dueSends(at: 10)
+        #expect(flow.canAnswerLED)
+        flow.answerLED(.lit(true), at: 10.05)
+        #expect(flow.ledProbeNumber == 2)
+        #expect(!flow.canAnswerLED)  // Play's off, then its low level, still to go out
+    }
+
+    @Test("Same as last needs an earlier color answer; Other is a color too")
+    func sameAsLastAndOther() {
+        var flow = Self.captured()
+        flow.startLEDs(scope: .full, at: 10)
+        for _ in 0..<2 {
+            _ = Self.drain(&flow, from: 10)
+            flow.answerLED(.lit(true), at: 10)
+        }
+        _ = Self.drain(&flow, from: 11)
+        #expect(!flow.canSameAsLast)
+        flow.answerLED(.sameAsLast, at: 11)
+        #expect(flow.ledProbe?.message == [0x90, 32, 1])
+        #expect(CaptureFlow.ledColors.last == "other")
+        flow.answerLED(.color("other"), at: 11)
+        _ = Self.drain(&flow, from: 12)
+        #expect(flow.canSameAsLast)
+    }
+
+    @Test("The LED test runs once: afterwards it isn't offered again, so answers aren't doubled")
+    func once() {
+        var flow = Self.captured()
+        #expect(flow.canStartLEDs)
+        flow.startLEDs(scope: .quick, at: 10)
+        flow.skipLEDs(at: 11)
+        #expect(!flow.canStartLEDs)
+        flow.startLEDs(scope: .quick, at: 12)
+        #expect(flow.phase == .done)
+    }
+
+    @Test("Skip drops lights still queued instead of lighting them first, then turns off what did light")
+    func skipDropsQueued() {
+        var flow = Self.captured()
+        flow.startLEDs(scope: .full, at: 10)
+        _ = Self.drain(&flow, from: 10)
+        flow.answerLED(.lit(true), at: 11)  // queues Play off, then Play at 1
+        flow.skipLEDs(at: 11)
+        #expect(Self.drain(&flow, from: 11) == [[0x90, 1, 0]])
     }
 }

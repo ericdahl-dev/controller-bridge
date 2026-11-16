@@ -79,6 +79,7 @@ struct DemoCaptureTests {
         var now = 1000.0
         while flow.phase == .leds {
             sent += flow.dueSends(at: now)
+            guard flow.canAnswerLED else { now += 0.1; continue }
             let choice: CaptureFlow.LEDChoice = switch flow.ledProbe?.question {
             case .lit: .lit(true)
             case .level: .level(.dim)

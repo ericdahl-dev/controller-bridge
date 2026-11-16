@@ -50,7 +50,9 @@ public struct LEDProbe: Equatable, Sendable {
             guard prompt.gesture == .press, prompt.shiftedOf == nil, prompt.layer == nil,
                 scope == .full || quickSteps.contains(prompt.id) || prompt.id.hasPrefix("deck1.hotcue"),
                 let control = steps.last(where: { $0.prompt == prompt.id && $0.status == .confirmed })?.controls.first,
-                let number = control.number, control.kind == .note || control.kind == .cc
+                let number = control.number, control.kind == .note || control.kind == .cc,
+                // Only the main port is probed (#143); and a channel mode CC (120-127) is never sent.
+                control.port == 0, !(control.kind == .cc && number >= 120)
             else { return [] }
             let status = UInt8(control.kind == .note ? 0x90 : 0xB0) | UInt8((control.channel - 1) & 0x0F)
             func probe(_ question: Question, _ text: String, _ value: UInt8) -> LEDProbe {

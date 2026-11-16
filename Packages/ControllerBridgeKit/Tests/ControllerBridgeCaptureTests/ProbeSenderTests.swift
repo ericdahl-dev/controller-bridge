@@ -52,4 +52,26 @@ struct ProbeSenderTests {
         sender.enqueueAllOff()
         #expect(!sender.hasPending)
     }
+
+    @Test("Channel mode messages (CC 120-127, such as Local Control and All Notes Off) are refused")
+    func channelMode() {
+        var sender = ProbeSender()
+        #expect(accepts(&sender, [0xB0, 119, 127]))
+        #expect(!accepts(&sender, [0xB0, 120, 0]))
+        #expect(!accepts(&sender, [0xB0, 122, 0]))
+        #expect(!accepts(&sender, [0xB5, 127, 0]))
+    }
+
+    @Test("Dropping what's queued keeps what's lit known, so all-off still turns it off")
+    func dropPending() {
+        var sender = ProbeSender()
+        _ = sender.enqueue([0x90, 1, 127])
+        _ = due(&sender, 0)
+        _ = sender.enqueue([0x90, 1, 0])
+        _ = sender.enqueue([0x90, 2, 127])
+        sender.dropPending()  // note 2 never went out, and note 1's off didn't either
+        sender.enqueueAllOff()
+        #expect(due(&sender, 1) == [[0x90, 1, 0]])
+        #expect(!sender.hasPending)
+    }
 }

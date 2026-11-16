@@ -25,6 +25,8 @@ public struct CaptureFlow: Sendable {
     private var ledIndex = 0
     private var announcedProbe: Int?
     private var lastColor: String?
+    private var hasColorAnswer = false
+    private var ledsTested = false
     private var sender = ProbeSender()
     /// The controller went away mid-capture (#229): nothing moves on until it's back or the capture is ended.
     public private(set) var isDisconnected = false
@@ -226,7 +228,14 @@ public struct CaptureFlow: Sendable {
     }
 
     /// The colors the owner can name.
-    public static let ledColors = ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink", "white"]
+    public static let ledColors = ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink", "white", "other"]
+
+    /// Whether the LED test can start: from the done page, once (a second run would double the answers).
+    public var canStartLEDs: Bool { phase == .done && !ledsTested && file != nil }
+    /// Whether the current probe has lit: its message has gone out. Answers before that are ignored.
+    public var canAnswerLED: Bool { ledProbe != nil && !sender.hasPending }
+    /// "Same as last" needs an earlier color answer.
+    public var canSameAsLast: Bool { canAnswerLED && hasColorAnswer }
 
     public var ledProbe: LEDProbe? { phase == .leds && ledProbes.indices.contains(ledIndex) ? ledProbes[ledIndex] : nil }
     public var ledProbeNumber: Int { ledIndex + 1 }
@@ -236,7 +245,8 @@ public struct CaptureFlow: Sendable {
 
     /// Starts the LED test from the done page: lights the first probe.
     public mutating func startLEDs(scope: LEDProbe.Scope, at time: Double) {
-        guard phase == .done, let file else { return }
+        guard canStartLEDs, let file else { return }
+        ledsTested = true
         ledProbes = LEDProbe.plan(prompts: prompts, steps: file.steps, scope: scope)
         ledIndex = 0
         announcedProbe = nil
@@ -248,14 +258,17 @@ public struct CaptureFlow: Sendable {
 
     /// Records the answer with the probe's step, turns its control off, and lights the next; after the last, all off.
     public mutating func answerLED(_ choice: LEDChoice, at time: Double) {
-        guard let probe = ledProbe else { return }
+        guard let probe = ledProbe, canAnswerLED, choice != .sameAsLast || hasColorAnswer else { return }
         let answer: LEDAnswer = switch choice {
         case .lit(let lit): LEDAnswer(sent: probe.message, lit: lit)
         case .level(let level): LEDAnswer(sent: probe.message, lit: level != nil, level: level)
         case .color(let color): LEDAnswer(sent: probe.message, lit: color != nil, color: color)
         case .sameAsLast: LEDAnswer(sent: probe.message, lit: lastColor != nil, color: lastColor)
         }
-        if probe.question == .color { lastColor = answer.color }
+        if probe.question == .color {
+            lastColor = answer.color
+            hasColorAnswer = true
+        }
         session?.answerLED(answer, forStep: probe.step)
         sender.enqueue(probe.off)
         ledIndex += 1
@@ -269,6 +282,7 @@ public struct CaptureFlow: Sendable {
     /// Ends the LED test early: everything off, back to the done page with the answers so far.
     public mutating func skipLEDs(at time: Double) {
         guard phase == .leds else { return }
+        sender.dropPending()
         finishLEDs()
     }
 

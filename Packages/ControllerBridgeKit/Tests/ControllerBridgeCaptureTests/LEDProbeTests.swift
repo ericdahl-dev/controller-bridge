@@ -65,4 +65,17 @@ struct LEDProbeTests {
         #expect(!plan.contains { ["deck1.pitch", "deck1.play.shift", "deck1.cue", "idle"].contains($0.step) })
         #expect(plan.allSatisfy { [0x90, 0xB0].contains($0.message[0] & 0xF0) && $0.message.count == 3 })
     }
+
+    @Test("Never probed either: a channel mode CC (120-127), or a control captured on another port than the main one")
+    func unsafeControls() {
+        let steps = [
+            CaptureStep(prompt: "deck1.play", status: .confirmed, controls: [
+                ControlFacts(kind: .cc, channel: 1, number: 122, encoding: .absolute, first: 127, last: 0, min: 0, max: 127),
+            ]),
+            CaptureStep(prompt: "deck1.sync", status: .confirmed, controls: [
+                ControlFacts(kind: .note, port: 1, channel: 1, number: 20, release: .noteOff, first: 127, last: 127, min: 127, max: 127),
+            ]),
+        ]
+        #expect(LEDProbe.plan(prompts: Self.prompts, steps: steps, scope: .full).isEmpty)
+    }
 }
