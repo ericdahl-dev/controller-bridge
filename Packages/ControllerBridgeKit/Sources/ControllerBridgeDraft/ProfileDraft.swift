@@ -21,6 +21,9 @@ public struct ProfileDraft: Sendable {
         draft.buttons(capture)
         draft.noise(capture)
         draft.pads(capture)
+        draft.pitch(capture)
+        draft.needle(capture)
+        draft.browse(capture)
         return draft
     }
 
@@ -45,6 +48,11 @@ public struct ProfileDraft: Sendable {
 
     /// The control a step found, or a TODO for `key` saying why there's none.
     mutating func control(_ capture: CaptureFile, _ prompt: String, for key: String) -> ControlFacts? {
+        controls(capture, prompt, for: key)?.first
+    }
+
+    /// Every control a step found, in the order they came, or nil and a TODO for `key` saying why there's none.
+    mutating func controls(_ capture: CaptureFile, _ prompt: String, for key: String) -> [ControlFacts]? {
         guard let step = capture.steps.first(where: { $0.prompt == prompt }) else {
             todo(key, "The capture has no \"\(prompt)\" step. Run the capture again with the current prompt list.")
             return nil
@@ -53,11 +61,11 @@ public struct ProfileDraft: Sendable {
             todo(key, "The owner skipped \"\(prompt)\". Ask them to run that step again, or read it from the docs.")
             return nil
         }
-        guard let control = step.controls.first else {
+        guard !step.controls.isEmpty else {
             todo(key, "\"\(prompt)\" was confirmed but found no control (only noise came in). Run that step again.")
             return nil
         }
-        return control
+        return step.controls
     }
 
     /// The buttons a profile names, by the capture prompt that finds each.
@@ -109,6 +117,65 @@ public struct ProfileDraft: Sendable {
         }
         todo("mapping.pads.mode_notes", "Only if the pads send other notes in Roll, Loop and Slicer modes (#225): press pad 1–8 in each mode and list them. The capture only records Hot Cue mode.")
         todo("mapping.pads.mode_select", "Four mode buttons (\"buttons\") or one that cycles (\"cycle\", #198)? From the manual, or by pressing the mode buttons in MIDI Monitor.")
+    }
+
+    /// The pitch fader, moved top to bottom: a 14-bit pair or one 7-bit CC (#195), inverted when the top gave the
+    /// high value (the LC6000's top is 0).
+    private mutating func pitch(_ capture: CaptureFile) {
+        let key = "mapping.pitch"
+        guard let control = control(capture, "deck1.pitch", for: key) else { return }
+        guard control.kind == .cc, let msb = control.number else {
+            todo(key, "The pitch fader sends pitch bend; profiles take a CC (pitch bend was dropped from v1.2, #199).")
+            return
+        }
+        set("\(key).bits", .int(control.lsb == nil ? 7 : 14))
+        set("\(key).msb_cc", .int(msb))
+        if let lsb = control.lsb { set("\(key).lsb_cc", .int(lsb)) }
+        set("\(key).invert", .bool(control.first > control.last))
+    }
+
+    /// The needle strip: its 14-bit pair and the note held while it's touched.
+    private mutating func needle(_ capture: CaptureFile) {
+        let key = "mapping.needle"
+        guard let controls = controls(capture, "deck1.needle", for: key) else { return }
+        guard let strip = controls.first(where: { $0.kind == .cc }), let msb = strip.number, let lsb = strip.lsb else {
+            todo(key, "The needle strip didn't send a 14-bit CC pair. Check it in MIDI Monitor; profiles need msb_cc and lsb_cc.")
+            return
+        }
+        set("\(key).msb_cc", .int(msb))
+        set("\(key).lsb_cc", .int(lsb))
+        if let touch = controls.first(where: { $0.kind == .note })?.number {
+            set("\(key).touch_note", .int(touch))
+        } else {
+            todo("\(key).touch_note", "No note came while the strip was touched. If it has no touch sensor, needle.require_touch must be false.")
+        }
+    }
+
+    /// The browse knob's CC, and from its turn the relative encoder format (#193) unless the jog already set it.
+    private mutating func browse(_ capture: CaptureFile) {
+        guard let control = control(capture, "deck1.browse.turn", for: "mapping.browse.select_turn_cc") else { return }
+        guard control.kind == .cc, let number = control.number else {
+            todo("mapping.browse.select_turn_cc", "The browse knob didn't send a CC. Check it in MIDI Monitor.")
+            return
+        }
+        set("mapping.browse.select_turn_cc", .int(number))
+        encoderFormat(control.encoding, from: "deck1.browse.turn")
+    }
+
+    /// The profile's one relative encoder format. A turn that couldn't tell (one way only) or an absolute knob is a TODO.
+    mutating func encoderFormat(_ encoding: ControlEncoding?, from prompt: String) {
+        let key = "mapping.midi.encoder_format"
+        switch encoding {
+        case .twosComplement, .offset64, .signMagnitude:
+            todos.removeAll { $0.key == key }
+            if profile.value(at: key) == nil { set(key, .string(encoding!.rawValue)) }
+        case .absolute:
+            todo(key, "\"\(prompt)\" sent absolute values, not relative steps. Check whether it's an endless encoder.")
+        case nil:
+            if profile.value(at: key) == nil {
+                todo(key, "\"\(prompt)\" turned only one way, so its format can't be told. Run it again, right then left.")
+            }
+        }
     }
 
     /// Notes that came in with hands off (a heartbeat) are ignored, so they never press anything.
