@@ -85,7 +85,8 @@ extension Bridge {
                 guard slot != 0 else { return Self.off }
                 let color = palette[slot] ?? [255, 255, 255]
                 // A held hot cue shows the brightest version of its color, so you can see which one is sounding.
-                return Self.velocity(held.contains(.pad(index)) ? Self.brightest(color) : color)
+                // Held, it's vivid too (#151), so the sounding cue stands out in its hue, not whiter.
+                return held.contains(.pad(index)) ? ringVelocity(Self.brightest(color)) : Self.velocity(color)
             }
         case .loop: return cues.map { $0 == 0 ? Self.off : Self.velocity(leds.loopPadColor) }
         case .roll: return Array(repeating: Self.velocity(leds.rollPadColor), count: cues.count)
@@ -97,6 +98,17 @@ extension Bridge {
     static func brightest(_ rgb: [Int]) -> [Int] {
         guard let top = rgb.max(), top > 0 else { return rgb }
         return rgb.map { $0 * 255 / top }
+    }
+
+    /// A vivid velocity (#151) for an [r, g, b] color: the ring, and a held pad.
+    static func vividVelocity(_ rgb: [Int]) -> UInt8 {
+        guard rgb.count == 3 else { return off }
+        return ControllerBridgeCore.vividVelocity(rgb[0], rgb[1], rgb[2])
+    }
+
+    /// The ring's and a held pad's velocity, by the Settings mapping (#151).
+    func ringVelocity(_ rgb: [Int]) -> UInt8 {
+        ringColors == .vivid ? Self.vividVelocity(rgb) : Self.velocity(rgb)
     }
 
     /// A pad or ring velocity for an [r, g, b] color.

@@ -239,9 +239,9 @@ struct PadsTests {
         #expect(rig.leds[40] == 0)
     }
 
-    // #122: the ring shows the deck's badge color, worked by hand through rgb222 (round(c / 255 * 3) per channel):
-    // deck 2 #ECCF65 → 3,2,1 = 57; deck 3 #C5754E → 2,1,1 = 37; deck 4 #62929E → 1,2,2 = 26.
-    @Test("On decks 2, 3 and 4 the ring lights in that deck's badge color", arguments: [(2, UInt8(57)), (3, 37), (4, 26)])
+    // #122, vivid since #151 (white out, strongest to 3, under 30 % dropped): deck 2 #ECCF65 → 3,2,0 = 56;
+    // deck 3 #C5754E → 3,1,0 = 52 (green is 33 % of red, so it stays orange); deck 4 #62929E → 0,2,3 = 11.
+    @Test("On decks 2, 3 and 4 the ring lights in that deck's badge color, vivid", arguments: [(2, UInt8(56)), (3, 52), (4, 11)])
     func ringInDeckColor(deck: Int, velocity: UInt8) throws {
         let rig = try Self.startedRig()
         rig.coordinator.setDeck(deck, controller: 0)

@@ -24,9 +24,13 @@ public final class Coordinator {
     var deckColors: DeckColors { followSyndicateDeckColors ? syndicateDeckColors : customDeckColors }
 
     /// A Bridge for a controller, with the deck colors in use.
+    /// Settings' ring color mapping (#151).
+    private var ringColors = RingColors.vivid
+
     private func makeBridge(_ mapping: Mapping) -> Bridge {
         let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
         bridge.deckColors = deckColors
+        bridge.ringColors = ringColors
         return bridge
     }
 
@@ -664,6 +668,13 @@ public final class Coordinator {
         followSyndicateDeckColors = followSyndicate
         customDeckColors = custom
         applyDeckColors()
+        disconnectFailedOutputs()
+    }
+
+    /// Settings (#151): vivid or exact ring colors, repainted at once.
+    public func setRingColors(_ mode: RingColors) {
+        ringColors = mode
+        for bridge in bridges { bridge.setRingColors(mode) }
         disconnectFailedOutputs()
     }
 

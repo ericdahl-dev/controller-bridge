@@ -109,6 +109,16 @@ struct TimingTests {
         #expect([rig.leds[32], rig.leds[33]] == [2, 48])
     }
 
+    @Test("A held pad is vivid (#151); unheld it keeps the exact cue color: pastel (255, 180, 180) is 58 unheld, 48 held")
+    func heldPadIsVivid() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(Self.palette(4, 255, 180, 180))
+        rig.coordinator.feedback(Self.cues([4, 0, 0, 0, 0, 0, 0, 0]))
+        #expect(rig.leds[32] == 58)                     // exact: 3, 2, 2
+        rig.coordinator.midi(.noteOn(channel: 0, note: 32, velocity: 127), source: Rig.lc6000.id)
+        #expect(rig.leds[32] == 48)                     // vivid: the white comes out, 3, 0, 0
+    }
+
     /// A started controller whose mapping sets `leds.beat_pulse`, with a track loaded so the ring is lit.
     final class PulseRig {
         let midi = Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out])

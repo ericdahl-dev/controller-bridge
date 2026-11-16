@@ -2,6 +2,12 @@
 ///
 /// One source of truth: the Presentation tests pin `DeckBadge`'s fills to `defaults`. A value, so a user setting can
 /// replace the defaults later (#123): the Bridge reads its colors from its own `deckColors`.
+/// How the ring (and a held pad) turns a color into the LC6000's 64 (#151): vivid keeps the hue; exact rounds each
+/// channel, as the pad cue colors do.
+public enum RingColors: String, Equatable, Sendable, Codable, CaseIterable {
+    case vivid, exact
+}
+
 public struct DeckColors: Equatable, Sendable, Codable {
     /// [r, g, b] for decks 1-4.
     public var rgb: [Int: [Int]]
@@ -25,9 +31,9 @@ public struct DeckColors: Equatable, Sendable, Codable {
     public subscript(deck: Int) -> [Int]? { rgb[deck] }
 
     /// The color as the LC6000 shows it, for Settings' preview swatch: the ring's rgb222 velocity, read back as RGB.
-    public static func ledPreview(_ rgb: [Int]) -> [Int] {
+    public static func ledPreview(_ rgb: [Int], mode: RingColors = .exact) -> [Int] {
         guard rgb.count == 3 else { return [0, 0, 0] }
-        let velocity = Int(rgbToVelocity(rgb[0], rgb[1], rgb[2]))
+        let velocity = Int(mode == .vivid ? vividVelocity(rgb[0], rgb[1], rgb[2]) : rgbToVelocity(rgb[0], rgb[1], rgb[2]))
         return [velocity >> 4 & 3, velocity >> 2 & 3, velocity & 3].map { $0 * 85 }
     }
 
