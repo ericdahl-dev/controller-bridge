@@ -171,4 +171,14 @@ public struct JogSimulator: Equatable, Sendable {
 
     /// Whether the deck's play light is on.
     public func playing(deck: Int) -> Bool { plays[deck] ?? false }
+
+    /// The marker as the renderer takes it (#238): turns clockwise from 12 o'clock.
+    public func markerTurns(deck: Int) -> Double { Double(marker(deck: deck)) / 16_384 }
+
+    /// The beat section to light (1-4) while the deck plays: the hand's quarter of the turn, so the two always agree
+    /// (the marker is the master clock hand while playing, #165). Paused, none.
+    public func litBeat(deck: Int) -> Int? {
+        guard playing(deck: deck) else { return nil }
+        return Int(markerTurns(deck: deck) * 4) % 4 + 1
+    }
 }

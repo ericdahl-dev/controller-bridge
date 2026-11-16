@@ -106,4 +106,21 @@ struct JogSimulatorTests {
         #expect(sim.front == nil)
         #expect(sim.marker(deck: 1) == 0)
     }
+
+    @Test("While its deck plays, the lit beat agrees with the hand: a quarter turn per beat from 12 o'clock; paused, none")
+    func litBeat() {
+        var sim = JogSimulator()
+        sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 100, at: Self.noon))
+        sim.apply(.marker(pitchBend: 4096 + 100))
+        #expect(sim.litBeat(deck: 1) == nil, "not playing")
+        sim.apply(.playing(true))
+        #expect(sim.litBeat(deck: 1) == 2)
+        sim.apply(.marker(pitchBend: 0))
+        #expect(sim.litBeat(deck: 1) == 1)
+        sim.apply(.marker(pitchBend: 16383))
+        #expect(sim.litBeat(deck: 1) == 4)
+        #expect(sim.markerTurns(deck: 1) == 16383.0 / 16384)
+        sim.apply(.playing(false))
+        #expect(sim.litBeat(deck: 1) == nil)
+    }
 }
