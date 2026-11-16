@@ -280,25 +280,26 @@ public final class Coordinator {
         disconnectFailedOutputs()
     }
 
-    /// The controller's own deck-layer switch (#79), as the LC6000 really sends it: note 51 at 127 on channel N makes
-    /// layer N the active one. Its note 51 at 0 always comes on ch1, whatever layer it leaves, so it means nothing.
-    /// And any other control on a layer's channel shows the unit is on that layer, so it takes over too: a long hold of
-    /// Shift + deck select changes layer with no note 51 at all.
+    /// The controller's own deck-layer switch (#79): the active layer is wherever the unit's controls last came
+    /// from. The LC6000's note 51 handover is only a hint: its 0 always comes on ch1, and in captures the controls
+    /// sometimes kept coming on ch1 after a 127 on ch2, while a long hold changes layer with no note 51 at all. So the
+    /// layer note is skipped here, and the first other control on a layer's channel moves the layer there.
     private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) {
         let layers = controllers.indices.filter { controllers[$0].source?.id == source && controllers[$0].followsLayers }
         guard let first = layers.first else { return }
-        let (channel, note, velocity): (UInt8, UInt8?, UInt8) = switch event {
-        case .noteOn(let c, let n, let v): (c, n, v)
-        case .noteOff(let c, let n, _): (c, n, 0)
-        case .controlChange(let c, _, let v): (c, nil, v)
+        let (channel, note): (UInt8, UInt8?) = switch event {
+        case .noteOn(let c, let n, _), .noteOff(let c, let n, _): (c, n)
+        case .controlChange(let c, _, _): (c, nil)
         }
         let isLayerNote = note.map { Int($0) == controllers[first].bridge.mapping.midi.layerNote } ?? false
-        if isLayerNote && velocity == 0 { return }
+        if isLayerNote { return }
         guard let target = layers.first(where: { controllers[$0].bridge.mapping.midi.channel == Int(channel) + 1 }) else { return }
         let current = layers.first { status.controllers[$0].activeLayer } ?? first
-        // Traffic on the layer already in front changes nothing; the layer note always hands over (and repaints).
-        if !isLayerNote && target == current && status.controllers[target].activeLayer { return }
-        if !isLayerNote && target == current { status.controllers[target].activeLayer = true; return }
+        // Traffic on the layer already in front changes nothing (before any handover, layer 1 is in front).
+        if target == current {
+            status.controllers[target].activeLayer = true
+            return
+        }
         activateLayer(target, leaving: current, among: layers)
     }
 
