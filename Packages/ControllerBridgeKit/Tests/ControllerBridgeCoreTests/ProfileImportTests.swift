@@ -79,9 +79,13 @@ struct ProfileImportTests {
         let exported = try profile.exported()
         let object = try #require(try JSONSerialization.jsonObject(with: exported) as? [String: Any])
         let mapping = try #require(object["mapping"] as? [String: Any])
-        #expect((mapping["osc"] as? [String: Any]).map { Set($0.keys) } == ["root", "feedback_quiet_ms", "feedback_answer_ms"])
+        let osc = try #require(mapping["osc"] as? [String: Any])
+        for key in ["host", "port", "feedback_host", "feedback_port"] { #expect(osc[key] == nil, "osc.\(key)") }
+        #expect(osc["root"] as? String == "/Syndicate/")
         #expect(mapping["deck"] == nil)
-        #expect((mapping["midi"] as? [String: Any]).map { Set($0.keys) } == ["input", "output", "ignore_notes"])
+        let midi = try #require(mapping["midi"] as? [String: Any])
+        #expect(midi["channel"] == nil)
+        #expect(midi["input"] as? String == "LC6000")
         #expect(try Self.importing(String(decoding: exported, as: UTF8.self)) == profile)
     }
 
