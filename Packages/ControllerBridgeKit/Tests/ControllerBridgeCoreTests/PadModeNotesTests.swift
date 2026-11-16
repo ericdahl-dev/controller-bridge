@@ -73,3 +73,18 @@ struct PadModeNotesCoordinatorTests {
         #expect(rig.leds[32] == 0)
     }
 }
+
+/// The LC6000 is unchanged by #225: no notes per mode, so its pads keep their notes and the mode buttons decide.
+@Suite("Pad mode notes: the LC6000 unchanged")
+struct PadModeNotesLC6000Tests {
+    @Test("In Roll mode its pad 1 (32) still plays a 1/32 roll, lit orange (56); note 100 is nothing")
+    func lc6000() throws {
+        let rig = try PadModeNotesCoordinatorTests.started(nil)
+        PadsTests.press(rig, PadsTests.modeRoll)
+        #expect(PadModeNotesCoordinatorTests.press(rig, 32) == [OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(1)]),
+                                                               OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(0)])])
+        #expect(rig.leds[32] == 56)
+        #expect(PadModeNotesCoordinatorTests.press(rig, 100) == [])
+        #expect(rig.leds[100] == nil)
+    }
+}
