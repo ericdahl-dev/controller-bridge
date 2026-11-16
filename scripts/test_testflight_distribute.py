@@ -60,5 +60,27 @@ class FindBuildTests(unittest.TestCase):
         self.assertEqual(td.find_build(http, BUNDLE, "1.0.1", "42.1", sleep=Recorder().sleep), "b1")
 
 
+class ProcessingPollTests(unittest.TestCase):
+    def test_waits_while_the_build_is_missing_then_processing(self):
+        # Right after the upload the build isn't listed yet, then it processes, then it's valid.
+        api = FakeASC(builds=[("1.0.1", "42.1", [None, "PROCESSING", "PROCESSING", "VALID"])])
+        clock = Recorder()
+        self.assertEqual(td.find_build(api.http, BUNDLE, "1.0.1", "42.1", sleep=clock.sleep), "build0")
+        self.assertEqual(clock.slept, [td.POLL_SECONDS] * 3)
+
+    def test_a_failed_or_invalid_build_stops_with_its_state(self):
+        for state in ("FAILED", "INVALID"):
+            api = FakeASC(builds=[("1.0.1", "42.1", ["PROCESSING", state])])
+            with self.assertRaisesRegex(td.DistributeError, state):
+                td.find_build(api.http, BUNDLE, "1.0.1", "42.1", sleep=Recorder().sleep)
+
+    def test_gives_up_after_the_timeout(self):
+        api = FakeASC(builds=[("1.0.1", "42.1", ["PROCESSING"])])
+        clock = Recorder()
+        with self.assertRaisesRegex(td.DistributeError, "still PROCESSING"):
+            td.find_build(api.http, BUNDLE, "1.0.1", "42.1", sleep=clock.sleep, timeout=300)
+        self.assertEqual(sum(clock.slept), 300)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,9 @@ returns (status, json).
 import sys
 
 PLATFORM = "MAC_OS"
+# App Store Connect usually processes a Mac build in 5 to 30 minutes.
+POLL_SECONDS = 30
+PROCESSING_TIMEOUT = 60 * 60
 
 
 class DistributeError(Exception):
@@ -37,14 +40,27 @@ def find_app(http, bundle_id):
     return app["id"]
 
 
-def find_build(http, bundle_id, version, build_number, sleep):
-    """The build's id, by marketing version and build number (matched exactly: "42.1" is run 42, attempt 1)."""
+def find_build(http, bundle_id, version, build_number, sleep, timeout=PROCESSING_TIMEOUT):
+    """The build's id once it has processed, by marketing version and build number (matched exactly: "42.1" is run
+    42, attempt 1). A build not listed yet counts as still processing: it appears a little after the upload."""
     app = find_app(http, bundle_id)
     query = {"filter[app]": app, "filter[preReleaseVersion.version]": version,
              "filter[version]": build_number, "filter[preReleaseVersion.platform]": PLATFORM}
-    builds = get(http, "/builds", query)["data"]
-    build = next((b for b in builds if b["attributes"]["version"] == build_number), None)
-    return build["id"]
+    waited, state = 0, "not listed yet"
+    while True:
+        builds = get(http, "/builds", query)["data"]
+        build = next((b for b in builds if b["attributes"]["version"] == build_number), None)
+        state = build["attributes"]["processingState"] if build else "not listed yet"
+        if state == "VALID":
+            print(f"Build {version} ({build_number}) has processed.")
+            return build["id"]
+        if state in ("FAILED", "INVALID"):
+            raise DistributeError(f"Build {version} ({build_number}) is {state} in App Store Connect; it can't be distributed.")
+        if waited >= timeout:
+            raise DistributeError(f"Build {version} ({build_number}) is still {state} after {waited // 60} minutes.")
+        print(f"Build {version} ({build_number}): {state}, waiting {POLL_SECONDS} s.")
+        sleep(POLL_SECONDS)
+        waited += POLL_SECONDS
 
 
 if __name__ == "__main__":
