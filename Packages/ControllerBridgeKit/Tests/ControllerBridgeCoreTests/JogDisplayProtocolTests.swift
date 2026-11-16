@@ -72,3 +72,20 @@ struct JogDisplayUploadTests {
         #expect(upload.expectedAcks == 4)
     }
 }
+
+@Suite("Jog display replies")
+struct JogDisplayReplyTests {
+    @Test("An ack is F0 00 02 0B 01 10 0F 00 01 <status> F7: 00 accepted, anything else refused (06 seen)")
+    func acks() {
+        #expect(JogDisplay.Reply([0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, 0x0F, 0x00, 0x01, 0x00, 0xF7]) == .accepted)
+        #expect(JogDisplay.Reply([0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, 0x0F, 0x00, 0x01, 0x06, 0xF7]) == .refused(0x06))
+    }
+
+    @Test("The unit's 01 10 10 is the commit done; anything else is nothing")
+    func commitAndOthers() {
+        #expect(JogDisplay.Reply([0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, 0x10, 0x00, 0x00, 0xF7]) == .committed)
+        #expect(JogDisplay.Reply([0xF0, 0x7E, 0x00, 0x06, 0x02, 0x00, 0x02, 0x0B, 0xF7]) == nil)   // an identity reply
+        #expect(JogDisplay.Reply([0x9F, 0x37, 0x7F]) == nil)
+        #expect(JogDisplay.Reply([0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, 0x0F, 0xF7]) == nil)          // too short to read
+    }
+}

@@ -83,4 +83,27 @@ public enum JogDisplay {
             show = JogDisplay.show(slot: slot)
         }
     }
+
+    /// What the unit answers on WD: an ack for each upload message, and the commit.
+    public enum Reply: Equatable, Sendable {
+        /// 01 10 0F 00 01 00.
+        case accepted
+        /// 01 10 0F 00 01 <status>, such as 06 for no hello or a wrong byte-sum.
+        case refused(UInt8)
+        /// 01 10 10: the image is stored.
+        case committed
+
+        /// Nil for anything else the unit sends (identity replies, notes).
+        public init?(_ message: [UInt8]) {
+            let reply: [UInt8] = [0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10]
+            guard message.count >= 8, Array(message.prefix(6)) == reply, message.last == 0xF7 else { return nil }
+            switch message[6] {
+            case 0x0F:
+                guard message.count == 11, message[7] == 0x00, message[8] == 0x01 else { return nil }
+                self = message[9] == 0x00 ? .accepted : .refused(message[9])
+            case 0x10: self = .committed
+            default: return nil
+            }
+        }
+    }
 }
