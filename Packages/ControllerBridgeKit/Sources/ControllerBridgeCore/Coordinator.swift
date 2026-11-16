@@ -553,10 +553,18 @@ public final class Coordinator {
               updated != controllers[index].profile else { return false }
         let old = controllers[index].bridge
         old.releaseAll()
+        // A profile without layers can't be followed: each entry falls back to its own deck, with no layer active (#115).
+        if updated.mapping.midi.layers.isEmpty, controllers[index].followsLayers {
+            controllers[index].followsLayers = false
+            status.controllers[index].followsLayers = false
+            status.controllers[index].activeLayer = false
+        }
         let bridge = makeBridge(updated, for: index)
         bridge.output = old.output
         bridge.carrySyndicateState(from: old)
         bridge.carryOwnState(from: old)
+        // The active layer's LEDs keep going where the unit's controls come from (#79).
+        if controllers[index].followsLayers { bridge.ledChannel = old.ledChannel }
         controllers[index].bridge = bridge
         controllers[index].profile = updated
         guard controllers[index].source != nil else { return false }

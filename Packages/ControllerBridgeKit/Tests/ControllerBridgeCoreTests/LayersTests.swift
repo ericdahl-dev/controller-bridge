@@ -325,4 +325,35 @@ struct LayersTests {
         #expect(Self.channelsWritten(output) == [2])
         #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [2])
     }
+
+    @Test("A profile swap on layer 3 stays on layer 3: ch1 Play goes to deck 3, and only layer 3 paints the LEDs (#115)")
+    func swapKeepsLayer() throws {
+        let rig = try Self.layered()
+        Self.switchLayer(rig, from: 1, to: 3)
+        Self.touch(rig, channel: 1)              // the unit's normal state: controls, and so layer 3's LEDs, on ch1
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        output.sent.removeAll()
+        var mapping = try Mapping.bundledDefault()
+        mapping.notes.buttons["play"] = 60
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)])
+        // One layer shown, so one Play LED write, not one per layer, and on ch1, where the unit's controls are.
+        #expect(output.sent.filter { if case .noteOn(_, 60, _) = $0 { true } else { false } } == [.noteOn(channel: 0, note: 60, velocity: 1)])
+        rig.osc.sent.removeAll()
+        Self.note(rig, channel: 1, 60, 127)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/3/PlayPause", [.int(1)])])
+    }
+
+    @Test("A swap to a profile without layers falls back to each entry's own deck: ch1 Play goes to deck 1 (#115)")
+    func swapToNoLayers() throws {
+        let rig = try Self.layered()
+        Self.switchLayer(rig, from: 1, to: 3)
+        var mapping = try Mapping.bundledDefault()
+        mapping.midi.layers = []
+        mapping.midi.layerNote = nil
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)])
+        rig.osc.sent.removeAll()
+        Self.note(rig, channel: 1, 1, 127)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, false, false, false])
+    }
 }

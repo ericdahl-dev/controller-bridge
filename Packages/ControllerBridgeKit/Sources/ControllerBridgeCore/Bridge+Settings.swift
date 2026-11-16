@@ -29,7 +29,6 @@ extension Bridge {
         synced = old.synced
         sliderEnabled = old.sliderEnabled
         looping = old.looping
-        feedbackStale = old.feedbackStale
         cues = old.cues
         palette = old.palette
         progress = old.progress
