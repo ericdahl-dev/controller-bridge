@@ -43,6 +43,9 @@ public struct CaptureFlow: Sendable {
     /// working it out on every message too slow, so it's worked out at once for the first detection, then at most
     /// every `refreshInterval`, and on `tick` for whatever came since.
     public private(set) var detected: [ControlFacts] = []
+    /// For a shifted step, how Shift changed the control: "Shift: same message", "Shift: channel +1, note +60" (#229).
+    /// Nil until the control arrives, and when the step it repeats was skipped.
+    public private(set) var shiftReadout: String?
     public static let refreshInterval = 0.1
     private var lastRefresh = -Double.infinity
     private var stale = false
@@ -72,6 +75,7 @@ public struct CaptureFlow: Sendable {
 
     private mutating func refresh(at time: Double? = nil) {
         detected = phase == .steps ? session?.currentControls ?? [] : []
+        shiftReadout = phase == .steps ? session?.currentShift.map { Self.readout($0, kind: detected.first?.kind) } : nil
         stale = false
         if let time { lastRefresh = time }
     }
@@ -127,7 +131,7 @@ public struct CaptureFlow: Sendable {
             let skipped = steps.filter { $0.status == .skipped }.count
             return "Capture finished: \(steps.count) steps, \(skipped) skipped."
         case .steps:
-            let detection = detected.map(\.spoken)
+            let detection = detected.map(\.spoken) + (shiftReadout.map { [$0] } ?? [])
             if announcedStep != stepNumber, let prompt {
                 announcedStep = stepNumber
                 announcedDetection = detection
@@ -139,7 +143,17 @@ public struct CaptureFlow: Sendable {
             }
             guard detection != announcedDetection else { return nil }
             announcedDetection = detection
-            return detection.isEmpty ? nil : "Detected: " + detection.joined(separator: ", then ") + "."
+            guard !detected.isEmpty else { return nil }
+            return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + "." + (shiftReadout.map { " \($0)." } ?? "")
         }
+    }
+
+    /// "Shift: same message", or what moved: "Shift: channel +1, note +60" (a CC says CC).
+    static func readout(_ shift: ShiftLayer, kind: ControlKind?) -> String {
+        func signed(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
+        var parts: [String] = []
+        if shift.channelOffset != 0 { parts.append("channel \(signed(shift.channelOffset))") }
+        if shift.numberOffset != 0 { parts.append("\(kind == .cc ? "CC" : "note") \(signed(shift.numberOffset))") }
+        return "Shift: " + (parts.isEmpty ? "same message" : parts.joined(separator: ", "))
     }
 }

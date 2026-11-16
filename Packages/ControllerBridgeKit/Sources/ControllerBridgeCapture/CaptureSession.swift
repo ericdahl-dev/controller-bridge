@@ -54,6 +54,12 @@ public struct CaptureSession: Sendable {
         }
     }
 
+    /// For a step repeated with Shift held, how its control differs from the step it repeats, so far (#229).
+    public var currentShift: ShiftLayer? {
+        guard let current, current.shiftedOf != nil else { return nil }
+        return step(current, .confirmed, take, noise: Set(idleNoise), before: file.steps).shift
+    }
+
     /// What the current take has detected so far, for showing live.
     public var currentControls: [ControlFacts] {
         guard let current else { return [] }
