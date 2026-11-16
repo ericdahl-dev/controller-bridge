@@ -92,6 +92,12 @@ class CheckSiteTests(unittest.TestCase):
             "index.html: loads https://x.example/norel.css from another site",
         ])
 
+    def test_every_image_has_alt_text_even_if_empty(self):
+        root = self.site({"support/index.html": page(
+            body='<a href="../">Home</a> <img src="../img/icon.png"> <img src="../img/icon.png" alt="">'
+                 ' <img src="../img/icon.png" alt="The app icon">')})
+        self.assertEqual(check_site.problems(root), ["support/index.html: <img src=\"../img/icon.png\"> has no alt"])
+
     def test_a_page_without_a_title_or_description_fails(self):
         root = self.site({"support/index.html": page(title="", description="", body='<a href="../">Home</a>')})
         self.assertEqual(check_site.problems(root), ["support/index.html: no <title>",

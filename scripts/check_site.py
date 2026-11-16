@@ -4,6 +4,7 @@
 - nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
   and so are <link rel="canonical"> and <link rel="alternate">
 - every page has a title and a meta description
+- every <img> has an alt attribute (alt="" for a decorative one)
 - no page title or main heading uses another company's name as the product's
 - the privacy page says the app collects no data
 - no other company's logo is in the site
@@ -38,6 +39,7 @@ class Page(HTMLParser):
         self.title, self.h1, self.description = None, None, None
         self.text = []
         self.refs = []  # (url, loaded): loaded is True for resources, False for links
+        self.no_alt = []  # src of every <img> without an alt attribute
         self._in = None
 
     def handle_starttag(self, tag, attrs):
@@ -52,6 +54,8 @@ class Page(HTMLParser):
         if tag == "link" and attrs.get("href") is not None:
             rels = (attrs.get("rel") or "").lower().split()
             self.refs.append((attrs["href"], not rels or not set(rels) <= LINK_RELS))
+        if tag == "img" and "alt" not in attrs:
+            self.no_alt.append(attrs.get("src") or "")
         if attrs.get("src") is not None:
             self.refs.append((attrs["src"], True))
 
@@ -105,6 +109,7 @@ def check_page(root, file, text):
         for name in OTHER_COMPANIES:
             if words and re.search(rf"\b{name}\b", words, re.IGNORECASE):
                 out.append(f"{file}: the <{part}> names {name}")
+    out += [f'{file}: <img src="{src}"> has no alt' for src in page.no_alt]
     out += check_refs(root, file, page.refs)
     if file == PRIVACY and PRIVACY_STATEMENT not in " ".join(" ".join(page.text).split()).lower():
         out.append(f'{file}: doesn\'t say "{PRIVACY_STATEMENT}"')
