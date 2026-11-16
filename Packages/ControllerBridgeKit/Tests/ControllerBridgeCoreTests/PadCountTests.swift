@@ -103,3 +103,28 @@ struct PadCountCoordinatorTests {
                                        OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(0)])])
     }
 }
+
+/// The import check (#196), in plain words.
+@Suite("Pad count in the import check")
+struct PadCountImportTests {
+    static func importing(_ json: String) throws -> ControllerProfile {
+        try ControllerProfile.importing(Data(json.utf8), bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+    }
+
+    @Test("A roll size is one of Syndicate's SlipLoop names; text is expected")
+    func rollSizes() {
+        #expect(throws: MappingError.invalid([
+            #"mapping.pads.roll_sizes[2]: "Third" isn't one of ThirtySecond, Sixteenth, Eighth, Quarter, Half, One, Two, Four"#,
+            #"mapping.pads.roll_sizes[3]: expected text, got 4"#,
+        ])) {
+            try Self.importing(#"{"mapping": {"pads": {"roll_sizes": ["Quarter", "Half", "Third", 4]}}}"#)
+        }
+    }
+
+    @Test("A good four-pad import works")
+    func fourPads() throws {
+        let profile = try Self.importing(#"{"mapping": {"notes": {"pads": [32, 33, 34, 35]}, "pads": {"roll_sizes": ["Half"]}}}"#)
+        #expect(profile.mapping.notes.pads == [32, 33, 34, 35])
+        #expect(profile.mapping.pads.rollSizes == ["Half"])
+    }
+}

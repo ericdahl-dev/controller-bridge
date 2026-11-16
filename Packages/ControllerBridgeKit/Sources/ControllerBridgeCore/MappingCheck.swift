@@ -232,6 +232,7 @@ extension Mapping {
     private static let choices: [String: [String]] = [
         "leds.beat_pulse": LEDs.BeatPulse.allRawValues,
         "leds.stale_idle": LEDs.StaleIdle.allRawValues,
+        "pads.roll_sizes[]": Pads.RollSize.allRawValues,
         "midi.encoder_format": EncoderFormat.allRawValues,
     ]
 
