@@ -19,6 +19,13 @@ class DistributeError(Exception):
     """A step that can't go on, with what to do about it."""
 
 
+def send(http, method, path, body):
+    status, response = http(method, path, body, None)
+    if status >= 400:
+        raise DistributeError(f"App Store Connect said {status} for {method} {path}: {detail(response)}")
+    return response
+
+
 def get(http, path, query=None):
     status, body = http("GET", path, None, query)
     if status >= 400:
@@ -61,6 +68,26 @@ def find_build(http, bundle_id, version, build_number, sleep, timeout=PROCESSING
         print(f"Build {version} ({build_number}): {state}, waiting {POLL_SECONDS} s.")
         sleep(POLL_SECONDS)
         waited += POLL_SECONDS
+
+
+def what_to_test(doc):
+    """The What to Test text: everything after the doc's first "---" rule."""
+    _, _, text = doc.partition("\n---\n")
+    return text.strip()
+
+
+def set_what_to_test(http, build, text, locale="en-US"):
+    """Sets the build's What to Test, creating its localization or updating it, so a rerun writes the same text."""
+    existing = get(http, f"/builds/{build}/betaBuildLocalizations")["data"]
+    localization = next((l for l in existing if l["attributes"]["locale"] == locale), None)
+    if localization:
+        send(http, "PATCH", f"/betaBuildLocalizations/{localization['id']}", {"data": {
+            "type": "betaBuildLocalizations", "id": localization["id"], "attributes": {"whatsNew": text}}})
+    else:
+        send(http, "POST", "/betaBuildLocalizations", {"data": {
+            "type": "betaBuildLocalizations", "attributes": {"locale": locale, "whatsNew": text},
+            "relationships": {"build": {"data": {"type": "builds", "id": build}}}}})
+    print(f"What to Test set ({locale}, {len(text)} characters).")
 
 
 if __name__ == "__main__":

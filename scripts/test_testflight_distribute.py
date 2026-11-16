@@ -17,9 +17,24 @@ class FakeASC:
         # Each build is (version, build number, states the poll sees in turn).
         self.builds = builds if builds is not None else [("1.0.1", "42.1", ["VALID"])]
         self.calls = []
+        self.localizations = {}  # locale -> (id, whatsNew)
 
     def http(self, method, path, body=None, query=None):
         self.calls.append((method, path, body, query))
+        if method == "GET" and path == "/builds/build1/betaBuildLocalizations":
+            return 200, {"data": [{"id": lid, "attributes": {"locale": locale, "whatsNew": text}}
+                                  for locale, (lid, text) in self.localizations.items()]}
+        if method == "POST" and path == "/betaBuildLocalizations":
+            attributes = body["data"]["attributes"]
+            assert body["data"]["relationships"]["build"]["data"] == {"type": "builds", "id": "build1"}
+            self.localizations[attributes["locale"]] = ("loc-new", attributes["whatsNew"])
+            return 201, {"data": {"id": "loc-new"}}
+        if method == "PATCH" and path.startswith("/betaBuildLocalizations/"):
+            lid = path.split("/")[2]
+            locale = next(k for k, (i, _) in self.localizations.items() if i == lid)
+            assert body["data"] == {"type": "betaBuildLocalizations", "id": lid, "attributes": body["data"]["attributes"]}
+            self.localizations[locale] = (lid, body["data"]["attributes"]["whatsNew"])
+            return 200, {"data": {"id": lid}}
         if method == "GET" and path == "/apps":
             assert query["filter[bundleId]"] == BUNDLE
             return 200, {"data": [{"id": "app1", "attributes": {"bundleId": BUNDLE}}]}
@@ -80,6 +95,35 @@ class ProcessingPollTests(unittest.TestCase):
         with self.assertRaisesRegex(td.DistributeError, "still PROCESSING"):
             td.find_build(api.http, BUNDLE, "1.0.1", "42.1", sleep=clock.sleep, timeout=300)
         self.assertEqual(sum(clock.slept), 300)
+
+
+DOC = """# TestFlight: What to test
+
+Paste this into the build's "What to Test".
+
+---
+
+DeckBridge 1.0.1 has a new look.
+
+- Try Settings.
+"""
+
+
+class WhatToTestTests(unittest.TestCase):
+    def test_the_text_is_everything_after_the_rule(self):
+        self.assertEqual(td.what_to_test(DOC), "DeckBridge 1.0.1 has a new look.\n\n- Try Settings.")
+
+    def test_creates_the_en_us_text_when_the_build_has_none(self):
+        api = FakeASC()
+        td.set_what_to_test(api.http, "build1", "New look.")
+        self.assertEqual(api.localizations, {"en-US": ("loc-new", "New look.")})
+
+    def test_updates_the_text_on_a_rerun(self):
+        api = FakeASC()
+        api.localizations = {"en-US": ("loc1", "Old text.")}
+        td.set_what_to_test(api.http, "build1", "New look.")
+        self.assertEqual(api.localizations, {"en-US": ("loc1", "New look.")})
+        self.assertFalse([c for c in api.calls if c[0] == "POST"])
 
 
 if __name__ == "__main__":
