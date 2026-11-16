@@ -96,6 +96,8 @@ xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configu
 scripts/smoke.sh   # required before a PR: a virtual LC6000 and a fake Syndicate check Play out and the Play LED back
 ```
 
+Releases are a version tag on `main`; see [`docs/DEVELOPING.md`](docs/DEVELOPING.md#releasing-to-testflight) for the workflow, its secrets and the one-time setup.
+
 Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. The app binds its feedback listener to `127.0.0.1:9096`, so it never triggers the local-network prompt. Quit Syndicate or the Python bridge first, since the smoke check needs UDP 9090 and 9096.
 
 #### Look and fonts
