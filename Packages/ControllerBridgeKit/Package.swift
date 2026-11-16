@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "ControllerBridgeCore", targets: ["ControllerBridgeCore"]),
         .library(name: "ControllerBridgePresentation", targets: ["ControllerBridgePresentation"]),
+        .library(name: "ControllerBridgeCapture", targets: ["ControllerBridgeCapture"]),
     ],
     targets: [
         // All bridge logic: the Coordinator, the Bridge, the mapping and the OSC codec.
@@ -19,5 +20,9 @@ let package = Package(
         .target(name: "ControllerBridgePresentation"),
         // Core only for the test that pins the deck badges to Core's deck colors (#122); the targets stay independent.
         .testTarget(name: "ControllerBridgePresentationTests", dependencies: ["ControllerBridgePresentation", "ControllerBridgeCore"]),
+        // Guided controller capture (#185): a prompt list plus raw MIDI in, a capture file out. Pure Swift and independent
+        // of Core, so the web capture (#190) can share the format without the bridge.
+        .target(name: "ControllerBridgeCapture"),
+        .testTarget(name: "ControllerBridgeCaptureTests", dependencies: ["ControllerBridgeCapture"]),
     ]
 )
