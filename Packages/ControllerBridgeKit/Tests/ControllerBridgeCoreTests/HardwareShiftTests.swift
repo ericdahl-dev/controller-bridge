@@ -133,3 +133,29 @@ struct HardwareShiftImportTests {
         }
     }
 }
+
+/// The LED mirror (#226): on a controller whose shifted note has its own LED, leds.mirror_shifted lights it with its
+/// button's state.
+@Suite("Hardware Shift LED mirror")
+struct HardwareShiftLEDMirrorTests {
+    static func playing(_ override: String) throws -> Rig {
+        let rig = try HardwareShiftCoordinatorTests.started(override)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        return rig
+    }
+
+    @Test("Mirrored: while playing, Play (1) and its shifted note (110) both light full")
+    func mirrored() throws {
+        let rig = try Self.playing(#"{ "notes": { "shifted": { "play": 110 } }, "leds": { "mirror_shifted": true } }"#)
+        #expect(rig.leds[1] == 127)
+        #expect(rig.leds[110] == 127)
+    }
+
+    @Test("Left out (the LC6000's false), the shifted note's LED is left alone")
+    func notMirrored() throws {
+        let rig = try Self.playing(#"{ "notes": { "shifted": { "play": 110 } } }"#)
+        #expect(rig.leds[1] == 127)
+        #expect(rig.leds[110] == nil)
+        #expect(try Mapping.bundledDefault().leds.mirrorShifted == false)
+    }
+}

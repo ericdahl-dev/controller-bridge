@@ -309,6 +309,8 @@ final class Bridge {
         var idle = mapping.leds.dimUnlitButtons ? dimLevel : offLevel
         if feedbackStale, Self.syndicateButtons.contains(name), mapping.leds.staleIdle == .off { idle = offLevel }
         led(note, on ? fullLevel : idle)
+        // Its shifted note's LED (#226), when the profile mirrors it.
+        if mapping.leds.mirrorShifted, let shifted = mapping.notes.shifted[name] { led(shifted, on ? fullLevel : idle) }
     }
 
     /// An LED write for the LED sweep (#26): straight to the controller, past the cache.

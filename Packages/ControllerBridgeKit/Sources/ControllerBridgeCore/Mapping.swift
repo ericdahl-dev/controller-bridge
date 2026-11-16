@@ -409,6 +409,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var staleIdle: StaleIdle
         /// The velocities a button LED takes for full, dim and off (#194).
         public var levels: LEDLevels
+        /// Light a button's shifted note (#226) with the button's own state, on a controller where it has its own LED.
+        public var mirrorShifted: Bool
 
         public enum BeatPulse: String, Equatable, Sendable, Codable, CaseIterable {
             case off, beat, downbeat
@@ -430,13 +432,16 @@ public struct Mapping: Equatable, Sendable, Codable {
             case pulseMs = "pulse_ms"
             case staleIdle = "stale_idle"
             case levels
+            case mirrorShifted = "mirror_shifted"
         }
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
-            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000
+            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000,
+            mirrorShifted: Bool = false
         ) {
             self.levels = levels
+            self.mirrorShifted = mirrorShifted
             self.ringFollowsDeck = ringFollowsDeck
             self.pitchCenter = pitchCenter
             self.ring = ring
@@ -461,7 +466,8 @@ public struct Mapping: Equatable, Sendable, Codable {
                 beatPulse: try c.decode(BeatPulse.self, forKey: .beatPulse), pulseMs: try c.decode(Int.self, forKey: .pulseMs),
                 staleIdle: try c.decode(StaleIdle.self, forKey: .staleIdle),
                 ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true,
-                levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000
+                levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000,
+                mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? false
             )
         }
     }
