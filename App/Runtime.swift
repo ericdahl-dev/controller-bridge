@@ -9,8 +9,10 @@ import os
 /// touches it. Anything else that must reach the Coordinator (stop, sleep, device changes) goes through the pipe,
 /// which also keeps it in order with the MIDI already queued.
 enum BridgeHost {
-    static func run(mapping: Mapping, midi: any MIDISystem, osc: any OSCSender, log: any LogSink, events: AsyncStream<PipeEvent>) async {
-        let coordinator = Coordinator(mapping: mapping, midi: midi, osc: osc, clock: SystemClock(), log: log)
+    static func run(
+        profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, log: any LogSink, events: AsyncStream<PipeEvent>
+    ) async {
+        let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
         coordinator.start()
         await Engine(coordinator: coordinator, log: log).run(events)
     }

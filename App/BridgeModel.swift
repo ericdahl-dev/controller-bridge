@@ -40,11 +40,14 @@ final class BridgeModel {
 
     private func start() {
         let log = UnifiedLogSink()
-        let mapping: Mapping
-        do { mapping = try Mapping.bundledDefault() } catch {
-            status.problem = "Couldn't load the mapping: \(error)"
+        // Each connected device gets the profile its name matches (#43). The OSC settings come from the first
+        // profile's mapping until Settings (#19) holds them.
+        let profiles: [ControllerProfile]
+        do { profiles = try ControllerProfile.bundled() } catch {
+            status.problem = "Couldn't load the controller profiles: \(error)"
             return
         }
+        let mapping = profiles[0].mapping
         let pipe = EventPipe()
         let status = status
 
@@ -78,6 +81,6 @@ final class BridgeModel {
 
         ticker = Ticker(producer: pipe.producer)
         let midi = midi!
-        Task.detached(name: "Bridge engine") { await BridgeHost.run(mapping: mapping, midi: midi, osc: osc, log: log, events: pipe.events) }
+        Task.detached(name: "Bridge engine") { await BridgeHost.run(profiles: profiles, midi: midi, osc: osc, log: log, events: pipe.events) }
     }
 }
