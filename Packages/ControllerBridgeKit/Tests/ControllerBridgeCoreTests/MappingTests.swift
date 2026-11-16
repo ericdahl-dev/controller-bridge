@@ -4,7 +4,8 @@ import Testing
 
 /// Expected values are typed from lc6000_bridge/default_mapping.toml, the Python default mapping, except
 /// `osc.feedback_host`: the app listens on loopback by default (#32), where Python listened on 0.0.0.0, and
-/// `leds.beat_pulse` / `leds.pulse_ms`, which Python never had (#23).
+/// `leds.beat_pulse` / `leds.pulse_ms` (#23) and `osc.feedback_quiet_ms` / `osc.feedback_answer_ms` /
+/// `leds.stale_idle` (#21), which Python never had.
 @Suite("Mapping")
 struct MappingTests {
     @Test("The bundled default mapping carries the Python default values")
@@ -12,7 +13,9 @@ struct MappingTests {
         let mapping = try Mapping.bundledDefault()
 
         #expect(mapping.midi == .init(input: "LC6000", output: "LC6000", channel: 1))
-        #expect(mapping.osc == .init(host: "127.0.0.1", port: 9090, root: "/Syndicate/", feedbackHost: "127.0.0.1", feedbackPort: 9096))
+        #expect(mapping.osc == .init(host: "127.0.0.1", port: 9090, root: "/Syndicate/", feedbackHost: "127.0.0.1", feedbackPort: 9096,
+            feedbackQuietMs: 10000, feedbackAnswerMs: 2000
+        ))
         #expect(mapping.deck.number == 1)
         #expect(mapping.jog == .init(ccs: [55], bendReleaseMs: 80, seekSecondsPerTick: 0.02, seekFallbackTicksPerBeat: 32, requireTouch: false))
         // pickup and pickup_tolerance are new in the app (#22): Python had no pickup.
@@ -29,7 +32,7 @@ struct MappingTests {
         #expect(mapping.notes.pads == [32, 33, 34, 35, 36, 37, 38, 39])
         #expect(mapping.leds == .init(
             pitchCenter: 42, ring: 40, ringColor: [0, 128, 255], rollPadColor: [255, 140, 0],
-            loopPadColor: [0, 255, 0], dimUnlitButtons: true, beatPulse: .off, pulseMs: 100
+            loopPadColor: [0, 255, 0], dimUnlitButtons: true, beatPulse: .off, pulseMs: 100, staleIdle: .dim
         ))
     }
 

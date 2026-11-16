@@ -72,4 +72,30 @@ struct StatusPresentationTests {
     func unmatchedDeviceRow() {
         #expect(StatusLight(unmatchedDevice: "DDJ-FLX4") == StatusLight(label: "DDJ-FLX4", word: "NO PROFILE", tone: .attention))
     }
+
+    @Test("Listening, but Syndicate hasn't answered since launch (#21): a gray WAITING, and the icon asks for attention")
+    func feedbackWaiting() {
+        let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .waiting(port: 9096), deck: 1))
+        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● WAITING · DECK [1]")
+        #expect(status.lights.last == StatusLight(label: "FEEDBACK", word: "WAITING", tone: .idle))
+        #expect(status.icon == .attention)
+    }
+
+    @Test("Syndicate stopped answering (#21): an orange DROPPED light (not STOPPED: BRIDGE ● STOPPED is the red error), the icon asks for attention, and the dropout shows")
+    func feedbackStopped() {
+        let status = StatusPresentation(BridgeState(
+            controller: .connected(profile: "LC6000"), feedback: .stopped(port: 9096), deck: 1,
+            lastDropout: "Syndicate feedback stopped"
+        ))
+        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● DROPPED · DECK [1]")
+        #expect(status.lights.last == StatusLight(label: "FEEDBACK", word: "DROPPED", tone: .attention))
+        #expect(status.icon == .attention)
+        #expect(status.lastDropout == "LAST DROPOUT: Syndicate feedback stopped")
+    }
+
+    @Test("With no dropout yet, there is no dropout line")
+    func noDropoutLine() {
+        let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1))
+        #expect(status.lastDropout == nil)
+    }
 }

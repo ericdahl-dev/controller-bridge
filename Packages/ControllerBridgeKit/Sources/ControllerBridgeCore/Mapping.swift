@@ -36,19 +36,31 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var root: String
         public var feedbackHost: String
         public var feedbackPort: Int
+        /// After this long with no feedback, the bridge asks Syndicate to resend, to tell a quiet Syndicate from a
+        /// gone one. Syndicate sends nothing while every deck is paused and nothing changes.
+        public var feedbackQuietMs: Int
+        /// How long that request may go unanswered before feedback counts as stopped.
+        public var feedbackAnswerMs: Int
 
         enum CodingKeys: String, CodingKey {
             case host, port, root
             case feedbackHost = "feedback_host"
             case feedbackPort = "feedback_port"
+            case feedbackQuietMs = "feedback_quiet_ms"
+            case feedbackAnswerMs = "feedback_answer_ms"
         }
 
-        public init(host: String, port: Int, root: String, feedbackHost: String, feedbackPort: Int) {
+        public init(
+            host: String, port: Int, root: String, feedbackHost: String, feedbackPort: Int,
+            feedbackQuietMs: Int, feedbackAnswerMs: Int
+        ) {
             self.host = host
             self.port = port
             self.root = root
             self.feedbackHost = feedbackHost
             self.feedbackPort = feedbackPort
+            self.feedbackQuietMs = feedbackQuietMs
+            self.feedbackAnswerMs = feedbackAnswerMs
         }
     }
 
@@ -200,9 +212,15 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var beatPulse: BeatPulse
         /// How long the ring stays lit after each pulsed beat.
         public var pulseMs: Int
+        /// What Syndicate's LEDs show once feedback has stopped: dim, or off.
+        public var staleIdle: StaleIdle
 
         public enum BeatPulse: String, Equatable, Sendable, Codable {
             case off, beat, downbeat
+        }
+
+        public enum StaleIdle: String, Equatable, Sendable, Codable {
+            case dim, off
         }
 
         enum CodingKeys: String, CodingKey {
@@ -214,11 +232,12 @@ public struct Mapping: Equatable, Sendable, Codable {
             case dimUnlitButtons = "dim_unlit_buttons"
             case beatPulse = "beat_pulse"
             case pulseMs = "pulse_ms"
+            case staleIdle = "stale_idle"
         }
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
-            beatPulse: BeatPulse, pulseMs: Int
+            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle
         ) {
             self.pitchCenter = pitchCenter
             self.ring = ring
@@ -228,6 +247,7 @@ public struct Mapping: Equatable, Sendable, Codable {
             self.dimUnlitButtons = dimUnlitButtons
             self.beatPulse = beatPulse
             self.pulseMs = pulseMs
+            self.staleIdle = staleIdle
         }
     }
 

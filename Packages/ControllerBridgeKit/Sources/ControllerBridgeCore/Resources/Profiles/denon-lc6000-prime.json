@@ -15,7 +15,9 @@
       "port": 9090,
       "root": "/Syndicate/",
       "feedback_host": "127.0.0.1",
-      "feedback_port": 9096
+      "feedback_port": 9096,
+      "feedback_quiet_ms": 10000,
+      "feedback_answer_ms": 2000
     },
     "deck": {
       "number": 1
@@ -106,7 +108,8 @@
       ],
       "dim_unlit_buttons": true,
       "beat_pulse": "off",
-      "pulse_ms": 100
+      "pulse_ms": 100,
+      "stale_idle": "dim"
     }
   }
 }

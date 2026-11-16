@@ -113,6 +113,8 @@ final class Bridge {
     var synced = false
     var sliderEnabled = true
     var looping = false
+    /// Syndicate's feedback has stopped (#21): its LEDs show `leds.stale_idle`.
+    var feedbackStale = false
     /// Each hot cue's color slot, 0 for an empty cue.
     var cues = [Int](repeating: 0, count: 8)
     /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
@@ -139,8 +141,10 @@ final class Bridge {
         self.ccNames = ccNames
     }
 
+    /// The resync for this controller: forget what the LEDs show and repaint every one. The Coordinator asks
+    /// Syndicate to resend (one Resend for all controllers, #21).
     func start() {
-        send("Feedback/Resend", .int(1))
+        feedbackStale = false
         rearmPickup()
         ledCache.removeAll()
         refreshLEDs()
@@ -238,7 +242,8 @@ final class Bridge {
 
     func buttonLED(_ name: String, on: Bool) {
         guard let note = mapping.notes.buttons[name] else { return }
-        let idle = mapping.leds.dimUnlitButtons ? Self.dim : Self.off
+        var idle = mapping.leds.dimUnlitButtons ? Self.dim : Self.off
+        if feedbackStale, Self.syndicateButtons.contains(name), mapping.leds.staleIdle == .off { idle = Self.off }
         led(note, on ? Self.full : idle)
     }
 
