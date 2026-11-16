@@ -31,9 +31,12 @@ public struct BridgeState: Equatable, Sendable {
 
     /// The deck is Syndicate's tempo master (#53). Not a problem, so it never changes the icon.
     public var master: Bool
+    /// The built-in demo controller is running (#64), not real hardware.
+    public var demo: Bool
 
     public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil,
-                master: Bool = false) {
+                master: Bool = false, demo: Bool = false) {
+        self.demo = demo
         self.controller = controller
         self.feedback = feedback
         self.deck = deck
@@ -102,7 +105,10 @@ public struct StatusPresentation: Equatable, Sendable {
         case .portInUse(let port): StatusLight(label: "FEEDBACK", word: "PORT \(port) IN USE", tone: .error)
         case .failed: StatusLight(label: "FEEDBACK", word: "FAILED", tone: .error)
         }
-        lights = (state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)] : []) + [controller, feedback]
+        lights = (state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)] : [])
+            // Orange and first, and it keeps the icon on attention: DEMO must never be mistaken for real hardware.
+            + (state.demo ? [StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention)] : [])
+            + [controller, feedback]
         master = state.master ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
         line = lights.map { "\($0.label) ● \($0.word)" }.joined(separator: " · ") + " · DECK [\(state.deck)]"
             + (state.master ? " · MASTER" : "")

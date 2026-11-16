@@ -110,4 +110,19 @@ struct StatusPresentationTests {
         #expect(notMaster.master == nil)
         #expect(notMaster.line == "LC6000 ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
     }
+
+    @Test("Demo mode (#64): a leading orange DEMO ● CONTROLLER light, DEMO in the status line, and the icon on attention")
+    func demo() {
+        let status = StatusPresentation(BridgeState(
+            controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1, demo: true
+        ))
+        #expect(status.lights == [
+            StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention),
+            StatusLight(label: "Denon LC6000 PRIME", word: "CONNECTED", tone: .live),
+            StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live),
+        ])
+        #expect(status.line == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
+        // An exception to "the icon is for problems": DEMO must never be mistaken for real hardware.
+        #expect(status.icon == .attention)
+    }
 }

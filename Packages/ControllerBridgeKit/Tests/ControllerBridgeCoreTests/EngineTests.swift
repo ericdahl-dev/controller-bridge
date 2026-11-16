@@ -192,6 +192,96 @@ struct EngineTests {
         ])
     }
 
+    /// A demo maker for the Engine, on the rig's clock, with its LED writes dropped.
+    static func demoMaker(_ rig: Rig) -> @Sendable () -> DemoSession {
+        let clock = rig.clock, log = rig.log
+        return { DemoSession(profile: try! ControllerProfile.bundled()[0], clock: clock, log: log, ledOutput: Rig.FakeOutput()) }
+    }
+
+    @Test("Demo on stops the real controller (one release, ports closed); its MIDI is ignored; demo off brings it back with one Resend")
+    func demoSwapsCoordinators() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))   // a live Syndicate answered
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)   // Cue held
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+        let seen = Seen()
+
+        pipe.producer.demo(on: true)
+        pipe.producer.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)    // real Play: ignored
+        pipe.producer.tick()
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { seen.append($0) }, makeDemo: Self.demoMaker(rig))
+            .run(pipe.events)
+
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])   // nothing else reaches the network
+        #expect(rig.midi.connected == [])
+        #expect(seen.values.last?.demo == true)
+        #expect(seen.values.last?.controllers.map(\.connected) == [true])
+        #expect(seen.values.last?.feedback == .live)
+
+        let back = EventPipe()
+        rig.osc.sent.removeAll()
+        back.producer.demo(on: true)
+        back.producer.demo(on: false)
+        back.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { seen.append($0) }, makeDemo: Self.demoMaker(rig))
+            .run(back.events)
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Feedback/Resend", [.int(1)])])
+        #expect(seen.values.last?.demo == false)
+    }
+
+    @Test("Quitting during the demo stops it and ends the loop, with nothing sent to the network")
+    func quitDuringDemo() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+        pipe.producer.demo(on: true)
+        pipe.producer.tick()
+        pipe.producer.stop()
+        await Engine(coordinator: rig.coordinator, log: rig.log, makeDemo: Self.demoMaker(rig)).run(pipe.events)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("Settings changed during the demo wait, then apply to the real controller when the demo ends")
+    func settingsWaitForDemoEnd() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+        pipe.producer.demo(on: true)
+        pipe.producer.setDeck(2, controller: 0)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, makeDemo: Self.demoMaker(rig)).run(pipe.events)
+        #expect(rig.osc.sent == [])
+        #expect(rig.coordinator.status.controllers.map(\.deck) == [1])
+
+        let back = EventPipe()
+        back.producer.demo(on: true)
+        back.producer.setDeck(2, controller: 0)
+        back.producer.demo(on: false)
+        back.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, makeDemo: Self.demoMaker(rig)).run(back.events)
+        #expect(rig.coordinator.status.controllers.map(\.deck) == [2])
+    }
+
+    @Test("Diagnostics follow the demo: its traffic shows in the OSC log")
+    func diagnosticsFollowDemo() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        let pipe = EventPipe()
+        let seen = SeenDiagnostics()
+        pipe.producer.diagnostics(open: true)
+        pipe.producer.demo(on: true)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, onDiagnostic: { seen.append($0) }, makeDemo: Self.demoMaker(rig))
+            .run(pipe.events)
+        #expect(seen.values.map(\.text).contains("OSC -> /Syndicate/Feedback/Resend 1"))
+    }
+
     final class Seen: @unchecked Sendable {
         var values: [CoordinatorStatus] = []
         func append(_ status: CoordinatorStatus) { values.append(status) }
