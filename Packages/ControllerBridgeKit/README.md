@@ -76,6 +76,10 @@ Checked on hardware (2026-11-15, see #12 and #103):
   `jog.msb_cc`/`jog.lsb_cc` may be left out. `jog.relative_edge_cc` is the platter's edge on its own CC: it nudges
   without a touch, even with `require_touch`. Left out, the jog is the LC6000's absolute pair.
 - `leds`: the button LED notes and the `0b00RRGGBB` color table are confirmed.
+- `notes.pads` and `pads.roll_sizes` (#196): a controller has 1–16 pads (the LC6000 has 8, notes 32–39). Pad N is
+  hot cue N, and in Roll mode plays `roll_sizes[N-1]`, by Syndicate's SlipLoop names (`ThirtySecond`, `Sixteenth`,
+  `Eighth`, `Quarter`, `Half`, `One`, `Two`, `Four`); a pad past the list does nothing in Roll mode. Left out,
+  `roll_sizes` is the LC6000's eight, shortest first. Syndicate sends 8 cue slots, so pads 9–16 stay dark.
 - `leds.levels` (#194): a button LED's velocity at full, dim and off, 127, 1 and 0 on the LC6000. Another controller's
   profile can set any of them (each 0–127; one left out keeps the LC6000's). They drive the button and pitch-center
   LEDs, turning the LEDs off, and the LED sweep's button pass; pad and ring colors don't use them.

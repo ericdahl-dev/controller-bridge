@@ -1,6 +1,6 @@
 // Pads, pad modes and cue colors (#18), as in the Python bridge.
 
-/// What the eight pads do.
+/// What the pads do.
 enum PadMode {
     case hotCue, roll, loop, slicer
 }
@@ -12,13 +12,14 @@ extension Bridge {
         5: [0, 255, 255], 6: [0, 0, 255], 7: [128, 0, 255], 8: [255, 0, 255],
     ]
 
-    /// The color slots from Cues feedback: a slot and a name per cue, 8 cues.
-    static func cueSlots(_ arguments: [OSCArgument]) -> [Int] {
-        let slots = stride(from: 0, to: arguments.count, by: 2).prefix(8).map { index -> Int in
+    /// The color slots from Cues feedback: a slot and a name per cue, one per pad (#196). Syndicate sends 8; pads past
+    /// what it sends are empty.
+    static func cueSlots(_ arguments: [OSCArgument], pads: Int) -> [Int] {
+        let slots = stride(from: 0, to: arguments.count, by: 2).prefix(pads).map { index -> Int in
             if case .int(let slot) = arguments[index] { return Int(slot) }
             return 0
         }
-        return slots + Array(repeating: 0, count: 8 - slots.count)
+        return slots + Array(repeating: 0, count: max(0, pads - slots.count))
     }
 
     /// ColorPalette feedback: a slot, then its red, green and blue (0-255). Syndicate may send several slots in one
@@ -32,8 +33,6 @@ extension Bridge {
         refreshLEDs()
     }
 
-    /// Slip roll sizes, pad 1 to pad 8.
-    static let rollSizes = ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]
 
     /// A mode button. Switching mode first releases any held pad, so a hot cue or roll never sticks.
     func padModeButton(_ mode: PadMode) -> (Bool) -> Void {
@@ -50,7 +49,7 @@ extension Bridge {
         for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
     }
 
-    /// A pad press or release. `index` is 0-7, so hot cue `index + 1`.
+    /// A pad press or release. `index` is 0-based, so hot cue `index + 1`.
     func handlePad(_ index: Int, pressed: Bool) {
         defer { refreshLEDs() }
         guard pressed else { return releaseHold(.pad(index)) }
@@ -58,9 +57,10 @@ extension Bridge {
         switch padMode {
         case .hotCue: hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
         case .roll:
-            // The check allows 8 pads only; a hand-built mapping with more mustn't trap (#92).
-            guard Self.rollSizes.indices.contains(index) else { return }
-            hold(.pad(index), "SlipLoop/" + Self.rollSizes[index], press: [.int(1)], release: [.int(0)])
+            // The profile's roll sizes (#196); a pad past the list does nothing.
+            let sizes = mapping.pads.rollSizes
+            guard sizes.indices.contains(index) else { return }
+            hold(.pad(index), "SlipLoop/" + sizes[index], press: [.int(1)], release: [.int(0)])
         case .loop: sendDeck("SetCueLoop", .int(cue))
         case .slicer: break
         }

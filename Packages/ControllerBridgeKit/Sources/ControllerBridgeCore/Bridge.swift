@@ -138,7 +138,7 @@ final class Bridge {
     /// An LED sweep (#26) owns the controller's LEDs.
     var ledsHeld = false
     /// Each hot cue's color slot, 0 for an empty cue.
-    var cues = [Int](repeating: 0, count: 8)
+    lazy var cues = [Int](repeating: 0, count: mapping.notes.pads.count)
     /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
     var palette = Bridge.defaultPalette
 
@@ -249,7 +249,7 @@ final class Bridge {
             if loaded { rearmPickup() }
             if !loaded {
                 // The track is gone: forget its cues, where it was and how long it was.
-                cues = [Int](repeating: 0, count: 8)
+                cues = [Int](repeating: 0, count: mapping.notes.pads.count)
                 progress = nil
                 duration = nil
             }
@@ -258,7 +258,7 @@ final class Bridge {
             if value != sliderEnabled { rearmPickup() }
             sliderEnabled = value
         case "loop": looping = value
-        case "cues": cues = Self.cueSlots(message.arguments)
+        case "cues": cues = Self.cueSlots(message.arguments, pads: mapping.notes.pads.count)
         case "trackinfo":
             // Title, artist, key, BPM, length in seconds, …: only the length is used, for jog seeking.
             guard message.arguments.count >= 5 else { return }
