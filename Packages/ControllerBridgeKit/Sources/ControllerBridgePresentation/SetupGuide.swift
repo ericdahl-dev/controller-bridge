@@ -16,24 +16,6 @@ public struct SetupGuide: Equatable, Sendable {
         feedbackLive ? "Done: feedback live" : "Done"
     }
 
-    /// The feedback Syndicate must send, as its OSC FEEDBACK subscriptions are named.
-    public static let subscriptions = [
-        "Playing", "PlayPending", "Loaded and TrackInfo", "Position/Progress", "TempoSlider/TempoSliderEnabled", "Cues",
-        "BPM/Sync", "Loop",
-    ]
-
-    /// The subscription that sends a deck value (#150), by the value's name: "cues" is "Cues". Nil for one the guide
-    /// doesn't list.
-    public static func subscriptionName(for value: String) -> String? {
-        switch value {
-        case "playing": "Playing"
-        case "cues": "Cues"
-        case "sync": "BPM/Sync"
-        case "loop": "Loop"
-        default: nil
-        }
-    }
-
     /// Bump when the steps change in a way a returning user should see.
     public static let version = 1
 
@@ -48,7 +30,9 @@ public struct SetupGuide: Equatable, Sendable {
     public var otherAppsNote: String
 
     /// `controller` is the profile's name, such as "Denon LC6000 PRIME", or nil when there is none yet.
-    public init(controller: String?, oscPort: Int, feedbackPort: Int) {
+    /// `subscriptions` are the profile's, by Syndicate's names, from Core's one list (#211), so the guide and the
+    /// check can't disagree.
+    public init(controller: String?, oscPort: Int, feedbackPort: Int, subscriptions: [String]) {
         let device = controller.map { "\($0)'s" } ?? "your controller's"
         let unit = controller ?? "your controller"
         otherAppsNote = "Quit djay Pro, Engine DJ or any other app using \(unit) first, and power-cycle \(unit) if one was "
@@ -58,7 +42,7 @@ public struct SetupGuide: Equatable, Sendable {
             Step(title: "Settings → OSC FEEDBACK", detail: "Set DEST IP to 127.0.0.1 and PORT to \(feedbackPort)."),
             // All four titles follow Syndicate's menu path (#68).
             Step(title: "Settings → OSC FEEDBACK → SUBSCRIPTIONS", detail: "Turn on these OSC FEEDBACK subscriptions:",
-                 checklist: Self.subscriptions),
+                 checklist: subscriptions),
             Step(title: "Settings → MIDI",
                  detail: "Turn \(device) MIDI input off. Otherwise Syndicate's own mapping and the bridge would both react to every button."),
         ]
