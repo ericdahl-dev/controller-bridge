@@ -51,4 +51,14 @@ struct ProfileImportTests {
         #expect(object["id"] as? String == "denon-lc6000-prime")
         #expect(((object["mapping"] as? [String: Any])?["notes"] as? [String: Any])?["cue"] as? Int == 2)
     }
+
+    @Test("device_hints needs at least one non-empty name, or no device would ever match after the next replug (#93)")
+    func deviceHintsNotEmpty() {
+        #expect(throws: MappingError.invalid(["device_hints: needs at least one device name"])) {
+            try Self.importing(#"{"device_hints": []}"#)
+        }
+        #expect(throws: MappingError.invalid(["device_hints[1]: can't be empty"])) {
+            try Self.importing(#"{"device_hints": ["LC6000", " "]}"#)
+        }
+    }
 }

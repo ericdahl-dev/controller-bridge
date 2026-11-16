@@ -23,8 +23,14 @@ extension ControllerProfile {
             case let ("id", .string(id)) where !bundled.contains(where: { $0.id == id }):
                 problems.append("id: \"\(id)\" isn't a bundled profile (\(bundled.map(\.id).joined(separator: ", ")))")
             case let ("device_hints", .array(hints)):
+                // With no usable hint, no device matches after the next replug or launch (#93).
+                if hints.isEmpty { problems.append("device_hints: needs at least one device name") }
                 for (index, hint) in hints.enumerated() {
-                    if let problem = Mapping.kindProblem(hint, expected: .string("")) { problems.append("device_hints[\(index)]: \(problem)") }
+                    if let problem = Mapping.kindProblem(hint, expected: .string("")) {
+                        problems.append("device_hints[\(index)]: \(problem)")
+                    } else if case .string(let text) = hint, text.trimmingCharacters(in: .whitespaces).isEmpty {
+                        problems.append("device_hints[\(index)]: can't be empty")
+                    }
                 }
             case ("mapping", _):
                 problems += Mapping.problems(in: value).map { "mapping.\($0)" }
