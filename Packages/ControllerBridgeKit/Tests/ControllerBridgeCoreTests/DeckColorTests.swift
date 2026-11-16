@@ -94,4 +94,14 @@ struct DeckColorTests {
         #expect(rig.log.lines.filter { $0.contains("black") }
             == ["Syndicate's deck 2 color is black, which the LC6000's ring can't show; using the default"])
     }
+
+    @Test("The LC6000 preview: each channel's rgb222 level × 85, and a dim color lifted as the ring lifts it", arguments: [
+        ([236, 207, 101], [255, 170, 85]),
+        ([108, 114, 119], [85, 85, 85]),
+        ([10, 0, 0], [85, 0, 0]),
+        ([0, 0, 0], [0, 0, 0]),
+    ])
+    func ledPreview(rgb: [Int], shown: [Int]) {
+        #expect(DeckColors.ledPreview(rgb) == shown)
+    }
 }
