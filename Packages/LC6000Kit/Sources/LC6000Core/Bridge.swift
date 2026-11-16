@@ -21,7 +21,10 @@ final class Bridge {
 
     /// CC handlers by name (see `ccNames`). Each is called with the raw 0-127 value.
     static var ccHandlers: [String: (Bridge) -> (UInt8) -> Void] {
-        [:]
+        [
+            // Browse, loops and jumps (Bridge+Browse.swift).
+            "select_turn": { $0.selectTurn },
+        ]
     }
 
     let mapping: Mapping

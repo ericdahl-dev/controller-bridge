@@ -62,4 +62,30 @@ struct BrowseTests {
         coordinator.midi(.noteOn(channel: 0, note: 18, velocity: 127), source: Rig.lc6000.id)
         #expect(osc.sent == [OSCMessage("/Syndicate/Browser/L3", [.int(1)])])
     }
+
+    static func turn(_ rig: Rig, cc: UInt8, _ value: UInt8) {
+        rig.coordinator.midi(.controlChange(channel: 0, controller: cc, value: value), source: Rig.lc6000.id)
+    }
+
+    // Relative CC values per the LC6000 PRIME MIDI spec: 0x01-0x3F forward that many ticks, 0x7F-0x40 back
+    // (0x7F is one tick back), 0 is no movement.
+    @Test("Turning Select moves the browser one step per tick: 0x02 is two down, 0x7F one up, 0 nothing")
+    func selectTurn() throws {
+        let rig = try Self.startedRig()
+        Self.turn(rig, cc: 6, 0x02)
+        Self.turn(rig, cc: 6, 0x7F)
+        Self.turn(rig, cc: 6, 0x00)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Browser/Down", [.int(1)]),
+            OSCMessage("/Syndicate/Browser/Down", [.int(1)]),
+            OSCMessage("/Syndicate/Browser/Up", [.int(1)]),
+        ])
+    }
+
+    @Test("A fast backward turn (0x7D, three ticks) moves the browser up three")
+    func selectTurnFastBack() throws {
+        let rig = try Self.startedRig()
+        Self.turn(rig, cc: 6, 0x7D)
+        #expect(rig.osc.sent == Array(repeating: OSCMessage("/Syndicate/Browser/Up", [.int(1)]), count: 3))
+    }
 }

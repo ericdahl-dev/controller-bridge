@@ -22,4 +22,10 @@ extension Bridge {
     func selectPress(_ pressed: Bool) {
         if pressed { send("Browser/L\(mapping.deck.number)", .int(1)) }
     }
+
+    /// One browser step per tick.
+    func selectTurn(_ value: UInt8) {
+        let ticks = relativeTicks(value)
+        for _ in 0..<abs(ticks) { send(ticks > 0 ? "Browser/Down" : "Browser/Up", .int(1)) }
+    }
 }
