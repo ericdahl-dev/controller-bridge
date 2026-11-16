@@ -242,8 +242,13 @@ private struct HelpBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Step.x2) {
             Text("Why no LEDs?").font(Theme.labelFont).foregroundStyle(Theme.caption)
-            Text(help.text).font(Theme.ui(13)).foregroundStyle(Theme.text)
-                .fixedSize(horizontal: false, vertical: true)
+            if help.subscriptions.isEmpty {
+                Text(help.text).font(Theme.ui(13)).foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                // Subscriptions off: a list, not a paragraph (#261).
+                SubscriptionListView(help: help)
+            }
             HStack(spacing: Theme.Step.x2) {
                 if help.showsGuide {
                     Button("Setup guide") { SetupGuideWindow.open(openWindow) }.buttonStyle(PillButtonStyle(small: true))

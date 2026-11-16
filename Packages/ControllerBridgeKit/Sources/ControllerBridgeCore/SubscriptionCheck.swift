@@ -7,20 +7,24 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
     /// The deck's phase in the bar, for the jog display's needle (#165). Asked for only while the display is on.
     case barRamp
 
-    /// As Syndicate's OSC FEEDBACK screen names it.
-    public var syndicateName: String {
+    /// Its checkboxes, each as Syndicate's OSC Feedback screen labels it (#261: the user's screenshot shows
+    /// TempoSlider and TempoSliderEnabled as two boxes, and BPM and Sync). Position/Progress is unconfirmed.
+    public var checkboxes: [String] {
         switch self {
-        case .playing: "Playing"
-        case .playPending: "PlayPending"
-        case .loaded: "Loaded and TrackInfo"
-        case .progress: "Position/Progress"
-        case .tempoSlider: "TempoSlider/TempoSliderEnabled"
-        case .cues: "Cues"
-        case .sync: "BPM/Sync"
-        case .loop: "Loop"
-        case .barRamp: "BarRamp"
+        case .playing: ["Playing"]
+        case .playPending: ["PlayPending"]
+        case .loaded: ["Loaded", "TrackInfo"]
+        case .progress: ["Position/Progress"]
+        case .tempoSlider: ["TempoSlider", "TempoSliderEnabled"]
+        case .cues: ["Cues"]
+        case .sync: ["BPM", "Sync"]
+        case .loop: ["Loop"]
+        case .barRamp: ["BarRamp"]
         }
     }
+
+    /// Its checkboxes as one name: "TempoSlider and TempoSliderEnabled".
+    public var syndicateName: String { checkboxes.joined(separator: " and ") }
 
     /// The subscriptions a profile needs, the only ones asked for and judged (#211). Every profile needs these eight
     /// today; mixer and player-type ones (#207, #210) join when a profile uses them.

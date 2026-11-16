@@ -54,8 +54,8 @@ struct SetupGuideTests {
     func subscriptionsChecklist() {
         let guide = SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096, subscriptions: Self.subscriptions)
         #expect(guide.steps[2].checklist == [
-            "Playing", "PlayPending", "Loaded and TrackInfo", "Position/Progress", "TempoSlider/TempoSliderEnabled", "Cues",
-            "BPM/Sync", "Loop",
+            "Playing", "PlayPending", "Loaded and TrackInfo", "Position/Progress", "TempoSlider and TempoSliderEnabled", "Cues",
+            "BPM and Sync", "Loop",
         ])
         #expect(guide.steps.allSatisfy { $0.checklist.isEmpty || $0.title.hasSuffix("SUBSCRIPTIONS") })
         #expect(!guide.steps.contains { $0.detail.contains("Tick") })
