@@ -112,3 +112,17 @@ struct JogDisplayPreviewNoControllerTests {
         #expect(Self.decks(take()) == [3])
     }
 }
+
+@Suite("Jog display preview from the pipe")
+struct JogDisplayPreviewPipeTests {
+    @Test("The preview deck the user picks reaches the Coordinator through the pipe")
+    func pickFromThePipe() async throws {
+        let (rig, take) = try JogDisplayPreviewNoControllerTests.rig()
+        _ = take()
+        let pipe = EventPipe()
+        pipe.producer.setJogPreviewDeck(4)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        #expect(JogDisplayPreviewNoControllerTests.decks(take()) == [4])
+    }
+}

@@ -90,6 +90,10 @@ public struct Engine {
             case .stopLEDSweep: active.stopLEDSweep()
             // The real unit's display answers the real Coordinator, demo or not.
             case .jogDisplayReply(let bytes): coordinator.jogDisplayReply(bytes)
+            // The preview's deck (#221) holds for the real controller and the demo alike.
+            case .setJogPreviewDeck(let deck):
+                coordinator.setJogPreviewDeck(deck)
+                demo?.coordinator.setJogPreviewDeck(deck)
             case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setControllers, .setProfiles, .resync,
                  .setJogDisplay:
                 if demo == nil { apply(event) } else { waiting.append(event) }
