@@ -53,6 +53,8 @@ public final class Coordinator {
     private var lastFeedbackAt: Double?
     /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
     private var resendSentAt: Double?
+    /// The answer to the last Resend (#150): when it went out, and the addresses that arrived within its window.
+    private var answer: (sentAt: Double, addresses: [String])?
 
     /// Set while the Diagnostics window is open (#26); nil otherwise, so nothing is built for it during a set.
     /// The LED sweep in progress: when it started, its steps and the next one to send.
@@ -302,6 +304,7 @@ public final class Coordinator {
         runSweep()
         for bridge in bridges { bridge.tick() }
         checkLiveness()
+        checkSubscriptions()
         disconnectFailedOutputs()
     }
 
@@ -408,6 +411,7 @@ public final class Coordinator {
             }
         }
         diagnostics?(.oscIn(message))
+        answer?.addresses.append(message.address)
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
@@ -456,6 +460,14 @@ public final class Coordinator {
             resendSentAt = nil
             requestResend()
         }
+    }
+
+    /// Once a Resend's answer window closes, what the answer held shows which subscriptions are on (#150).
+    private func checkSubscriptions() {
+        guard let answer, clock.now - answer.sentAt >= Double(oscSettings.feedbackAnswerMs) / 1000 else { return }
+        self.answer = nil
+        guard let check = SubscriptionCheck(answer: answer.addresses) else { return }
+        status.noDeckData = check.noDeckData
     }
 
     /// Syndicate didn't answer: show idle for its state until it's back.
@@ -665,6 +677,7 @@ public final class Coordinator {
     private func requestResend() {
         guard resendSentAt == nil else { return }
         resendSentAt = clock.now
+        answer = (clock.now, [])
         controllers[0].bridge.send("Feedback/Resend", .int(1))
     }
 
