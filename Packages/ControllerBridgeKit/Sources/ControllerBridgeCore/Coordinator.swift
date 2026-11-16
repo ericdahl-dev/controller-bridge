@@ -9,7 +9,7 @@ public final class Coordinator {
     private let log: any LogSink
     private var controllers: [Controller]
     /// The controller profiles a device can match.
-    private let profiles: [ControllerProfile]
+    private var profiles: [ControllerProfile]
     /// Unmatched devices already logged, so a device-list change doesn't log them again.
     private var loggedUnmatched: Set<MIDIEndpoint.ID> = []
     /// Devices matching more than one profile, already logged.
@@ -293,6 +293,36 @@ public final class Coordinator {
             controllers[index].bridge.start()
             requestResend()
         }
+        disconnectFailedOutputs()
+    }
+
+    /// An imported mapping (#24): these profiles replace the current ones. A controller whose profile changed releases
+    /// its held controls first, then runs the new one on the same ports, with its deck setting kept, and the bridge
+    /// resyncs once.
+    public func setProfiles(_ newProfiles: [ControllerProfile]) {
+        guard !newProfiles.isEmpty else { return }
+        profiles = newProfiles
+        var resync = false
+        for index in controllers.indices {
+            guard let updated = newProfiles.first(where: { $0.id == controllers[index].profile.id }),
+                  updated != controllers[index].profile else { continue }
+            let old = controllers[index].bridge
+            old.releaseAll()
+            var mapping = updated.mapping
+            // The deck is a setting, not part of the profile.
+            mapping.deck.number = status.controllers[index].deck
+            let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
+            bridge.setLEDsEnabled(ledsEnabled)
+            bridge.output = old.output
+            controllers[index].bridge = bridge
+            controllers[index].profile = updated
+            if controllers[index].source != nil {
+                status.controllers[index].profile = updated.name
+                bridge.start()
+                resync = true
+            }
+        }
+        if resync { requestResend() }
         disconnectFailedOutputs()
     }
 
