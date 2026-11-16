@@ -223,4 +223,16 @@ struct PadsTests {
         #expect((UInt8(32)...39).map { leds[$0] } == [0, 0, 0, 0, 0, 0, 0, 0])
         #expect(leds[Self.modeRoll] == 127)
     }
+
+    @Test("The platter ring (note 40) lights in the ring color (0, 128, 255) while a track is loaded: 0b00_10_11 = 11")
+    func ringFollowsLoaded() throws {
+        let rig = try Self.startedRig()
+        #expect(rig.leds[40] == 0)
+
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        #expect(rig.leds[40] == 11)
+
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
+        #expect(rig.leds[40] == 0)
+    }
 }
