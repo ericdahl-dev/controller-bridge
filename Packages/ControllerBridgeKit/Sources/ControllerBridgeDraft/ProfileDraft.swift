@@ -21,6 +21,7 @@ public struct ProfileDraft: Sendable {
         draft.buttons(capture)
         draft.noise(capture)
         draft.pads(capture)
+        draft.layers(capture)
         draft.jog(capture)
         draft.pitch(capture)
         draft.needle(capture)
@@ -118,6 +119,28 @@ public struct ProfileDraft: Sendable {
         }
         todo("mapping.pads.mode_notes", "Only if the pads send other notes in Roll, Loop and Slicer modes (#225): press pad 1–8 in each mode and list them. The capture only records Hot Cue mode.")
         todo("mapping.pads.mode_select", "Four mode buttons (\"buttons\") or one that cycles (\"cycle\", #198)? From the manual, or by pressing the mode buttons in MIDI Monitor.")
+    }
+
+    /// Deck layers: deck 2's Play on its own channel means the left side switches channels. The note the controller
+    /// sends on deck 2's channel as it switches is the layer note. Only decks 1 and 2 are captured.
+    private mutating func layers(_ capture: CaptureFile) {
+        let key = "mapping.midi.layers"
+        guard case .int(let deck1)? = profile.value(at: "mapping.midi.channel"),
+              let play2 = control(capture, "deck2.play", for: key) else { return }
+        guard play2.channel != deck1 else {
+            todo(key, "Deck 2's Play came on deck 1's channel (\(deck1)), so the side doesn't switch channels. If it switches decks some other way, that needs a new profile key.")
+            return
+        }
+        let layer = { (channel: Int, deck: Int) in DraftJSON.object([.init(key: "channel", value: .int(channel)), .init(key: "deck", value: .int(deck))]) }
+        set(key, .array([layer(deck1, 1), layer(play2.channel, 2)]))
+        todo(key, "Only decks 1 and 2 were captured. For a 4-deck controller, add decks 3 and 4: switch to each and press Play in MIDI Monitor.")
+        let announce = capture.steps.first { $0.prompt == "layer2.select" && $0.status == .confirmed }?
+            .controls.first { $0.kind == .note && $0.channel == play2.channel }
+        if let note = announce?.number {
+            set("mapping.midi.layer_note", .int(note))
+        } else {
+            todo("mapping.midi.layer_note", "No note came on deck 2's channel as the side switched. Leave it out if the controller doesn't announce its layer.")
+        }
     }
 
     /// The jog: an absolute 14-bit pair (the LC6000) or a relative CC (#204), the edge's own CC when it has one, and the
