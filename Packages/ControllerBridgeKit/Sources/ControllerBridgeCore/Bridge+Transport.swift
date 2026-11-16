@@ -1,4 +1,4 @@
-// Transport buttons: Play, Cue, Sync, Master, Censor, Key Lock, Slip, Pitch − / + and Shift.
+// Transport buttons: Play, Cue, Sync, Master, Censor, Key Lock, Slip, Pitch Bend − / + and Shift.
 // Triggers fire on press only; holds send 1, then 0.
 
 extension Bridge {
@@ -14,12 +14,14 @@ extension Bridge {
         if pressed { sendDeck("TempoMaster", .int(1)) }
     }
 
+    /// Pitch Bend − (#114): nudges the tempo down while held.
     func pitchMinus(_ pressed: Bool) {
-        if pressed { sendDeck(shift ? "PitchReset" : "PitchDown", .int(1)) }
+        holdButton(.phaseMinus, "PhaseMinus", pressed: pressed)
     }
 
+    /// Pitch Bend + (#114): nudges the tempo up while held.
     func pitchPlus(_ pressed: Bool) {
-        if pressed { sendDeck(shift ? "PitchReset" : "PitchUp", .int(1)) }
+        holdButton(.phasePlus, "PhasePlus", pressed: pressed)
     }
 
     func shiftButton(_ pressed: Bool) {

@@ -54,25 +54,48 @@ struct TransportTests {
         ])
     }
 
-    @Test("Pitch − / + send PitchDown and PitchUp; with Shift held, both send PitchReset")
-    func pitchButtons() throws {
+    // #114: the LC6000's printed Shift functions. Pitch Bend − / + nudge the tempo while held (Syndicate §14.6).
+
+    @Test("Pitch Bend − / + are holds: PhaseMinus or PhasePlus 1 on press, 0 on release")
+    func pitchBendHolds() throws {
         let rig = try Self.started()
         Self.press(rig, 24)
         Self.release(rig, 24)
         Self.press(rig, 25)
         Self.release(rig, 25)
-        Self.press(rig, 26)   // Shift down
-        Self.press(rig, 24)
-        Self.press(rig, 25)
-        Self.release(rig, 26) // Shift up
-        Self.press(rig, 25)
         #expect(rig.osc.sent == [
-            OSCMessage("/Syndicate/Deck/1/PitchDown", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/PitchReset", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/PitchReset", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PhaseMinus", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PhaseMinus", [.int(0)]),
+            OSCMessage("/Syndicate/Deck/1/PhasePlus", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PhasePlus", [.int(0)]),
         ])
+    }
+
+    @Test("A held Pitch Bend is released once by stop and once by an unplug")
+    func pitchBendReleasedByStopAndUnplug() throws {
+        let rig = try Self.started()
+        Self.press(rig, 24)
+        rig.osc.sent.removeAll()
+        rig.coordinator.stop()
+        Self.release(rig, 24)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseMinus", [.int(0)])])
+
+        let unplugged = try Self.started()
+        Self.press(unplugged, 25)
+        unplugged.osc.sent.removeAll()
+        unplugged.midi.sources = []
+        unplugged.coordinator.devicesChanged()
+        #expect(unplugged.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhasePlus", [.int(0)])])
+    }
+
+    @Test("Leaving a layer with Pitch Bend held releases it on the old deck")
+    func pitchBendReleasedByLayerSwitch() throws {
+        let rig = try LayersTests.layered()
+        LayersTests.note(rig, channel: 1, 25, 127)
+        rig.osc.sent.removeAll()
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        #expect(rig.osc.sent.first == OSCMessage("/Syndicate/Deck/1/PhasePlus", [.int(0)]))
+        #expect(rig.osc.sent.filter { $0.address.hasSuffix("PhasePlus") }.count == 1)
     }
 
     @Test("Key Lock toggles on each press: PitchPreserve 1, then 0, and its LED follows")
@@ -181,13 +204,13 @@ struct TransportTests {
         #expect(rig.osc.sent == [])
     }
 
-    @Test("Release-all clears Shift: its LED goes dim, and Pitch + afterwards sends PitchUp, not PitchReset")
+    @Test("Release-all clears Shift: its LED goes dim, and Pitch Bend + afterwards nudges instead of the Shift function")
     func releaseAllClearsShift() throws {
         let rig = try Self.started()
         Self.press(rig, 26)
         rig.coordinator.willSleep()   // release-all, ports left open
         #expect(rig.leds[26] == 1)
         Self.press(rig, 25)
-        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)])])
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhasePlus", [.int(1)])])
     }
 }

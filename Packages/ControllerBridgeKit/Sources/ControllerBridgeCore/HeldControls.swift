@@ -14,6 +14,8 @@ enum HoldKey: Hashable {
     case censor
     case pad(Int)
     case bend
+    case phaseMinus
+    case phasePlus
 }
 
 /// The held controls, in press order.
