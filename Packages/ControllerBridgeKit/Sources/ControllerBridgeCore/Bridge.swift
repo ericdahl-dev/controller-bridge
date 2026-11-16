@@ -80,6 +80,8 @@ final class Bridge {
     var keyLockOn = false
     /// The deck colors the ring shows (#122); a setting can replace the defaults (#123).
     var deckColors = DeckColors.defaults
+    /// Vivid or exact ring and held-pad colors (#151).
+    var ringColors = RingColors.vivid
     /// The address of a Reverse latched on with Shift + Censor (#114), so release-all turns it off on that deck.
     var latchedReverse: String?
     /// Lines for the log, taken by the Coordinator after each event (#114).

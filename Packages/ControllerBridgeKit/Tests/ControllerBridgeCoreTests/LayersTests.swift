@@ -327,19 +327,19 @@ struct LayersTests {
     }
 
     // #122: the ring shows the deck the layer drives, so a layer change visibly changes it. Deck 2's badge #ECCF65 is
-    // rgb222 3,2,1 = 57.
+    // yellow (255, 255, 0), 3,3,0 = 60.
 
-    @Test("Normal mode: switching to layer 2 with deck 2 loaded repaints the ring on ch1 in deck 2's color, 57")
+    @Test("Normal mode: switching to layer 2 with deck 2 loaded repaints the ring on ch1 in deck 2's color, 60")
     func normalModeRingInDeckColor() throws {
         let rig = try Self.layered()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
         let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
         output.sent.removeAll()
         Self.note(rig, channel: 2, 51, 127)
-        #expect(output.sent.last { if case .noteOn(0, 40, _) = $0 { true } else { false } } == .noteOn(channel: 0, note: 40, velocity: 57))
+        #expect(output.sent.last { if case .noteOn(0, 40, _) = $0 { true } else { false } } == .noteOn(channel: 0, note: 40, velocity: 60))
     }
 
-    @Test("Multi-channel mode: with layer 2 in front, deck 2's ring goes out on ch2 in deck 2's color, 57")
+    @Test("Multi-channel mode: with layer 2 in front, deck 2's ring goes out on ch2 in deck 2's color, 60")
     func multiChannelRingInDeckColor() throws {
         let rig = try Self.layered()
         let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
@@ -347,7 +347,7 @@ struct LayersTests {
         Self.note(rig, channel: 2, 1, 127)       // Play on ch2: controls on ch2
         output.sent.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
-        #expect(output.sent.contains(.noteOn(channel: 1, note: 40, velocity: 57)))
+        #expect(output.sent.contains(.noteOn(channel: 1, note: 40, velocity: 60)))
     }
 
     @Test("A profile swap on layer 3 stays on layer 3: ch1 Play goes to deck 3, and only layer 3 paints the LEDs (#115)")
@@ -472,4 +472,18 @@ struct LayersTests {
         #expect(sent.contains(.noteOn(channel: 0, note: 1, velocity: 127)))
     }
 
+    @Test("Connecting says where the LEDs go, or that no output was found, so a dark unit can be diagnosed from the log")
+    func connectLogsTheLEDOutput() throws {
+        let midi = Rig.FakeMIDISystem(sources: [Self.wdIn, Self.controlsIn], destinations: [Self.wdOut, Self.controlsOut])
+        let log = Rig.FakeLog()
+        let coordinator = Coordinator(profiles: try ControllerProfile.bundled(), midi: midi, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: log)
+        coordinator.start(controllers: [ControllerSettings(deck: 1, input: nil, output: nil, followLayers: false)], ledsEnabled: true)
+        #expect(log.lines.contains("LEDs go to Denon DJ LC6000 PRIME LC6000 PRIME Controller"))
+
+        let none = Rig.FakeMIDISystem(sources: [Self.controlsIn], destinations: [Self.wdOut])
+        let noneLog = Rig.FakeLog()
+        let alone = Coordinator(profiles: try ControllerProfile.bundled(), midi: none, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: noneLog)
+        alone.start(controllers: [ControllerSettings(deck: 1, input: nil, output: nil, followLayers: false)], ledsEnabled: true)
+        #expect(noneLog.lines.contains("No LED output found for Denon DJ LC6000 PRIME LC6000 PRIME Controller, so its LEDs stay dark"))
+    }
 }

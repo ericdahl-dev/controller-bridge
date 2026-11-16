@@ -1,12 +1,12 @@
-# controller-bridge
+# DeckBridge
 
 A Mac menu-bar app that lets you use a **Denon LC6000 PRIME** with **[Untitled Audio Syndicate](https://untitledaudiosyndicate.com)** through Syndicate's OSC API, with LED feedback.
 
 Syndicate's own MIDI mapping (0.3.7) can't handle the LC6000's 14-bit jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10. The app reads the LC6000's MIDI, converts it, and sends it to Syndicate's fixed OSC addresses. It also listens to Syndicate's OSC feedback to light the controller.
 
 ```
-LC6000 ──USB MIDI──▶  Controller Bridge  ──OSC :9090──▶ Syndicate
-LC6000 ◀──MIDI LEDs──  Controller Bridge  ◀──OSC feedback :9096── Syndicate
+LC6000 ──USB MIDI──▶  DeckBridge  ──OSC :9090──▶ Syndicate
+LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── Syndicate
 ```
 
 ## What it does
@@ -49,7 +49,7 @@ LC6000 ◀──MIDI LEDs──  Controller Bridge  ◀──OSC feedback :9096�
 
 ## Install
 
-Install **Controller Bridge** from the Mac App Store (macOS 26 or later). It lives in the menu bar and has no Dock icon. On first launch it opens a short setup guide for Syndicate.
+Install **DeckBridge** from the Mac App Store (macOS 26 or later). It lives in the menu bar and has no Dock icon. On first launch it opens a short setup guide for Syndicate.
 
 ## Set up Syndicate
 
@@ -145,7 +145,7 @@ xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configu
 scripts/smoke.sh   # a virtual LC6000 and a fake Syndicate check Play out and the Play LED back; CI requires it too
 ```
 
-Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. Quit Syndicate and the app itself first, because the smoke check needs UDP 9090 and 9096. A real controller can stay plugged in: the check pins the app to its own virtual device and puts your saved settings back afterwards.
+Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. Quit Syndicate and the app itself first, because the smoke check needs UDP 9090 and 9096. With no real LC6000 attached, the check runs the app on automatic devices beside a virtual "… WD" port, as on a real unit (#143). A real controller can stay plugged in: then the check pins the app to its own virtual device instead and says the automatic case was skipped. It puts your saved settings back afterwards. CI always runs the automatic case.
 
 **CI uses an older Xcode than you may have locally.** GitHub's standard macOS runner builds with Xcode 26.x (Swift 6.2), while development has been on Xcode 27.2. The two compilers can disagree. Once, Xcode 26.6's Release optimizer crashed on code that 27.2 built fine (#65). If **App build** fails with a `swift-frontend` stack dump, find the function named in `gh run view <id> --log-failed`, then simplify or split it.
 
@@ -153,7 +153,7 @@ Releases are a version tag on `main`. See [`docs/DEVELOPING.md`](docs/DEVELOPING
 
 ### Look and fonts
 
-The app follows Syndicate's dark, flat style (#34). The colors were sampled from its public screenshots, and `ControllerBridgePresentation` tests every text color against WCAG AA. The app bundles two fonts under the [SIL Open Font License 1.1](https://openfontlicense.org): [Inter](https://github.com/rsms/inter) 4.1 for UI text and [IBM Plex Mono](https://github.com/IBM/plex) 2.5.0 for numbers. Their license files ship in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo).
+The app follows Syndicate's flat style (#34) in its dark and light themes. The colors are Syndicate's own tokens, from its user guide's CSS (#127), and `ControllerBridgePresentation` tests every text color against WCAG AA in both themes. **Settings › Appearance** picks Match macOS, Dark or Light. The app bundles two fonts under the [SIL Open Font License 1.1](https://openfontlicense.org): [Inter](https://github.com/rsms/inter) 4.1 for UI text and [IBM Plex Mono](https://github.com/IBM/plex) 2.5.0 for numbers. Their license files ship in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo).
 
 For PR screenshots, a Debug build can render the panel without a screen: `ControllerBridge.app/Contents/MacOS/ControllerBridge --render-snapshots snaps`. It prints where the PNGs went (inside the sandbox container). Release builds leave this out.
 

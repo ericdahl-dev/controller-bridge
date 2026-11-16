@@ -127,4 +127,46 @@ struct DeckColorTests {
         #expect(rig.leds[40] == 48)
         #expect(rig.coordinator.status.deckColors[4] == [128, 0, 255])
     }
+
+    // #151: the ring is vivid. Take out the white (the smallest channel), scale the strongest to level 3, drop a channel
+    // under 30 % of it, quantize. A near-gray (saturation under 20 %) keeps the exact mapping.
+    static let vividCases: [([Int32], UInt8)] = [
+        ([255, 0, 0], 48),                      // red, unchanged
+        ([128, 0, 255], 35),                    // purple: 50 % ≥ 30 %, so (2, 0, 3)
+        ([0, 200, 180], 15),                    // teal-ish: (0, 3, 3)
+        ([255, 180, 180], 48),                  // pastel: the white comes out, (3, 0, 0)
+        ([0x6C, 0x72, 0x77], 21),               // near-gray: exact, (1, 1, 1)
+        ([255, 140, 0], 56),                    // orange stays orange, never red: (3, 2, 0)
+        ([0xC5, 0x75, 0x4E], 52),               // a muted orange: green is 33 % ≥ 30 %, so (3, 1, 0), not red
+    ]
+
+    @Test("Vivid ring colors from Syndicate's palette (slot 1, deck 1)", arguments: vividCases)
+    func vividRing(rgb: [Int32], velocity: UInt8) throws {
+        let rig = try Self.onDeck(1)
+        Self.palette(rig, slot: 1, rgb[0], rgb[1], rgb[2])
+        #expect(rig.leds[40] == velocity)
+    }
+
+    @Test("Switching ring colors to Exact repaints at once: deck 2 at #ECCF65 goes from vivid 56 to exact 57, and back")
+    func ringColorsSwitch() throws {
+        let rig = try Self.onDeck(2)
+        Self.palette(rig, slot: 3, 0xEC, 0xCF, 0x65)
+        #expect(rig.leds[40] == 56)
+        rig.coordinator.setRingColors(.exact)
+        #expect(rig.leds[40] == 57)
+        rig.coordinator.setRingColors(.vivid)
+        #expect(rig.leds[40] == 56)
+    }
+
+    @Test("The LC6000 preview follows the ring mode: Syndicate's yellow is (255, 170, 85) exact, (255, 170, 0) vivid")
+    func previewFollowsMode() {
+        #expect(DeckColors.ledPreview([236, 207, 101], mode: .exact) == [255, 170, 85])
+        #expect(DeckColors.ledPreview([236, 207, 101], mode: .vivid) == [255, 170, 0])
+        #expect(DeckColors.ledPreview([255, 180, 180], mode: .vivid) == [255, 0, 0])
+    }
+
+    @Test("The default deck colors are Syndicate's factory cue palette slots 1, 3, 5 and 7: red, yellow, cyan, purple")
+    func defaultsAreFactorySlots() {
+        #expect(DeckColors.defaults == DeckColors(rgb: [1: [255, 0, 0], 2: [255, 255, 0], 3: [0, 255, 255], 4: [128, 0, 255]]))
+    }
 }

@@ -39,7 +39,7 @@ extension BridgeStatus {
         case .listening(let port):
             switch syndicateFeedback {
             case .waiting: .waiting(port: port)
-            case .live: .live(port: port)
+            case .live: noDeckData ? .noDeckData(port: port) : .live(port: port)
             case .stale: .stopped(port: port)
             }
         case .portInUse(let port): .portInUse(port: port)
@@ -56,7 +56,7 @@ extension BridgeStatus {
             controller: first?.controller ?? .notConnected, feedback: feedback, deck: first?.deck ?? deck,
             stopped: problem != nil, lastDropout: lastDropoutTime, master: self.controller?.master == true, demo: demo,
             lastEvent: first?.lastEvent, others: Array(entries.dropFirst()), stopReason: stopReason,
-            followsLayers: first?.followsLayers ?? false
+            followsLayers: first?.followsLayers ?? false, missingSubscriptions: missingSubscriptions.map(\.rawValue)
         )
     }
 
@@ -82,8 +82,8 @@ extension BridgeStatus {
 }
 
 enum AppInfo {
-    /// Placeholder until the display name is picked (#29). Every window reads it from here.
-    static let displayName = "Controller Bridge"
+    /// The display name (#29). Every window reads it from here.
+    static let displayName = "DeckBridge"
 }
 
 struct StatusPanel: View {

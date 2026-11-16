@@ -32,6 +32,20 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
+            // Syndicate's OSC FEEDBACK subscriptions off (#150): NO DECK DATA, and help naming them.
+            ("feedback-no-deck-data", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.noDeckData = true
+            }),
+            // A loaded deck answered without Cues (#150): LIVE, and help about the pad colors.
+            ("feedback-cues-missing", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.missingSubscriptions = [.cues]
+            }),
             // Syndicate stopped answering (#21): DROPPED, and the last dropout under the lights.
             ("feedback-dropped", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]

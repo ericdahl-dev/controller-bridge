@@ -22,6 +22,18 @@ public struct SetupGuide: Equatable, Sendable {
         "BPM/Sync", "Loop",
     ]
 
+    /// The subscription that sends a deck value (#150), by the value's name: "cues" is "Cues". Nil for one the guide
+    /// doesn't list.
+    public static func subscriptionName(for value: String) -> String? {
+        switch value {
+        case "playing": "Playing"
+        case "cues": "Cues"
+        case "sync": "BPM/Sync"
+        case "loop": "Loop"
+        default: nil
+        }
+    }
+
     /// Bump when the steps change in a way a returning user should see.
     public static let version = 1
 

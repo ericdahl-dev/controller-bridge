@@ -61,6 +61,8 @@ public struct BridgeState: Equatable, Sendable {
         case live(port: Int)
         /// Listening, but Syndicate hasn't answered since launch (#21).
         case waiting(port: Int)
+        /// Syndicate answers, but with no deck info: its OSC FEEDBACK subscriptions are off (#150).
+        case noDeckData(port: Int)
         /// Listening, but Syndicate stopped answering (#21).
         case stopped(port: Int)
         /// Another app holds the port, so no feedback arrives.
@@ -105,10 +107,13 @@ public struct BridgeState: Equatable, Sendable {
 
     /// The first controller follows its own deck layers (#79).
     public var followsLayers = false
+    /// The LED subscriptions a loaded deck's feedback lacked (#150), by deck value name: "playing", "cues"…
+    public var missingSubscriptions: [String] = []
 
     public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil,
                 master: Bool = false, demo: Bool = false, lastEvent: String? = nil, others: [ControllerEntry] = [],
-                stopReason: StopReason = .midi, followsLayers: Bool = false) {
+                stopReason: StopReason = .midi, followsLayers: Bool = false, missingSubscriptions: [String] = []) {
+        self.missingSubscriptions = missingSubscriptions
         self.stopReason = stopReason
         self.followsLayers = followsLayers
         self.demo = demo
@@ -274,6 +279,7 @@ public struct StatusPresentation: Equatable, Sendable {
         let feedback: StatusLight = switch state.feedback {
         case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)
         case .live: StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live)
+        case .noDeckData: StatusLight(label: "FEEDBACK", word: "NO DECK DATA", tone: .attention)
         case .waiting: StatusLight(label: "FEEDBACK", word: "WAITING", tone: .idle)
         case .stopped: StatusLight(label: "FEEDBACK", word: "DROPPED", tone: .attention)
         case .portInUse(let port): StatusLight(label: "FEEDBACK", word: "PORT \(port) IN USE", tone: .error)
@@ -307,7 +313,10 @@ public struct StatusPresentation: Equatable, Sendable {
             else { .attention }
         lastDropout = state.lastDropout.map { CaptionedValue(caption: "Last dropout", value: $0) }
         // Quitting stops a working set only while feedback is live, so that's when Quit asks first (#66).
-        if case .live = state.feedback { quitAsks = true } else { quitAsks = false }
+        switch state.feedback {
+        case .live, .noDeckData: quitAsks = true
+        default: quitAsks = false
+        }
         // In demo mode a click would be held for the real controller and jump its deck later, unasked (#90).
         deckPicker = state.stopped ? .hidden
             : state.demo ? .disabled(reason: "Demo controller is on, so the deck stays put.") : .enabled
@@ -366,9 +375,6 @@ public struct StatusPresentation: Equatable, Sendable {
 }
 
 extension StatusLight.Tone {
-    /// The tone in the dark theme.
-    public var color: RGB { color(in: Palette.dark) }
-
     /// The tone in a theme (#127): each passes AA on that theme's surfaces.
     public func color(in palette: ThemePalette) -> RGB {
         switch self {

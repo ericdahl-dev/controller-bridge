@@ -16,12 +16,14 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     public var followSyndicateDeckColors = true
     /// The deck colors used while following is off (#123).
     public var customDeckColors = DeckColors.defaults
+    /// The ring's color mapping (#151). Vivid by default.
+    public var ringColors = RingColors.vivid
     /// Light or dark (#127). Syndicate's own LIGHT MODE can't be read over OSC, so the DJ picks it to match.
     public var appearance = Appearance.matchMacOS
 
     enum CodingKeys: String, CodingKey {
         case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
-        case followSyndicateDeckColors, customDeckColors, appearance
+        case followSyndicateDeckColors, customDeckColors, appearance, ringColors
     }
 
     /// Settings saved before #123 have no deck colors: they load with the defaults.
@@ -36,6 +38,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         followSyndicateDeckColors = try c.decodeIfPresent(Bool.self, forKey: .followSyndicateDeckColors) ?? true
         customDeckColors = try c.decodeIfPresent(DeckColors.self, forKey: .customDeckColors) ?? .defaults
         appearance = try c.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .matchMacOS
+        ringColors = try c.decodeIfPresent(RingColors.self, forKey: .ringColors) ?? .vivid
     }
 
     public init(
@@ -80,6 +83,7 @@ extension BridgeSettings {
         out.followSyndicateDeckColors = pick(\.followSyndicateDeckColors)
         out.customDeckColors = pick(\.customDeckColors)
         out.appearance = pick(\.appearance)
+        out.ringColors = pick(\.ringColors)
         // Controllers: the draft's list (an add or remove is the DJ's edit), each field rebased where both had it.
         out.controllers = draft.controllers.indices.map { index in
             let edited = draft.controllers[index]

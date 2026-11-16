@@ -24,9 +24,13 @@ public final class Coordinator {
     var deckColors: DeckColors { followSyndicateDeckColors ? syndicateDeckColors : customDeckColors }
 
     /// A Bridge for a controller, with the deck colors in use.
+    /// Settings' ring color mapping (#151).
+    private var ringColors = RingColors.vivid
+
     private func makeBridge(_ mapping: Mapping) -> Bridge {
         let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
         bridge.deckColors = deckColors
+        bridge.ringColors = ringColors
         return bridge
     }
 
@@ -34,8 +38,7 @@ public final class Coordinator {
 
     /// Logs once per deck when Syndicate's color for it is black, which DeckColors replaces with the default.
     private func noteBlackSlot(_ numbers: [Int]) -> [Int] {
-        if numbers.count >= 4, numbers[0] % 2 == 1, (1...7).contains(numbers[0]), DeckColors.isBlack(numbers[1...3]) {
-            let deck = (numbers[0] + 1) / 2
+        if numbers.count >= 4, let deck = DeckColors.deck(forSlot: numbers[0]), DeckColors.isBlack(numbers[1...3]) {
             if loggedBlackDecks.insert(deck).inserted {
                 log.log("Syndicate's deck \(deck) color is black, which the LC6000's ring can't show; using the default")
             }
@@ -53,6 +56,8 @@ public final class Coordinator {
     private var lastFeedbackAt: Double?
     /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
     private var resendSentAt: Double?
+    /// The answer to the last Resend (#150): when it went out, and the addresses that arrived within its window.
+    private var answer: (sentAt: Double, messages: [OSCMessage])?
 
     /// Set while the Diagnostics window is open (#26); nil otherwise, so nothing is built for it during a set.
     /// The LED sweep in progress: when it started, its steps and the next one to send.
@@ -255,10 +260,17 @@ public final class Coordinator {
         if let destination = chosenOutput ?? sameName ?? Self.match(allowed, bridge.mapping.midi.output) {
             do {
                 bridge.output = try midiSystem.openOutput(destination: destination)
+                // Layers sharing a unit open the same port: say it once.
+                if controllers[index].destination?.id != destination.id,
+                   !controllers.contains(where: { $0.destination?.id == destination.id }) {
+                    log.log("LEDs go to \(destination.name)")
+                }
                 controllers[index].destination = destination
             } catch {
                 log.log("Couldn't open MIDI output \(destination.name): \(error)")
             }
+        } else {
+            log.log("No LED output found for \(source.name), so its LEDs stay dark")
         }
     }
 
@@ -308,6 +320,7 @@ public final class Coordinator {
         runSweep()
         for bridge in bridges { bridge.tick() }
         checkLiveness()
+        checkSubscriptions()
         disconnectFailedOutputs()
     }
 
@@ -414,6 +427,8 @@ public final class Coordinator {
             }
         }
         diagnostics?(.oscIn(message))
+        answer?.messages.append(message)
+        if SubscriptionCheck.provesSubscriptions(message.address) { status.noDeckData = false }
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
@@ -462,6 +477,15 @@ public final class Coordinator {
             resendSentAt = nil
             requestResend()
         }
+    }
+
+    /// Once a Resend's answer window closes, what the answer held shows which subscriptions are on (#150).
+    private func checkSubscriptions() {
+        guard let answer, clock.now - answer.sentAt >= Double(oscSettings.feedbackAnswerMs) / 1000 else { return }
+        self.answer = nil
+        guard let check = SubscriptionCheck(answer: answer.messages) else { return }
+        status.noDeckData = check.noDeckData
+        status.missingSubscriptions = check.missing
     }
 
     /// Syndicate didn't answer: show idle for its state until it's back.
@@ -660,6 +684,13 @@ public final class Coordinator {
         disconnectFailedOutputs()
     }
 
+    /// Settings (#151): vivid or exact ring colors, repainted at once.
+    public func setRingColors(_ mode: RingColors) {
+        ringColors = mode
+        for bridge in bridges { bridge.setRingColors(mode) }
+        disconnectFailedOutputs()
+    }
+
     /// Settings (#19): the LEDs switch, for every controller.
     public func setLEDs(enabled: Bool) {
         ledsEnabled = enabled
@@ -671,6 +702,7 @@ public final class Coordinator {
     private func requestResend() {
         guard resendSentAt == nil else { return }
         resendSentAt = clock.now
+        answer = (clock.now, [])
         controllers[0].bridge.send("Feedback/Resend", .int(1))
     }
 
