@@ -84,4 +84,14 @@ struct ProfileImportTests {
         #expect((mapping["midi"] as? [String: Any]).map { Set($0.keys) } == ["input", "output", "ignore_notes"])
         #expect(try Self.importing(String(decoding: exported, as: UTF8.self)) == profile)
     }
+
+    @Test("The import note says Settings owns Deck, Channel and the OSC addresses, and names any the file set")
+    func importNote() {
+        #expect(ControllerProfile.importNote(file: "mine.json", settingsOwned: []) ==
+            "Imported mine.json. Deck, Channel and the OSC addresses come from Settings.")
+        #expect(ControllerProfile.importNote(file: "mine.json", settingsOwned: ["mapping.osc.port", "mapping.deck.number"]) ==
+            "Imported mine.json. Deck, Channel and the OSC addresses come from Settings, so the file's osc.port and deck.number weren't applied.")
+        #expect(ControllerProfile.importNote(file: "mine.json", settingsOwned: ["mapping.midi.channel"]) ==
+            "Imported mine.json. Deck, Channel and the OSC addresses come from Settings, so the file's midi.channel wasn't applied.")
+    }
 }

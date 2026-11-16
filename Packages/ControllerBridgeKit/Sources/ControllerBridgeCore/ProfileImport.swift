@@ -133,6 +133,15 @@ extension ControllerProfile {
         ["osc", "host"], ["osc", "port"], ["osc", "feedback_host"], ["osc", "feedback_port"], ["deck", "number"], ["midi", "channel"],
     ]
 
+    /// What Settings says after a good import (#93).
+    public static func importNote(file: String, settingsOwned: [String]) -> String {
+        let base = "Imported \(file). Deck, Channel and the OSC addresses come from Settings"
+        guard !settingsOwned.isEmpty else { return base + "." }
+        let names = settingsOwned.map { $0.hasPrefix("mapping.") ? String($0.dropFirst(8)) : $0 }
+        let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names.last!
+        return base + ", so the file's \(list) \(names.count == 1 ? "wasn't" : "weren't") applied."
+    }
+
     /// The Settings-owned keys a file sets, as "mapping.osc.port", in document order, so the import can say they
     /// weren't applied.
     public static func settingsOwnedKeys(in data: Data) -> [String] {
