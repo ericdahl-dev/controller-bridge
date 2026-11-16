@@ -124,3 +124,27 @@ struct PadChannelLayersTests {
         #expect(PadChannelCoordinatorTests.led(rig, 32, channel: 10) == 48)
     }
 }
+
+/// The LC6000 is unchanged by #224: no pad channel, so its pads play and light on the deck's channel.
+@Suite("Pad channel: the LC6000 unchanged")
+struct PadChannelLC6000Tests {
+    @Test("Pad 1 on channel 1 holds hot cue 1, and lights red (48) on channel 1")
+    func flat() throws {
+        let rig = try PadChannelCoordinatorTests.started(nil)
+        PadChannelCoordinatorTests.press(rig, 32, channel: 1)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(1), .int(1)]),
+                                 OSCMessage("/Syndicate/Deck/1/HotCue", [.int(1), .int(0)])])
+        rig.coordinator.feedback(PadChannelCoordinatorTests.cues)
+        #expect(PadChannelCoordinatorTests.led(rig, 32, channel: 1) == 48)
+    }
+
+    @Test("Normal mode on layer 2: deck 2's pad LEDs still go out on channel 1, where the unit's controls are (#79)")
+    func layeredNormalMode() throws {
+        let rig = try LayersTests.layered()
+        LayersTests.note(rig, channel: 1, 51, 0); LayersTests.note(rig, channel: 2, 51, 127)
+        LayersTests.note(rig, channel: 1, 1, 127)       // Play on ch1: normal mode, layer 2 in front
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Cues", [.int(1), .string("c1")]))
+        #expect(PadChannelCoordinatorTests.led(rig, 32, channel: 1) == 48)
+        #expect(PadChannelCoordinatorTests.led(rig, 32, channel: 2) == nil)
+    }
+}
