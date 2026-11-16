@@ -67,4 +67,19 @@ struct DeckColorTests {
         #expect(rig.coordinator.status.deckColors[2] == [255, 0, 0])
         #expect(rig.coordinator.status.deckColors[1] == DeckColors.defaults[1])
     }
+
+    @Test("With following off, the custom color wins over Syndicate's: deck 2 custom blue (0, 0, 255) = 3, even after slot 3 red")
+    func customColorWins() throws {
+        let rig = try Self.onDeck(2)
+        var custom = DeckColors.defaults
+        custom.rgb[2] = [0, 0, 255]
+        rig.coordinator.setDeckColors(followSyndicate: false, custom: custom)
+        #expect(rig.leds[40] == 3)
+        Self.palette(rig, slot: 3, 255, 0, 0)
+        #expect(rig.leds[40] == 3)
+        #expect(rig.coordinator.status.deckColors[2] == [0, 0, 255])
+
+        rig.coordinator.setDeckColors(followSyndicate: true, custom: custom)
+        #expect(rig.leds[40] == 48)
+    }
 }

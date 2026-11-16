@@ -44,6 +44,39 @@ struct SettingsTests {
         #expect(BridgeSettings.load(from: store, defaults: Self.defaults) == changed)
     }
 
+    // #123: deck colors are the user's taste, so they're in the settings, not the profile.
+
+    @Test("Deck colors: following Syndicate is the default, and custom colors start as the defaults")
+    func deckColorDefaults() {
+        #expect(Self.defaults.followSyndicateDeckColors)
+        #expect(Self.defaults.customDeckColors == .defaults)
+    }
+
+    @Test("Custom deck colors and the follow switch load back as saved")
+    func deckColorsRoundTrip() throws {
+        let store = MemoryStore()
+        var changed = Self.defaults
+        changed.followSyndicateDeckColors = false
+        changed.customDeckColors.rgb[2] = [0, 0, 255]
+        try changed.save(to: store)
+        let loaded = BridgeSettings.load(from: store, defaults: Self.defaults)
+        #expect(loaded.followSyndicateDeckColors == false)
+        #expect(loaded.customDeckColors[2] == [0, 0, 255])
+    }
+
+    @Test("Settings saved before #123 still load, with deck colors at their defaults")
+    func settingsBeforeDeckColors() {
+        let store = MemoryStore()
+        store.values[BridgeSettings.storageKey] = Data(#"""
+            {"controllers":[{"deck":3}],"syndicateHost":"192.168.1.20","syndicatePort":9090,"feedbackPort":9096,
+             "feedbackListen":"thisMac","ledsEnabled":true}
+            """#.utf8)
+        let loaded = BridgeSettings.load(from: store, defaults: Self.defaults)
+        #expect(loaded.syndicateHost == "192.168.1.20")
+        #expect(loaded.followSyndicateDeckColors)
+        #expect(loaded.customDeckColors == .defaults)
+    }
+
     @Test("Nothing saved, or saved data that can't be read, loads the defaults")
     func missingOrCorruptLoadsDefaults() {
         let store = MemoryStore()
@@ -162,6 +195,20 @@ struct SettingsTests {
         let rebased = BridgeSettings.rebased(draft: draft, base: base, onto: saved)
         #expect(rebased.controllers[0].deck == 3)
         #expect(rebased.syndicateHost == "192.168.1.20")
+    }
+
+    @Test("Deck colors edited in Settings survive a panel deck change while Settings is open (#123)")
+    func deckColorEditsSurviveRebase() {
+        let base = Self.defaults
+        var draft = base
+        draft.followSyndicateDeckColors = false
+        draft.customDeckColors.rgb[2] = [0, 0, 255]
+        var saved = base
+        saved.controllers[0].deck = 3
+        let rebased = BridgeSettings.rebased(draft: draft, base: base, onto: saved)
+        #expect(rebased.controllers[0].deck == 3)
+        #expect(rebased.followSyndicateDeckColors == false)
+        #expect(rebased.customDeckColors[2] == [0, 0, 255])
     }
 
     @Test("A field the DJ also edited in Settings keeps the DJ's value")

@@ -20,6 +20,7 @@ public enum PipeEvent: Equatable, Sendable {
     case setDeck(Int, controller: Int)
     case setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int)
     case setLEDs(enabled: Bool)
+    case setDeckColors(followSyndicate: Bool, custom: DeckColors)
     case setControllers([ControllerSettings])
     /// An imported mapping (#24): the controller profiles to run from now on.
     case setProfiles([ControllerProfile])
@@ -60,6 +61,9 @@ public struct EventPipe: Sendable {
             continuation.yield(.setDevices(input: input, output: output, controller: controller))
         }
         public func setLEDs(enabled: Bool) { continuation.yield(.setLEDs(enabled: enabled)) }
+        public func setDeckColors(followSyndicate: Bool, custom: DeckColors) {
+            continuation.yield(.setDeckColors(followSyndicate: followSyndicate, custom: custom))
+        }
         public func setControllers(_ entries: [ControllerSettings]) { continuation.yield(.setControllers(entries)) }
         public func setProfiles(_ profiles: [ControllerProfile]) { continuation.yield(.setProfiles(profiles)) }
         /// Quit. Queues the stop behind everything already sent, then closes the pipe, so nothing after it is handled.

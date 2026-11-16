@@ -12,6 +12,28 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     public var feedbackPort: Int
     public var feedbackListen: FeedbackListen
     public var ledsEnabled: Bool
+    /// The deck colors follow Syndicate's cue palette (slots 1, 3, 5 and 7) (#123). On by default.
+    public var followSyndicateDeckColors = true
+    /// The deck colors used while following is off (#123).
+    public var customDeckColors = DeckColors.defaults
+
+    enum CodingKeys: String, CodingKey {
+        case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
+        case followSyndicateDeckColors, customDeckColors
+    }
+
+    /// Settings saved before #123 have no deck colors: they load with the defaults.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        controllers = try c.decode([ControllerSettings].self, forKey: .controllers)
+        syndicateHost = try c.decode(String.self, forKey: .syndicateHost)
+        syndicatePort = try c.decode(Int.self, forKey: .syndicatePort)
+        feedbackPort = try c.decode(Int.self, forKey: .feedbackPort)
+        feedbackListen = try c.decode(FeedbackListen.self, forKey: .feedbackListen)
+        ledsEnabled = try c.decode(Bool.self, forKey: .ledsEnabled)
+        followSyndicateDeckColors = try c.decodeIfPresent(Bool.self, forKey: .followSyndicateDeckColors) ?? true
+        customDeckColors = try c.decodeIfPresent(DeckColors.self, forKey: .customDeckColors) ?? .defaults
+    }
 
     public init(
         controllers: [ControllerSettings], syndicateHost: String, syndicatePort: Int, feedbackPort: Int,
@@ -52,6 +74,8 @@ extension BridgeSettings {
         out.feedbackPort = pick(\.feedbackPort)
         out.feedbackListen = pick(\.feedbackListen)
         out.ledsEnabled = pick(\.ledsEnabled)
+        out.followSyndicateDeckColors = pick(\.followSyndicateDeckColors)
+        out.customDeckColors = pick(\.customDeckColors)
         // Controllers: the draft's list (an add or remove is the DJ's edit), each field rebased where both had it.
         out.controllers = draft.controllers.indices.map { index in
             let edited = draft.controllers[index]

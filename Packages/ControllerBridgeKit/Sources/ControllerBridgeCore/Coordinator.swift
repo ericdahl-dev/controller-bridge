@@ -17,8 +17,11 @@ public final class Coordinator {
     private var bridges: [Bridge] { controllers.map(\.bridge) }
     /// Deck colors from Syndicate's palette, the defaults until one arrives (#123).
     private var syndicateDeckColors = DeckColors.defaults
+    /// Settings' deck colors (#123): follow Syndicate, or the custom colors.
+    private var followSyndicateDeckColors = true
+    private var customDeckColors = DeckColors.defaults
     /// The deck colors in use: the ring's, and the app's badges through the status.
-    var deckColors: DeckColors { syndicateDeckColors }
+    var deckColors: DeckColors { followSyndicateDeckColors ? syndicateDeckColors : customDeckColors }
 
     /// A Bridge for a controller, with the deck colors in use.
     private func makeBridge(_ mapping: Mapping) -> Bridge {
@@ -587,6 +590,14 @@ public final class Coordinator {
     }
 
     /// Settings (#19): the LEDs switch, for every controller.
+    /// Settings' deck colors (#123): the ring repaints, and the status carries them to the badges.
+    public func setDeckColors(followSyndicate: Bool, custom: DeckColors) {
+        followSyndicateDeckColors = followSyndicate
+        customDeckColors = custom
+        applyDeckColors()
+        disconnectFailedOutputs()
+    }
+
     public func setLEDs(enabled: Bool) {
         ledsEnabled = enabled
         for bridge in bridges { bridge.setLEDsEnabled(enabled) }

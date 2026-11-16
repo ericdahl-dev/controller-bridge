@@ -2,12 +2,23 @@
 ///
 /// One source of truth: the Presentation tests pin `DeckBadge`'s fills to `defaults`. A value, so a user setting can
 /// replace the defaults later (#123): the Bridge reads its colors from its own `deckColors`.
-public struct DeckColors: Equatable, Sendable {
+public struct DeckColors: Equatable, Sendable, Codable {
     /// [r, g, b] for decks 1-4.
     public var rgb: [Int: [Int]]
 
     public init(rgb: [Int: [Int]]) {
         self.rgb = rgb
+    }
+
+    /// Saved as four [r, g, b] arrays, deck 1 first.
+    public init(from decoder: any Decoder) throws {
+        let list = try decoder.singleValueContainer().decode([[Int]].self)
+        rgb = Dictionary(uniqueKeysWithValues: list.enumerated().map { ($0.offset + 1, $0.element) })
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode((1...4).map { rgb[$0] ?? [0, 0, 0] })
     }
 
     /// [r, g, b] for a deck, or nil for a deck outside 1-4.
