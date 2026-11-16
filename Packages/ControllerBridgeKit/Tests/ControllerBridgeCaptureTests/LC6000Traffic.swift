@@ -12,6 +12,11 @@ enum LC6000Traffic {
     /// Cue on deck 1: note 2.
     static let cue: Take = [(0.00, [0x90, 0x02, 0x7F]), (0.15, [0x80, 0x02, 0x00])]
 
+    /// Shift (note 26) held while Play is pressed. The LC6000 sends Play unchanged; the bridge tracks Shift itself.
+    static let shiftPlay: Take = [
+        (0.0, [0x90, 26, 0x7F]), (0.3, [0x90, 0x01, 0x7F]), (0.4, [0x80, 0x01, 0x00]), (0.6, [0x80, 26, 0x00]),
+    ]
+
     /// The jog wheel's edge spun forward: a 14-bit position on CC 17 (MSB) and CC 49 (LSB), 8000 to 8200.
     static let jogSpin: Take = pairs(msb: 17, lsb: 49, values: Array(stride(from: 8000, through: 8200, by: 40)))
 
@@ -63,6 +68,12 @@ enum OtherTraffic {
     static let pitchBend: [(time: Double, bytes: [UInt8])] = [8192, 12288, 16383].enumerated().map {
         (Double($0) * 0.01, [0xE1, UInt8($1 & 0x7F), UInt8($1 >> 7)])
     }
+
+    /// A controller whose Shift (note 63, channel 1) moves Play from note 11 to note 75 on the same channel.
+    static let play: [(time: Double, bytes: [UInt8])] = [(0.0, [0x90, 11, 0x7F]), (0.1, [0x80, 11, 0x00])]
+    static let shiftPlay: [(time: Double, bytes: [UInt8])] = [
+        (0.0, [0x90, 63, 0x7F]), (0.3, [0x90, 75, 0x7F]), (0.4, [0x80, 75, 0x00]), (0.6, [0x80, 63, 0x00]),
+    ]
 
     static let noteOnZeroRelease: [(time: Double, bytes: [UInt8])] = [(0.00, [0x92, 0x0B, 0x7F]), (0.10, [0x92, 0x0B, 0x00])]
 }

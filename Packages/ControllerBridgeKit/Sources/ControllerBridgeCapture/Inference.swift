@@ -67,6 +67,17 @@ enum Inference {
         }
     }
 
+    /// The Shift button in a step repeated with Shift held: a note pressed before everything else and released after,
+    /// around at least one other control. Nil when there's no such note.
+    static func heldAround(_ messages: [[UInt8]]) -> (channel: Int, number: Int)? {
+        let voices = messages.compactMap(Voice.init)
+        guard let first = voices.first, let last = voices.last, first.kind == .noteOn, first.value > 0,
+            last.control == first.control, last.kind == .noteOff || (last.kind == .noteOn && last.value == 0),
+            voices.contains(where: { $0.control != first.control })
+        else { return nil }
+        return (first.channel + 1, first.number)
+    }
+
     /// 14-bit pairs, MSB to LSB: two CCs on one channel whose messages arrive side by side. The MSB is the lower of
     /// n and n+32 (the MIDI convention); otherwise, as on the LC6000's Needle Drop (64 and 65), the one sent first.
     private static func pairs(_ voices: [Voice]) -> [ControlKey: ControlKey] {

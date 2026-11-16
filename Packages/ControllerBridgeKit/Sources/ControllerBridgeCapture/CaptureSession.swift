@@ -51,12 +51,30 @@ public struct CaptureSession: Sendable {
         return take.map { CaptureMessage(t: Int(((($0.time - start) * 1000)).rounded()), bytes: $0.bytes) }
     }
 
+    /// How a shifted control differs from the same control in the confirmed unshifted step.
+    private func shiftLayer(of base: String, _ control: ControlFacts?) -> ShiftLayer? {
+        guard let control,
+            let unshifted = steps.last(where: { $0.prompt == base && $0.status == .confirmed })?.controls.first,
+            unshifted.kind == control.kind
+        else { return nil }
+        return ShiftLayer(
+            of: base, channelOffset: control.channel - unshifted.channel,
+            numberOffset: (control.number ?? 0) - (unshifted.number ?? 0)
+        )
+    }
+
     private mutating func finish(_ status: StepStatus) {
         guard let prompt = current else { return }
-        steps.append(CaptureStep(
-            prompt: prompt.id, status: status, messages: messages,
-            controls: Inference.controls(in: take.map(\.bytes), gesture: prompt.gesture)
-        ))
+        let bytes = take.map(\.bytes)
+        var controls = Inference.controls(in: bytes, gesture: prompt.gesture)
+        var shift: ShiftLayer?
+        if let base = prompt.shiftedOf {
+            if let held = Inference.heldAround(bytes) {
+                controls.removeAll { $0.kind == .note && $0.channel == held.channel && $0.number == held.number }
+            }
+            shift = shiftLayer(of: base, controls.first)
+        }
+        steps.append(CaptureStep(prompt: prompt.id, status: status, messages: messages, controls: controls, shift: shift))
         take = []
         index += 1
     }
