@@ -1,5 +1,3 @@
-import ControllerBridgeCore
-
 /// The Settings window's tabs (#171), in toolbar order. ⌘1–4 pick them.
 public enum SettingsTab: Int, CaseIterable, Hashable, Sendable {
     case controller = 1, decks, syndicate, general
