@@ -195,7 +195,6 @@ struct StatusPanel: View {
         }
         .frame(width: 360)
         .background(Theme.background)
-        .environment(\.colorScheme, .dark)
         // ⌘Q quits without asking: a DJ pressing it means it (#131).
         .background {
             Button("Quit now") { NSApplication.shared.terminate(nil) }

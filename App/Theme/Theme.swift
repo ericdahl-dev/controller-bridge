@@ -9,6 +9,43 @@ extension Color {
     init(_ rgb: RGB) {
         self.init(.sRGB, red: Double(rgb.red) / 255, green: Double(rgb.green) / 255, blue: Double(rgb.blue) / 255)
     }
+
+    /// A theme color that follows the effective appearance: Syndicate's dark value or its light one (#127).
+    init(_ token: KeyPath<ThemePalette, RGB>) {
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) != .aqua
+            return NSColor(Palette.themed(dark: dark)[keyPath: token])
+        })
+    }
+
+    /// A status tone's color in the effective appearance.
+    init(tone: StatusLight.Tone) {
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) != .aqua
+            return NSColor(tone.color(in: Palette.themed(dark: dark)))
+        })
+    }
+}
+
+extension NSColor {
+    convenience init(_ rgb: RGB) {
+        self.init(srgbRed: CGFloat(rgb.red) / 255, green: CGFloat(rgb.green) / 255, blue: CGFloat(rgb.blue) / 255, alpha: 1)
+    }
+}
+
+extension Palette {
+    static func themed(dark: Bool) -> ThemePalette { dark ? Palette.dark : Palette.light }
+}
+
+extension Appearance {
+    /// The app's look for this setting: nil follows macOS.
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .matchMacOS: nil
+        case .dark: NSAppearance(named: .darkAqua)
+        case .light: NSAppearance(named: .aqua)
+        }
+    }
 }
 
 enum Theme {
@@ -24,15 +61,17 @@ enum Theme {
         }
     }
 
-    static let background = Color(Palette.background)
-    static let panel = Color(Palette.panel)
-    static let button = Color(Palette.button)
-    static let buttonRaised = Color(Palette.buttonRaised)
-    static let hairline = Color(Palette.hairline)
-    static let text = Color(Palette.text)
-    static let caption = Color(Palette.caption)
-    static let attention = Color(Palette.attention)
-    static let error = Color(Palette.error)
+    // Syndicate's tokens, dark or light with the appearance (#127).
+    static let background = Color(\.background)
+    static let panel = Color(\.panel)
+    static let button = Color(\.button)
+    static let buttonRaised = Color(\.buttonRaised)
+    static let hairline = Color(\.hairline)
+    static let text = Color(\.text)
+    static let caption = Color(\.caption)
+    static let attention = Color(\.attention)
+    static let error = Color(\.error)
+    static let live = Color(\.live)
 
     static let corner: CGFloat = 3
 
@@ -121,9 +160,9 @@ struct StatusLightView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(light.label).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
             HStack(spacing: 5) {
-                Circle().fill(Color(light.tone.color)).frame(width: 7, height: 7)
+                Circle().fill(Color(tone: light.tone)).frame(width: 7, height: 7)
                 // A word never breaks mid-word; the panel lays lights out in a grid instead.
-                Text(light.word).font(Theme.ui(12, .bold)).foregroundStyle(Color(light.tone.color))
+                Text(light.word).font(Theme.ui(12, .bold)).foregroundStyle(Color(tone: light.tone))
                     .lineLimit(1).fixedSize()
             }
         }
@@ -161,10 +200,10 @@ struct StatusLineView: View {
             if index > 0 { line = line + separator }
             if let label = part.label {
                 line = line + Text(keep(label.uppercased()) + "\u{00A0}").foregroundStyle(Theme.caption)
-                    + Text(keep("● " + part.word)).foregroundStyle(Color(part.tone.color))
+                    + Text(keep("● " + part.word)).foregroundStyle(Color(tone: part.tone))
             } else {
                 // DECK reads as a caption; MASTER keeps its orange.
-                line = line + Text(keep(part.word)).foregroundStyle(part.tone == .idle ? Theme.caption : Color(part.tone.color))
+                line = line + Text(keep(part.word)).foregroundStyle(part.tone == .idle ? Theme.caption : Color(tone: part.tone))
             }
         }
         return line
@@ -210,10 +249,10 @@ struct FlatButtonStyle: ButtonStyle {
                 .background(configuration.isPressed || hovering || selected ? Theme.buttonRaised : Theme.button, in: shape)
                 .overlay(alignment: .bottom) {
                     if selected {
-                        Rectangle().fill(Color(Palette.selectedBar)).frame(height: 2).padding(.horizontal, Theme.Space.s)
+                        Rectangle().fill(Color(\.selectedBar)).frame(height: 2).padding(.horizontal, Theme.Space.s)
                     }
                 }
-                .overlay(shape.strokeBorder(Color(Palette.buttonEdge), lineWidth: 1))
+                .overlay(shape.strokeBorder(Color(\.buttonEdge), lineWidth: 1))
                 .focusRing(focused || forcedFocus, shape: shape)
                 .contentShape(Rectangle())
                 .onHover { hovering = $0 }

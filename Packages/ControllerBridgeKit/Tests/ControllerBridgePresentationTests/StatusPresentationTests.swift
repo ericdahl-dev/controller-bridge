@@ -43,14 +43,25 @@ struct StatusPresentationTests {
         #expect(failed.icon == .error)
     }
 
-    @Test("Each tone has its dot color: green, caption gray, Syndicate orange, muted red", arguments: [
-        (StatusLight.Tone.live, 0x72CD8B),
-        (.idle, 0xA9AAAA),
+    @Test("Each tone has its dot color in the dark theme: Signal Green, caption gray, orange, muted red (#127)", arguments: [
+        (StatusLight.Tone.live, 0x00FF48),
+        (.idle, 0xBDBDBD),
         (.attention, 0xF19741),
         (.error, 0xE06C6C),
     ] as [(StatusLight.Tone, UInt32)])
     func toneColors(tone: StatusLight.Tone, hex: UInt32) {
         #expect(tone.color == RGB(hex: hex))
+        #expect(tone.color(in: Palette.dark) == RGB(hex: hex))
+    }
+
+    @Test("In the light theme each tone is its darker, AA-passing color (#127)", arguments: [
+        (StatusLight.Tone.live, 0x007026),
+        (.idle, 0x4F4F4F),
+        (.attention, 0x9A4A00),
+        (.error, 0xA33B3B),
+    ] as [(StatusLight.Tone, UInt32)])
+    func lightToneColors(tone: StatusLight.Tone, hex: UInt32) {
+        #expect(tone.color(in: Palette.light) == RGB(hex: hex))
     }
 
     @Test("If the bridge couldn't start (no mapping, CoreMIDI or OSC sender), a red STOPPED light leads and the icon shows an error")

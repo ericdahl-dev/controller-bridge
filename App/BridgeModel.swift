@@ -79,8 +79,6 @@ final class BridgeModel {
     init() {
         // Line-buffered stdout, so the smoke script sees the log even when it stops the app.
         setvbuf(stdout, nil, _IOLBF, 0)
-        // #34 themes every window dark; force it now so it drops in without a rewrite.
-        NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
         start()
         AppDelegate.model = self
     }
@@ -205,6 +203,7 @@ final class BridgeModel {
         }
         status.oscPort = new.syndicatePort
         if new.ledsEnabled != old.ledsEnabled { producer.setLEDs(enabled: new.ledsEnabled) }
+        if new.appearance != old.appearance { NSApplication.shared.appearance = new.appearance.nsAppearance }
         if new.followSyndicateDeckColors != old.followSyndicateDeckColors || new.customDeckColors != old.customDeckColors {
             producer.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors)
         }
@@ -250,6 +249,7 @@ final class BridgeModel {
         layers = mapping.midi.layers
         let settings = BridgeSettings.load(from: storage, defaults: .defaults(from: mapping))
         self.settings = settings
+        NSApplication.shared.appearance = settings.appearance.nsAppearance
         status.deck = settings.controllers[0].deck
         status.oscPort = settings.syndicatePort
         let pipe = EventPipe()

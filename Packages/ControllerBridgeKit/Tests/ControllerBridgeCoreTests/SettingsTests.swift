@@ -307,4 +307,28 @@ struct SettingsTests {
         let rebased = BridgeSettings.rebased(draft: draft, base: base, onto: saved)
         #expect(rebased.controllers.map(\.deck) == [3, 2])
     }
+
+    @Test("Appearance (#127): Match macOS by default, saved like the rest, and settings saved before it read as Match macOS")
+    func appearance() throws {
+        #expect(Self.defaults.appearance == .matchMacOS)
+        let store = MemoryStore()
+        var dark = Self.defaults
+        dark.appearance = .dark
+        try dark.save(to: store)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).appearance == .dark)
+
+        let old = Data(#"{"controllers": [{"deck": 1}], "syndicateHost": "127.0.0.1", "syndicatePort": 9090, "feedbackPort": 9096, "feedbackListen": "thisMac", "ledsEnabled": true}"#.utf8)
+        #expect(try JSONDecoder().decode(BridgeSettings.self, from: old).appearance == .matchMacOS)
+    }
+
+    @Test("An appearance picked in the Settings draft survives a rebase onto newer saved settings (#127)")
+    func appearanceRebases() {
+        var draft = Self.defaults
+        draft.appearance = .light
+        var saved = Self.defaults
+        saved.ledsEnabled = false
+        let rebased = BridgeSettings.rebased(draft: draft, base: Self.defaults, onto: saved)
+        #expect(rebased.appearance == .light)
+        #expect(rebased.ledsEnabled == false)
+    }
 }
