@@ -343,7 +343,10 @@ enum Snapshots {
             if !stop || fed {
                 for message in DemoCapture.take(for: prompt) { flow.receive(message.bytes, at: now + 1 + message.time) }
             }
-            if stop { break }
+            if stop {
+                flow.tick(at: now + 9)
+                break
+            }
             now += 10
             flow.next(at: now)
         }

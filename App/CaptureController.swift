@@ -11,7 +11,8 @@ final class CaptureController {
     struct Choice: Hashable, Identifiable {
         var name: String
         var endpoint: MIDIEndpoint?
-        var id: String { name }
+        /// By endpoint, so two units of the same name stay apart.
+        var id: String { endpoint.map { "\($0.id)" } ?? "demo" }
     }
 
     private(set) var flow = CaptureFlow(appVersion: CaptureController.appVersion)
@@ -21,6 +22,7 @@ final class CaptureController {
     private(set) var choices: [Choice] = []
 
     private var input: CaptureMIDIInput?
+    private var listenTask: Task<Void, Never>?
     private var paused: MIDIEndpoint.ID?
     private var demoTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
@@ -57,14 +59,13 @@ final class CaptureController {
         guard let picked else { return }
         let time = ProcessInfo.processInfo.systemUptime
         if let endpoint = picked.endpoint {
-            let all = choices.compactMap(\.endpoint)
-            let ports = CapturePorts.suggested(for: picked.name, sources: all.map(\.name), destinations: destinations.map(\.name))
-            let listened = ports.input.compactMap { name in all.first { $0.name == name } }
+            let others = choices.compactMap(\.endpoint).filter { $0.id != endpoint.id }
+            let ports = CapturePorts.suggested(for: picked.name, sources: others.map(\.name), destinations: destinations.map(\.name))
+            // The picked endpoint itself, then the device's other ports (the first of each name).
+            let listened = [endpoint] + ports.input.dropFirst().compactMap { name in others.first { $0.name == name } }
             paused = endpoint.id
             setCapture(endpoint.id)
-            input = CaptureMIDIInput(sources: listened) { [weak self] bytes, time, port in
-                Task { @MainActor in self?.receive(bytes, at: time, port: port) }
-            }
+            listen(to: listened)
             flow.start(device: picked.name, ports: ports, at: time)
         } else {
             flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: time)
@@ -80,10 +81,21 @@ final class CaptureController {
     var canNext: Bool { flow.canNext(at: now) }
     var idleSecondsLeft: Int? { flow.idleSecondsLeft(at: now) }
 
+    /// One stream, read by one task, so messages reach the flow in the order they came (a 14-bit pair needs its MSB
+    /// before its LSB).
+    private func listen(to sources: [MIDIEndpoint]) {
+        let (stream, continuation) = AsyncStream<([UInt8], Double, Int)>.makeStream()
+        input = CaptureMIDIInput(sources: sources) { bytes, time, port in continuation.yield((bytes, time, port)) }
+        listenTask = Task { [weak self] in
+            for await (bytes, time, port) in stream { self?.receive(bytes, at: time, port: port) }
+        }
+    }
+
     /// Ends the capture: the bridge gets the controller back, and nothing more is heard. Safe to call twice.
     func end() {
         input?.stop()
         input = nil
+        listenTask?.cancel()
         demoTask?.cancel()
         clockTask?.cancel()
         if paused != nil { setCapture(nil) }
@@ -123,9 +135,15 @@ final class CaptureController {
         clockTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
-                self?.now = ProcessInfo.processInfo.systemUptime
+                self?.tick()
             }
         }
+    }
+
+    private func tick() {
+        now = ProcessInfo.processInfo.systemUptime
+        flow.tick(at: now)
+        announce()
     }
 
     private func announce() {

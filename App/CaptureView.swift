@@ -19,7 +19,8 @@ struct CaptureWindowRoot: View {
             if let controller { CaptureView(controller: controller) } else { Theme.panel.frame(width: 480, height: 360) }
         }
         .onAppear {
-            // A fresh capture each time the window opens: one closed mid-way has already given its controller back.
+            // A fresh capture each time the window opens, and any earlier one gives its controller back.
+            controller?.end()
             let made = CaptureController(setCapture: model.setCapture(source:))
             made.refresh(sources: model.sources, destinations: model.destinations)
             controller = made
