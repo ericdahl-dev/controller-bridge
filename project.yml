@@ -1,0 +1,55 @@
+name: LC6000Bridge
+options:
+  bundleIdPrefix: dev.ericdahl
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+packages:
+  LC6000Kit:
+    path: Packages/LC6000Kit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  LC6000Bridge:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+    dependencies:
+      - package: LC6000Kit
+        product: LC6000Core
+    entitlements:
+      path: App/LC6000Bridge.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        # UDP to Syndicate's OSC input (127.0.0.1:9090).
+        com.apple.security.network.client: true
+        # The feedback listener on 127.0.0.1:9096. CoreMIDI needs no entitlement.
+        com.apple.security.network.server: true
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Menu bar only: no Dock icon.
+        LSUIElement: true
+        # Required for a Mac App Store upload (#28).
+        LSApplicationCategoryType: public.app-category.music
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        # Placeholder until the display name is picked in #29; the bundle id is final.
+        PRODUCT_BUNDLE_IDENTIFIER: dev.ericdahl.LC6000Bridge
+        # Set by the release workflow (#28), which signs with its App Store profile; empty locally.
+        PROVISIONING_PROFILE_SPECIFIER: $(APP_PROFILE_NAME)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: false
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: true
