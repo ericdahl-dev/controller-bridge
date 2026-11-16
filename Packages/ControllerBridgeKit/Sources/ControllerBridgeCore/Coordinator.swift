@@ -227,17 +227,11 @@ public final class Coordinator {
         status.controllers[index].lastProfile = profile.name
         let destinations = midiSystem.destinations
         let chosenOutput = controllers[index].chosenOutput.flatMap { id in destinations.first { $0.id == id } }
-        // Layers of one unit share its port both ways (#79): a destination another layer has isn't taken from this one.
-        let taken = Set(controllers.indices.filter { $0 != index && !sharesLayers(index, with: $0) }
-            .compactMap { controllers[$0].destination?.id })
+        let taken = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].destination?.id })
         let freeDestinations = controllers[index].chosenInput == nil ? destinations.filter { !taken.contains($0.id) } : destinations
         // The LEDs go back to the port the controls came from: same name first, then the name hint (#99).
         let sameName = freeDestinations.first { $0.name == source.name }
-        // Never a port the profile excludes, such as the LC6000's jog display (WD): its "LC6000" matches the hint too.
-        let allowed = freeDestinations.filter { destination in
-            !profile.excludeHints.contains { destination.name.lowercased().contains($0.lowercased()) }
-        }
-        if let destination = chosenOutput ?? sameName ?? Self.match(allowed, bridge.mapping.midi.output) {
+        if let destination = chosenOutput ?? sameName ?? Self.match(freeDestinations, bridge.mapping.midi.output) {
             do {
                 bridge.output = try midiSystem.openOutput(destination: destination)
                 controllers[index].destination = destination
