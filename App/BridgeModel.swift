@@ -19,6 +19,10 @@ final class BridgeStatus {
     var bridges: [ControllerStatus] = []
     /// Every MIDI source and the controller profile it matched (#43); one with no profile is listed, not bridged.
     var devices: [DeviceStatus] = []
+    /// Whether Syndicate's feedback is arriving (#21): the listener can be up while Syndicate is quiet or gone.
+    var syndicateFeedback: FeedbackState = .waiting
+    /// The last time Syndicate's feedback stopped, for the menu.
+    var lastDropout: String?
     var feedback: Feedback = .starting
     var problem: String?
 

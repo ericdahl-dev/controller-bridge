@@ -18,11 +18,19 @@ extension BridgeStatus {
             if let bridge = self.controller, bridge.connected { .connected(profile: bridge.profile ?? "Controller") } else { .notConnected }
         let feedback: BridgeState.Feedback = switch self.feedback {
         case .starting: .starting
-        case .listening(let port): .live(port: port)
+        // The listener is up; whether Syndicate is answering is the Coordinator's call (#21).
+        case .listening(let port):
+            switch syndicateFeedback {
+            case .waiting: .waiting(port: port)
+            case .live: .live(port: port)
+            case .stale: .stopped(port: port)
+            }
         case .portInUse(let port): .portInUse(port: port)
         case .failed: .failed
         }
-        return StatusPresentation(BridgeState(controller: controller, feedback: feedback, deck: shownDeck, stopped: problem != nil))
+        return StatusPresentation(BridgeState(
+            controller: controller, feedback: feedback, deck: shownDeck, stopped: problem != nil, lastDropout: lastDropout
+        ))
     }
 }
 
@@ -63,6 +71,9 @@ struct StatusPanel: View {
                     CaptionValue(caption: "OSC", value: "9090")
                     CaptionValue(caption: "Feedback", value: feedbackPort)
                     Spacer(minLength: 0)
+                }
+                if let dropout = presentation.lastDropout {
+                    Text(dropout).font(Theme.ui(11)).foregroundStyle(Theme.caption).lineLimit(1)
                 }
                 if let problem = status.problem {
                     Text(problem).font(Theme.ui(11)).foregroundStyle(Theme.error)

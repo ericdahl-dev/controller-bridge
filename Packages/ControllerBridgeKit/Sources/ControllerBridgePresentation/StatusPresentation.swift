@@ -11,6 +11,10 @@ public struct BridgeState: Equatable, Sendable {
     public enum Feedback: Equatable, Sendable {
         case starting
         case live(port: Int)
+        /// Listening, but Syndicate hasn't answered since launch (#21).
+        case waiting(port: Int)
+        /// Listening, but Syndicate stopped answering (#21).
+        case stopped(port: Int)
         /// Another app holds the port, so no feedback arrives.
         case portInUse(port: Int)
         /// Any other listener failure. The reason goes in the diagnostics (#26), not the status line.
@@ -22,12 +26,15 @@ public struct BridgeState: Equatable, Sendable {
     public var deck: Int
     /// The bridge couldn't start at all; the reason goes in the panel and the diagnostics (#26).
     public var stopped: Bool
+    /// The last time Syndicate's feedback stopped (#21), if it has.
+    public var lastDropout: String?
 
-    public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false) {
+    public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil) {
         self.controller = controller
         self.feedback = feedback
         self.deck = deck
         self.stopped = stopped
+        self.lastDropout = lastDropout
     }
 }
 
@@ -71,6 +78,8 @@ public struct StatusPresentation: Equatable, Sendable {
     public var lights: [StatusLight]
     public var line: String
     public var icon: IconState
+    /// "LAST DROPOUT: …" for the panel, once Syndicate's feedback has stopped at least once (#21).
+    public var lastDropout: String?
 
     public init(_ state: BridgeState) {
         let controller: StatusLight = switch state.controller {
@@ -81,6 +90,8 @@ public struct StatusPresentation: Equatable, Sendable {
         let feedback: StatusLight = switch state.feedback {
         case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)
         case .live: StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live)
+        case .waiting: StatusLight(label: "FEEDBACK", word: "WAITING", tone: .idle)
+        case .stopped: StatusLight(label: "FEEDBACK", word: "STOPPED", tone: .attention)
         case .portInUse(let port): StatusLight(label: "FEEDBACK", word: "PORT \(port) IN USE", tone: .error)
         case .failed: StatusLight(label: "FEEDBACK", word: "FAILED", tone: .error)
         }
@@ -89,6 +100,7 @@ public struct StatusPresentation: Equatable, Sendable {
         icon = if lights.contains(where: { $0.tone == .error }) { .error }
             else if lights.allSatisfy({ $0.tone == .live }) { .ok }
             else { .attention }
+        lastDropout = state.lastDropout.map { "LAST DROPOUT: " + $0 }
     }
 }
 
