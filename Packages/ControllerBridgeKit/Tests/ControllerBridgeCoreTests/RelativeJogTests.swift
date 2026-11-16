@@ -75,4 +75,34 @@ struct RelativeJogCoordinatorTests {
             OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]),
         ])
     }
+
+    static func trackInfo(_ rig: Rig, seconds: Float) {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [
+            .string("t"), .string("a"), .string("8A"), .float(120), .float(seconds), .int(100), .int(400), .string("track"),
+        ]))
+    }
+
+    @Test("Paused, 16 ticks (0x50) of 720 a turn seek 16/720 x 4 s of a 200 s track: from 0.5 to 0.5004444")
+    func seekWhilePaused() throws {
+        let rig = try Self.started()
+        Self.trackInfo(rig, seconds: 200)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Progress", [.float(0.5)]))
+        Self.turn(rig, 0x50)
+        guard case .float(let position)? = rig.osc.sent.last?.arguments.first else {
+            Issue.record("expected a float WaveformSeek, got \(rig.osc.sent)")
+            return
+        }
+        #expect(rig.osc.sent.last?.address == "/Syndicate/Deck/1/WaveformSeek")
+        #expect(abs(position - 0.500_444_4) < 0.000_000_5)
+    }
+
+    @Test("Paused with no track length, 180 ticks (720 a turn, 4 beats) skip a beat; 63 + 63 aren't one yet")
+    func beatSkipWhilePaused() throws {
+        let rig = try Self.started()
+        Self.turn(rig, 0x7F)   // +63
+        Self.turn(rig, 0x7F)   // +126
+        #expect(rig.osc.sent == [])
+        Self.turn(rig, 0x7F)   // +189: one beat, 9 left over
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(1)])])
+    }
 }
