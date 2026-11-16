@@ -145,7 +145,13 @@ public final class Coordinator {
         refreshDevices()
         for index in controllers.indices {
             if let source = controllers[index].source {
-                if !midiSystem.sources.contains(where: { $0.id == source.id }) { disconnect(index, reason: .unplugged) }
+                if !midiSystem.sources.contains(where: { $0.id == source.id }) {
+                    disconnect(index, reason: .unplugged)
+                } else if controllers[index].bridge.output == nil {
+                    // Its input connected before its output port appeared (#148): open the port now and paint into it.
+                    openOutput(index, for: source, profile: controllers[index].profile)
+                    if controllers[index].bridge.output != nil { controllers[index].bridge.repaintLEDs() }
+                }
             } else if connect(index) {
                 controllers[index].bridge.start()
                 requestResend()
@@ -230,6 +236,15 @@ public final class Coordinator {
         controllers[index].knownSourceID = source.id
         status.controllers[index].profile = profile.name
         status.controllers[index].lastProfile = profile.name
+        openOutput(index, for: source, profile: profile)
+        report(index, "Connected \(source.name)")
+        return true
+    }
+
+    /// Opens the LED output for a connected controller: the chosen one, else the port named like its input, else
+    /// the mapping's hint, never a port the profile excludes. Logs where the LEDs go, or that they have nowhere to go.
+    private func openOutput(_ index: Int, for source: MIDIEndpoint, profile: ControllerProfile) {
+        let bridge = controllers[index].bridge
         let destinations = midiSystem.destinations
         let chosenOutput = controllers[index].chosenOutput.flatMap { id in destinations.first { $0.id == id } }
         // Layers of one unit share its port both ways (#79): a destination another layer has isn't taken from this one.
@@ -257,8 +272,6 @@ public final class Coordinator {
         } else {
             log.log("No LED output found for \(source.name), so its LEDs stay dark")
         }
-        report(index, "Connected \(source.name)")
-        return true
     }
 
     /// Lists every MIDI source with the profile it matches. A source that matches none is listed, not bridged.

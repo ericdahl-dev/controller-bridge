@@ -451,7 +451,25 @@ struct LayersTests {
         let (coordinator, midi) = try Self.realUnit(destinations: [Self.wdOut, renamedOut])
         coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
         #expect(midi.outputs[Self.wdOut.id]?.sent ?? [] == [])
-        #expect((midi.outputs[renamedOut.id]?.sent ?? []).contains(.noteOn(channel: 0, note: 1, velocity: 127)))
+        // Bound first: #expect((x?.y ?? []).contains(z)) passes when x is nil (Swift Testing's expansion of the call).
+        let sent = midi.outputs[renamedOut.id]?.sent ?? []
+        #expect(sent.contains(.noteOn(channel: 0, note: 1, velocity: 127)))
+    }
+
+    @Test("An output port that appears after its controller connected is opened, and the LEDs paint into it (#148)")
+    func lateOutputPortIsOpened() throws {
+        let midi = Rig.FakeMIDISystem(sources: [Self.controlsIn], destinations: [])
+        let coordinator = Coordinator(
+            profiles: try ControllerProfile.bundled(), midi: midi, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: Rig.FakeLog()
+        )
+        coordinator.start(controllers: [ControllerSettings(deck: 1, input: nil, output: nil, followLayers: false)], ledsEnabled: true)
+        coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))   // no output yet: nowhere to send
+
+        midi.destinations = [Self.controlsOut]
+        coordinator.devicesChanged()
+        coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        let sent = midi.outputs[Self.controlsOut.id]?.sent ?? []
+        #expect(sent.contains(.noteOn(channel: 0, note: 1, velocity: 127)))
     }
 
     @Test("Connecting says where the LEDs go, or that no output was found, so a dark unit can be diagnosed from the log")
