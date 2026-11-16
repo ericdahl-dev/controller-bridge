@@ -65,15 +65,15 @@ final class BridgeModel {
             return
         }
 
-        // Loopback by default: no local-network prompt. (The mapping's feedback_host is 0.0.0.0 for Python parity.)
-        let feedbackPort = mapping.osc.feedbackPort
+        // The default is loopback (127.0.0.1), so there is no local-network prompt.
+        let feedbackHost = mapping.osc.feedbackHost, feedbackPort = mapping.osc.feedbackPort
         do {
-            listener = try FeedbackListener.start(host: "127.0.0.1", port: feedbackPort, producer: pipe.producer)
+            listener = try FeedbackListener.start(host: feedbackHost, port: feedbackPort, producer: pipe.producer)
             status.feedback = .listening(port: feedbackPort)
-            log.log("Feedback listening on 127.0.0.1:\(feedbackPort)")
+            log.log("Feedback listening on \(feedbackHost):\(feedbackPort)")
         } catch {
             status.feedback = error.isAddressInUse ? .portInUse(port: feedbackPort) : .failed(error.description)
-            log.log("Feedback listener on 127.0.0.1:\(feedbackPort) failed: \(error)")
+            log.log("Feedback listener on \(feedbackHost):\(feedbackPort) failed: \(error)")
         }
 
         ticker = Ticker(producer: pipe.producer)

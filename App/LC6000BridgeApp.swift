@@ -53,7 +53,7 @@ struct StatusPanel: View {
     private var feedbackLine: String {
         switch status.feedback {
         case .starting: "Feedback: starting"
-        case .listening(let port): "Feedback: listening on 127.0.0.1:\(port)"
+        case .listening(let port): "Feedback: listening on port \(port)"
         case .portInUse(let port): "Feedback: port \(port) is in use by another app"
         case .failed(let reason): "Feedback: \(reason)"
         }
