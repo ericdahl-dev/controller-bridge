@@ -19,4 +19,13 @@ public struct DeckColors: Equatable, Sendable {
         3: [0xC5, 0x75, 0x4E],
         4: [0x62, 0x92, 0x9E],
     ])
+
+    /// After a ColorPalette message ([slot, r, g, b]): the deck whose slot it is (slot 2N−1 is deck N) takes the color.
+    /// Nil when the message isn't a deck's slot, so nothing needs repainting.
+    public func updated(byPalette numbers: [Int]) -> DeckColors? {
+        guard numbers.count >= 4, numbers[0] % 2 == 1, (1...7).contains(numbers[0]) else { return nil }
+        var out = self
+        out.rgb[(numbers[0] + 1) / 2] = Array(numbers[1...3])
+        return out == self ? nil : out
+    }
 }

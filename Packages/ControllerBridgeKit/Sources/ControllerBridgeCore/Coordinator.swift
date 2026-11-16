@@ -15,6 +15,22 @@ public final class Coordinator {
     /// Devices matching more than one profile, already logged.
     private var loggedAmbiguous: Set<MIDIEndpoint.ID> = []
     private var bridges: [Bridge] { controllers.map(\.bridge) }
+    /// Deck colors from Syndicate's palette, the defaults until one arrives (#123).
+    private var syndicateDeckColors = DeckColors.defaults
+    /// The deck colors in use: the ring's, and the app's badges through the status.
+    var deckColors: DeckColors { syndicateDeckColors }
+
+    /// A Bridge for a controller, with the deck colors in use.
+    private func makeBridge(_ mapping: Mapping) -> Bridge {
+        let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
+        bridge.deckColors = deckColors
+        return bridge
+    }
+
+    /// Gives every Bridge the deck colors in use; each repaints its ring.
+    private func applyDeckColors() {
+        for bridge in bridges { bridge.setDeckColors(deckColors) }
+    }
 
     /// When the last feedback message arrived, if any has (#21).
     private var lastFeedbackAt: Double?
@@ -346,6 +362,12 @@ public final class Coordinator {
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
     public func feedback(_ message: OSCMessage) {
+        // Syndicate's deck colors are cue palette slots 1, 3, 5 and 7 (#123).
+        if message.address.lowercased().hasSuffix("/colorpalette"),
+           let updated = syndicateDeckColors.updated(byPalette: message.arguments.compactMap(\.wholeNumber)) {
+            syndicateDeckColors = updated
+            applyDeckColors()
+        }
         diagnostics?(.oscIn(message))
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
@@ -461,7 +483,7 @@ public final class Coordinator {
     private func configure(_ index: Int, as entry: ControllerSettings) {
         let profile = profiles[0]
         if index == controllers.count {
-            controllers.append(Controller(bridge: Bridge(mapping: profile.mapping, osc: osc, clock: clock), profile: profile))
+            controllers.append(Controller(bridge: makeBridge( profile.mapping), profile: profile))
             status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
         }
         status.controllers[index].deck = entry.deck
@@ -480,7 +502,7 @@ public final class Coordinator {
         let first = profiles[0]
         let index = controllers.count
         status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
-        var controller = Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first)
+        var controller = Controller(bridge: makeBridge( first.mapping), profile: first)
         controller.channel = entry.channel
         controller.followsLayers = entry.followLayers == true
         controllers.append(controller)
@@ -519,7 +541,7 @@ public final class Coordinator {
         // The deck and channel are settings, not part of the profile.
         mapping.deck.number = status.controllers[index].deck
         if let channel = controllers[index].channel { mapping.midi.channel = channel }
-        let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
+        let bridge = makeBridge( mapping)
         bridge.setLEDsEnabled(ledsEnabled)
         bridge.layerShown = layerInFront(index, channel: mapping.midi.channel, layers: profile.mapping.midi.layers)
         return bridge
