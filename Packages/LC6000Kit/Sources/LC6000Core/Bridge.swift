@@ -10,6 +10,15 @@ final class Bridge {
     static var buttonHandlers: [String: (Bridge) -> (Bool) -> Void] {
         [
             "play": { $0.play },
+            "cue": { $0.cue },
+            "censor": { $0.censor },
+            "sync": { $0.sync },
+            "master": { $0.master },
+            "pitch_minus": { $0.pitchMinus },
+            "pitch_plus": { $0.pitchPlus },
+            "shift": { $0.shiftButton },
+            "key_lock": { $0.keyLock },
+            "slip": { $0.slip },
         ]
     }
 
@@ -31,9 +40,15 @@ final class Bridge {
 
     // Controller state.
     var shift = false
+    var held = HeldControls()
+    var keyLockOn = false
+    var slipOn = false
 
     // Syndicate's state, from feedback.
     var playing = false
+    var loaded = false
+    var synced = false
+    var sliderEnabled = true
 
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
@@ -85,12 +100,6 @@ final class Bridge {
         handler(self)(value)
     }
 
-    // MARK: Buttons. Triggers fire on press only; holds send 1, then 0.
-
-    private func play(_ pressed: Bool) {
-        if pressed { sendDeck("PlayPause", .int(1)) }
-    }
-
     // MARK: Feedback in
 
     func handle(_ message: OSCMessage) {
@@ -102,6 +111,9 @@ final class Bridge {
         let value = message.arguments.first?.isTrue ?? false
         switch key {
         case "playing": playing = value
+        case "loaded": loaded = value
+        case "sync": synced = value
+        case "temposliderenabled": sliderEnabled = value
         default: return
         }
         refreshLEDs()
@@ -111,6 +123,7 @@ final class Bridge {
 
     func refreshLEDs() {
         buttonLED("play", on: playing)
+        refreshTransportLEDs()
     }
 
     func buttonLED(_ name: String, on: Bool) {
