@@ -73,4 +73,33 @@ struct RecoveryTests {
         rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Self.iac.id)  // Play on another device
         #expect(rig.osc.sent == [])
     }
+
+    static func replug(_ rig: Rig) {
+        rig.midi.sources = [Self.iac, Rig.lc6000]
+        rig.midi.destinations = [Rig.lc6000Out]
+        rig.coordinator.devicesChanged()
+    }
+
+    @Test("Replugging reopens the ports and resyncs once: every LED repainted from current state, one Resend")
+    func replugResyncs() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        Self.unplug(rig)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))
+        rig.osc.sent.removeAll()
+
+        Self.replug(rig)
+        let repainted = rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []
+        #expect(rig.midi.outputs[Rig.lc6000Out.id]?.closed == false)   // a fresh output
+        #expect(repainted.contains(.noteOn(channel: 0, note: 1, velocity: 1)))     // Play, dim: stopped while away
+        #expect(repainted.contains(.noteOn(channel: 0, note: 2, velocity: 1)))     // Cue
+        #expect(repainted.contains(.noteOn(channel: 0, note: 42, velocity: 0)))    // pitch center
+        #expect(rig.osc.sent == [Self.resend])
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+        #expect(rig.coordinator.status.controllers == [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME")])
+
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
+    }
 }
