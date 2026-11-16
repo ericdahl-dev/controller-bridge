@@ -56,7 +56,7 @@ struct PaletteTests {
     }
 
     /// The values are Syndicate's own (#127): its user guide's CSS tokens (untitledaudiosyndicate.com/user-guide,
-    /// "from the app's LookAndFeel greys, paper #EDEDEA and Signal Green, Syndicate Branding/spec/tokens.json").
+    /// from the app's LookAndFeel grays, paper #EDEDEA and Signal Green, per Syndicate Branding/spec/tokens.json).
     @Test("Dark is Syndicate's default theme: ground, window, key, highlight, rule, fg, fg-btn, fg-dim, signal")
     func darkTokens() {
         let p = Palette.dark

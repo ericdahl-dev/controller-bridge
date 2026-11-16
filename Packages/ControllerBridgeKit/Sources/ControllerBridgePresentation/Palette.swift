@@ -26,8 +26,8 @@ public struct ThemePalette: Equatable, Sendable {
 }
 
 /// The bridge's colors are Syndicate's own (#127), from the CSS tokens in its user guide
-/// (untitledaudiosyndicate.com/user-guide), which say they come "from the app's LookAndFeel greys, paper #EDEDEA and
-/// Signal Green (Syndicate Branding/spec/tokens.json)". Each token's name is in a comment. Where a token's use would
+/// (untitledaudiosyndicate.com/user-guide), which say they come from the app's LookAndFeel grays, paper #EDEDEA and
+/// Signal Green (Syndicate Branding/spec/tokens.json). Each token's name is in a comment. Where a token's use would
 /// miss WCAG AA here, a passing token takes its place, or it is darkened the least that passes; that is noted too.
 /// Syndicate has no attention, error or key colors, so those are the bridge's, picked to pass in each theme.
 public enum Palette {
