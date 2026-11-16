@@ -37,8 +37,10 @@ GOOD = {
     "fonts/Inter-Regular.ttf": "font",
     "img/icon.png": "png",
     "robots.txt": "User-agent: *\nAllow: /\nSitemap: https://getdeckbridge.app/sitemap.xml\n",
-    "sitemap.xml": sitemap("https://getdeckbridge.app/"),
-    "llms.txt": "# DeckBridge\n\n> A bridge.\n",
+    "sitemap.xml": sitemap("https://getdeckbridge.app/", "https://getdeckbridge.app/support/",
+                           "https://getdeckbridge.app/privacy/", "https://getdeckbridge.app/capture/"),
+    "llms.txt": "# DeckBridge\n\n> A bridge.\n\n- [Home](https://getdeckbridge.app/)\n- [Support](https://getdeckbridge.app/support/)\n"
+                "- [Privacy](https://getdeckbridge.app/privacy/)\n- [Capture](https://getdeckbridge.app/capture/)\n",
     "analytics.js": "/* PostHog */",
 }
 NO_ANALYTICS = "<!-- no analytics.js -->"
@@ -68,7 +70,8 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(self.site(remove=["privacy/index.html"])),
                          ["privacy/index.html: missing",
                           "index.html: link to privacy/ doesn't resolve",
-                          "support/index.html: link to ../privacy/#network doesn't resolve"])
+                          "support/index.html: link to ../privacy/#network doesn't resolve",
+                          "sitemap.xml: https://getdeckbridge.app/privacy/ isn't a page in the site"])
 
     def test_a_broken_link_or_asset_fails(self):
         root = self.site({"support/index.html": page(body='<a href="../faq/">FAQ</a> <img src="../img/nope.png" alt="">')})
@@ -168,7 +171,7 @@ class CheckSiteTests(unittest.TestCase):
     def test_every_sitemap_url_is_on_the_site_and_is_a_page(self):
         root = self.site({"sitemap.xml": sitemap(
             "https://getdeckbridge.app/", "https://getdeckbridge.app/support/", "https://getdeckbridge.app/privacy/index.html",
-            "http://getdeckbridge.app/", "https://example.com/", "https://getdeckbridge.app.evil.example/",
+            "https://getdeckbridge.app/capture/", "http://getdeckbridge.app/", "https://example.com/", "https://getdeckbridge.app.evil.example/",
             "https://getdeckbridge.app/faq/", "https://getdeckbridge.app/img/nope.png")})
         self.assertEqual(check_site.problems(root), [
             "sitemap.xml: http://getdeckbridge.app/ isn't under https://getdeckbridge.app/",
@@ -178,9 +181,24 @@ class CheckSiteTests(unittest.TestCase):
             "sitemap.xml: https://getdeckbridge.app/img/nope.png isn't a page in the site",
         ])
 
+    def test_the_sitemap_lists_every_required_page(self):
+        root = self.site({"sitemap.xml": sitemap("https://getdeckbridge.app/", "https://getdeckbridge.app/privacy/index.html")})
+        self.assertEqual(check_site.problems(root), [
+            "sitemap.xml: doesn't list https://getdeckbridge.app/support/",
+            "sitemap.xml: doesn't list https://getdeckbridge.app/capture/",
+        ])
+
     def test_llms_txt_starts_with_the_product_name(self):
-        root = self.site({"llms.txt": "# Controller Bridge\n\n> A bridge.\n"})
+        root = self.site({"llms.txt": GOOD["llms.txt"].replace("# DeckBridge", "# Controller Bridge", 1)})
         self.assertEqual(check_site.problems(root), ['llms.txt: doesn\'t start with "# DeckBridge"'])
+
+    def test_llms_txt_links_every_required_page(self):
+        root = self.site({"llms.txt": "# DeckBridge\n\n- [Home](https://getdeckbridge.app/)\n"
+                                      "- [Privacy](https://getdeckbridge.app/privacy/)\n"})
+        self.assertEqual(check_site.problems(root), [
+            "llms.txt: doesn't link https://getdeckbridge.app/support/",
+            "llms.txt: doesn't link https://getdeckbridge.app/capture/",
+        ])
 
     def test_a_page_without_a_title_or_description_fails(self):
         root = self.site({"support/index.html": page(title="", description="", body='<a href="../">Home</a>')})

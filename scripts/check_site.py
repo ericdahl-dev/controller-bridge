@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Checks the DeckBridge website (#169) before anyone looks at it or it's published:
 - every page exists, and every internal link and asset resolves
-- robots.txt, sitemap.xml and llms.txt are at the root; the sitemap parses, and each URL in it
-  is under https://getdeckbridge.app/ and is a page in the site; llms.txt starts with "# DeckBridge"
+- robots.txt, sitemap.xml and llms.txt are at the root; the sitemap parses, each URL in it
+  is under https://getdeckbridge.app/ and is a page in the site, and it lists every required page (PAGES); llms.txt starts with "# DeckBridge"
+  and links every required page by its public URL
 - nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
   and so are <link rel="canonical"> and <link rel="alternate">. The one exception is the PostHog loader script
   (POSTHOG_LOADER), which website/analytics.js adds to count visits; the privacy page discloses it
@@ -192,7 +193,7 @@ def check_sitemap(root, files):
     locs = [(el.text or "").strip() for el in tree.iter() if el.tag.rsplit("}", 1)[-1] == "loc"]
     if not locs:
         return ["sitemap.xml: lists no pages"]
-    out = []
+    out, listed = [], set()
     for loc in locs:
         if not loc.startswith(SITE):
             out.append(f"sitemap.xml: {loc} isn't under {SITE}")
@@ -202,7 +203,14 @@ def check_sitemap(root, files):
             path += "index.html"
         if not (path.endswith(".html") and path in files):
             out.append(f"sitemap.xml: {loc} isn't a page in the site")
+        listed.add(path)
+    out += [f"sitemap.xml: doesn't list {page_url(page)}" for page in PAGES if page not in listed]
     return out
+
+
+def page_url(page):
+    """A required page's public URL: index.html -> https://getdeckbridge.app/, support/index.html -> .../support/."""
+    return SITE + page.removesuffix("index.html")
 
 
 CAPTURE_PROMPTS = "capture/prompts.json"
@@ -247,8 +255,10 @@ def problems(root, app_prompts=None):
             out += check_refs(root, file, [(url, True) for url in css_refs(css)])
     if "llms.txt" in files:
         with open(os.path.join(root, "llms.txt"), encoding="utf-8") as f:
-            if f.readline().rstrip() != LLMS_HEADING:
-                out.append(f'llms.txt: doesn\'t start with "{LLMS_HEADING}"')
+            llms = f.read()
+        if llms.split("\n", 1)[0].rstrip() != LLMS_HEADING:
+            out.append(f'llms.txt: doesn\'t start with "{LLMS_HEADING}"')
+        out += [f"llms.txt: doesn't link {page_url(page)}" for page in PAGES if f"]({page_url(page)})" not in llms]
     if "sitemap.xml" in files:
         out += check_sitemap(root, files)
     if app_prompts is not None:
