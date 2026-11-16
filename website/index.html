@@ -266,7 +266,6 @@
   --display-tracking-xl: -0.045em;
 }
 </style>
-<link rel="stylesheet" href="assets/diagrams/diagram.css">
 <link rel="stylesheet" href="site.css">
 <script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
 <script src="assets/backgrounds/backgrounds.js"></script>
@@ -352,7 +351,13 @@
         <h2 class="span-5" id="how-h">From the LC6000 to Syndicate over OSC</h2>
         <p class="span-6 start-7 muted">DeckBridge reads the controller’s USB MIDI, sends it to Syndicate’s OSC input on port 9090 and lights the LC6000 from Syndicate’s feedback on port 9096.</p>
       </div>
-      <div class="panel db-path"><div class="dg" data-diagram><script type="application/json">{"layout": "sync", "alt": "The LC6000 PRIME's jog wheel, pitch fader and pads go to DeckBridge over USB MIDI, and on to Syndicate's OSC input on port 9090; Syndicate's feedback on port 9096 comes back to light the controller.", "left": {"label": "LC6000 PRIME", "icon": "ui:sliders-horizontal", "meta": "USB MIDI", "rows": [{"label": "Jog wheel", "meta": "14-bit"}, {"label": "Pitch fader", "meta": "14-bit"}, {"label": "Pads and LEDs", "meta": "MIDI"}]}, "link": {"label": "DeckBridge", "icon": "ui:refresh-cw"}, "right": {"label": "Syndicate", "icon": "ui:music", "meta": "OSC", "rows": [{"label": "OSC input", "meta": "9090"}, {"label": "OSC feedback", "meta": "9096"}, {"label": "Decks", "meta": "1 to 4"}]}}</script></div></div>
+      <div class="db-path fill" role="img" aria-label="The signal path: the LC6000 PRIME's jog wheel, pitch fader and pads go to DeckBridge over USB MIDI, DeckBridge sends them on to Syndicate's OSC input on port 9090, and Syndicate's feedback on port 9096 comes back through DeckBridge to light the LC6000's LEDs">
+        <ol class="db-flow" aria-hidden="true">
+          <li class="db-node"><span class="db-node__head"><b>LC6000 PRIME</b><span>USB MIDI</span></span><span class="db-node__row">Jog wheel<em>14-bit</em></span><span class="db-node__row">Pitch fader<em>14-bit</em></span><span class="db-node__row">Pads and LEDs<em>MIDI</em></span></li>
+          <li class="db-node db-node--hub"><i class="db-wire db-wire--in"></i><i class="db-wire db-wire--out"></i><span class="db-node__head"><b>DeckBridge</b><span>menu bar</span></span><span class="db-node__row">MIDI in<em>USB</em></span><span class="db-node__row">OSC out<em>9090</em></span><span class="db-node__row">Feedback in<em>9096</em></span></li>
+          <li class="db-node"><span class="db-node__head"><b>Syndicate</b><span>OSC</span></span><span class="db-node__row">OSC input<em>9090</em></span><span class="db-node__row">OSC feedback<em>9096</em></span><span class="db-node__row">Decks<em>1 to 4</em></span></li>
+        </ol>
+      </div>
     </div>
   </section>
 
@@ -364,12 +369,12 @@
       </div>
       <div class="grid">
         <article class="card card--row card--open span-6">
-          <h3>Checks every control in Diagnostics</h3>
+          <h3>Diagnostics checks every LC6000 control</h3>
           <p>A MIDI monitor, an LED sweep and an OSC log show what goes in and comes out, with unmapped messages marked.</p>
           <div class="panel db-shotpanel"><div class="db-shot"><span class="db-crop" style="--sw: 1020; --sh: 402; --sx: 210; --sy: 198"><img src="img/2-diagnostics.webp" alt="The DeckBridge Diagnostics window: the MIDI monitor lists each LC6000 PRIME message with its mapping, such as play, pad1 and jog, and marks unmapped ones" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the diagnostics window"></span></div></div>
         </article>
         <article class="card card--row card--open span-6">
-          <h3>Runs with no hardware in demo mode</h3>
+          <h3>Demo mode runs DeckBridge with no hardware</h3>
           <p>The demo controller plays a script against a simulated Syndicate, so you can watch DeckBridge work before you plug in.</p>
           <div class="panel db-shotpanel"><div class="db-shot"><span class="db-crop" style="--sw: 824; --sh: 402; --sx: 308; --sy: 198"><img src="img/4-demo.webp" alt="The DeckBridge panel in demo mode: a built-in demo controller drives the bridge so you can see it work with no hardware" width="1440" height="900" loading="lazy" decoding="async" data-source="client" data-subject="the panel in demo mode"></span></div></div>
         </article>
@@ -400,13 +405,14 @@
         <div class="span-5 stack-6">
           <div class="section-head"><h2 id="faq-h">Questions about DeckBridge</h2></div>
           <div class="db-needs">
-            <h3 class="t-label">What you need</h3>
+            <p class="t-label">What DeckBridge needs</p>
             <ul>
               <li><b>A Mac on macOS 26 or later.</b> DeckBridge lives in the menu bar and has no Dock icon.</li>
               <li><b>Syndicate, with OSC input turned on.</b> DeckBridge drives Syndicate over OSC.</li>
               <li><b>A Denon LC6000 PRIME over USB.</b> It’s the only controller supported today.</li>
             </ul>
           </div>
+          <img class="db-appicon" src="img/icon-512.png" alt="The DeckBridge app icon" width="512" height="512" loading="lazy" decoding="async" data-source="client" data-subject="the app icon">
         </div>
         <div class="db-faq span-6 start-7">
           <details><summary>What is DeckBridge?</summary><p>DeckBridge is a native Mac menu-bar app that lets you play Syndicate from a Denon LC6000 PRIME by bridging the controller’s MIDI to Syndicate OSC. It sends the 14-bit jog wheel and pitch fader to Syndicate at full resolution and lights the controller’s LEDs from Syndicate’s OSC feedback.</p></details>
@@ -442,7 +448,7 @@
     <div class="closing__links">
       <div class="grid">
         <div class="span-4 stack-4">
-          <a class="footer__mark" href="#top"><img src="img/favicon-64.png" alt="" width="28" height="28">DeckBridge</a>
+          <a class="footer__mark" href="#top"><img src="img/favicon-64.png" alt="" width="28" height="28" loading="lazy" decoding="async">DeckBridge</a>
           <p class="footer__lede">A Mac menu-bar app for the LC6000 PRIME.</p>
         </div>
         <div class="span-2 start-9 footer__col"><h3>Help</h3><ul><li><a href="support/">Support</a></li><li><a href="support/#setup">Setup guide</a></li></ul></div>
@@ -463,6 +469,5 @@
 <script type="module" src="assets/system.js"></script>
 <script type="module" src="assets/motion/motion.js"></script>
 <script type="module" src="assets/layout/layout.js"></script>
-<script type="module" src="assets/diagrams/mount.js"></script>
 </body>
 </html>
