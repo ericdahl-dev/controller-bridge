@@ -11,10 +11,27 @@ enum LC6000Traffic {
 
     /// Cue on deck 1: note 2.
     static let cue: Take = [(0.00, [0x90, 0x02, 0x7F]), (0.15, [0x80, 0x02, 0x00])]
+
+    /// The jog wheel's edge spun forward: a 14-bit position on CC 17 (MSB) and CC 49 (LSB), 8000 to 8200.
+    static let jogSpin: Take = pairs(msb: 17, lsb: 49, values: Array(stride(from: 8000, through: 8200, by: 40)))
+
+    /// Needle Drop slid left to right: a 14-bit position on CC 64 (MSB) and CC 65 (LSB). Not an n / n+32 pair.
+    static let needleSlide: Take = pairs(msb: 64, lsb: 65, values: [0, 4096, 8192, 12288, 16383])
+
+    /// A 14-bit value as MSB then LSB on channel 1, 10 ms apart.
+    static func pairs(msb: UInt8, lsb: UInt8, values: [Int], channel: UInt8 = 0) -> Take {
+        values.enumerated().flatMap { index, value -> Take in
+            let time = Double(index) * 0.01
+            return [(time, [0xB0 | channel, msb, UInt8(value >> 7)]), (time + 0.001, [0xB0 | channel, lsb, UInt8(value & 0x7F)])]
+        }
+    }
 }
 
 /// Other controllers' shapes the LC6000 doesn't send, so the inference is covered both ways. Hand-built.
 enum OtherTraffic {
     /// A button released with a note-on at velocity 0, as many controllers do.
+    /// A 7-bit knob turned from 10 to 20 on CC 22, channel 2.
+    static let knob: [(time: Double, bytes: [UInt8])] = (10...20).map { (Double($0) * 0.01, [0xB1, 22, UInt8($0)]) }
+
     static let noteOnZeroRelease: [(time: Double, bytes: [UInt8])] = [(0.00, [0x92, 0x0B, 0x7F]), (0.10, [0x92, 0x0B, 0x00])]
 }

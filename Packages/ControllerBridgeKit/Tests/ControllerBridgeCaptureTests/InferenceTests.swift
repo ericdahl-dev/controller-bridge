@@ -31,4 +31,25 @@ struct InferenceTests {
             ControlFacts(kind: .note, channel: 3, number: 11, release: .noteOnZero, first: 127, last: 127, min: 127, max: 127),
         ])
     }
+
+    @Test("A 7-bit knob is a CC with its number, channel and values in order")
+    func sevenBitCC() {
+        #expect(Self.controls(OtherTraffic.knob, gesture: .move) == [
+            ControlFacts(kind: .cc, channel: 2, number: 22, encoding: .absolute, first: 10, last: 20, min: 10, max: 20),
+        ])
+    }
+
+    @Test("A 14-bit pair is one control: LC6000 jog is CC 17 with LSB 49, read as 14-bit values")
+    func jogPair() {
+        #expect(Self.controls(LC6000Traffic.jogSpin, gesture: .turn) == [
+            ControlFacts(kind: .cc, channel: 1, number: 17, lsb: 49, encoding: .absolute, first: 8000, last: 8200, min: 8000, max: 8200),
+        ])
+    }
+
+    @Test("A pair needn't be n and n+32: LC6000 Needle Drop is CC 64 with LSB 65, MSB first")
+    func needlePair() {
+        #expect(Self.controls(LC6000Traffic.needleSlide, gesture: .move) == [
+            ControlFacts(kind: .cc, channel: 1, number: 64, lsb: 65, encoding: .absolute, first: 0, last: 16383, min: 0, max: 16383),
+        ])
+    }
 }
