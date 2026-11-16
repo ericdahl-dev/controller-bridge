@@ -117,6 +117,18 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
+            // The longest status lines (#66, #171): the budget must still fit them in natural case.
+            ("four-controllers", {
+                $0.bridges = (1...4).map { ControllerStatus(deck: $0, connected: true, profile: "Denon LC6000 PRIME") }
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
+            ("demo-master", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", master: true)]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.demo = true
+            }),
             ("starting-deck4", { $0.deck = 4 }),
             ("many-lights", {
                 $0.bridges = [ControllerStatus(deck: 2, connected: true, profile: "Denon LC6000 PRIME", master: true)]

@@ -9,65 +9,108 @@ struct SetupGuideView: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xl) {
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text("Set up Syndicate").textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
-                Text("Four settings, once").font(Theme.ui(Theme.Size.heading, .bold)).foregroundStyle(Theme.text)
-                Text("\(AppInfo.displayName) talks to Syndicate over OSC. Open Syndicate's Settings and check these.")
-                    .font(Theme.ui(Theme.Size.label)).foregroundStyle(Theme.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            VStack(alignment: .leading, spacing: Theme.Space.l) {
-                ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
-                    HStack(alignment: .top, spacing: Theme.Space.m) {
-                        // Plain digits, no square: squares are for decks (#68).
-                        Text("\(index + 1)")
-                            .font(Theme.data(Theme.Size.value, .semibold))
-                            .foregroundStyle(Theme.caption)
-                            .frame(width: 20, alignment: .leading)
-                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                            Text(step.title).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
-                            Text(step.detail).font(Theme.ui(Theme.Size.emphasis)).foregroundStyle(Theme.text)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if !step.checklist.isEmpty {
-                                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
-                                          alignment: .leading, spacing: Theme.Space.xs) {
-                                    ForEach(step.checklist, id: \.self) { item in
-                                        Text("☐ " + item).font(Theme.data(Theme.Size.body)).foregroundStyle(Theme.text)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .padding(Theme.Space.l)
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: Theme.corner))
+        VStack(alignment: .leading, spacing: Theme.Step.x4) {
+            heading
+            steps
             Text(SetupGuide.footer)
-                .font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
+                .font(Theme.ui(12)).foregroundStyle(Theme.caption)
                 .fixedSize(horizontal: false, vertical: true)
-            // Another DJ app can switch the controller's MIDI mode until it restarts (#79).
-            Text(guide.otherAppsNote)
-                .font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.attention)
+            OtherAppsCallout(note: guide.otherAppsNote)
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+            liveCheck
+        }
+        .padding(Theme.Step.x6)
+        .frame(width: 460)
+        .background(Theme.panel)
+    }
+
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x1) {
+            Text("Set up Syndicate").font(Theme.labelFont).foregroundStyle(Theme.caption)
+            Text("Four settings, once").font(Theme.ui(22, .medium)).tracking(-0.8).foregroundStyle(Theme.text)
+            Text("\(AppInfo.displayName) talks to Syndicate over OSC. Open Syndicate's Settings and check these.")
+                .font(Theme.ui(13)).foregroundStyle(Theme.caption)
                 .fixedSize(horizontal: false, vertical: true)
-            // The live check: the panel's lights, so the DJ sees each step take (#68).
-            HStack(alignment: .bottom, spacing: Theme.Space.xl) {
-                ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }
-                Spacer()
-                Button(SetupGuide.doneTitle(feedbackLive: feedbackLive)) { dismissWindow(id: SetupGuideWindow.id) }
-                    .buttonStyle(FlatButtonStyle())
-                    .frame(width: feedbackLive ? 200 : 120)
-                    .keyboardShortcut(.defaultAction)
+                .padding(.top, 2)
+        }
+    }
+
+    /// Numbered steps with hairlines between, as the site's support page (#171).
+    private var steps: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
+                if index > 0 { Rectangle().fill(Theme.hairline).frame(height: 1) }
+                StepRow(number: index + 1, step: step)
+                    .padding(.vertical, Theme.Step.x3)
             }
         }
-        .padding(Theme.Space.xxl)
-        .frame(width: 460)
-        .background(Theme.background)
+    }
+
+    /// The live check: the panel's lights, so the DJ sees each step take (#68).
+    private var liveCheck: some View {
+        HStack(alignment: .center, spacing: Theme.Step.x6) {
+            ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0, size: 13) }
+            Spacer()
+            Button(SetupGuide.doneTitle(feedbackLive: feedbackLive)) { dismissWindow(id: SetupGuideWindow.id) }
+                // Green once Syndicate answers: then Done finishes the job.
+                .buttonStyle(PillButtonStyle(kind: feedbackLive ? .primary : .secondary))
+                .keyboardShortcut(.defaultAction)
+        }
     }
 
     private var feedbackLive: Bool {
         presentation.lights.contains { $0.kind == .feedback && $0.tone == .live }
+    }
+}
+
+/// One step: a large muted numeral, Syndicate's menu path in mono, what to do, and a checklist when there is one.
+private struct StepRow: View {
+    let number: Int
+    let step: SetupGuide.Step
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Step.x2) {
+            // Plain digits, no square: squares are for decks (#68).
+            Text("\(number)")
+                .font(Theme.ui(20, .medium))
+                .foregroundStyle(Theme.caption)
+                .frame(width: 22, alignment: .leading)
+            VStack(alignment: .leading, spacing: Theme.Step.x1) {
+                Text(step.title).font(Theme.labelFont).foregroundStyle(Theme.caption)
+                Text(step.detail).font(Theme.ui(13)).foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !step.checklist.isEmpty { checklist.padding(.top, Theme.Step.x1) }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var checklist: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                  alignment: .leading, spacing: Theme.Step.x1) {
+            ForEach(step.checklist, id: \.self) { item in
+                Text("☐ " + item).font(Theme.data(11.5)).foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// Another DJ app can switch the controller's MIDI mode until it restarts (#79): an attention callout, dot and words.
+private struct OtherAppsCallout: View {
+    let note: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Step.x2) {
+            Circle().fill(Theme.attention).frame(width: 7, height: 7).padding(.top, 5).accessibilityHidden(true)
+            Text(note).font(Theme.ui(12)).foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, Theme.Step.x3)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.attention.opacity(0.10), in: RoundedRectangle(cornerRadius: Theme.Radius.small))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small).strokeBorder(Theme.attention.opacity(0.35), lineWidth: 1))
     }
 }
 
