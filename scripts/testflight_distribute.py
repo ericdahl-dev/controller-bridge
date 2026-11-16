@@ -113,19 +113,25 @@ def set_what_to_test(http, build, text, locale="en-US"):
 
 
 def add_to_group(http, app, build, name):
-    """Adds the build to the beta group with exactly this name. Already in it (409) is fine: reruns are safe."""
+    """Adds the build to the beta group with exactly this name, once: a build already in it, or an internal group
+    that gets every build by itself, is left alone. Any refusal fails with the API's words."""
     groups = get(http, "/betaGroups", {"filter[app]": app, "filter[name]": name})["data"]
     group = next((g for g in groups if g["attributes"]["name"] == name), None)
     if group is None:
         raise DistributeError(f'No beta group named "{name}" for this app in App Store Connect.')
-    status, response = http("POST", f"/betaGroups/{group['id']}/relationships/builds",
-                             {"data": [{"type": "builds", "id": build}]}, None)
-    if status == 409:
+    attributes = group["attributes"]
+    if attributes.get("isInternalGroup") and attributes.get("hasAccessToAllBuilds"):
+        print(f'"{name}" gets every build automatically.')
+        return
+    members = get(http, f"/betaGroups/{group['id']}/relationships/builds", {"limit": 200})["data"]
+    if any(m["id"] == build for m in members):
         print(f'Already in "{name}".')
-    elif status >= 400:
+        return
+    status, response = http("POST", f"/betaGroups/{group['id']}/relationships/builds",
+                            {"data": [{"type": "builds", "id": build}]}, None)
+    if status >= 400:
         raise DistributeError(f'Couldn\'t add the build to "{name}": {status} {detail(response)}')
-    else:
-        print(f'Added to "{name}".')
+    print(f'Added to "{name}".')
 
 
 REVIEW_CONTACT = {"contactFirstName": "first name", "contactLastName": "last name", "contactPhone": "phone",

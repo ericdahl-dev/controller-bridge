@@ -20,6 +20,7 @@ class FakeASC:
         self.localizations = {}  # locale -> (id, whatsNew)
         self.groups = {"Internal": "g-int", "Syndicate": "g-ext", "Syndicate Friends": "g-other"}
         self.in_group = set()
+        self.all_builds = set()  # internal groups that get every build automatically
         self.group_conflict = False
         self.review_detail = {"contactFirstName": "A", "contactLastName": "B", "contactPhone": "+1 555 0100",
                               "contactEmail": "beta@example.com"}
@@ -45,8 +46,12 @@ class FakeASC:
         if method == "GET" and path == "/betaGroups":
             assert query["filter[app]"] == "app1"
             # The API's name filter matches partly, as App Store Connect's does.
-            return 200, {"data": [{"id": gid, "attributes": {"name": name}}
+            return 200, {"data": [{"id": gid, "attributes": {"name": name, "isInternalGroup": gid == "g-int",
+                                                             "hasAccessToAllBuilds": gid in self.all_builds}}
                                   for name, gid in self.groups.items() if query["filter[name]"] in name]}
+        if method == "GET" and path.startswith("/betaGroups/") and path.endswith("/relationships/builds"):
+            gid = path.split("/")[2]
+            return 200, {"data": [{"type": "builds", "id": "build1"}] if gid in self.in_group else []}
         if method == "POST" and path.startswith("/betaGroups/") and path.endswith("/relationships/builds"):
             gid = path.split("/")[2]
             assert body == {"data": [{"type": "builds", "id": "build1"}]}
@@ -176,10 +181,23 @@ class GroupTests(unittest.TestCase):
         with self.assertRaisesRegex(td.DistributeError, "No beta group named \"Testers\""):
             td.add_to_group(api.http, "app1", "build1", "Testers")
 
-    def test_a_build_already_in_the_group_is_fine(self):
+    def test_a_build_already_in_the_group_is_not_added_again(self):
+        api = FakeASC()
+        api.in_group = {"g-int"}
+        td.add_to_group(api.http, "app1", "build1", "Internal")
+        self.assertFalse([c for c in api.calls if c[0] == "POST"])
+
+    def test_an_internal_group_that_gets_every_build_is_left_alone(self):
+        api = FakeASC()
+        api.all_builds = {"g-int"}
+        td.add_to_group(api.http, "app1", "build1", "Internal")
+        self.assertFalse([c for c in api.calls if c[0] == "POST"])
+
+    def test_a_refused_add_fails_with_the_api_detail(self):
         api = FakeASC()
         api.group_conflict = True
-        td.add_to_group(api.http, "app1", "build1", "Internal")
+        with self.assertRaisesRegex(td.DistributeError, "already in the group"):
+            td.add_to_group(api.http, "app1", "build1", "Syndicate")
 
 
 class ReviewTests(unittest.TestCase):
@@ -248,10 +266,9 @@ class RunTests(unittest.TestCase):
         api = FakeASC()
         self.run_distribute(api)
         api.calls.clear()
-        api.group_conflict = True
         code, _ = self.run_distribute(api)
         self.assertEqual(code, 0)
-        self.assertFalse([c for c in api.calls if c[0] == "POST" and c[1] in ("/betaBuildLocalizations", "/betaAppReviewSubmissions")])
+        self.assertEqual([c for c in api.calls if c[0] == "POST"], [])
 
     def test_missing_test_information_still_gives_internal_testers_the_build_then_fails(self):
         api = FakeASC()
