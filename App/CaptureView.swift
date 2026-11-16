@@ -94,7 +94,10 @@ private struct CaptureStepPage: View {
         let flow = controller.flow
         CaptureHeading(eyebrow: "Step \(flow.stepNumber) of \(flow.stepCount)", title: flow.prompt?.text ?? "")
         if flow.isDisconnected { CaptureDisconnected { controller.endCapture() } }
-        CaptureReadout(detected: flow.detected, shift: flow.shiftReadout, idleSecondsLeft: controller.idleSecondsLeft)
+        CaptureReadout(
+            detected: flow.detected, notes: [flow.shiftReadout, flow.layerReadout].compactMap { $0 },
+            idleSecondsLeft: controller.idleSecondsLeft
+        )
         HStack(spacing: Theme.Step.x2) {
             Button("Redo") { controller.redo() }
                 .buttonStyle(PillButtonStyle())
@@ -114,8 +117,8 @@ private struct CaptureStepPage: View {
 /// What the step has detected so far, live.
 private struct CaptureReadout: View {
     let detected: [ControlFacts]
-    /// How Shift changed the control, on a shifted step (#229).
-    let shift: String?
+    /// How Shift changed the control (#229), and what a layer step found (#217).
+    let notes: [String]
     let idleSecondsLeft: Int?
 
     var body: some View {
@@ -127,7 +130,7 @@ private struct CaptureReadout: View {
                 line("Waiting for the control…", color: Theme.caption)
             } else {
                 ForEach(Array(detected.enumerated()), id: \.offset) { line($0.element.summary, color: Theme.text) }
-                if let shift { line(shift, color: Theme.caption) }
+                ForEach(notes, id: \.self) { line($0, color: Theme.caption) }
             }
         }
         .padding(Theme.Step.x4)
@@ -144,7 +147,7 @@ private struct CaptureReadout: View {
     private var accessibilityText: String {
         if let idleSecondsLeft { return idleSecondsLeft > 0 ? "Listening, Next in \(idleSecondsLeft) seconds" : "Done listening" }
         if detected.isEmpty { return "Detected: nothing yet" }
-        return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + (shift.map { ". \($0)" } ?? "")
+        return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + notes.map { ". \($0)" }.joined()
     }
 }
 
