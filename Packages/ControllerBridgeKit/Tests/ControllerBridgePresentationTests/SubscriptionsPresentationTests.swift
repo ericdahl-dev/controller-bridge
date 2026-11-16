@@ -47,9 +47,8 @@ struct SubscriptionsPresentationTests {
         #expect(HelpMessage(state)?.text == "No controller connected. Plug it in over USB; the bridge finds it.")
     }
 
-    @Test("Every LED subscription the bridge checks is named as the setup guide and README name it", arguments: Subscription.allCases)
-    func namesMatchGuide(subscription: Subscription) {
-        let name = SetupGuide.subscriptionName(for: subscription.rawValue)
-        #expect(name.map(SetupGuide.subscriptions.contains) == true, "\(subscription): \(String(describing: name))")
+    @Test("The setup guide lists exactly the subscriptions the bridge knows, in the same order (#211)")
+    func namesMatchGuide() {
+        #expect(SetupGuide.subscriptions == Subscription.allCases.map(\.syndicateName))
     }
 }
