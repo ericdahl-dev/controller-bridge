@@ -44,5 +44,30 @@ struct DemoCaptureTests {
         #expect(pitch?.last == 16383)
         #expect(steps.first { $0.prompt == "deck1.play.shift" }?.shift == ShiftLayer(of: "deck1.play", channelOffset: 0, numberOffset: 0))
         #expect(Self.walked().flow.file?.noise == [[0x90, 0x34]])
+        // The standard list's layer steps (#217).
+        let layers = Self.walked().flow.file?.layers ?? []
+        #expect(layers.map(\.selectReadout) == ["Layer 2: Shift + Note 55 on ch 16 · indicator Note 51 on ch 2"])
+        #expect(layers.map(\.offsetReadout) == ["Layer 2: channel +1"])
+    }
+
+    @Test("The demo's layer step is the LC6000's: Shift + note 55 on ch 16, note 51 on ch 2, and deck 2 on channel +1 (#217)")
+    func layers() {
+        let prompts = [
+            CapturePrompt(id: "deck1.play", text: "Play.", gesture: .press),
+            CapturePrompt(id: "layer2.select", text: "Deck 2.", gesture: .press, layer: 2),
+            CapturePrompt(id: "deck2.play", text: "Play on deck 2.", gesture: .press, layer: 2, layerOf: "deck1.play"),
+        ]
+        var flow = CaptureFlow(prompts: prompts, appVersion: "1.2.0")
+        flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: 0)
+        var now = 0.0
+        while let prompt = flow.prompt {
+            for message in DemoCapture.take(for: prompt) { flow.receive(message.bytes, at: now + 1 + message.time) }
+            now += 10
+            flow.next(at: now)
+        }
+        #expect(flow.file?.layers.first?.select?.summary == "Note 55 on ch 16")
+        #expect(flow.file?.layers.first?.withShift == true)
+        #expect(flow.file?.layers.first?.indicator?.summary == "Note 51 on ch 2")
+        #expect(flow.file?.layers.first?.channelOffset == 1)
     }
 }

@@ -50,6 +50,8 @@ public struct CaptureFlow: Sendable {
     /// For a shifted step, how Shift changed the control: "Shift: same message", "Shift: channel +1, note +60" (#229).
     /// Nil until the control arrives, and when the step it repeats was skipped.
     public private(set) var shiftReadout: String?
+    /// On a layer step (#217): the select step's button and indicator, or a layered step's offset from deck 1.
+    public private(set) var layerReadout: String?
     public static let refreshInterval = 0.1
     private var lastRefresh = -Double.infinity
     private var stale = false
@@ -80,6 +82,8 @@ public struct CaptureFlow: Sendable {
     private mutating func refresh(at time: Double? = nil) {
         detected = phase == .steps ? session?.currentControls ?? [] : []
         shiftReadout = phase == .steps ? session?.currentShift.map { Self.readout($0, kind: detected.first?.kind) } : nil
+        let layer = phase == .steps ? session?.currentLayer : nil
+        layerReadout = prompt?.layerOf == nil ? layer?.selectReadout : layer?.offsetReadout
         stale = false
         if let time { lastRefresh = time }
     }
@@ -168,7 +172,8 @@ public struct CaptureFlow: Sendable {
             let skipped = steps.filter { $0.status == .skipped }.count
             return "Capture finished: \(steps.count) steps, \(skipped) skipped."
         case .steps:
-            let detection = detected.map(\.spoken) + (shiftReadout.map { [$0] } ?? [])
+            let notes = [shiftReadout, layerReadout].compactMap { $0 }
+            let detection = detected.map(\.spoken) + notes
             if announcedStep != stepNumber, let prompt {
                 announcedStep = stepNumber
                 announcedDetection = detection
@@ -181,7 +186,7 @@ public struct CaptureFlow: Sendable {
             guard detection != announcedDetection else { return nil }
             announcedDetection = detection
             guard !detected.isEmpty else { return nil }
-            return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + "." + (shiftReadout.map { " \($0)." } ?? "")
+            return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + "." + notes.map { " \($0)." }.joined()
         }
     }
 

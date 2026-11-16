@@ -126,3 +126,38 @@ struct JogDisplayPreviewPipeTests {
         #expect(JogDisplayPreviewNoControllerTests.decks(take()) == [4])
     }
 }
+
+/// Every deck in the simulator (#221 bug): the content of all four decks reaches it live, while only the followed
+/// deck is uploaded.
+@Suite("Jog display preview of every deck")
+struct JogDisplayPreviewAllDecksTests {
+    static func previews(_ events: [JogDisplayEvent]) -> [Int: String?] {
+        var out: [Int: String?] = [:]
+        for case .preview(let content) in events { out[content.deck] = content.title }
+        return out
+    }
+
+    @Test("The driver reports a deck's preview on change only, and sends nothing for it")
+    func driverPreview() {
+        let (driver, take) = JogDisplayPreviewTests.previewing()
+        let one = JogDisplayContent(deck: 1, color: [255, 0, 0], title: "A")
+        driver.preview(one)
+        driver.preview(one)
+        driver.preview(JogDisplayContent(deck: 3, color: [0, 255, 255], title: "C"))
+        #expect(take() == [.preview(one), .preview(JogDisplayContent(deck: 3, color: [0, 255, 255], title: "C"))])
+    }
+
+    @Test("No controller, live Syndicate: decks 1 and 3's tracks both reach the simulator; only the followed deck (3) uploads")
+    func allDecks() throws {
+        let (rig, take) = try JogDisplayPreviewNoControllerTests.rig()
+        rig.coordinator.setJogPreviewDeck(3)
+        _ = take()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3, title: "Night Drive"))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1, title: "Daybreak"))
+        let events = take()
+        let previews = Self.previews(events)
+        #expect(previews[1] == "Daybreak")
+        #expect(previews[3] == "Night Drive")
+        #expect(JogDisplayPreviewNoControllerTests.decks(events) == [3], "only deck 3, the one followed, uploads")
+    }
+}

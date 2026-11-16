@@ -30,7 +30,9 @@ public enum DemoCapture {
         case "deck1.needle": return held(70, around: pairs(msb: 64, lsb: 65, values: [1000, 6000, 11000, 15000]))
         case "deck1.browse.turn":
             return [0x01, 0x01, 0x01, 0x7F, 0x7F, 0x7F].enumerated().map { (0.3 + Double($0) * 0.15, [0xB0, 6, $1]) }
-        case "layer2.select": return [(0.3, [0x91, 51, 0x7F]), (0.4, [0x90, 51, 0x00])]
+        // The LC6000's Shift + deck select (ch16 note 55), then note 51 at 0 on the old channel and 127 on the new (#217).
+        case "layer2.select":
+            return held(26, around: [(0.3, [0x9F, 55, 0x7F]), (0.4, [0x8F, 55, 0x00]), (0.45, [0x90, 51, 0x00]), (0.46, [0x91, 51, 0x7F])])
         case "deck2.play": return press(1, channel: 1)
         default:
             if let base = prompt.shiftedOf, let note = notes[base] { return held(26, around: press(note).map { ($0.time + 0.2, $0.bytes) }) }

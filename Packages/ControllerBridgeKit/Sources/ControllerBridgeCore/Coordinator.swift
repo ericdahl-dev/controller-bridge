@@ -251,6 +251,8 @@ public final class Coordinator {
     /// connected, it says goodbye.
     private func updateJogDisplay() {
         guard let driver = jogDisplay else { return }
+        // Every deck's content, live, for the simulator (#221); only the deck in front is uploaded below.
+        for index in controllers.indices { driver.preview(jogContent(index)) }
         let connected = controllers.indices.filter { controllers[$0].source != nil }
         // With no controller connected, nothing reaches a unit, but the preview follows a deck from Syndicate (#221).
         guard let first = connected.first else {
