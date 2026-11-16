@@ -14,7 +14,7 @@ public struct DeckBadge: Equatable, Sendable {
     }
 
     public init(deck: Int) {
-        let fill = Self.fills[deck] ?? Palette.buttonRaised
+        let fill = Self.fills[deck] ?? Self.neutral
         self.init(fill: fill, digit: Self.legibleDigit(on: fill))
     }
 
@@ -26,14 +26,21 @@ public struct DeckBadge: Equatable, Sendable {
         4: RGB(hex: 0x62929E),
     ]
 
+    /// A deck outside 1-4. Badge colors are deck colors, not theme surfaces, so they don't change with the theme
+    /// (#127).
+    static let neutral = RGB(hex: 0x424242)
+
     static let white = RGB(hex: 0xFFFFFF)
+
+    /// The near-black digit, fixed rather than the theme's background, so the digit rule holds in either theme (#127).
+    static let nearBlack = RGB(hex: 0x141415)
 
     static let black = RGB(hex: 0x000000)
 
-    /// White or the background's near-black, whichever has more contrast on `fill`. On a mid tone where neither
+    /// White or a near-black, whichever has more contrast on `fill`. On a mid tone where neither
     /// reaches 4.5:1, pure black does: white or black always reaches about 4.58:1 (#123).
     static func legibleDigit(on fill: RGB) -> RGB {
-        let best = Contrast.ratio(white, fill) >= Contrast.ratio(Palette.background, fill) ? white : Palette.background
+        let best = Contrast.ratio(white, fill) >= Contrast.ratio(nearBlack, fill) ? white : nearBlack
         if Contrast.ratio(best, fill) >= 4.5 { return best }
         return Contrast.ratio(white, fill) >= Contrast.ratio(black, fill) ? white : black
     }
