@@ -103,7 +103,10 @@ public final class Coordinator {
 
     /// Releases everything held in Syndicate. Safe to call again: a second call sends nothing.
     public func stop() {
-        for bridge in bridges { bridge.releaseAll() }
+        for index in controllers.indices {
+            controllers[index].bridge.releaseAll()
+            disconnect(index)
+        }
     }
 
     /// The Mac is about to sleep: release everything held, since the controller may be gone on wake.

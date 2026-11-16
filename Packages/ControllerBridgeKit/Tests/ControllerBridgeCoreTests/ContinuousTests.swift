@@ -69,21 +69,21 @@ struct ContinuousTests {
         #expect(rig.osc.sent.count == 3)
     }
 
-    @Test("The nudge is a held control: stop sends PhaseBend 0 once, and the next turn nudges afresh")
+    @Test("The nudge is a held control: release-all sends PhaseBend 0 once, and the next turn nudges afresh")
     func bendIsHeld() throws {
         let rig = try Self.started()
         Self.feedback(rig, "Playing", [.int(1)])
         Self.cc(rig, 55, 0x01)
         rig.osc.sent.removeAll()
 
-        rig.coordinator.stop()
+        rig.coordinator.willSleep()   // release-all, ports left open
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)])])
 
         Self.cc(rig, 55, 0x01)
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)]))
 
         rig.osc.sent.removeAll()
-        rig.coordinator.stop()
+        rig.coordinator.willSleep()   // release-all, ports left open
         rig.clock.now = 1
         rig.coordinator.tick()
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)])])
@@ -149,11 +149,11 @@ struct ContinuousTests {
         #expect(rig.osc.sent.count == 1)
     }
 
-    @Test("Release-all clears the needle touch: after stop, moving the strip seeks nothing")
+    @Test("Release-all clears the needle touch: afterwards, moving the strip seeks nothing")
     func releaseAllClearsNeedleTouch() throws {
         let rig = try Self.started()
         rig.coordinator.midi(.noteOn(channel: 0, note: 70, velocity: 127), source: Rig.lc6000.id)
-        rig.coordinator.stop()
+        rig.coordinator.willSleep()   // release-all, ports left open
         Self.cc(rig, 64, 100)
         #expect(rig.osc.sent == [])
     }
@@ -169,7 +169,7 @@ struct ContinuousTests {
         Self.cc(rig, 55, 0x01)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
 
-        rig.coordinator.stop()
+        rig.coordinator.willSleep()   // release-all, ports left open
         rig.osc.sent.removeAll()
         Self.cc(rig, 55, 0x01)
         #expect(rig.osc.sent == [])
