@@ -31,7 +31,7 @@ struct ControllerBridgeApp: App {
 
         Window("Diagnostics", id: "diagnostics") {
             DiagnosticsWindow(
-                log: model.diagnostics, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
+                log: model.diagnostics, status: model.status, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
                 startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep
             )
         }
