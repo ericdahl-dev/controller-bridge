@@ -18,7 +18,43 @@ struct JogDisplayCoordinatorTests {
             shown.contents.append(content)
             return [UInt8(content.deck), 0, 0, 255]
         })
+        rig.coordinator.setJogDisplay(enabled: true)
         return (port, shown)
+    }
+
+    @Test("Off by default: attached, through a start, a layer change, a load, playing and ticks, nothing goes to either port")
+    func offByDefault() throws {
+        let rig = try Rig()
+        let port = Port()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1) { _ in [0, 0, 0, 255] })
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
+        ))
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(1)]))
+        for step in 1...20 { rig.clock.now = Double(step) * 0.05; rig.coordinator.tick() }
+        #expect(port.controller == [])
+        #expect(port.wd == [])
+    }
+
+    @Test("Turned off while showing: goodbye, then nothing more; on again: hello")
+    func turnOff() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        rig.coordinator.start()
+        port.controller.removeAll()
+        rig.coordinator.setJogDisplay(enabled: false)
+        #expect(port.controller == [JogDisplay.goodbye])
+        port.wd.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.clock.now = 1
+        rig.coordinator.tick()
+        #expect(port.wd == [])
+        rig.coordinator.setJogDisplay(enabled: true)
+        #expect(port.controller == [JogDisplay.goodbye] + JogDisplay.hello)
     }
 
     /// Answers the upload in flight: every ack, then the commit.

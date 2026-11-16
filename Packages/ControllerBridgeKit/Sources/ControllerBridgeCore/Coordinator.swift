@@ -125,6 +125,15 @@ public final class Coordinator {
 
     /// The LC6000's jog display, when the app found its WD port.
     private var jogDisplay: JogDisplayDriver?
+    /// Settings' "Show the deck on the jog display". Off until a hardware check passes (#165): while off, nothing goes
+    /// to the display's ports, not even the hello.
+    private var jogDisplayEnabled = false
+
+    /// Turns the jog display on (hello, then the deck in front) or off (goodbye, then nothing).
+    public func setJogDisplay(enabled: Bool) {
+        jogDisplayEnabled = enabled
+        updateJogDisplay()
+    }
     /// The marker: the master clock's hand while the deck in front plays, else where the platter left it.
     private var jogMarker = JogMarker()
     private var masterBPM: Double?
@@ -191,7 +200,7 @@ public final class Coordinator {
     private func updateJogDisplay() {
         guard let driver = jogDisplay else { return }
         let connected = controllers.indices.filter { controllers[$0].source != nil }
-        guard let first = connected.first else { return driver.disconnect() }
+        guard jogDisplayEnabled, let first = connected.first else { return driver.disconnect() }
         let front = connected.first { status.controllers[$0].activeLayer } ?? first
         let deck = status.controllers[front].deck
         let track = controllers[front].bridge.track
