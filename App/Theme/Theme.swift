@@ -96,22 +96,22 @@ enum Theme {
         static let heading: CGFloat = 18
     }
 
-    /// Inter for UI text, with tabular figures so numbers don't jitter.
+    /// Geist for UI text, as on the site (#171), with tabular figures so numbers don't jitter.
     static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         let name = switch weight {
-        case .bold, .heavy, .black: "Inter-Bold"
-        case .semibold, .medium: "Inter-SemiBold"
-        default: "Inter-Regular"
+        case .semibold, .bold, .heavy, .black: "Geist-SemiBold"
+        case .medium: "Geist-Medium"
+        default: "Geist-Regular"
         }
         return Font.custom(name, size: size).monospacedDigit()
     }
 
-    /// IBM Plex Mono for values: ports, BPM, deck numbers.
+    /// Geist Mono for labels and values: ports, MIDI and OSC lines, deck numbers (#171).
     static func data(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font {
         let name = switch weight {
-        case .semibold, .bold, .heavy, .black: "IBMPlexMono-SmBld"
-        case .medium: "IBMPlexMono-Medm"
-        default: "IBMPlexMono"
+        case .semibold, .bold, .heavy, .black: "GeistMono-SemiBold"
+        case .medium: "GeistMono-Medium"
+        default: "GeistMono-Regular"
         }
         return Font.custom(name, size: size)
     }

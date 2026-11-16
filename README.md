@@ -153,7 +153,7 @@ Releases are a version tag on `main`. See [`docs/DEVELOPING.md`](docs/DEVELOPING
 
 ### Look and fonts
 
-The app follows Syndicate's flat style (#34) in its dark and light themes. The colors are Syndicate's own tokens, from its user guide's CSS (#127), and `ControllerBridgePresentation` tests every text color against WCAG AA in both themes. **Settings › Appearance** picks Match macOS, Dark or Light. The app bundles two fonts under the [SIL Open Font License 1.1](https://openfontlicense.org): [Inter](https://github.com/rsms/inter) 4.1 for UI text and [IBM Plex Mono](https://github.com/IBM/plex) 2.5.0 for numbers. Their license files ship in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo).
+The app follows Syndicate's flat style (#34) in its dark and light themes. The colors are Syndicate's own tokens, from its user guide's CSS (#127), and `ControllerBridgePresentation` tests every text color against WCAG AA in both themes. **Settings › Appearance** picks Match macOS, Dark or Light. The app bundles [Geist and Geist Mono](https://github.com/vercel/geist-font) 1.9.2, the site's fonts (#171), under the [SIL Open Font License 1.1](https://openfontlicense.org): Geist for UI text, Geist Mono for labels and numbers. The license file ships in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo), and the release preflight fails if a font or the license is missing.
 
 For PR screenshots, a Debug build can render the panel without a screen: `ControllerBridge.app/Contents/MacOS/ControllerBridge --render-snapshots snaps`. It prints where the PNGs went (inside the sandbox container). Release builds leave this out.
 

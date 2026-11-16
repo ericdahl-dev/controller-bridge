@@ -11,13 +11,18 @@ enum Snapshots {
     /// SNAPSHOT_APPEARANCE=light renders the light theme (#127); dark by default.
     static let scheme: ColorScheme = ProcessInfo.processInfo.environment["SNAPSHOT_APPEARANCE"] == "light" ? .light : .dark
 
+    static let fonts = ["Geist-Regular", "Geist-Medium", "Geist-SemiBold", "GeistMono-Regular", "GeistMono-Medium", "GeistMono-SemiBold"]
+    static var missingFonts: Bool { fonts.contains { NSFont(name: $0, size: 12) == nil } }
+
     static func render(to name: String) {
         // Theme colors resolve against the app's appearance, so set it to match.
         NSApplication.shared.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(name).path
-        for font in ["Inter-Regular", "Inter-SemiBold", "Inter-Bold", "IBMPlexMono", "IBMPlexMono-Medm", "IBMPlexMono-SmBld"] {
+        for font in fonts {
             print("\(font): \(NSFont(name: font, size: 12) == nil ? "MISSING" : "ok")")
         }
+        // A missing font would render in the system font and look almost right: stop instead (#171).
+        if missingFonts { print("A bundled font is missing; no snapshots."); exit(1) }
         let states: [(String, (BridgeStatus) -> Void)] = [
             ("layers", {
                 // The LC6000 following its own layers (#79), switched to layer 2.
