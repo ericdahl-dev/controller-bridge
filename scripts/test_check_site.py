@@ -29,18 +29,22 @@ GOOD = {
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD,
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="capture/">record it in your browser</a>'
+                            ' <a href="for/lc6000/">DeckBridge for the LC6000</a>'
                             ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
     "capture/index.html": page(body='<a href="../">Home</a>'),
+    "for/lc6000/index.html": page(body='<a href="../../">Home</a>'),
     "privacy/index.html": page(body='<h2 id="network">Network</h2><p>DeckBridge collects no data.</p>' + WEBSITE),
     "style.css": '@font-face { font-family: Inter; src: url("fonts/Inter-Regular.ttf"); } body { color: #EDEDEA; }',
     "fonts/Inter-Regular.ttf": "font",
     "img/icon.png": "png",
     "robots.txt": "User-agent: *\nAllow: /\nSitemap: https://getdeckbridge.app/sitemap.xml\n",
     "sitemap.xml": sitemap("https://getdeckbridge.app/", "https://getdeckbridge.app/support/",
-                           "https://getdeckbridge.app/privacy/", "https://getdeckbridge.app/capture/"),
+                           "https://getdeckbridge.app/privacy/", "https://getdeckbridge.app/capture/",
+                           "https://getdeckbridge.app/for/lc6000/"),
     "llms.txt": "# DeckBridge\n\n> A bridge.\n\n- [Home](https://getdeckbridge.app/)\n- [Support](https://getdeckbridge.app/support/)\n"
-                "- [Privacy](https://getdeckbridge.app/privacy/)\n- [Capture](https://getdeckbridge.app/capture/)\n",
+                "- [Privacy](https://getdeckbridge.app/privacy/)\n- [Capture](https://getdeckbridge.app/capture/)\n"
+                "- [LC6000](https://getdeckbridge.app/for/lc6000/)\n",
     "analytics.js": "/* PostHog */",
 }
 NO_ANALYTICS = "<!-- no analytics.js -->"
@@ -95,7 +99,8 @@ class CheckSiteTests(unittest.TestCase):
             "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">' + CAPTURE_LD,
                                body='<img src="//cdn.example.com/a.png" alt=""> <script src="http://x.example/t.js"></script>'
                                     ' <a href="https://testflight.apple.com/join/XXXX">ok</a>'
-                                    ' <a href="support/">s</a> <a href="privacy/">p</a> <a href="capture/">c</a>'),
+                                    ' <a href="support/">s</a> <a href="privacy/">p</a> <a href="capture/">c</a>'
+                                    ' <a href="for/lc6000/">l</a>'),
             "style.css": '@import url("https://fonts.example/x.css"); body { background: url(https://x.example/bg.png); }',
         })
         self.assertEqual(check_site.problems(root), [
@@ -171,7 +176,7 @@ class CheckSiteTests(unittest.TestCase):
     def test_every_sitemap_url_is_on_the_site_and_is_a_page(self):
         root = self.site({"sitemap.xml": sitemap(
             "https://getdeckbridge.app/", "https://getdeckbridge.app/support/", "https://getdeckbridge.app/privacy/index.html",
-            "https://getdeckbridge.app/capture/", "http://getdeckbridge.app/", "https://example.com/", "https://getdeckbridge.app.evil.example/",
+            "https://getdeckbridge.app/capture/", "https://getdeckbridge.app/for/lc6000/", "http://getdeckbridge.app/", "https://example.com/", "https://getdeckbridge.app.evil.example/",
             "https://getdeckbridge.app/faq/", "https://getdeckbridge.app/img/nope.png")})
         self.assertEqual(check_site.problems(root), [
             "sitemap.xml: http://getdeckbridge.app/ isn't under https://getdeckbridge.app/",
@@ -186,6 +191,7 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(root), [
             "sitemap.xml: doesn't list https://getdeckbridge.app/support/",
             "sitemap.xml: doesn't list https://getdeckbridge.app/capture/",
+            "sitemap.xml: doesn't list https://getdeckbridge.app/for/lc6000/",
         ])
 
     def test_llms_txt_starts_with_the_product_name(self):
@@ -198,6 +204,7 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(root), [
             "llms.txt: doesn't link https://getdeckbridge.app/support/",
             "llms.txt: doesn't link https://getdeckbridge.app/capture/",
+            "llms.txt: doesn't link https://getdeckbridge.app/for/lc6000/",
         ])
 
     def test_a_page_without_a_title_or_description_fails(self):
@@ -274,6 +281,17 @@ class CheckSiteTests(unittest.TestCase):
                          ["index.html: doesn't link the web capture (capture/)"])
         self.assertEqual(check_site.problems(self.site({"index.html": no_ld})),
                          ["index.html: its JSON-LD doesn't name https://getdeckbridge.app/capture/"])
+
+    def test_the_lc6000_page_is_required_and_the_home_page_links_it(self):
+        # the first controller page (#268): /for/<controller>/ pages are the pattern for the next ones
+        self.assertEqual(check_site.problems(self.site(remove=["for/lc6000/index.html"])), [
+            "for/lc6000/index.html: missing",
+            "index.html: link to for/lc6000/ doesn't resolve",
+            "sitemap.xml: https://getdeckbridge.app/for/lc6000/ isn't a page in the site",
+        ])
+        no_link = GOOD["index.html"].replace(' <a href="for/lc6000/">DeckBridge for the LC6000</a>', "")
+        self.assertEqual(check_site.problems(self.site({"index.html": no_link})),
+                         ["index.html: doesn't link the LC6000 page (for/lc6000/)"])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
