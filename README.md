@@ -1,12 +1,12 @@
-# controller-bridge
+# DeckBridge
 
 A Mac menu-bar app that lets you use a **Denon LC6000 PRIME** with **[Untitled Audio Syndicate](https://untitledaudiosyndicate.com)** through Syndicate's OSC API, with LED feedback.
 
 Syndicate's own MIDI mapping (0.3.7) can't handle the LC6000's 14-bit jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10. The app reads the LC6000's MIDI, converts it, and sends it to Syndicate's fixed OSC addresses. It also listens to Syndicate's OSC feedback to light the controller.
 
 ```
-LC6000 ──USB MIDI──▶  Controller Bridge  ──OSC :9090──▶ Syndicate
-LC6000 ◀──MIDI LEDs──  Controller Bridge  ◀──OSC feedback :9096── Syndicate
+LC6000 ──USB MIDI──▶  DeckBridge  ──OSC :9090──▶ Syndicate
+LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── Syndicate
 ```
 
 ## What it does
@@ -49,7 +49,7 @@ LC6000 ◀──MIDI LEDs──  Controller Bridge  ◀──OSC feedback :9096�
 
 ## Install
 
-Install **Controller Bridge** from the Mac App Store (macOS 26 or later). It lives in the menu bar and has no Dock icon. On first launch it opens a short setup guide for Syndicate.
+Install **DeckBridge** from the Mac App Store (macOS 26 or later). It lives in the menu bar and has no Dock icon. On first launch it opens a short setup guide for Syndicate.
 
 ## Set up Syndicate
 
