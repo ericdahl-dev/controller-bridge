@@ -40,7 +40,7 @@ extension Bridge {
 
     /// The deck's badge color, so the ring shows which deck this layer drives (#122).
     var ringColor: [Int] {
-        guard mapping.leds.ringFollowsDeck, let deck = DeckColors.rgb[mapping.deck.number] else { return mapping.leds.ringColor }
+        guard mapping.leds.ringFollowsDeck, let deck = deckColors[mapping.deck.number] else { return mapping.leds.ringColor }
         return deck
     }
 }
