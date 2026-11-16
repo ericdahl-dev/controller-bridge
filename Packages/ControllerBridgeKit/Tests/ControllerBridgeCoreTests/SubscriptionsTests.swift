@@ -114,3 +114,42 @@ struct SubscriptionsTests {
         #expect(rig.coordinator.status.missingSubscriptions == [])
     }
 }
+
+/// BarRamp (#165): the jog needle is the deck's own phase, from its BarRamp. Needed only while Settings' jog display
+/// switch is on; the simulator alone just shows a still needle without it, with no warning.
+@Suite("BarRamp subscription")
+struct BarRampSubscriptionTests {
+    static func answered(jogDisplay: Bool, barRamp: Bool) throws -> Rig {
+        let rig = try Rig()
+        rig.coordinator.setJogDisplay(enabled: jogDisplay)
+        rig.coordinator.start()
+        rig.clock.now = 0.3
+        var answer = [SubscriptionsTests.palette, OSCMessage("/Syndicate/Header/BPM", [.float(120)])] + EverySubscriptionTests.deck1.map(\.1)
+        if barRamp { answer.append(OSCMessage("/Syndicate/Deck/1/BarRamp", [.float(0.25)])) }
+        for message in answer { rig.coordinator.feedback(message) }
+        SubscriptionsTests.tick(rig, at: 2.0)
+        return rig
+    }
+
+    @Test("Jog display off: not required, and not missing without it (the LC6000's check as before)")
+    func off() throws {
+        let rig = try Self.answered(jogDisplay: false, barRamp: false)
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.barRamp))
+        #expect(rig.coordinator.status.missingSubscriptions == [])
+    }
+
+    @Test("Jog display on: required, missing when the answer has no BarRamp, fine when it has one")
+    func on() throws {
+        let missing = try Self.answered(jogDisplay: true, barRamp: false)
+        #expect(missing.coordinator.status.requiredSubscriptions.last == .barRamp)
+        #expect(missing.coordinator.status.missingSubscriptions == [.barRamp])
+        #expect(try Self.answered(jogDisplay: true, barRamp: true).coordinator.status.missingSubscriptions == [])
+    }
+
+    @Test("Turning the switch on later asks for it from then on")
+    func later() throws {
+        let rig = try Self.answered(jogDisplay: false, barRamp: false)
+        rig.coordinator.setJogDisplay(enabled: true)
+        #expect(rig.coordinator.status.requiredSubscriptions.contains(.barRamp))
+    }
+}

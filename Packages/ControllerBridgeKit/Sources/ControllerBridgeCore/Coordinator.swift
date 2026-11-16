@@ -161,6 +161,7 @@ public final class Coordinator {
     /// Turns the jog display on (hello, then the deck in front) or off (goodbye, then nothing).
     public func setJogDisplay(enabled: Bool) {
         jogDisplayEnabled = enabled
+        status.requiredSubscriptions = requiredSubscriptions
         updateJogDisplay()
     }
     /// Each controller entry's needle: its deck's own phase in the bar, else where its platter left it (#165).
@@ -699,7 +700,9 @@ public final class Coordinator {
 
     /// What every controller's profile needs, in the guide's order (#211).
     private var requiredSubscriptions: [Subscription] {
-        let needed = Set(bridges.flatMap { Subscription.required(for: $0.mapping) })
+        var needed = Set(bridges.flatMap { Subscription.required(for: $0.mapping) })
+        // The jog needle reads the deck's BarRamp (#165): asked for only while the display is on.
+        if jogDisplayEnabled { needed.insert(.barRamp) }
         return Subscription.allCases.filter(needed.contains)
     }
 
