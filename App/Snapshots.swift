@@ -136,6 +136,7 @@ enum Snapshots {
             print("Couldn't create \(directory): \(error)"); return
         }
         write(buttonStates, to: "\(directory)/buttons.png")
+        write(siteStyles, to: "\(directory)/site-styles.png")
         for (name, configure) in states {
             let status = BridgeStatus()
             configure(status)
@@ -210,6 +211,35 @@ enum Snapshots {
         }
         .padding(Theme.Space.xl)
         .frame(width: 360)
+        .background(Theme.panel)
+    }
+
+    /// The site's components (#171): pills normal, focused and disabled, a segmented control, a chip on a card.
+    private static var siteStyles: some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x4) {
+            HStack(spacing: Theme.Step.x2) {
+                Button("Done: feedback live") {}.buttonStyle(PillButtonStyle(kind: .primary))
+                Button("Settings…") {}.buttonStyle(PillButtonStyle())
+                Button("Quit") {}.buttonStyle(PillButtonStyle(kind: .quiet))
+            }
+            HStack(spacing: Theme.Step.x3) {
+                Button("Focused") {}.buttonStyle({ var style = PillButtonStyle(kind: .primary); style.showsFocusForSnapshot = true; return style }())
+                Button("Focused") {}.buttonStyle({ var style = PillButtonStyle(); style.showsFocusForSnapshot = true; return style }())
+                Button("Apply") {}.buttonStyle(PillButtonStyle(kind: .primary)).disabled(true)
+            }
+            SegmentedPills(options: ["MIDI Monitor", "LED Sweep", "OSC Log"], title: { $0 }, selection: .constant("MIDI Monitor"))
+            VStack(alignment: .leading, spacing: Theme.Step.x2) {
+                Text("Controller").font(Theme.labelFont).foregroundStyle(Theme.caption)
+                HStack {
+                    ToneChip(word: "UNMAPPED", tone: .attention, spoken: "Unmapped")
+                    Spacer()
+                }
+            }
+            .padding(Theme.Step.x3)
+            .card()
+        }
+        .padding(Theme.Step.x6)
+        .frame(width: 400)
         .background(Theme.panel)
     }
 
