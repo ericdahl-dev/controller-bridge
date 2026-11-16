@@ -37,12 +37,7 @@ struct ControllerBridgeApp: App {
         .defaultLaunchBehavior(.suppressed)
 
         Settings {
-            Text("Settings arrive in #19.")
-                .font(Theme.ui(13))
-                .foregroundStyle(Theme.text)
-                .padding(40)
-                .background(Theme.background)
-                .preferredColorScheme(.dark)
+            SettingsView(model: model)
         }
     }
 }

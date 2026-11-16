@@ -9,7 +9,7 @@ public enum MIDIEvent: Equatable, Sendable {
 }
 
 /// A MIDI source or destination.
-public struct MIDIEndpoint: Equatable, Sendable, Identifiable {
+public struct MIDIEndpoint: Hashable, Sendable, Identifiable, Codable {
     /// The CoreMIDI unique id: stable across replugs, unlike the endpoint reference.
     public var id: Int32
     public var name: String

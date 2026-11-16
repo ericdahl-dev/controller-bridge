@@ -51,6 +51,8 @@ targets:
         # Required for a Mac App Store upload (#28).
         LSApplicationCategoryType: public.app-category.music
         ITSAppUsesNonExemptEncryption: false
+        # Settings' "All networks" feedback listener, for Syndicate on another Mac (#19).
+        NSLocalNetworkUsageDescription: Controller Bridge listens for OSC feedback from Syndicate running on another Mac on your network.
     settings:
       base:
         # Placeholder until the display name is picked in #29; the bundle id is final.
