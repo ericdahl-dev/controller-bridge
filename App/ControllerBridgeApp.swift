@@ -24,6 +24,7 @@ struct ControllerBridgeApp: App {
         // Window style, not .menu, so it carries the dark panel.
         MenuBarExtra {
             StatusPanel(status: model.status, setDemo: model.setDemo, setDeck: { model.setDeck($0, controller: $1) })
+                .environment(\.deckColors, model.status.deckColors)
         } label: {
             MenuBarLabel(status: model.status)
         }
@@ -35,6 +36,7 @@ struct ControllerBridgeApp: App {
                 startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep,
                 hiddenNotes: model.profiles.first?.mapping.midi.ignoreNotes ?? []
             )
+            .environment(\.deckColors, model.status.deckColors)
         }
         .defaultSize(width: 720, height: 480)
         // Opens only from the panel's Diagnostics…, never by itself at launch.
@@ -50,6 +52,7 @@ struct ControllerBridgeApp: App {
 
         Settings {
             SettingsView(model: model)
+                .environment(\.deckColors, model.status.deckColors)
         }
     }
 }

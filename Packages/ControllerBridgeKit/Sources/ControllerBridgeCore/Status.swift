@@ -11,6 +11,8 @@ public struct CoordinatorStatus: Equatable, Sendable {
     public var sweeping = false
     /// The built-in demo controller (#64) is running instead of the real one.
     public var demo = false
+    /// The deck colors in use, for the app's badges (#123): Syndicate's palette, or the defaults until it arrives.
+    public var deckColors = DeckColors.defaults
 
     public init(
         controllers: [ControllerStatus], devices: [DeviceStatus] = [], feedback: FeedbackState = .waiting,

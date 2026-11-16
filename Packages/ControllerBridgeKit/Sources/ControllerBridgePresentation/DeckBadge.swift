@@ -8,6 +8,11 @@ public struct DeckBadge: Equatable, Sendable {
         self.digit = digit
     }
 
+    /// A badge on any fill, such as a deck color from Syndicate's palette (#123), with the more legible digit.
+    public init(fill: RGB) {
+        self.init(fill: fill, digit: Self.legibleDigit(on: fill))
+    }
+
     public init(deck: Int) {
         let fill = Self.fills[deck] ?? Palette.buttonRaised
         self.init(fill: fill, digit: Self.legibleDigit(on: fill))
@@ -23,8 +28,13 @@ public struct DeckBadge: Equatable, Sendable {
 
     static let white = RGB(hex: 0xFFFFFF)
 
-    /// White or the background's near-black, whichever has more contrast on `fill`.
+    static let black = RGB(hex: 0x000000)
+
+    /// White or the background's near-black, whichever has more contrast on `fill`. On a mid tone where neither
+    /// reaches 4.5:1, pure black does: white or black always reaches about 4.58:1 (#123).
     static func legibleDigit(on fill: RGB) -> RGB {
-        Contrast.ratio(white, fill) >= Contrast.ratio(Palette.background, fill) ? white : Palette.background
+        let best = Contrast.ratio(white, fill) >= Contrast.ratio(Palette.background, fill) ? white : Palette.background
+        if Contrast.ratio(best, fill) >= 4.5 { return best }
+        return Contrast.ratio(white, fill) >= Contrast.ratio(black, fill) ? white : black
     }
 }
