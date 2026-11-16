@@ -81,14 +81,14 @@ struct StatusPresentationTests {
         #expect(status.icon == .attention)
     }
 
-    @Test("Syndicate stopped answering (#21): an orange STOPPED light, the icon asks for attention, and the dropout shows")
+    @Test("Syndicate stopped answering (#21): an orange DROPPED light (not STOPPED: BRIDGE ● STOPPED is the red error), the icon asks for attention, and the dropout shows")
     func feedbackStopped() {
         let status = StatusPresentation(BridgeState(
             controller: .connected(profile: "LC6000"), feedback: .stopped(port: 9096), deck: 1,
             lastDropout: "Syndicate feedback stopped"
         ))
-        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● STOPPED · DECK [1]")
-        #expect(status.lights.last == StatusLight(label: "FEEDBACK", word: "STOPPED", tone: .attention))
+        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● DROPPED · DECK [1]")
+        #expect(status.lights.last == StatusLight(label: "FEEDBACK", word: "DROPPED", tone: .attention))
         #expect(status.icon == .attention)
         #expect(status.lastDropout == "LAST DROPOUT: Syndicate feedback stopped")
     }

@@ -91,7 +91,7 @@ public struct StatusPresentation: Equatable, Sendable {
         case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)
         case .live: StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live)
         case .waiting: StatusLight(label: "FEEDBACK", word: "WAITING", tone: .idle)
-        case .stopped: StatusLight(label: "FEEDBACK", word: "STOPPED", tone: .attention)
+        case .stopped: StatusLight(label: "FEEDBACK", word: "DROPPED", tone: .attention)
         case .portInUse(let port): StatusLight(label: "FEEDBACK", word: "PORT \(port) IN USE", tone: .error)
         case .failed: StatusLight(label: "FEEDBACK", word: "FAILED", tone: .error)
         }
