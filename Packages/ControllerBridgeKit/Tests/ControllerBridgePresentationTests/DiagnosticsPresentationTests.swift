@@ -83,6 +83,19 @@ struct DiagnosticsPresentationTests {
         #expect(lines.shown(.osc).count == 3)
     }
 
+    @Test("Direction shows OSC received from Syndicate, sent to it, or both (#218)")
+    func directionFilter() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 1")
+        lines.append(to: .osc, message: "OSC -> /Syndicate/Deck/1/PlayPause 1")
+        #expect(lines.filter.direction == .both)
+        lines.filter.direction = .received
+        #expect(lines.shown(.osc).map(\.message) == ["OSC <- /Syndicate/Deck/1/Playing 1"])
+        lines.filter.direction = .sent
+        #expect(lines.shown(.osc).map(\.message) == ["OSC -> /Syndicate/Deck/1/PlayPause 1"])
+        #expect(DiagnosticsDirection.allCases.map(\.rawValue) == ["In and out", "In", "Out"])
+    }
+
     @Test("Hidden streaming lines can't push the rest out: after 20,100 of them, the Playing line is still shown (#97)")
     func hiddenLinesDontEvict() {
         var lines = DiagnosticsLines()

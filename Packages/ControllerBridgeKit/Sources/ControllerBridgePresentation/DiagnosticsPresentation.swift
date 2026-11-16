@@ -45,19 +45,35 @@ public struct SweepAvailability: Equatable, Sendable {
     }
 }
 
-/// How the window narrows a Diagnostics list (#218): by text for now. Display only.
+/// Which way the OSC log's lines went (#218), by their "OSC <-" (from Syndicate) or "OSC ->" (to it) prefix.
+public enum DiagnosticsDirection: String, CaseIterable, Sendable {
+    case both = "In and out"
+    case received = "In"
+    case sent = "Out"
+}
+
+/// How the window narrows a Diagnostics list (#218): by text and direction. Display only.
 public struct DiagnosticsFilter: Equatable, Sendable {
     /// Lines containing this, in any case; empty matches every line.
     public var text = ""
+    /// OSC lines going this way; other lines (MIDI, the sweep) are never narrowed by it.
+    public var direction = DiagnosticsDirection.both
 
-    public init(text: String = "") {
+    public init(text: String = "", direction: DiagnosticsDirection = .both) {
         self.text = text
+        self.direction = direction
     }
 
-    var isEmpty: Bool { text.isEmpty }
+    var isEmpty: Bool { text.isEmpty && direction == .both }
 
     func matches(_ line: DiagnosticsLines.Line) -> Bool {
-        text.isEmpty || line.text.localizedCaseInsensitiveContains(text)
+        let text = line.text
+        switch direction {
+        case .both: break
+        case .received: if text.hasPrefix("OSC -> ") { return false }
+        case .sent: if text.hasPrefix("OSC <- ") { return false }
+        }
+        return self.text.isEmpty || text.localizedCaseInsensitiveContains(self.text)
     }
 }
 
