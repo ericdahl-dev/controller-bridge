@@ -131,4 +131,22 @@ struct OSCDestinationTests {
         destination.send(Self.play)
         #expect(sinks.sink("127.0.0.1:9090")?.sent == [Self.play.encoded()])
     }
+
+    @Test("A failing send is reported, at most once a second, so a dead host doesn't fire on every 10 ms tick")
+    func sendFailuresThrottled() async throws {
+        let sinks = FakeSinks(), resolver = FakeResolver(), clock = Rig.FakeClock(), failures = Count()
+        let destination = OSCDestination(resolver: resolver, open: { try sinks.open($0, $1) }, clock: clock)
+        destination.onSendFailure = { failures.value += 1 }
+        #expect(await destination.connect(host: "192.168.1.20", port: 9090) == nil)
+        sinks.sink("192.168.1.20:9090")?.fails = true
+
+        destination.send(Self.play)
+        clock.now = 0.5
+        destination.send(Self.play)
+        #expect(failures.value == 1)
+        #expect(destination.lastError == "Couldn't send OSC to 192.168.1.20:9090")
+        clock.now = 1.1
+        destination.send(Self.play)
+        #expect(failures.value == 2)
+    }
 }

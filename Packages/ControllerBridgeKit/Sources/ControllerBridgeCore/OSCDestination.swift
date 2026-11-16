@@ -21,6 +21,9 @@ public final class OSCDestination: OSCSender {
         var sink: (any DatagramSink)?
         var onReady: (@Sendable () -> Void)?
         var lastError: String?
+        var address = ""
+        var onSendFailure: (@Sendable () -> Void)?
+        var lastFailureReport: Double?
     }
 
     private let resolver: any HostResolver
@@ -35,6 +38,13 @@ public final class OSCDestination: OSCSender {
         self.open = open
         self.clock = clock
         self.lookupTimeout = lookupTimeout
+    }
+
+    /// Called when sends start failing (such as EHOSTUNREACH after the host's address changed), at most once a second.
+    /// The app re-resolves the name then.
+    public var onSendFailure: (@Sendable () -> Void)? {
+        get { state.withLock { $0.onSendFailure } }
+        set { state.withLock { $0.onSendFailure = newValue } }
     }
 
     /// A destination is open: sends go out.
@@ -64,6 +74,7 @@ public final class OSCDestination: OSCSender {
             let sink = try open(address, port)
             let ready = state.withLock { state -> (@Sendable () -> Void)? in
                 state.sink = sink
+                state.address = "\(address):\(port)"
                 state.lastError = nil
                 return state.onReady
             }
@@ -103,6 +114,17 @@ public final class OSCDestination: OSCSender {
 
     public func send(_ message: OSCMessage) {
         guard let sink = state.withLock({ $0.sink }) else { return }
-        try? sink.send(message.encoded())
+        do {
+            try sink.send(message.encoded())
+        } catch {
+            let now = clock.now
+            let report = state.withLock { state -> (@Sendable () -> Void)? in
+                state.lastError = "Couldn't send OSC to \(state.address)"
+                if let last = state.lastFailureReport, now - last < 1 { return nil }
+                state.lastFailureReport = now
+                return state.onSendFailure
+            }
+            report?()
+        }
     }
 }
