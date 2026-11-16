@@ -2,7 +2,7 @@ import CoreMIDI
 import Foundation
 
 // Sends a jog-display plan to the LC6000 (#121, #165), listening on both of its ports. Plan lines:
-//   <delay ms> WD  <hex…>      send to "Denon DJ LC6000 PRIME WD"
+//   <delay ms> WD  <hex…>      send to "Denon DJ LC6000 PRIME WD" (jog SysEx, ch1 pitch bend, ch1 note 1)
 //   <delay ms> CTL <hex…>      send to the Controller (Serato SysEx 00 20 7F only)
 //   <delay ms> ACKS <n> <timeout ms>   wait until n `01 10 0F` acks have arrived on WD since the last ACKS
 //   # comment
@@ -50,7 +50,13 @@ for (n, raw) in try String(contentsOfFile: args[2], encoding: .utf8).split(separ
         } else {
             let denon = sysexOK && Array(b[1...5]) == [0x00, 0x02, 0x0B, 0x7F, 0x10]
             let identity = b == [0xF0, 0x7E, 0x00, 0x06, 0x01, 0xF7]
-            guard denon || identity || b == [0x90, 0x01, 0x00] else { fail("WD takes 00 02 0B 7F 10 SysEx, identity request, or 90 01 00") }
+            // What a host sends the jog display besides SysEx (#165): the platter marker as pitch bend on ch1, and the
+            // play/cue state as note 1 on ch1.
+            let marker = b.count == 3 && b[0] == 0xE0 && b[1] < 0x80 && b[2] < 0x80
+            let playState = b.count == 3 && b[0] == 0x90 && b[1] == 0x01 && b[2] < 0x80
+            guard denon || identity || marker || playState else {
+                fail("WD takes 00 02 0B 7F 10 SysEx, an identity request, pitch bend on ch1, or note 1 on ch1")
+            }
         }
         plan.append((delay, .send(port: p[1], bytes: b)))
     default: fail("port must be WD, CTL or ACKS")
