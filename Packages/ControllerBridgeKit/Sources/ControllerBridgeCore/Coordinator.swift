@@ -21,6 +21,9 @@ public final class Coordinator {
     /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
     private var resendSentAt: Double?
 
+    /// Settings' LEDs switch, kept so a Bridge rebuilt for another profile honors it.
+    private var ledsEnabled = true
+
     /// What the menu shows. The app copies it after each call.
     public private(set) var status: CoordinatorStatus
 
@@ -126,6 +129,7 @@ public final class Coordinator {
             // The deck is a setting, not part of the profile.
             mapping.deck.number = status.controllers[index].deck
             controllers[index].bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
+            controllers[index].bridge.setLEDsEnabled(ledsEnabled)
         }
         let bridge = controllers[index].bridge
         do {
@@ -288,6 +292,13 @@ public final class Coordinator {
             controllers[index].bridge.start()
             requestResend()
         }
+        disconnectFailedOutputs()
+    }
+
+    /// Settings (#19): the LEDs switch, for every controller.
+    public func setLEDs(enabled: Bool) {
+        ledsEnabled = enabled
+        for bridge in bridges { bridge.setLEDsEnabled(enabled) }
         disconnectFailedOutputs()
     }
 

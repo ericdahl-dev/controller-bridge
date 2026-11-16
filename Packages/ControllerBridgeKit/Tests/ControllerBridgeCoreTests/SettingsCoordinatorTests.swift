@@ -68,4 +68,23 @@ struct SettingsCoordinatorTests {
         rig.coordinator.setDevices(input: nil, output: nil, controller: 0)
         #expect(rig.midi.connected == [Rig.lc6000.id])
     }
+
+    @Test("LEDs off turns every lit LED off once and sends nothing after; LEDs on repaints")
+    func ledsOff() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        #expect(rig.leds[1] == 127)
+
+        rig.coordinator.setLEDs(enabled: false)
+        #expect(rig.leds.values.allSatisfy { $0 == 0 })
+        let count = rig.midi.outputs[Rig.lc6000Out.id]?.sent.count
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))
+        rig.coordinator.midi(.noteOn(channel: 0, note: 22, velocity: 127), source: Rig.lc6000.id)   // Key Lock
+        #expect(rig.midi.outputs[Rig.lc6000Out.id]?.sent.count == count)
+
+        rig.coordinator.setLEDs(enabled: true)
+        #expect(rig.leds[1] == 1)      // stopped now
+        #expect(rig.leds[22] == 127)   // Key Lock on
+    }
 }
