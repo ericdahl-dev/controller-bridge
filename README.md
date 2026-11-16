@@ -93,7 +93,7 @@ A native, sandboxed menu-bar app is replacing the Python bridge (#12). `Packages
 brew install xcodegen && xcodegen generate
 xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configuration Release \
   -derivedDataPath build CODE_SIGN_IDENTITY=- build
-scripts/smoke.sh   # required before a PR: a virtual LC6000 and a fake Syndicate check Play out and the Play LED back
+scripts/smoke.sh   # a virtual LC6000 and a fake Syndicate check Play out and the Play LED back; CI requires it too
 ```
 
 Releases are a version tag on `main`; see [`docs/DEVELOPING.md`](docs/DEVELOPING.md#releasing-to-testflight) for the workflow, its secrets and the one-time setup.
