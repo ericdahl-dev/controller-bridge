@@ -22,6 +22,9 @@ public final class Coordinator {
     private var resendSentAt: Double?
 
     /// Set while the Diagnostics window is open (#26); nil otherwise, so nothing is built for it during a set.
+    /// The LED sweep in progress: when it started, its steps and the next one to send.
+    private var sweep: (start: Double, steps: [LEDSweep.Step], next: Int)?
+
     public var diagnostics: ((DiagnosticEvent) -> Void)? {
         didSet { (osc as? OSCTap)?.onSend = diagnostics.map { sink in { sink(.oscOut($0)) } } }
     }
@@ -180,6 +183,7 @@ public final class Coordinator {
 
     /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
     public func tick() {
+        runSweep()
         for bridge in bridges { bridge.tick() }
         checkLiveness()
         disconnectFailedOutputs()
@@ -266,5 +270,26 @@ public final class Coordinator {
         guard resendSentAt == nil else { return }
         resendSentAt = clock.now
         controllers[0].bridge.send("Feedback/Resend", .int(1))
+    }
+
+    // MARK: LED sweep (#26)
+
+    /// Starts the LED sweep on the first controller, `delay` seconds per color (0.6, as the Python led-sweep).
+    public func startLEDSweep(delay: Double = 0.6) {
+        sweep = (clock.now, LEDSweep.steps(for: controllers[0].bridge.mapping, delay: delay), 0)
+        runSweep()
+    }
+
+    /// Sends every sweep step that is due.
+    private func runSweep() {
+        guard var current = sweep else { return }
+        let bridge = controllers[0].bridge
+        while current.next < current.steps.count, clock.now - current.start >= current.steps[current.next].at {
+            let step = current.steps[current.next]
+            for send in step.sends { bridge.sweepLED(send.note, send.velocity) }
+            for caption in step.captions { diagnostics?(.sweep(caption)) }
+            current.next += 1
+        }
+        sweep = current.next < current.steps.count ? current : nil
     }
 }

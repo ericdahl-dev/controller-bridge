@@ -247,6 +247,12 @@ final class Bridge {
         led(note, on ? Self.full : idle)
     }
 
+    /// An LED write for the LED sweep (#26): straight to the controller, past the cache.
+    func sweepLED(_ note: Int, _ velocity: UInt8) {
+        guard let output else { return }
+        do { try output.send(.noteOn(channel: channel, note: UInt8(note), velocity: velocity)) } catch { outputFailed = true }
+    }
+
     func led(_ note: Int, _ velocity: UInt8) {
         guard ledCache[note] != velocity else { return }
         ledCache[note] = velocity

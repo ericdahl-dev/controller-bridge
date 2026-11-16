@@ -9,7 +9,8 @@ struct DiagnosticsTests {
     final class Events {
         var all: [DiagnosticEvent] = []
         var monitor: [String] { all.compactMap { if case .midiIn = $0 { $0.text } else { nil } } }
-        var osc: [String] { all.compactMap { if case .midiIn = $0 { nil } else { $0.text } } }
+        var osc: [String] { all.compactMap { switch $0 { case .oscOut, .oscIn: $0.text; default: nil } } }
+        var sweep: [String] { all.compactMap { if case .sweep = $0 { $0.text } else { nil } } }
     }
 
     /// A started rig whose diagnostics are open (a sink is set).
@@ -82,5 +83,46 @@ struct DiagnosticsTests {
             "OSC <- /Syndicate/Deck/1/Progress 0.25",
             "OSC <- /Syndicate/Deck/1/TrackInfo Song 128.0 8",
         ])
+    }
+
+    /// The controller output's sends since the last call, as (note, velocity).
+    static func takeSent(_ rig: Rig) -> [(UInt8, UInt8)] {
+        let output = rig.midi.outputs[Rig.lc6000Out.id]
+        defer { output?.sent.removeAll() }
+        return (output?.sent ?? []).compactMap { if case let .noteOn(_, note, velocity) = $0 { (note, velocity) } else { nil } }
+    }
+
+    static func tick(_ rig: Rig, at time: Double) {
+        rig.clock.now = time
+        rig.coordinator.tick()
+    }
+
+    /// The default profile's pads (32-39) and the platter ring (40).
+    static let padsAndRing: [UInt8] = [32, 33, 34, 35, 36, 37, 38, 39, 40]
+
+    @Test("The LED sweep steps the pads and ring through all 64 colors, 0.6 s apart, captioned as Python's led-sweep")
+    func sweepColors() throws {
+        let (rig, events) = try Self.openRig()
+        rig.clock.now = 100
+        _ = Self.takeSent(rig)
+
+        rig.coordinator.startLEDSweep()
+        #expect(Self.takeSent(rig).map(\.0) == Self.padsAndRing)
+        #expect(events.sweep == [
+            "Color sweep: velocity shown on every pad and the ring. Note what each looks like.",
+            "  velocity  0 (0x00) = rgb222 r0 g0 b0",
+        ])
+
+        Self.tick(rig, at: 100.3)
+        #expect(Self.takeSent(rig).isEmpty)
+        Self.tick(rig, at: 100.601)
+        #expect(Self.takeSent(rig).map(\.1) == Array(repeating: 1, count: 9))
+        #expect(events.sweep.last == "  velocity  1 (0x01) = rgb222 r0 g0 b1")
+
+        Self.tick(rig, at: 100 + 45 * 0.6 + 0.001)
+        #expect(Self.takeSent(rig).suffix(9).map(\.1) == Array(repeating: 45, count: 9))
+        #expect(events.sweep.last == "  velocity 45 (0x2D) = rgb222 r2 g3 b1")
+        Self.tick(rig, at: 100 + 63 * 0.6 + 0.001)
+        #expect(events.sweep.last == "  velocity 63 (0x3F) = rgb222 r3 g3 b3")
     }
 }

@@ -9,6 +9,8 @@ public enum DiagnosticEvent: Equatable, Sendable {
     case oscOut(OSCMessage)
     /// OSC feedback from Syndicate.
     case oscIn(OSCMessage)
+    /// A line from the LED sweep, as the Python led-sweep printed it.
+    case sweep(String)
 
     /// The line as the Python bridge printed it, so a hardware check reads the same.
     public var text: String {
@@ -21,6 +23,7 @@ public enum DiagnosticEvent: Equatable, Sendable {
         // lc6000_bridge/cli.py --verbose: print("OSC ->", address, *args)
         case .oscOut(let message): return (["OSC ->", message.address] + message.arguments.map(\.pythonText)).joined(separator: " ")
         case .oscIn(let message): return (["OSC <-", message.address] + message.arguments.map(\.pythonText)).joined(separator: " ")
+        case .sweep(let line): return line
         }
     }
 }
