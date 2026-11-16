@@ -15,10 +15,10 @@ enum BridgeHost {
     ) async {
         let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
         coordinator.start()
-        // The demo controller (#64) runs the first profile against an in-process controller and an in-memory Syndicate.
-        let demoProfile = profiles[0]
-        let makeDemo: @Sendable () -> DemoSession = {
-            DemoSession(profile: demoProfile, clock: SystemClock(), log: log, ledOutput: DroppedMIDIOutput())
+        // The demo controller (#64) runs the profile running now (an imported mapping too, #98) against an in-process
+        // controller and an in-memory Syndicate.
+        let makeDemo: @Sendable (ControllerProfile) -> DemoSession = { profile in
+            DemoSession(profile: profile, clock: SystemClock(), log: log, ledOutput: DroppedMIDIOutput())
         }
         await Engine(
             coordinator: coordinator, log: log, onStatus: statusSink(status), onDiagnostic: diagnosticsSink(diagnostics),
