@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for scripts/check_site.py on tiny sites written to a temporary folder. No network.
 Run: python3 -I scripts/test_check_site.py"""
-import os, sys, tempfile, unittest
+import os, re, sys, tempfile, unittest
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -293,6 +293,19 @@ class CheckSiteTests(unittest.TestCase):
         root = self.site({"img/huge.png": "x" * 2_100_000})
         self.assertEqual(check_site.problems(root), ["the site is 2.1 MB, over 2 MB"])
 
+
+
+class SiteCIJobTests(unittest.TestCase):
+    def test_the_site_job_runs_every_node_test(self):
+        """A scripts/test_*.mjs that CI's site job doesn't name would never run (#190)."""
+        scripts = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(scripts, "..", ".github", "workflows", "ci.yml"), encoding="utf-8") as f:
+            ci = f.read()
+        job = ci.split("\n  site:\n", 1)[1]
+        job = re.split(r"\n  [A-Za-z_-]+:\n", job, maxsplit=1)[0]  # up to the next job
+        tests = sorted(name for name in os.listdir(scripts) if name.startswith("test_") and name.endswith(".mjs"))
+        self.assertTrue(tests)
+        self.assertEqual([name for name in tests if f"scripts/{name}" not in job], [])
 
 if __name__ == "__main__":
     unittest.main()
