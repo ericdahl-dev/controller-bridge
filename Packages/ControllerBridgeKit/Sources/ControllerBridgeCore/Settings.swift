@@ -95,11 +95,14 @@ public struct ControllerSettings: Codable, Equatable, Sendable {
     /// The chosen MIDI input and output. Nil is automatic: the first device a controller profile matches.
     public var input: MIDIEndpoint?
     public var output: MIDIEndpoint?
+    /// The MIDI channel, 1-16, to tell two controllers on one device apart (#25). Nil is the profile's channel.
+    public var channel: Int?
 
-    public init(deck: Int, input: MIDIEndpoint?, output: MIDIEndpoint?) {
+    public init(deck: Int, input: MIDIEndpoint?, output: MIDIEndpoint?, channel: Int? = nil) {
         self.deck = deck
         self.input = input
         self.output = output
+        self.channel = channel
     }
 }
 

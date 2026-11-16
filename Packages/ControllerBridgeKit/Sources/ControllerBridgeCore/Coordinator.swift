@@ -38,6 +38,8 @@ public final class Coordinator {
         /// The devices picked in Settings (#19). Nil is automatic: the first device a profile matches.
         var chosenInput: MIDIEndpoint.ID?
         var chosenOutput: MIDIEndpoint.ID?
+        /// The MIDI channel picked in Settings (#25), 1-16, or nil for the profile's.
+        var channel: Int?
     }
 
     /// One controller, whose profile is chosen by the name of the device that connects. Until one does, it runs the
@@ -125,11 +127,7 @@ public final class Coordinator {
         }
         if profile != controllers[index].profile {
             controllers[index].profile = profile
-            var mapping = profile.mapping
-            // The deck is a setting, not part of the profile.
-            mapping.deck.number = status.controllers[index].deck
-            controllers[index].bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
-            controllers[index].bridge.setLEDsEnabled(ledsEnabled)
+            controllers[index].bridge = makeBridge(profile, for: index)
         }
         let bridge = controllers[index].bridge
         do {
@@ -294,6 +292,37 @@ public final class Coordinator {
             requestResend()
         }
         disconnectFailedOutputs()
+    }
+
+    /// Settings (#25): the controller entries, one per controller. Existing controllers take their entry's changes;
+    /// new entries connect and resync.
+    public func setControllers(_ entries: [ControllerSettings]) {
+        for (index, entry) in entries.enumerated() {
+            if index == controllers.count {
+                let first = profiles[0]
+                status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
+                controllers.append(Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first))
+                controllers[index].channel = entry.channel
+                controllers[index].bridge = makeBridge(first, for: index)
+                setDevices(input: entry.input, output: entry.output, controller: index)
+                continue
+            }
+            setDeck(entry.deck, controller: index)
+            if entry.input?.id != controllers[index].chosenInput || entry.output?.id != controllers[index].chosenOutput {
+                setDevices(input: entry.input, output: entry.output, controller: index)
+            }
+        }
+    }
+
+    /// A Bridge running `profile` with this controller's settings: its deck, channel and the LEDs switch.
+    private func makeBridge(_ profile: ControllerProfile, for index: Int) -> Bridge {
+        var mapping = profile.mapping
+        // The deck and channel are settings, not part of the profile.
+        mapping.deck.number = status.controllers[index].deck
+        if let channel = controllers[index].channel { mapping.midi.channel = channel }
+        let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
+        bridge.setLEDsEnabled(ledsEnabled)
+        return bridge
     }
 
     /// Settings (#19): the LEDs switch, for every controller.
