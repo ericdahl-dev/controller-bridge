@@ -1,3 +1,5 @@
+import Foundation
+
 /// What the DJ sets in Settings (#19): the controllers, the OSC connection to Syndicate and the LEDs. Kept in user
 /// defaults by the app.
 public struct BridgeSettings: Codable, Equatable, Sendable {
@@ -34,6 +36,30 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
             ledsEnabled: true
         )
     }
+}
+
+extension BridgeSettings {
+    /// The user-defaults key the settings are kept under, as JSON.
+    public static let storageKey = "settings.v1"
+
+    /// The saved settings, or `defaults` when nothing is saved or what is saved can't be read.
+    public static func load(from storage: any SettingsStorage, defaults: BridgeSettings) -> BridgeSettings {
+        guard let data = storage.data(forKey: storageKey),
+              let settings = try? JSONDecoder().decode(BridgeSettings.self, from: data) else { return defaults }
+        return settings
+    }
+
+    public func save(to storage: any SettingsStorage) {
+        // Encoding plain values can't fail.
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        storage.set(data, forKey: Self.storageKey)
+    }
+}
+
+/// Where settings are kept: user defaults in the app.
+public protocol SettingsStorage {
+    func data(forKey key: String) -> Data?
+    func set(_ data: Data, forKey key: String)
 }
 
 /// One controller: the Syndicate deck it drives and the MIDI devices it uses.
