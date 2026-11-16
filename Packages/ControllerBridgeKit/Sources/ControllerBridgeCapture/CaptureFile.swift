@@ -70,6 +70,27 @@ public struct CaptureFile: Codable, Equatable, Sendable {
         try JSONDecoder().decode(CaptureFile.self, from: data)
     }
 
+    /// The capture with each step's messages, controls and Shift layer worked out again from its raw messages (#190),
+    /// by the same inference the app's capture runs: what a file written without them (the web capture's) needs before
+    /// a draft profile is made from it. Noise, LED answers, the note, ports and prompts are kept as written. An app
+    /// capture comes out unchanged.
+    public func inferred() -> CaptureFile {
+        let noise = Set(self.noise)
+        var out = self
+        out.steps = []
+        for step in steps {
+            guard let prompt = prompts.first(where: { $0.id == step.prompt }) else {
+                out.steps.append(step)
+                continue
+            }
+            let take: CaptureSession.Take = step.messages.map { (Double($0.t) / 1000, $0.port, $0.bytes) }
+            var redone = CaptureSession.step(prompt, step.status, take, noise: noise, before: out.steps)
+            redone.leds = step.leds
+            out.steps.append(redone)
+        }
+        return out
+    }
+
     /// Pretty-printed with sorted keys, so two captures diff cleanly.
     public func encoded() throws -> Data {
         let encoder = JSONEncoder()
