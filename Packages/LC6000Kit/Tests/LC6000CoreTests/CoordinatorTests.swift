@@ -121,4 +121,13 @@ struct CoordinatorTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
         #expect(rig.leds[1] == 1)
     }
+
+    @Test("MIDI on another channel is ignored")
+    func otherChannelIgnored() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        rig.coordinator.midi(.noteOn(channel: 1, note: 1, velocity: 127), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [])
+    }
 }
