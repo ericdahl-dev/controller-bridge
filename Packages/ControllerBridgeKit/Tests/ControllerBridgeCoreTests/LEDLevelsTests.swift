@@ -67,3 +67,32 @@ struct LEDLevelsCoordinatorTests {
         #expect(try Self.started(#""dim_unlit_buttons": false"#).leds[22] == 0)
     }
 }
+
+/// The LED sweep's button pass (#194): each note steps through the profile's full, dim and off.
+@Suite("LED levels in the sweep")
+struct LEDLevelsSweepTests {
+    /// The velocities note 0 (a button note on both profiles) gets during a sweep, 0.03 s a step.
+    static func note0(_ override: String?) throws -> [UInt8] {
+        let rig = try Rig(override: override)
+        rig.coordinator.start()
+        rig.coordinator.startLEDSweep(delay: 0.03)
+        // 64 color steps, then note 0's full, dim and off a third of a step apart.
+        for step in 1...80 {
+            rig.clock.now = Double(step) * 0.03
+            rig.coordinator.tick()
+        }
+        return (rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).compactMap {
+            if case let .noteOn(_, 0, velocity) = $0 { return velocity } else { return nil }
+        }
+    }
+
+    @Test("A test-only profile sweeps a button at 100, 20, then 5")
+    func profileLevels() throws {
+        #expect(try Self.note0(#"{ "leds": { "levels": { "full": 100, "dim": 20, "off": 5 } } }"#) == [100, 20, 5])
+    }
+
+    @Test("The LC6000 sweeps a button at 127, 1, then 0, as before")
+    func lc6000() throws {
+        #expect(try Self.note0(nil) == [127, 1, 0])
+    }
+}
