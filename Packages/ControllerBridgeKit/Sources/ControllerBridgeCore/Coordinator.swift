@@ -21,6 +21,9 @@ public final class Coordinator {
     /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
     private var resendSentAt: Double?
 
+    /// Set while the Diagnostics window is open (#26); nil otherwise, so nothing is built for it during a set.
+    public var diagnostics: ((DiagnosticEvent) -> Void)?
+
     /// What the menu shows. The app copies it after each call.
     public private(set) var status: CoordinatorStatus
 
@@ -186,6 +189,10 @@ public final class Coordinator {
 
     /// A MIDI message from a source. Only the controller connected to that source handles it.
     public func midi(_ event: MIDIEvent, source: MIDIEndpoint.ID) {
+        if let diagnostics {
+            let mapping = (controllers.first { $0.source?.id == source } ?? controllers[0]).bridge.mapping
+            diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
+        }
         for controller in controllers where controller.source?.id == source { controller.bridge.handle(event) }
         disconnectFailedOutputs()
     }
