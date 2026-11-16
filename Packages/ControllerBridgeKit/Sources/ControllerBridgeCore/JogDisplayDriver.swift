@@ -34,6 +34,11 @@ public final class JogDisplayDriver {
     static let timeout = 5.0
 
     private var connected = false
+    /// Whether the hello went out and no goodbye since.
+    public var isConnected: Bool { connected }
+    /// The last marker and play light sent, so only changes go out.
+    private var lastMarker: Int?
+    private var lastPlayLight: Bool?
     /// The content shown, or being uploaded, and the content wanted next.
     private var current: JogDisplayContent?
     private var wanted: JogDisplayContent?
@@ -63,6 +68,8 @@ public final class JogDisplayDriver {
         guard connected else { return }
         connected = false
         upload = nil
+        lastMarker = nil
+        lastPlayLight = nil
         current = nil
         port.sendController(JogDisplay.goodbye)
     }
@@ -71,6 +78,20 @@ public final class JogDisplayDriver {
     public func show(_ content: JogDisplayContent) {
         wanted = content
         if upload == nil { next() }
+    }
+
+    /// The marker at `pitchBend` (0...16383): pitch bend on WD ch1. Only a change goes out.
+    public func marker(_ pitchBend: Int) {
+        guard connected, pitchBend != lastMarker else { return }
+        lastMarker = pitchBend
+        port.sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)])
+    }
+
+    /// The play light: note 1 on WD ch1, 127 or 0. Only a change goes out.
+    public func playLight(_ on: Bool) {
+        guard connected, on != lastPlayLight else { return }
+        lastPlayLight = on
+        port.sendWD([0x90, 0x01, on ? 0x7F : 0x00])
     }
 
     /// A message from the WD port.
@@ -121,5 +142,7 @@ public final class JogDisplayDriver {
         let job = JogDisplay.Upload(image: image, slot: slot)
         upload = (job, slot, 0, false, clock.now)
         for message in job.start + job.body { port.sendWD(message) }
+        // The upload's start turns the play light off (90 01 00): the next tick puts it back.
+        lastPlayLight = false
     }
 }

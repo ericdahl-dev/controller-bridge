@@ -86,3 +86,80 @@ struct JogDisplayCoordinatorTests {
         #expect(port.controller == [JogDisplay.goodbye] + JogDisplay.hello)
     }
 }
+
+/// The marker and the play light on the WD port (#165), at the Coordinator seam. Pitch bend on ch1 is E0 lsb msb;
+/// the play light is note 1 on ch1. Worked by hand at 120 BPM: a quarter-second into beat 1 is 2048 (E0 00 10).
+@Suite("Jog marker at the Coordinator")
+struct JogMarkerCoordinatorTests {
+    static func started() throws -> (Rig, JogDisplayDriverTests.FakePort) {
+        let rig = try Rig()
+        let (port, _) = JogDisplayCoordinatorTests.attach(rig)
+        rig.coordinator.start()
+        JogDisplayCoordinatorTests.answer(rig, port)
+        port.wd.removeAll()
+        return (rig, port)
+    }
+
+    static func bends(_ port: JogDisplayDriverTests.FakePort) -> [[UInt8]] { port.wd.filter { $0.first == 0xE0 } }
+    static func lights(_ port: JogDisplayDriverTests.FakePort) -> [[UInt8]] { port.wd.filter { $0.count == 3 && $0[0] == 0x90 && $0[1] == 1 } }
+
+    static func feed(_ rig: Rig, _ path: String, _ argument: OSCArgument) {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/" + path, [argument]))
+    }
+
+    static func tick(_ rig: Rig, at time: Double) {
+        rig.clock.now = time
+        rig.coordinator.tick()
+    }
+
+    @Test("Playing, the hand follows the master clock: 0 on beat 1, 2048 a quarter-second on")
+    func clockHand() throws {
+        let (rig, port) = try Self.started()
+        Self.feed(rig, "Deck/1/Playing", .int(1))
+        Self.feed(rig, "Header/BPM", .float(120))
+        Self.feed(rig, "Header/Clock", .int(1))
+        Self.tick(rig, at: 0)
+        Self.tick(rig, at: 0.25)
+        #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x00, 0x10]])
+    }
+
+    @Test("At most 30 a second: ticks every 10 ms send at 0, 0.04 and 0.08 s (0, 327, 655)")
+    func rateLimit() throws {
+        let (rig, port) = try Self.started()
+        Self.feed(rig, "Deck/1/Playing", .int(1))
+        Self.feed(rig, "Header/BPM", .float(120))
+        Self.feed(rig, "Header/Clock", .int(1))
+        for step in 0...9 { Self.tick(rig, at: Double(step) * 0.01) }
+        #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x47, 0x02], [0xE0, 0x0F, 0x05]])
+    }
+
+    @Test("Paused, the clock doesn't move it; a quarter turn of the platter (900 counts) does: 4096")
+    func pausedPlatter() throws {
+        let (rig, port) = try Self.started()
+        Self.feed(rig, "Header/BPM", .float(120))
+        Self.feed(rig, "Header/Clock", .int(2))
+        Self.tick(rig, at: 0.2)
+        #expect(Self.bends(port) == [])
+        // Platter at 1000, then 1900: 900 counts forward (CC 17 then CC 49).
+        for (msb, lsb) in [(UInt8(7), UInt8(104)), (14, 108)] {
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: msb), source: Rig.lc6000.id)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
+        }
+        Self.tick(rig, at: 0.3)
+        #expect(Self.bends(port) == [[0xE0, 0x00, 0x20]])
+    }
+
+    @Test("The play light: 127 while playing; loaded and paused, it blinks every half-second")
+    func playLight() throws {
+        let (rig, port) = try Self.started()
+        Self.feed(rig, "Deck/1/Loaded", .int(1))
+        Self.feed(rig, "Deck/1/Playing", .int(1))
+        Self.tick(rig, at: 0.1)
+        #expect(Self.lights(port) == [[0x90, 0x01, 0x7F]])
+        Self.feed(rig, "Deck/1/Playing", .int(0))
+        Self.tick(rig, at: 0.2)
+        Self.tick(rig, at: 0.5)
+        Self.tick(rig, at: 1.0)
+        #expect(Self.lights(port) == [[0x90, 0x01, 0x7F], [0x90, 0x01, 0x00], [0x90, 0x01, 0x7F]])
+    }
+}

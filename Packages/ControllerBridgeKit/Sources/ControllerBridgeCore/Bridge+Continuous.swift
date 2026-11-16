@@ -133,6 +133,7 @@ extension Bridge {
 
     private func jog(counts: Int, needsTouch: Bool = true) {
         guard counts != 0, platterTouched || !mapping.jog.requireTouch || !needsTouch else { return }
+        jogCountsPending += counts
         lastJogTime = clock.now
         if playing {
             let direction = counts > 0 ? 1 : -1
