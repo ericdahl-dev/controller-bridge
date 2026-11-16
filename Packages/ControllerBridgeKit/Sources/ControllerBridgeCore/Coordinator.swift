@@ -50,6 +50,7 @@ public final class Coordinator {
     private func applyDeckColors() {
         status.deckColors = deckColors
         for bridge in bridges { bridge.setDeckColors(deckColors) }
+        updateJogDisplay()
     }
 
     /// When the last feedback message arrived, if any has (#21).
@@ -118,6 +119,34 @@ public final class Coordinator {
         self.init(profiles: [profile], midi: midi, osc: osc, clock: clock, log: log)
     }
 
+    // MARK: Jog display (#165)
+
+    /// The LC6000's jog display, when the app found its WD port.
+    private var jogDisplay: JogDisplayDriver?
+
+    /// Drives the jog display from now on: it says hello and shows the deck in front once a controller is connected.
+    public func attachJogDisplay(_ driver: JogDisplayDriver) {
+        jogDisplay = driver
+        updateJogDisplay()
+    }
+
+    /// A message from the jog display's WD port: the unit's answers to an upload.
+    public func jogDisplayReply(_ bytes: [UInt8]) {
+        jogDisplay?.reply(bytes)
+    }
+
+    /// The display shows the deck in front: the active layer, else the first connected controller. With none
+    /// connected, it says goodbye.
+    private func updateJogDisplay() {
+        guard let driver = jogDisplay else { return }
+        let connected = controllers.indices.filter { controllers[$0].source != nil }
+        guard let first = connected.first else { return driver.disconnect() }
+        let front = connected.first { status.controllers[$0].activeLayer } ?? first
+        let deck = status.controllers[front].deck
+        driver.connect()
+        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255]))
+    }
+
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
     /// connected is not an error: it connects when it appears.
     ///
@@ -138,6 +167,7 @@ public final class Coordinator {
             }
             controllers[index].bridge.start()
         }
+        updateJogDisplay()
         requestResend()
     }
 
@@ -159,6 +189,7 @@ public final class Coordinator {
             }
         }
         disconnectFailedOutputs()
+        updateJogDisplay()
     }
 
     /// Reading from a source failed, such as a reconnect that couldn't attach. Counts as that controller's unplug.
@@ -188,6 +219,7 @@ public final class Coordinator {
         case .unplugged, .deviceChanged, .removed, .stopped: nil
         }
         report(index, "Disconnected \(source.name)" + (detail.map { " (\($0))" } ?? ""))
+        updateJogDisplay()
     }
 
     /// Whether two controllers are layers of one unit: both follow layers, on different channels. Two following
@@ -320,6 +352,7 @@ public final class Coordinator {
     public func tick() {
         runSweep()
         for bridge in bridges { bridge.tick() }
+        jogDisplay?.tick()
         checkLiveness()
         checkSubscriptions()
         disconnectFailedOutputs()
@@ -401,6 +434,7 @@ public final class Coordinator {
         status.controllers[target].activeLayer = true
         controllers[target].bridge.ledChannel = multiChannel || controllers[target].bridge.mapping.midi.channel == 1 ? nil : 0
         controllers[target].bridge.becameActiveLayer()
+        updateJogDisplay()
     }
 
     /// Where a layer's LEDs go; repaints there if it moved.
