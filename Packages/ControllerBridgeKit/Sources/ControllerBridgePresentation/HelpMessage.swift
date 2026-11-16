@@ -35,10 +35,14 @@ public struct HelpMessage: Equatable, Sendable {
             self.init(text: "No feedback from Syndicate yet. Set OSC FEEDBACK to 127.0.0.1 : \(port).", showsGuide: true)
         case .stopped:
             self.init(text: "Syndicate stopped answering. Is it still running? The LEDs catch up when it's back.", showsGuide: true)
-        case .starting, .live, .failed:
+        case .starting, .live, .noDeckData, .failed:
             // Every controller counts (#89): the first that needs a hand, named by its number when there are several.
             let all = [state.controller] + state.others.map(\.controller)
-            guard let index = all.firstIndex(where: { if case .connected = $0 { false } else { true } }) else { return nil }
+            guard let index = all.firstIndex(where: { if case .connected = $0 { false } else { true } }) else {
+                guard let subscriptions = Self.subscriptions(state) else { return nil }
+                self = subscriptions
+                return
+            }
             let name = all.count > 1 ? "Controller \(index + 1)" : nil
             switch all[index] {
             case .notConnected:
@@ -56,5 +60,38 @@ public struct HelpMessage: Equatable, Sendable {
                 return nil
             }
         }
+    }
+
+    /// Syndicate's subscriptions off, or some LED ones missing on a loaded deck (#150).
+    private static func subscriptions(_ state: BridgeState) -> HelpMessage? {
+        let place = "Syndicate › Settings › OSC FEEDBACK"
+        if case .noDeckData = state.feedback {
+            return HelpMessage(text: "Syndicate isn't sending deck info. In \(place), turn on the subscriptions: \(list(SetupGuide.subscriptions)).",
+                               showsGuide: true)
+        }
+        let missing = state.missingSubscriptions.compactMap { value in
+            SetupGuide.subscriptionName(for: value).map { (led: ledName(value), name: $0) }
+        }
+        guard !missing.isEmpty else { return nil }
+        let leds = list(missing.map(\.led)), names = list(missing.map(\.name))
+        let text = missing.count == 1
+            ? "\(leds.prefix(1).uppercased() + leds.dropFirst()) need the \(names) subscription. Turn it on in \(place)."
+            : "\(leds.prefix(1).uppercased() + leds.dropFirst()) need the \(names) subscriptions. Turn them on in \(place)."
+        return HelpMessage(text: text, showsGuide: true)
+    }
+
+    /// What a subscription lights on the controller.
+    private static func ledName(_ value: String) -> String {
+        switch value {
+        case "playing": "the Play LED"
+        case "cues": "hot cue pad colors"
+        case "sync": "the Sync LED"
+        default: "the loop LEDs"
+        }
+    }
+
+    /// "A, B and C".
+    private static func list(_ items: [String]) -> String {
+        items.count < 2 ? items.joined() : items.dropLast().joined(separator: ", ") + " and " + items.last!
     }
 }

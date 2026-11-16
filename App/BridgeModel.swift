@@ -22,6 +22,10 @@ final class BridgeStatus {
     var devices: [DeviceStatus] = []
     /// Whether Syndicate's feedback is arriving (#21): the listener can be up while Syndicate is quiet or gone.
     var syndicateFeedback: FeedbackState = .waiting
+    /// Syndicate answers with no deck info: its OSC FEEDBACK subscriptions are off (#150).
+    var noDeckData = false
+    /// LED subscriptions a loaded deck's answer lacked (#150).
+    var missingSubscriptions: [Subscription] = []
     /// The last time Syndicate's feedback stopped, for the menu.
     var lastDropout: String?
     /// When feedback last dropped, as the time to show ("21:14"), stamped as it happens (#66).
