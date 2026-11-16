@@ -200,4 +200,26 @@ struct StatusPresentationTests {
         #expect(StatusPresentation(BridgeState(controller: .noProfile(device: "DDJ-FLX4"), feedback: .live(port: 9096), deck: 1)).header
             == StatusHeader(title: "DDJ-FLX4", subtitle: "No controller profile matches it"))
     }
+
+    @Test("Two controllers (#25): a block each with its own header, light and deck; the line lists both decks")
+    func twoControllers() {
+        let state = BridgeState(
+            controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1,
+            others: [BridgeState.ControllerEntry(controller: .unplugged(profile: "Denon LC6000 PRIME"), deck: 3, lastEvent: "Unplugged at 21:14")]
+        )
+        let status = StatusPresentation(state)
+        #expect(status.blocks == [
+            ControllerBlock(
+                header: StatusHeader(title: "Denon LC6000 PRIME", subtitle: nil),
+                light: StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live), deck: 1
+            ),
+            ControllerBlock(
+                header: StatusHeader(title: "Denon LC6000 PRIME", subtitle: "Unplugged at 21:14"),
+                light: StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention), deck: 3
+            ),
+        ])
+        #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1] [3]")
+        // An unplugged second controller still needs a look.
+        #expect(status.icon == .attention)
+    }
 }
