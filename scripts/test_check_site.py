@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for scripts/check_site.py on tiny sites written to a temporary folder. No network.
 Run: python3 -I scripts/test_check_site.py"""
-import os, sys, tempfile, unittest
+import os, re, sys, tempfile, unittest
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -20,11 +20,15 @@ def sitemap(*locs):
 
 WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no cookies. PostHog turns your IP address'
            ' into an anonymous hash that changes every day, and does not keep the address. It counts clicks on a few links.'
-           ' To have your visits removed, email us.</p>')
+           ' To have your visits removed, email us. On the capture page it counts only that a capture started and finished.</p>'
+           '<p>The web capture saves the file on your computer; nothing is uploaded.</p>')
+
+CAPTURE_LD = '<script type="application/ld+json">{"text": "Record it at https://getdeckbridge.app/capture/."}</script>'
 
 GOOD = {
-    "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">',
+    "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD,
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
+                            ' <a href="capture/">record it in your browser</a>'
                             ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
     "capture/index.html": page(body='<a href="../">Home</a>'),
@@ -33,8 +37,10 @@ GOOD = {
     "fonts/Inter-Regular.ttf": "font",
     "img/icon.png": "png",
     "robots.txt": "User-agent: *\nAllow: /\nSitemap: https://getdeckbridge.app/sitemap.xml\n",
-    "sitemap.xml": sitemap("https://getdeckbridge.app/"),
-    "llms.txt": "# DeckBridge\n\n> A bridge.\n",
+    "sitemap.xml": sitemap("https://getdeckbridge.app/", "https://getdeckbridge.app/support/",
+                           "https://getdeckbridge.app/privacy/", "https://getdeckbridge.app/capture/"),
+    "llms.txt": "# DeckBridge\n\n> A bridge.\n\n- [Home](https://getdeckbridge.app/)\n- [Support](https://getdeckbridge.app/support/)\n"
+                "- [Privacy](https://getdeckbridge.app/privacy/)\n- [Capture](https://getdeckbridge.app/capture/)\n",
     "analytics.js": "/* PostHog */",
 }
 NO_ANALYTICS = "<!-- no analytics.js -->"
@@ -64,7 +70,8 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(self.site(remove=["privacy/index.html"])),
                          ["privacy/index.html: missing",
                           "index.html: link to privacy/ doesn't resolve",
-                          "support/index.html: link to ../privacy/#network doesn't resolve"])
+                          "support/index.html: link to ../privacy/#network doesn't resolve",
+                          "sitemap.xml: https://getdeckbridge.app/privacy/ isn't a page in the site"])
 
     def test_a_broken_link_or_asset_fails(self):
         root = self.site({"support/index.html": page(body='<a href="../faq/">FAQ</a> <img src="../img/nope.png" alt="">')})
@@ -85,10 +92,10 @@ class CheckSiteTests(unittest.TestCase):
 
     def test_external_resources_fail_but_external_links_dont(self):
         root = self.site({
-            "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">',
+            "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">' + CAPTURE_LD,
                                body='<img src="//cdn.example.com/a.png" alt=""> <script src="http://x.example/t.js"></script>'
                                     ' <a href="https://testflight.apple.com/join/XXXX">ok</a>'
-                                    ' <a href="support/">s</a> <a href="privacy/">p</a>'),
+                                    ' <a href="support/">s</a> <a href="privacy/">p</a> <a href="capture/">c</a>'),
             "style.css": '@import url("https://fonts.example/x.css"); body { background: url(https://x.example/bg.png); }',
         })
         self.assertEqual(check_site.problems(root), [
@@ -164,7 +171,7 @@ class CheckSiteTests(unittest.TestCase):
     def test_every_sitemap_url_is_on_the_site_and_is_a_page(self):
         root = self.site({"sitemap.xml": sitemap(
             "https://getdeckbridge.app/", "https://getdeckbridge.app/support/", "https://getdeckbridge.app/privacy/index.html",
-            "http://getdeckbridge.app/", "https://example.com/", "https://getdeckbridge.app.evil.example/",
+            "https://getdeckbridge.app/capture/", "http://getdeckbridge.app/", "https://example.com/", "https://getdeckbridge.app.evil.example/",
             "https://getdeckbridge.app/faq/", "https://getdeckbridge.app/img/nope.png")})
         self.assertEqual(check_site.problems(root), [
             "sitemap.xml: http://getdeckbridge.app/ isn't under https://getdeckbridge.app/",
@@ -174,9 +181,24 @@ class CheckSiteTests(unittest.TestCase):
             "sitemap.xml: https://getdeckbridge.app/img/nope.png isn't a page in the site",
         ])
 
+    def test_the_sitemap_lists_every_required_page(self):
+        root = self.site({"sitemap.xml": sitemap("https://getdeckbridge.app/", "https://getdeckbridge.app/privacy/index.html")})
+        self.assertEqual(check_site.problems(root), [
+            "sitemap.xml: doesn't list https://getdeckbridge.app/support/",
+            "sitemap.xml: doesn't list https://getdeckbridge.app/capture/",
+        ])
+
     def test_llms_txt_starts_with_the_product_name(self):
-        root = self.site({"llms.txt": "# Controller Bridge\n\n> A bridge.\n"})
+        root = self.site({"llms.txt": GOOD["llms.txt"].replace("# DeckBridge", "# Controller Bridge", 1)})
         self.assertEqual(check_site.problems(root), ['llms.txt: doesn\'t start with "# DeckBridge"'])
+
+    def test_llms_txt_links_every_required_page(self):
+        root = self.site({"llms.txt": "# DeckBridge\n\n- [Home](https://getdeckbridge.app/)\n"
+                                      "- [Privacy](https://getdeckbridge.app/privacy/)\n"})
+        self.assertEqual(check_site.problems(root), [
+            "llms.txt: doesn't link https://getdeckbridge.app/support/",
+            "llms.txt: doesn't link https://getdeckbridge.app/capture/",
+        ])
 
     def test_a_page_without_a_title_or_description_fails(self):
         root = self.site({"support/index.html": page(title="", description="", body='<a href="../">Home</a>')})
@@ -195,6 +217,19 @@ class CheckSiteTests(unittest.TestCase):
             'privacy/index.html: doesn\'t say "does not keep the address"',
             'privacy/index.html: doesn\'t say "counts clicks on a few links"',
             'privacy/index.html: doesn\'t say "to have your visits removed, email"',
+            'privacy/index.html: doesn\'t say "web capture"',
+            'privacy/index.html: doesn\'t say "nothing is uploaded"',
+            'privacy/index.html: doesn\'t say "counts only that a capture started and finished"',
+        ])
+
+    def test_the_privacy_page_must_disclose_the_web_capture(self):
+        without = WEBSITE.replace(" On the capture page it counts only that a capture started and finished.", "").replace(
+            "<p>The web capture saves the file on your computer; nothing is uploaded.</p>", "")
+        root = self.site({"privacy/index.html": page(body="<p>DeckBridge collects no data.</p>" + without)})
+        self.assertEqual(check_site.problems(root), [
+            'privacy/index.html: doesn\'t say "web capture"',
+            'privacy/index.html: doesn\'t say "nothing is uploaded"',
+            'privacy/index.html: doesn\'t say "counts only that a capture started and finished"',
         ])
 
     def test_every_page_loads_analytics_js(self):
@@ -232,6 +267,14 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(missing, app_prompts=app),
                          ["capture/prompts.json: missing; copy it from " + app])
 
+    def test_the_home_page_links_the_web_capture_in_the_faq_and_its_json_ld(self):
+        no_link = GOOD["index.html"].replace(' <a href="capture/">record it in your browser</a>', "")
+        no_ld = GOOD["index.html"].replace(CAPTURE_LD, "")
+        self.assertEqual(check_site.problems(self.site({"index.html": no_link})),
+                         ["index.html: doesn't link the web capture (capture/)"])
+        self.assertEqual(check_site.problems(self.site({"index.html": no_ld})),
+                         ["index.html: its JSON-LD doesn't name https://getdeckbridge.app/capture/"])
+
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
         self.assertEqual(check_site.problems(root), ["img/Syndicate_logo.png: looks like another company's logo",
@@ -250,6 +293,19 @@ class CheckSiteTests(unittest.TestCase):
         root = self.site({"img/huge.png": "x" * 2_100_000})
         self.assertEqual(check_site.problems(root), ["the site is 2.1 MB, over 2 MB"])
 
+
+
+class SiteCIJobTests(unittest.TestCase):
+    def test_the_site_job_runs_every_node_test(self):
+        """A scripts/test_*.mjs that CI's site job doesn't name would never run (#190)."""
+        scripts = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(scripts, "..", ".github", "workflows", "ci.yml"), encoding="utf-8") as f:
+            ci = f.read()
+        job = ci.split("\n  site:\n", 1)[1]
+        job = re.split(r"\n  [A-Za-z_-]+:\n", job, maxsplit=1)[0]  # up to the next job
+        tests = sorted(name for name in os.listdir(scripts) if name.startswith("test_") and name.endswith(".mjs"))
+        self.assertTrue(tests)
+        self.assertEqual([name for name in tests if f"scripts/{name}" not in job], [])
 
 if __name__ == "__main__":
     unittest.main()

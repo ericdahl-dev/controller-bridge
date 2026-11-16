@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Checks the DeckBridge website (#169) before anyone looks at it or it's published:
 - every page exists, and every internal link and asset resolves
-- robots.txt, sitemap.xml and llms.txt are at the root; the sitemap parses, and each URL in it
-  is under https://getdeckbridge.app/ and is a page in the site; llms.txt starts with "# DeckBridge"
+- robots.txt, sitemap.xml and llms.txt are at the root; the sitemap parses, each URL in it
+  is under https://getdeckbridge.app/ and is a page in the site, and it lists every required page (PAGES); llms.txt starts with "# DeckBridge"
+  and links every required page by its public URL
 - nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
   and so are <link rel="canonical"> and <link rel="alternate">. The one exception is the PostHog loader script
   (POSTHOG_LOADER), which website/analytics.js adds to count visits; the privacy page discloses it
@@ -28,11 +29,15 @@ ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt"]
 SITE = "https://getdeckbridge.app/"
 LLMS_HEADING = "# DeckBridge"
 PRIVACY = "privacy/index.html"
+HOME = "index.html"
+CAPTURE_URL = SITE + "capture/"
 PRIVACY_STATEMENTS = [
     "collects no data",  # the app
     # the website: cookieless PostHog (persistence memory, cookieless_mode always), worded as showrecorder.app's
     "posthog", "no cookies", "anonymous hash that changes every day", "does not keep the address",
     "counts clicks on a few links", "to have your visits removed, email",
+    # the web capture (#190): it uploads nothing, and the analytics count only that one started and finished
+    "web capture", "nothing is uploaded", "counts only that a capture started and finished",
 ]
 OTHER_COMPANIES = ["Syndicate", "Denon"]
 MAX_BYTES = 2_000_000
@@ -167,6 +172,13 @@ def check_page(root, file, text):
         except ValueError as e:
             out.append(f"{file}: JSON-LD block {n} doesn't parse: {e}")
     out += check_refs(root, file, page.refs)
+    if file == HOME:
+        # The FAQ points owners without the app to the web capture (#190), in its text and in the FAQPage JSON-LD.
+        if not any(not loaded and target(root, file, url) == os.path.normpath(os.path.join(root, "capture"))
+                   for url, loaded in page.refs if not is_external(url) and not skip(url)):
+            out.append(f"{file}: doesn't link the web capture (capture/)")
+        if not any(CAPTURE_URL in block for block in page.json_ld):
+            out.append(f"{file}: its JSON-LD doesn't name {CAPTURE_URL}")
     if file == PRIVACY:
         said = " ".join(" ".join(page.text).split()).lower()
         out += [f'{file}: doesn\'t say "{words}"' for words in PRIVACY_STATEMENTS if words not in said]
@@ -181,7 +193,7 @@ def check_sitemap(root, files):
     locs = [(el.text or "").strip() for el in tree.iter() if el.tag.rsplit("}", 1)[-1] == "loc"]
     if not locs:
         return ["sitemap.xml: lists no pages"]
-    out = []
+    out, listed = [], set()
     for loc in locs:
         if not loc.startswith(SITE):
             out.append(f"sitemap.xml: {loc} isn't under {SITE}")
@@ -191,7 +203,14 @@ def check_sitemap(root, files):
             path += "index.html"
         if not (path.endswith(".html") and path in files):
             out.append(f"sitemap.xml: {loc} isn't a page in the site")
+        listed.add(path)
+    out += [f"sitemap.xml: doesn't list {page_url(page)}" for page in PAGES if page not in listed]
     return out
+
+
+def page_url(page):
+    """A required page's public URL: index.html -> https://getdeckbridge.app/, support/index.html -> .../support/."""
+    return SITE + page.removesuffix("index.html")
 
 
 CAPTURE_PROMPTS = "capture/prompts.json"
@@ -236,8 +255,10 @@ def problems(root, app_prompts=None):
             out += check_refs(root, file, [(url, True) for url in css_refs(css)])
     if "llms.txt" in files:
         with open(os.path.join(root, "llms.txt"), encoding="utf-8") as f:
-            if f.readline().rstrip() != LLMS_HEADING:
-                out.append(f'llms.txt: doesn\'t start with "{LLMS_HEADING}"')
+            llms = f.read()
+        if llms.split("\n", 1)[0].rstrip() != LLMS_HEADING:
+            out.append(f'llms.txt: doesn\'t start with "{LLMS_HEADING}"')
+        out += [f"llms.txt: doesn't link {page_url(page)}" for page in PAGES if f"]({page_url(page)})" not in llms]
     if "sitemap.xml" in files:
         out += check_sitemap(root, files)
     if app_prompts is not None:
