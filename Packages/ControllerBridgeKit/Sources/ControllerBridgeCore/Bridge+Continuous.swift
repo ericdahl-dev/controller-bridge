@@ -17,10 +17,55 @@ extension Bridge {
             invert: mapping.pitch.invert, deadZone: mapping.pitch.deadZone
         )
         let rounded = (t * 100_000).rounded() / 100_000
+        // Moving the fader while Syndicate has the slider disabled would queue up a jump.
+        guard sliderEnabled, pickedUp(at: rounded) else { return }
         guard rounded != lastTempo else { return }
         lastTempo = rounded
+        recentTempoSends.removeAll { clock.now - $0.time > Self.echoWindow }
+        recentTempoSends.append((clock.now, rounded))
         sendDeck("TempoSlider", .float(Float(rounded)))
         refreshLEDs()
+    }
+
+    // MARK: Pickup
+
+    /// How long after a send its echo may still come back from Syndicate.
+    static let echoWindow = 0.5
+
+    /// Syndicate reported its TempoSlider. A value the bridge didn't send (sync, a mouse edit, another controller)
+    /// moved the on-screen slider away from the fader, so pickup re-arms.
+    func tempoReported(_ value: Double) {
+        reportedTempo = value
+        let tolerance = mapping.pitch.pickupTolerance
+        let isEcho = lastTempo.map { abs($0 - value) <= tolerance } == true
+            || recentTempoSends.contains { clock.now - $0.time <= Self.echoWindow && abs($0.value - value) <= tolerance }
+        if !isEcho { rearmPickup() }
+    }
+
+    /// Dim while the fader waits to be picked up, so it can be caught by feel; otherwise full at the center.
+    var pitchCenterVelocity: UInt8 {
+        if mapping.pitch.pickup, pickupArmed, reportedTempo != nil { return Self.dim }
+        return lastTempo == 0 ? Self.full : Self.off
+    }
+
+    func rearmPickup() {
+        pickupArmed = true
+        faderPosition = nil
+        // Syndicate's slider may be anywhere now, so the pickup send goes out even if it repeats the last value.
+        lastTempo = nil
+    }
+
+    /// Whether the fader at `position` drives the tempo. While armed it doesn't, until it comes within tolerance of
+    /// the reported value or moves across it. With no report yet there is nothing to meet, so the fader passes through.
+    private func pickedUp(at position: Double) -> Bool {
+        guard mapping.pitch.pickup, pickupArmed, let reported = reportedTempo else { return true }
+        let previous = faderPosition
+        faderPosition = position
+        let near = abs(position - reported) <= mapping.pitch.pickupTolerance
+        let crossed = previous.map { ($0 - reported) * (position - reported) < 0 } ?? false
+        guard near || crossed else { return false }
+        pickupArmed = false
+        return true
     }
 
     // MARK: Needle Drop

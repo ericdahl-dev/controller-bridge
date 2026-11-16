@@ -22,9 +22,17 @@ targets:
     platform: macOS
     sources:
       - path: App
+        excludes:
+          - Fonts
+      # Inter (UI) and IBM Plex Mono (numbers), both SIL OFL 1.1; their licenses ship alongside (#34).
+      - path: App/Fonts
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: ControllerBridgeKit
         product: ControllerBridgeCore
+      - package: ControllerBridgeKit
+        product: ControllerBridgePresentation
     entitlements:
       path: App/ControllerBridge.entitlements
       properties:
