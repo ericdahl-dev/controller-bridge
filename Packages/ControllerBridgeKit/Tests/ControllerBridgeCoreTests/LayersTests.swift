@@ -117,4 +117,36 @@ struct LayersTests {
         // Play is note 1; ch2 is channel 1 counted from 0. Lit full: deck 2 is playing.
         #expect(output.sent.contains(.noteOn(channel: 1, note: 1, velocity: 127)))
     }
+
+    static func fader(_ rig: Rig, channel: UInt8, _ msb: UInt8) {
+        rig.coordinator.midi(.controlChange(channel: channel - 1, controller: 8, value: msb), source: Rig.lc6000.id)
+    }
+
+    static func switchLayer(_ rig: Rig, from: UInt8, to: UInt8) {
+        Self.note(rig, channel: 16, 55, 127)
+        Self.note(rig, channel: from, 51, 0)
+        Self.note(rig, channel: to, 51, 127)
+    }
+
+    @Test("The one pitch fader is shared by the layers: back on a layer, its deck waits for pickup instead of jumping")
+    func sharedFaderPicksUpAgain() throws {
+        let rig = try Self.layered()
+        for deck in 1...2 {
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/Loaded", [.int(1)]))
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/TempoSlider", [.float(0)]))
+        }
+        Self.switchLayer(rig, from: 1, to: 2)
+        Self.fader(rig, channel: 2, 0x40)              // center: deck 2 picks up at 0.0
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/2/TempoSlider", [.float(0)]))
+
+        Self.switchLayer(rig, from: 2, to: 1)
+        Self.fader(rig, channel: 1, 0x7F)              // the fader goes to the top on layer 1
+        Self.switchLayer(rig, from: 1, to: 2)
+        rig.osc.sent.removeAll()
+
+        Self.fader(rig, channel: 2, 0x7E)              // 0.96887: far from deck 2's 0.0, so nothing
+        #expect(rig.osc.sent == [])
+        Self.fader(rig, channel: 2, 0x40)              // back across 0.0: picked up
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/TempoSlider", [.float(0)])])
+    }
 }
