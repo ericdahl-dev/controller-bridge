@@ -51,4 +51,17 @@ struct CaptureSummaryTests {
             "Nothing else: no name, email, location or time of day.",
         ])
     }
+
+    @Test("The file name and email name the controller, with characters a file name can't hold made safe")
+    func namesAndEmail() {
+        var file = Self.file()
+        #expect(file.suggestedFileName == "LC6000 PRIME capture.deckbridge-capture")
+        #expect(file.emailSubject == "Controller capture: LC6000 PRIME")
+        #expect(CaptureFile.emailRecipient == "deckbridge@ericdahl.dev")
+        #expect(file.emailBody == "Here's a capture of my LC6000 PRIME for DeckBridge. The file is attached.")
+        file.device = "DJ/Con:troller 4"
+        #expect(file.suggestedFileName == "DJ-Con-troller 4 capture.deckbridge-capture")
+        file.device = "  "
+        #expect(file.suggestedFileName == "Controller capture.deckbridge-capture")
+    }
 }
