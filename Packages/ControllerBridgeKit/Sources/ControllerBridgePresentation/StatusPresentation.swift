@@ -52,6 +52,11 @@ public struct StatusLight: Equatable, Sendable {
         self.word = word
         self.tone = tone
     }
+
+    /// A MIDI source that no controller profile matches (#43): listed, not bridged.
+    public init(unmatchedDevice name: String) {
+        self.init(label: name, word: "NO PROFILE", tone: .attention)
+    }
 }
 
 /// The menu-bar icon's state dot.

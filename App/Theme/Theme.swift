@@ -126,7 +126,7 @@ struct StatusLineView: View {
         let separator = Text(" · ").foregroundStyle(Theme.caption)
         var line = Text("")
         for light in presentation.lights {
-            line = line + Text("\(light.label) ").foregroundStyle(Theme.caption)
+            line = line + Text("\(light.label.uppercased()) ").foregroundStyle(Theme.caption)
                 + Text("● \(light.word)").foregroundStyle(Color(light.tone.color)) + separator
         }
         return line + Text("DECK [\(deck)]").foregroundStyle(Theme.caption)

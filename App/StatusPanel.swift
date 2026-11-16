@@ -1,18 +1,28 @@
 // The menu-bar panel, in the Syndicate-style theme (#34).
+import ControllerBridgeCore
 import ControllerBridgePresentation
 import SwiftUI
 
 extension BridgeStatus {
-    /// The status in Syndicate's words. The only controller profile so far is the LC6000 (#43 adds more).
+    /// The first controller, as the Coordinator reports it (#20, #43).
+    var controller: ControllerStatus? { bridges.first }
+
+    /// MIDI sources no controller profile matches (#43).
+    var unmatchedDevices: [DeviceStatus] { devices.filter { $0.profile == nil } }
+
+    var shownDeck: Int { controller?.deck ?? deck }
+
+    /// The status in Syndicate's words.
     var presentation: StatusPresentation {
-        let controller: BridgeState.Controller = controllers.isEmpty ? .notConnected : .connected(profile: "LC6000")
+        let controller: BridgeState.Controller =
+            if let bridge = self.controller, bridge.connected { .connected(profile: bridge.profile ?? "Controller") } else { .notConnected }
         let feedback: BridgeState.Feedback = switch self.feedback {
         case .starting: .starting
         case .listening(let port): .live(port: port)
         case .portInUse(let port): .portInUse(port: port)
         case .failed: .failed
         }
-        return StatusPresentation(BridgeState(controller: controller, feedback: feedback, deck: deck, stopped: problem != nil))
+        return StatusPresentation(BridgeState(controller: controller, feedback: feedback, deck: shownDeck, stopped: problem != nil))
     }
 }
 
@@ -29,11 +39,10 @@ struct StatusPanel: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
-                    DeckBadgeView(deck: status.deck)
+                    DeckBadgeView(deck: status.shownDeck)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(AppInfo.displayName).font(Theme.ui(14, .bold)).foregroundStyle(Theme.text)
-                        Text(status.controllers.first ?? "No controller").font(Theme.ui(11)).foregroundStyle(Theme.caption)
-                            .lineLimit(1)
+                        Text(subtitle).font(Theme.ui(11)).foregroundStyle(Theme.caption).lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
@@ -41,8 +50,16 @@ struct StatusPanel: View {
                     ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }
                     Spacer(minLength: 0)
                 }
+                if !status.unmatchedDevices.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(status.unmatchedDevices.prefix(3), id: \.name) { device in
+                            StatusLightView(light: StatusLight(unmatchedDevice: device.name))
+                                .help(device.note ?? "")
+                        }
+                    }
+                }
                 HStack(spacing: 16) {
-                    CaptionValue(caption: "Deck", value: "\(status.deck)")
+                    CaptionValue(caption: "Deck", value: "\(status.shownDeck)")
                     CaptionValue(caption: "OSC", value: "9090")
                     CaptionValue(caption: "Feedback", value: feedbackPort)
                     Spacer(minLength: 0)
@@ -61,11 +78,20 @@ struct StatusPanel: View {
             .padding(12)
             .background(Theme.panel)
             Rectangle().fill(Theme.hairline).frame(height: 1)
-            StatusLineView(presentation: presentation, deck: status.deck)
+            StatusLineView(presentation: presentation, deck: status.shownDeck)
         }
         .frame(width: 320)
         .background(Theme.background)
         .environment(\.colorScheme, .dark)
+    }
+
+    /// The connected controller's profile, else its last disconnect or reconnect, else none.
+    private var subtitle: String {
+        if let bridge = status.controller {
+            if bridge.connected, let profile = bridge.profile { return profile }
+            if let event = bridge.lastEvent { return event }
+        }
+        return "No controller"
     }
 
     private var feedbackPort: String {

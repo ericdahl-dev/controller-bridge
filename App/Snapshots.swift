@@ -2,6 +2,7 @@
 // Renders the panel in a few states to PNGs, for PR screenshots: `ControllerBridge --render-snapshots <name>`.
 // The app is sandboxed, so the PNGs go to <container tmp>/<name>; the path is printed. Compiled out of Release.
 import AppKit
+import ControllerBridgeCore
 import ControllerBridgePresentation
 import SwiftUI
 
@@ -13,9 +14,19 @@ enum Snapshots {
             print("\(font): \(NSFont(name: font, size: 12) == nil ? "MISSING" : "ok")")
         }
         let states: [(String, (BridgeStatus) -> Void)] = [
-            ("connected", { $0.controllers = ["DENON LC6000 PRIME"]; $0.feedback = .listening(port: 9096) }),
-            ("not-connected", { $0.feedback = .listening(port: 9096); $0.deck = 2 }),
-            ("port-in-use", { $0.controllers = ["DENON LC6000 PRIME"]; $0.feedback = .portInUse(port: 9096); $0.deck = 3 }),
+            ("connected", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+            }),
+            ("not-connected", {
+                $0.bridges = [ControllerStatus(deck: 2, connected: false, lastEvent: "Unplugged Denon LC6000 PRIME at 21:14")]
+                $0.devices = [DeviceStatus(name: "DDJ-FLX4", profile: nil, note: "No controller profile matches DDJ-FLX4, so it isn't bridged.")]
+                $0.feedback = .listening(port: 9096)
+            }),
+            ("port-in-use", {
+                $0.bridges = [ControllerStatus(deck: 3, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .portInUse(port: 9096)
+            }),
             ("starting-deck4", { $0.deck = 4 }),
             ("stopped", { $0.problem = "Couldn't start CoreMIDI: status(\"MIDIClientCreateWithBlock\", -10844)" }),
         ]

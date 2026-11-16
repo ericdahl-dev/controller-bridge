@@ -67,4 +67,9 @@ struct StatusPresentationTests {
         #expect(status.lights.first == StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error))
         #expect(status.icon == .error)
     }
+
+    @Test("A MIDI device no profile matches (#43) gets its own orange NO PROFILE row, so an IAC bus never hides the controller light")
+    func unmatchedDeviceRow() {
+        #expect(StatusLight(unmatchedDevice: "DDJ-FLX4") == StatusLight(label: "DDJ-FLX4", word: "NO PROFILE", tone: .attention))
+    }
 }
