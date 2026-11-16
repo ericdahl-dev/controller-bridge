@@ -76,4 +76,26 @@ struct MultiControllerTests {
         Self.press(rig, 1, from: Rig.lc6000)
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
     }
+
+    @Test("Two controllers on one device, told apart by channel: each channel drives its own deck and LEDs")
+    func oneDeviceTwoChannels() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.setControllers([
+            ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out, channel: 1),
+            ControllerSettings(deck: 2, input: Rig.lc6000, output: Rig.lc6000Out, channel: 2),
+        ])
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+        rig.osc.sent.removeAll()
+
+        Self.press(rig, 1, from: Rig.lc6000, channel: 0)
+        Self.press(rig, 1, from: Rig.lc6000, channel: 1)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]),
+        ])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        #expect(Self.leds(rig, Rig.lc6000Out, channel: 1)[1] == 127)
+        #expect(Self.leds(rig, Rig.lc6000Out, channel: 0)[1] == 1)
+    }
 }

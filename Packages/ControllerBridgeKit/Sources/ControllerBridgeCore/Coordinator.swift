@@ -40,6 +40,8 @@ public final class Coordinator {
         var chosenOutput: MIDIEndpoint.ID?
         /// The MIDI channel picked in Settings (#25), 1-16, or nil for the profile's.
         var channel: Int?
+        /// The destination its LEDs go to, once open.
+        var destination: MIDIEndpoint?
     }
 
     /// One controller, whose profile is chosen by the name of the device that connects. Until one does, it runs the
@@ -101,10 +103,13 @@ public final class Coordinator {
         guard let source = controllers[index].source else { return }
         let bridge = controllers[index].bridge
         bridge.releaseAll()
-        midiSystem.disconnect(source: source)
-        bridge.output?.close()
-        bridge.output = nil
         controllers[index].source = nil
+        let destination = controllers[index].destination
+        controllers[index].destination = nil
+        // Another controller on the same device, on another channel (#25), keeps it open.
+        if !controllers.contains(where: { $0.source?.id == source.id }) { midiSystem.disconnect(source: source) }
+        if destination == nil || !controllers.contains(where: { $0.destination?.id == destination?.id }) { bridge.output?.close() }
+        bridge.output = nil
         status.controllers[index].profile = nil
         report(index, "Disconnected \(source.name)" + (reason.map { " (\($0))" } ?? ""))
     }
@@ -131,7 +136,7 @@ public final class Coordinator {
         }
         let bridge = controllers[index].bridge
         do {
-            try midiSystem.connect(source: source)
+            if !controllers.contains(where: { $0.source?.id == source.id }) { try midiSystem.connect(source: source) }
         } catch {
             log.log("Couldn't open MIDI input \(source.name): \(error)")
             return false
@@ -142,7 +147,10 @@ public final class Coordinator {
         let destinations = midiSystem.destinations
         let chosenOutput = controllers[index].chosenOutput.flatMap { id in destinations.first { $0.id == id } }
         if let destination = chosenOutput ?? Self.match(destinations, bridge.mapping.midi.output) {
-            do { bridge.output = try midiSystem.openOutput(destination: destination) } catch {
+            do {
+                bridge.output = try midiSystem.openOutput(destination: destination)
+                controllers[index].destination = destination
+            } catch {
                 log.log("Couldn't open MIDI output \(destination.name): \(error)")
             }
         }
@@ -308,10 +316,26 @@ public final class Coordinator {
                 continue
             }
             setDeck(entry.deck, controller: index)
+            if entry.channel != controllers[index].channel {
+                controllers[index].channel = entry.channel
+                setChannel(index)
+            }
             if entry.input?.id != controllers[index].chosenInput || entry.output?.id != controllers[index].chosenOutput {
                 setDevices(input: entry.input, output: entry.output, controller: index)
             }
         }
+    }
+
+    /// Rebuilds the controller's Bridge on its new channel: held controls are released first, the ports stay open.
+    private func setChannel(_ index: Int) {
+        let old = controllers[index].bridge
+        old.releaseAll()
+        let bridge = makeBridge(controllers[index].profile, for: index)
+        bridge.output = old.output
+        controllers[index].bridge = bridge
+        guard controllers[index].source != nil else { return }
+        bridge.start()
+        requestResend()
     }
 
     /// A Bridge running `profile` with this controller's settings: its deck, channel and the LEDs switch.
