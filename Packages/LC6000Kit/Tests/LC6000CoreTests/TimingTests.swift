@@ -64,4 +64,21 @@ struct TimingTests {
         // Dim at start, then on, off, on, off across the first second.
         #expect(playLED == [1, 127, 1, 127, 1])
     }
+
+    @Test("With no controller output open, ticks send nothing, and opening it later paints the current blink state")
+    func tickWithPortsClosed() throws {
+        let rig = try Rig()
+        rig.midi.destinations = []
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/PlayPending", [.int(1)]))
+        for time in [0.0, 0.3, 0.5] { Self.tick(rig, at: time) }
+        #expect(rig.midi.outputs.isEmpty)
+        #expect(rig.osc.sent.isEmpty)
+
+        rig.midi.destinations = [Rig.lc6000Out]
+        rig.coordinator.start()
+        Self.tick(rig, at: 0.6)
+        #expect(rig.leds[1] == 127)
+    }
 }
