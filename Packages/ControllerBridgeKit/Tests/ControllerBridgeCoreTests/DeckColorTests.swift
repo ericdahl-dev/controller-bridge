@@ -127,4 +127,21 @@ struct DeckColorTests {
         #expect(rig.leds[40] == 48)
         #expect(rig.coordinator.status.deckColors[4] == [128, 0, 255])
     }
+
+    // #151: the ring is vivid. Take out the white (the smallest channel), scale the strongest to level 3, drop a channel
+    // under 35 % of it, quantize. A near-grey (saturation under 20 %) keeps the exact mapping.
+    static let vividCases: [([Int32], UInt8)] = [
+        ([255, 0, 0], 48),                      // red, unchanged
+        ([128, 0, 255], 35),                    // purple: 50 % ≥ 35 %, so (2, 0, 3)
+        ([0, 200, 180], 15),                    // teal-ish: (0, 3, 3)
+        ([255, 180, 180], 48),                  // pastel: the white comes out, (3, 0, 0)
+        ([0x6C, 0x72, 0x77], 21),               // near-grey: exact, (1, 1, 1)
+    ]
+
+    @Test("Vivid ring colors from Syndicate's palette (slot 1, deck 1)", arguments: vividCases)
+    func vividRing(rgb: [Int32], velocity: UInt8) throws {
+        let rig = try Self.onDeck(1)
+        Self.palette(rig, slot: 1, rgb[0], rgb[1], rgb[2])
+        #expect(rig.leds[40] == velocity)
+    }
 }

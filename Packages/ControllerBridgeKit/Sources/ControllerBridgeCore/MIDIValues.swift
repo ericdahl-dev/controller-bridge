@@ -32,3 +32,18 @@ func tempoSlider(from value14: Int, invert: Bool, deadZone: Double) -> Double {
     if abs(t) < deadZone { t = 0 }
     return min(1, max(-1, t))
 }
+
+/// A vivid LC6000 color velocity that keeps the hue (#151), for the platter ring and a held pad. rgb222 rounding on
+/// its own lands a color's weaker channels on level 1-2, which adds white and washes the color out on the unit. So:
+/// take out the white (the smallest channel), scale the strongest channel to level 3, drop any channel under 35 % of
+/// it, then quantize. A near-grey (saturation under 20 %) has no hue to keep and uses the exact mapping.
+func vividVelocity(_ red: Int, _ green: Int, _ blue: Int) -> UInt8 {
+    let rgb = [red, green, blue].map { max(0, min(255, $0)) }
+    let top = rgb.max() ?? 0, bottom = rgb.min() ?? 0
+    guard top > 0, Double(top - bottom) / Double(top) >= 0.2 else { return rgbToVelocity(red, green, blue) }
+    let levels = rgb.map { channel -> Int in
+        let share = Double(channel - bottom) / Double(top - bottom)
+        return share < 0.35 ? 0 : Int((share * 3).rounded())
+    }
+    return UInt8(levels[0] << 4 | levels[1] << 2 | levels[2])
+}

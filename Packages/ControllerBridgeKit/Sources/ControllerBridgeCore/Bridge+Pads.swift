@@ -99,6 +99,12 @@ extension Bridge {
         return rgb.map { $0 * 255 / top }
     }
 
+    /// A vivid velocity (#151) for an [r, g, b] color: the ring, and a held pad.
+    static func vividVelocity(_ rgb: [Int]) -> UInt8 {
+        guard rgb.count == 3 else { return off }
+        return ControllerBridgeCore.vividVelocity(rgb[0], rgb[1], rgb[2])
+    }
+
     /// A pad or ring velocity for an [r, g, b] color.
     static func velocity(_ rgb: [Int]) -> UInt8 {
         // A user mapping can hold any list here until the mapping check (#24) refuses it.
