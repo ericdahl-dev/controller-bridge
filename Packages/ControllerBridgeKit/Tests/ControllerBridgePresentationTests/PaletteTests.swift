@@ -21,10 +21,42 @@ struct PaletteTests {
             ("error red on background", p.error, p.background),
             ("error red on panel", p.error, p.panel),
             ("key blue on panel", p.key, p.panel),
+            // #171: grouped cards on the surface, tonal pills on the raised button, dark ink on the green pill
+            ("text on surface", p.text, p.surface),
+            ("caption on surface", p.caption, p.surface),
+            ("caption on raised button", p.caption, p.buttonRaised),
+            ("live green on surface", p.live, p.surface),
+            ("attention orange on surface", p.attention, p.surface),
+            ("error red on surface", p.error, p.surface),
+            ("ink on the accent pill", p.onAccent, p.accent),
+            // #174: the selected segment is the window color on a text-color fill; a hovered tonal pill is the text
+            // color at 14% over the raised fill
+            ("window color on the selected segment", p.panel, p.text),
+            ("text on a hovered tonal pill", p.text, p.text.over(p.buttonRaised, opacity: 0.14)),
         ]
     }
 
     static let themes: [(String, ThemePalette)] = [("dark", Palette.dark), ("light", Palette.light)]
+
+    /// A chip (UNMAPPED, #171): its word on its tone's tint, composited over the window and over a card.
+    @Test("A chip's word reaches 4.5:1 on its own tint, for every tone, on the window and on a card, in both themes",
+          arguments: themes.indices)
+    func chipContrast(theme: Int) {
+        let (themeName, palette) = Self.themes[theme]
+        for tone in [StatusLight.Tone.live, .idle, .attention, .error] {
+            for (surfaceName, surface) in [("window", palette.panel), ("card", palette.surface)] {
+                let tint = tone.color(in: palette).over(surface, opacity: Palette.chipTint)
+                let ratio = Contrast.ratio(Palette.chipWord(in: palette), tint)
+                #expect(ratio >= 4.5, "\(themeName) \(tone) chip on the \(surfaceName): \(ratio)")
+            }
+        }
+    }
+
+    @Test("Compositing: a color at an opacity over another, rounded per channel")
+    func over() {
+        #expect(RGB(hex: 0xFFFFFF).over(RGB(hex: 0x000000), opacity: 0.5) == RGB(hex: 0x808080))
+        #expect(RGB(hex: 0x00FF48).over(RGB(hex: 0x1B1B1B), opacity: 0) == RGB(hex: 0x1B1B1B))
+    }
 
     @Test("Every text and surface pair the theme uses reaches 4.5:1, in both themes (#127)", arguments: themes.indices)
     func aaContrast(theme: Int) {
@@ -43,6 +75,7 @@ struct PaletteTests {
             ("button edge on button", p.buttonEdge, p.button),
             ("selected bar on button", p.selectedBar, p.button),
             ("selected bar on raised button", p.selectedBar, p.buttonRaised),
+            ("text-field edge on surface", p.buttonEdge, p.surface),
         ]
     }
 
@@ -72,6 +105,7 @@ struct PaletteTests {
         #expect(p.live == RGB(hex: 0x00FF48))         // --signal-text
         #expect(p.accent == RGB(hex: 0x00FF48))       // --signal
         #expect(p.onAccent == RGB(hex: 0x111111))     // --on-signal
+        #expect(p.surface == RGB(hex: 0x20201F))      // the site's --p-surface (#171): cards on the window
     }
 
     @Test("Light is Syndicate's LIGHT MODE; live text is its --signal-text darkened 8%, the least that reaches AA on the window")
@@ -89,5 +123,6 @@ struct PaletteTests {
         #expect(p.live == RGB(hex: 0x007026))         // --signal-text #007a29 is 4.01:1 on the window
         #expect(p.accent == RGB(hex: 0x00FF48))       // --signal
         #expect(p.onAccent == RGB(hex: 0x111111))     // --on-signal
+        #expect(p.surface == RGB(hex: 0xE6E6E4))      // lighter than the window, as the site's cards (#171)
     }
 }

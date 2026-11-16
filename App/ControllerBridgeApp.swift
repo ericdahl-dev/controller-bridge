@@ -23,7 +23,10 @@ struct ControllerBridgeApp: App {
     var body: some Scene {
         // Window style, not .menu, so it carries the dark panel.
         MenuBarExtra {
-            StatusPanel(status: model.status, setDemo: model.setDemo, setDeck: { model.setDeck($0, controller: $1) })
+            StatusPanel(
+                status: model.status, setDemo: model.setDemo, setDeck: { model.setDeck($0, controller: $1) },
+                helpAdd: { model.captureDevice = $0 }
+            )
                 .environment(\.deckColors, model.status.deckColors)
         } label: {
             MenuBarLabel(status: model.status)
@@ -34,7 +37,8 @@ struct ControllerBridgeApp: App {
             DiagnosticsWindow(
                 log: model.diagnostics, status: model.status, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
                 startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep,
-                hiddenNotes: model.profiles.first?.mapping.midi.ignoreNotes ?? []
+                hiddenNotes: model.profiles.first?.mapping.midi.ignoreNotes ?? [], jogSimulator: model.jogSimulator,
+                setJogPreviewDeck: model.setJogPreviewDeck
             )
             .environment(\.deckColors, model.status.deckColors)
         }
@@ -46,6 +50,13 @@ struct ControllerBridgeApp: App {
         // "Setup Guide": the caption inside says SET UP SYNDICATE, so the title doesn't repeat it (#68).
         Window("Setup Guide", id: SetupGuideWindow.id) {
             SetupGuideView(guide: model.status.setupGuide, presentation: model.status.presentation)
+        }
+        .windowResizability(.contentSize)
+        .defaultLaunchBehavior(.suppressed)
+
+        // The guided capture (#186): from Settings › Controller.
+        Window(CaptureWindow.title, id: CaptureWindow.id) {
+            CaptureWindowRoot(model: model)
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)
@@ -65,7 +76,7 @@ struct MenuBarLabel: View {
     var body: some View {
         let presentation = status.presentation
         Image(nsImage: MenuBarIcon.image(presentation.icon))
-            .accessibilityLabel(MenuBarIcon.accessibilityLabel(presentation))
+            .accessibilityLabel(presentation.iconAccessibilityLabel)
             .task { SetupGuideWindow.openIfNew(openWindow) }
     }
 }

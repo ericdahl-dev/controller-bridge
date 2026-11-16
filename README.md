@@ -2,7 +2,7 @@
 
 A Mac menu-bar app that lets you use a **Denon LC6000 PRIME** with **[Untitled Audio Syndicate](https://untitledaudiosyndicate.com)** through Syndicate's OSC API, with LED feedback.
 
-Syndicate's own MIDI mapping (0.3.7) can't handle the LC6000's 14-bit jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10. The app reads the LC6000's MIDI, converts it, and sends it to Syndicate's fixed OSC addresses. It also listens to Syndicate's OSC feedback to light the controller.
+Syndicate's own MIDI mapping (0.3.7) can't handle the LC6000's 14-bit jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10 ([Syndicate User Guide 0.3.7, section 13.9](https://untitledaudiosyndicate.com/user-guide/index.html#c13-9): 14-bit CC pairs and generic MIDI LED feedback are listed as not supported). The app reads the LC6000's MIDI, converts it, and sends it to Syndicate's fixed OSC addresses. It also listens to Syndicate's OSC feedback to light the controller.
 
 ```
 LC6000 ──USB MIDI──▶  DeckBridge  ──OSC :9090──▶ Syndicate
@@ -44,12 +44,13 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 
 **Not possible:**
 - Scratching: Syndicate has no scratch or scrub OSC route.
-- The platter's center display: it needs SysEx that Denon doesn't document.
 - Slicer mode: it is unmapped.
+
+**Coming in v1.1:** the platter's center display showing the active deck (#165).
 
 ## Install
 
-Install **DeckBridge** from the Mac App Store (macOS 26 or later). It lives in the menu bar and has no Dock icon. On first launch it opens a short setup guide for Syndicate.
+DeckBridge is in public beta on TestFlight: join at **[testflight.apple.com/join/HWcpqqpz](https://testflight.apple.com/join/HWcpqqpz)**, then install it from the TestFlight app (macOS 26 or later). The Mac App Store release is coming. It lives in the menu bar and has no Dock icon. On first launch it opens a short setup guide for Syndicate.
 
 ## Set up Syndicate
 
@@ -153,7 +154,7 @@ Releases are a version tag on `main`. See [`docs/DEVELOPING.md`](docs/DEVELOPING
 
 ### Look and fonts
 
-The app follows Syndicate's flat style (#34) in its dark and light themes. The colors are Syndicate's own tokens, from its user guide's CSS (#127), and `ControllerBridgePresentation` tests every text color against WCAG AA in both themes. **Settings › Appearance** picks Match macOS, Dark or Light. The app bundles two fonts under the [SIL Open Font License 1.1](https://openfontlicense.org): [Inter](https://github.com/rsms/inter) 4.1 for UI text and [IBM Plex Mono](https://github.com/IBM/plex) 2.5.0 for numbers. Their license files ship in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo).
+The app follows Syndicate's flat style (#34) in its dark and light themes. The colors are Syndicate's own tokens, from its user guide's CSS (#127), and `ControllerBridgePresentation` tests every text color against WCAG AA in both themes. **Settings › Appearance** picks Match macOS, Dark or Light. The app bundles [Geist and Geist Mono](https://github.com/vercel/geist-font) 1.9.2, the site's fonts (#171), under the [SIL Open Font License 1.1](https://openfontlicense.org): Geist for UI text, Geist Mono for labels and numbers. The license file ships in the app, in `Contents/Resources/Fonts/` (`App/Fonts/` in the repo), and the release preflight fails if a font or the license is missing.
 
 For PR screenshots, a Debug build can render the panel without a screen: `ControllerBridge.app/Contents/MacOS/ControllerBridge --render-snapshots snaps`. It prints where the PNGs went (inside the sandbox container). Release builds leave this out.
 

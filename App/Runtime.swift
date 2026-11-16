@@ -3,6 +3,7 @@
 import Dispatch
 import Foundation
 import ControllerBridgeCore
+import ControllerBridgeRender
 import os
 
 /// Makes the Coordinator inside one task and runs the Engine loop there, so that loop is the only code that ever
@@ -11,15 +12,29 @@ import os
 enum BridgeHost {
     static func run(
         profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, log: any LogSink, status: BridgeStatus,
-        diagnostics: DiagnosticsLog, controllers: [ControllerSettings], ledsEnabled: Bool, events: AsyncStream<PipeEvent>
+        diagnostics: DiagnosticsLog, jogSimulator: JogSimulatorLog, controllers: [ControllerSettings], ledsEnabled: Bool, jogDisplay: (any JogDisplayPort)?,
+        events: AsyncStream<PipeEvent>
     ) async {
         let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
+        // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe. Always attached:
+        // with no WD port, or with the switch off, it only previews, for the Diagnostics simulator (#221).
+        let jogEvents = jogSink(jogSimulator)
+        let driver = JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log) { content in
+            JogDisplayRenderer.uploadImage(content)
+        }
+        driver.onEvent = jogEvents
+        coordinator.attachJogDisplay(driver)
         // Straight onto the saved devices, decks, layers and LEDs switch: nothing unchosen, even for a moment (#105).
         coordinator.start(controllers: controllers, ledsEnabled: ledsEnabled)
         // The demo controller (#64) runs the profile running now (an imported mapping too, #98) against an in-process
         // controller and an in-memory Syndicate.
         let makeDemo: @Sendable (ControllerProfile) -> DemoSession = { profile in
-            DemoSession(profile: profile, clock: SystemClock(), log: log, ledOutput: DroppedMIDIOutput())
+            let session = DemoSession(profile: profile, clock: SystemClock(), log: log, ledOutput: DroppedMIDIOutput())
+            // The demo's deck shows in the jog display preview too (#221); it has no unit, so it only previews.
+            let preview = JogDisplayDriver(port: nil, clock: SystemClock(), log: log) { content in JogDisplayRenderer.uploadImage(content) }
+            preview.onEvent = jogEvents
+            session.coordinator.attachJogDisplay(preview)
+            return session
         }
         await Engine(
             coordinator: coordinator, log: log, onStatus: statusSink(status), onDiagnostic: diagnosticsSink(diagnostics),
@@ -30,6 +45,14 @@ enum BridgeHost {
     /// Hands each Diagnostics line to the window, one main-actor hop per line. Only called while the window is open.
     private nonisolated static func diagnosticsSink(_ log: DiagnosticsLog) -> @Sendable (DiagnosticEvent) -> Void {
         { event in Task { @MainActor in log.append(event) } }
+    }
+
+    /// Hands each jog display event to the simulator, one main-actor hop each (#221).
+    private nonisolated static func jogSink(_ simulator: JogSimulatorLog) -> @Sendable (JogDisplayEvent) -> Void {
+        { event in
+            let now = Date.now
+            Task { @MainActor in simulator.apply(event, at: now) }
+        }
     }
 
     /// Copies each Coordinator status change into the menu's status, with one main-actor hop per change. Made here,
@@ -46,6 +69,7 @@ enum BridgeHost {
                 status.syndicateFeedback = coordinatorStatus.feedback
                 status.noDeckData = coordinatorStatus.noDeckData
                 status.missingSubscriptions = coordinatorStatus.missingSubscriptions
+                status.requiredSubscriptions = coordinatorStatus.requiredSubscriptions
                 status.lastDropout = coordinatorStatus.lastDropout
                 status.sweeping = coordinatorStatus.sweeping
                 status.demo = coordinatorStatus.demo

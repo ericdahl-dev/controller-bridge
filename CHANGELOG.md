@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.2
+
+- The panel and Diagnostics name **every** Syndicate subscription that's off and what it breaks, e.g. "TempoSlider/TempoSliderEnabled is off: the pitch fader can jump" (#211).
+- Diagnostics log: filter, hide streaming values, deck and direction filters, 20,000-line history, pause, copy visible and save (#218).
+- Help add a controller: a guided capture of any MIDI controller, then save it or email it to us. Nothing is sent unless you choose to (#186, #188).
+- Groundwork for more controllers in profiles: encoder formats, relative jogs, LED levels, 7-bit faders, 1–16 pads and pad channels (#193–#196, #204, #224, #225). The LC6000 behaves as before.
+
+## 1.0.1
+
+A new look that matches getdeckbridge.app (#171).
+
+- Geist and Geist Mono type, pill buttons, cards, and status words in normal case.
+- The panel, Diagnostics and the setup guide are redesigned. The panel is a little taller.
+- Settings is in four tabs: Controller, Decks, Syndicate, General, with ⌘1–4. A refused Apply opens the tab and the field
+  that needs fixing, and VoiceOver says why.
+- A tall Settings tab scrolls, with Apply pinned at the bottom.
+- Status chips and segments meet AA contrast in light and dark, and at increased contrast.
+- Fix: a MIDI device named "Controller" no longer counts as the controller light.
+
 ## 1.0
 
 The first release: a Mac menu-bar app that plays Untitled Audio Syndicate from a Denon LC6000 PRIME over OSC, with

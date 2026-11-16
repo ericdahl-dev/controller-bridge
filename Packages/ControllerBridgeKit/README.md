@@ -64,7 +64,51 @@ Checked on hardware (2026-11-15, see #12 and #103):
 - `midi.ignore_notes`: the unit sends note 52 about every 0.3 s while idle, a heartbeat. It's dropped, and the
   Diagnostics monitor says so.
 - `pitch`: 14-bit on CC 8/40, with the fader's top at 0, so `invert` stays false.
+- `pitch.bits` (#195): 14 on the LC6000. A controller with a 7-bit pitch fader sets 7: the fader is then `msb_cc`
+  alone and `lsb_cc` may be left out. 64 is the exact center (below it a step is 1/64, above it 1/63), so a centered
+  fader reads 0; `invert`, `dead_zone` and pickup work as on 14-bit.
+- `midi.encoder_format` (#193): the browse knob (CC 6) and the Auto Loop knob (CC 3) send two's complement:
+  0x01–0x3F turn forward, 0x7F is one tick back. Another controller's profile can say `"offset_64"` (0x40 is still,
+  0x41 one forward) or `"sign_magnitude"` (bit 6 is back, the low six bits how far). Left out, it's
+  `"twos_complement"`.
+- `jog.relative_cc` (#204): for a platter that sends relative ticks on one CC (most Pioneer DDJ jogs), not the LC6000's
+  14-bit position. The ticks decode by `midi.encoder_format`, `jog.counts_per_rev` counts ticks per turn, and
+  `jog.msb_cc`/`jog.lsb_cc` may be left out. `jog.relative_edge_cc` is the platter's edge on its own CC: it nudges
+  without a touch, even with `require_touch`. Left out, the jog is the LC6000's absolute pair.
 - `leds`: the button LED notes and the `0b00RRGGBB` color table are confirmed.
+- `notes.pads` and `pads.roll_sizes` (#196): a controller has 1–16 pads (the LC6000 has 8, notes 32–39). Pad N is
+  hot cue N, and in Roll mode plays `roll_sizes[N-1]`, by Syndicate's SlipLoop names (`ThirtySecond`, `Sixteenth`,
+  `Eighth`, `Quarter`, `Half`, `One`, `Two`, `Four`); a pad past the list does nothing in Roll mode. Left out,
+  `roll_sizes` is the LC6000's eight, shortest first. Syndicate sends 8 cue slots, so pads 9–16 stay dark.
+- `notes.shifted` (#226): Shift done in hardware. On controllers that send a different note for a button while Shift is
+  held (the DDJ-400, the MCX8000), each button's shifted note, such as `{ "beat_jump_back": 60 }`. That note acts as the
+  button pressed with Shift held, for that press only, so Shift + Beat Jump Back still jumps a bar. Keys are the
+  profile's button names, and each note is checked like any other (0–127, not another button's). Left out or empty
+  (the LC6000), the app works Shift out from the Shift button, and nothing extra is saved.
+- `leds.mirror_shifted` (#226): `false` on the LC6000. On a controller whose shifted note has its own LED, `true`
+  lights it with its button's state.
+- `pads.mode_select` (#198): `buttons` on the LC6000, whose four buttons (`mode_hotcue`, `mode_roll`, `mode_loop`,
+  `mode_slicer`) each pick a pad mode. A controller with one pad-mode button sets `cycle` and maps that button as
+  `notes.mode_cycle`: each press moves Hot Cue → Roll → Loop → Slicer → Hot Cue, releasing a held pad first. Any
+  `mode_*` notes it maps still light as indicators. Optional `pads.mode_cycle_velocities` (`hotcue`, `roll`, `loop`,
+  `slicer`, each 0–127) lights the cycle button's own LED per mode; left out, DeckBridge leaves that LED alone.
+- `pads.channel` and `midi.layers[].pad_channel` (#224): the MIDI channel (1–16) a deck's pads use when it isn't the
+  deck's own, such as a Pioneer DDJ-400/FLX4 profile's 8 for deck 1 and 10 for deck 2. Pads then play only on that
+  channel (the same note on the deck's channel isn't a pad), and their LEDs, and the LED sweep's color pass, go out on
+  it. Left out (the LC6000, so the bundled profile doesn't name it), pads share the deck's channel.
+- `pads.mode_notes` (#225): on a controller whose pads send a different note range in each pad mode (Pioneer's do),
+  each mode's notes, one per pad: `hotcue`, `roll`, `loop` and `slicer`, all four, each as long as `notes.pads`. The
+  note then says the mode: a roll note plays a roll, and a note from another mode switches to it first, letting a held
+  pad go. The pad LEDs light the current mode's notes; the other modes' go dark. The `mode_*` buttons still pick the
+  mode. Left out (the LC6000), `notes.pads` serves every mode and DeckBridge tracks the mode itself. The LED sweep's
+  color pass covers `notes.pads` only.
+- `leds.levels` (#194): a button LED's velocity at full, dim and off, 127, 1 and 0 on the LC6000. Another controller's
+  profile can set any of them (each 0–127; one left out keeps the LC6000's). They drive the button and pitch-center
+  LEDs, turning the LEDs off, and the LED sweep's button pass; pad and ring colors don't use them.
+- `leds.color_table` (#197): how a pad or ring color becomes a velocity. `"rgb222"` (the LC6000, and the default) packs
+  2 bits per channel. Another controller lists its own: `[{ "rgb": [255, 0, 0], "value": 5 }, …]`, and a color takes
+  the nearest entry's value (the first of equally near ones). Black is off; a dim color never rounds to a black entry
+  but takes the nearest lit one. Each `rgb` is three values 0–255, each `value` 0–127.
 
 Still PROVISIONAL:
 

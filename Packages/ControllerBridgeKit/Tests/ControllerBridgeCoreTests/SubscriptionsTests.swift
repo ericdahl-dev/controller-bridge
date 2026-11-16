@@ -72,28 +72,25 @@ struct SubscriptionsTests {
 
     @Test("A loaded deck without Cues in the answer: the Cues subscription is missing. Empty deck 2 counts for nothing")
     func loadedDeckWithoutCues() throws {
-        let rig = try Self.answered([
-            OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]),
-            OSCMessage("/Syndicate/Deck/1/Sync", [.int(0)]),
-            OSCMessage("/Syndicate/Deck/1/Loop", [.int(0)]),
+        let rig = try Self.answered(EverySubscriptionTests.deck1.filter { $0.0 != .cues }.map(\.1) + [
             OSCMessage("/Syndicate/Deck/2/Loaded", [.int(0)]),
         ])
         #expect(rig.coordinator.status.noDeckData == false)
         #expect(rig.coordinator.status.missingSubscriptions == [.cues])
     }
 
-    @Test("A loaded deck with only Loaded: Playing, Cues, Sync and Loop are all missing")
+    /// Every subscription but Loaded and TrackInfo, which a deck with only Loaded proves (#211).
+    static let allButLoaded: [Subscription] = [.playing, .playPending, .progress, .tempoSlider, .cues, .sync, .loop]
+
+    @Test("A loaded deck with only Loaded: every other subscription is missing")
     func loadedDeckOnly() throws {
         let rig = try Self.answered([OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)])])
-        #expect(rig.coordinator.status.missingSubscriptions == [.playing, .cues, .sync, .loop])
+        #expect(rig.coordinator.status.missingSubscriptions == Self.allButLoaded)
     }
 
-    @Test("A loaded deck with every LED value: nothing is missing")
+    @Test("A loaded deck with every value in the real capture: nothing is missing")
     func loadedDeckComplete() throws {
-        let rig = try Self.answered(["Loaded", "Playing", "Cues", "Sync", "Loop"].map {
-            OSCMessage("/Syndicate/Deck/1/\($0)", [.int(1)])
-        })
+        let rig = try Self.answered(EverySubscriptionTests.deck1.map(\.1))
         #expect(rig.coordinator.status.missingSubscriptions == [])
     }
 
@@ -109,12 +106,10 @@ struct SubscriptionsTests {
     @Test("A later complete answer clears an earlier gap: during a paused set, the quiet Resend gets every value again")
     func laterAnswerClearsGap() throws {
         let rig = try Self.answered([OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)])])
-        #expect(rig.coordinator.status.missingSubscriptions == [.playing, .cues, .sync, .loop])
+        #expect(rig.coordinator.status.missingSubscriptions == Self.allButLoaded)
         Self.tick(rig, at: 10.3)                 // 10 s quiet: the next Resend
         rig.clock.now = 10.5
-        for value in ["Loaded", "Playing", "Cues", "Sync", "Loop"] {
-            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/\(value)", [.int(1)]))
-        }
+        for message in EverySubscriptionTests.deck1.map(\.1) { rig.coordinator.feedback(message) }
         Self.tick(rig, at: 12.3)
         #expect(rig.coordinator.status.missingSubscriptions == [])
     }

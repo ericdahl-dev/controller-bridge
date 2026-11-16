@@ -24,7 +24,7 @@ targets:
       - path: App
         excludes:
           - Fonts
-      # Inter (UI) and IBM Plex Mono (numbers), both SIL OFL 1.1; their licenses ship alongside (#34).
+      # Geist (UI) and Geist Mono (labels and numbers), SIL OFL 1.1, as on the site; the license ships alongside (#171).
       - path: App/Fonts
         type: folder
         buildPhase: resources
@@ -33,6 +33,10 @@ targets:
         product: ControllerBridgeCore
       - package: ControllerBridgeKit
         product: ControllerBridgePresentation
+      - package: ControllerBridgeKit
+        product: ControllerBridgeCapture
+      - package: ControllerBridgeKit
+        product: ControllerBridgeRender
     entitlements:
       path: App/ControllerBridge.entitlements
       properties:
@@ -58,6 +62,13 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # Settings' "All networks" feedback listener, for Syndicate on another Mac (#19).
         NSLocalNetworkUsageDescription: DeckBridge listens for OSC feedback from Syndicate running on another Mac on your network.
+        # The capture file (#188): JSON, saved through the save panel or attached to the owner's own email.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.ericdahl.deckbridge.capture
+            UTTypeDescription: DeckBridge controller capture
+            UTTypeConformsTo: [public.json]
+            UTTypeTagSpecification:
+              public.filename-extension: [deckbridge-capture]
     settings:
       base:
         # The display name is DeckBridge (#29), set in Info.plist; the bundle id is final and stays as it is.

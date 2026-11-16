@@ -40,10 +40,13 @@ public final class DemoSession {
     /// Everything the bridge sent to the in-memory Syndicate, in order.
     public var sentToSyndicate: [OSCMessage] { syndicate.received }
 
-    /// The demo Coordinator's status, marked as the demo.
+    /// The demo Coordinator's status, marked as the demo. The subscription check (#211) judges the DJ's real Syndicate,
+    /// not the simulated one, so the demo reports nothing missing.
     public var status: CoordinatorStatus {
         var status = coordinator.status
         status.demo = true
+        status.missingSubscriptions = []
+        status.noDeckData = false
         return status
     }
 
@@ -100,7 +103,6 @@ enum DemoScript {
         let channel = UInt8(clamping: mapping.midi.channel - 1)
         let play = UInt8(clamping: mapping.notes.buttons["play"] ?? 0)
         let pitch = UInt8(clamping: mapping.pitch.msbCC)
-        let (jogMSB, jogLSB) = (UInt8(clamping: mapping.jog.msbCC), UInt8(clamping: mapping.jog.lsbCC))
         var steps = [
             Step(at: 0.5, event: .noteOn(channel: channel, note: play, velocity: 127)),
             Step(at: 0.6, event: .noteOff(channel: channel, note: play, velocity: 0)),
@@ -111,10 +113,21 @@ enum DemoScript {
         }
         // The jog, the platter position counting up 8 at a time as a slow forward turn does (#103): a nudge while
         // playing. The first position is only the starting point.
-        for (index, position) in stride(from: 100, through: 140, by: 8).enumerated() {
-            let at = 3.0 + Double(index) * 0.05
-            steps.append(Step(at: at, event: .controlChange(channel: channel, controller: jogMSB, value: UInt8(position >> 7))))
-            steps.append(Step(at: at, event: .controlChange(channel: channel, controller: jogLSB, value: UInt8(position & 0x7F))))
+        switch mapping.jog.mode {
+        case .absolute(let msb, let lsb):
+            let (jogMSB, jogLSB) = (UInt8(clamping: msb), UInt8(clamping: lsb))
+            for (index, position) in stride(from: 100, through: 140, by: 8).enumerated() {
+                let at = 3.0 + Double(index) * 0.05
+                steps.append(Step(at: at, event: .controlChange(channel: channel, controller: jogMSB, value: UInt8(position >> 7))))
+                steps.append(Step(at: at, event: .controlChange(channel: channel, controller: jogLSB, value: UInt8(position & 0x7F))))
+            }
+        case .relative(let cc, _):
+            // The same nudge as relative ticks (#204): 8 forward, four times, in the profile's encoder format.
+            let forward = mapping.midi.encoderFormat.value(forTicks: 8)
+            for index in 1...4 {
+                steps.append(Step(at: 3.0 + Double(index) * 0.05,
+                                  event: .controlChange(channel: channel, controller: UInt8(clamping: cc), value: forward)))
+            }
         }
         steps += [
             Step(at: 6.0, event: .noteOn(channel: channel, note: play, velocity: 127)),

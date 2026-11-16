@@ -11,6 +11,8 @@ public struct CoordinatorStatus: Equatable, Sendable {
     public var noDeckData = false
     /// LED subscriptions a loaded deck's answer lacked (#150), in `Subscription` order. Empty when none are missing.
     public var missingSubscriptions: [Subscription] = []
+    /// The subscriptions the controllers' profiles need, in the setup guide's order (#211).
+    public var requiredSubscriptions: [Subscription] = Subscription.allCases
     /// An LED sweep (#26) is running.
     public var sweeping = false
     /// The built-in demo controller (#64) is running instead of the real one.
@@ -72,6 +74,8 @@ public struct ControllerStatus: Equatable, Sendable {
     public var lastProfile: String?
     /// Why it last disconnected, if it has (#91).
     public var lastDisconnect: DisconnectReason?
+    /// The MIDI device it runs on while connected (#200), so Settings can offer a profile for it.
+    public var device: String?
     /// This entry is a deck layer the controller has switched to (#79): its layer note came in at velocity 127.
     public var activeLayer: Bool
     /// This entry is one deck layer of a controller that follows its own layers (#79).
@@ -79,8 +83,10 @@ public struct ControllerStatus: Equatable, Sendable {
 
     public init(
         deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false, outputOpen: Bool = false,
-        lastProfile: String? = nil, lastDisconnect: DisconnectReason? = nil, activeLayer: Bool = false, followsLayers: Bool = false
+        lastProfile: String? = nil, lastDisconnect: DisconnectReason? = nil, activeLayer: Bool = false, followsLayers: Bool = false,
+        device: String? = nil
     ) {
+        self.device = device
         self.lastProfile = lastProfile
         self.lastDisconnect = lastDisconnect
         self.deck = deck
@@ -101,11 +107,15 @@ public struct DeviceStatus: Equatable, Sendable {
     public var profile: String?
     /// A plain message for the menu, such as why the device isn't bridged.
     public var note: String?
+    /// For another port of a known controller (one its profile's `exclude_hints` names, such as the LC6000's WD
+    /// port), that profile's name. Such a port isn't an unsupported controller (#200).
+    public var partOf: String?
 
-    public init(name: String, profile: String?, note: String?) {
+    public init(name: String, profile: String?, note: String?, partOf: String? = nil) {
         self.name = name
         self.profile = profile
         self.note = note
+        self.partOf = partOf
     }
 }
 

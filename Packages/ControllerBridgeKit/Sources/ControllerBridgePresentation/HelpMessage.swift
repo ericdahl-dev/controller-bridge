@@ -62,32 +62,17 @@ public struct HelpMessage: Equatable, Sendable {
         }
     }
 
-    /// Syndicate's subscriptions off, or some LED ones missing on a loaded deck (#150).
+    /// Syndicate's subscriptions off, or some missing on a loaded deck (#150), each named with what it breaks (#211).
     private static func subscriptions(_ state: BridgeState) -> HelpMessage? {
         let place = "Syndicate › Settings › OSC FEEDBACK"
         if case .noDeckData = state.feedback {
-            return HelpMessage(text: "Syndicate isn't sending deck info. In \(place), turn on the subscriptions: \(list(SetupGuide.subscriptions)).",
+            return HelpMessage(text: "Syndicate isn't sending deck info. In \(place), turn on the subscriptions: \(list(state.requiredSubscriptions)).",
                                showsGuide: true)
         }
-        let missing = state.missingSubscriptions.compactMap { value in
-            SetupGuide.subscriptionName(for: value).map { (led: ledName(value), name: $0) }
-        }
+        let missing = state.missingSubscriptions
         guard !missing.isEmpty else { return nil }
-        let leds = list(missing.map(\.led)), names = list(missing.map(\.name))
-        let text = missing.count == 1
-            ? "\(leds.prefix(1).uppercased() + leds.dropFirst()) need the \(names) subscription. Turn it on in \(place)."
-            : "\(leds.prefix(1).uppercased() + leds.dropFirst()) need the \(names) subscriptions. Turn them on in \(place)."
-        return HelpMessage(text: text, showsGuide: true)
-    }
-
-    /// What a subscription lights on the controller.
-    private static func ledName(_ value: String) -> String {
-        switch value {
-        case "playing": "the Play LED"
-        case "cues": "hot cue pad colors"
-        case "sync": "the Sync LED"
-        default: "the loop LEDs"
-        }
+        let each = missing.map { "\($0.name) is off: \($0.breaks)." }.joined(separator: " ")
+        return HelpMessage(text: each + (missing.count == 1 ? " Turn it on in \(place)." : " Turn them on in \(place)."), showsGuide: true)
     }
 
     /// "A, B and C".

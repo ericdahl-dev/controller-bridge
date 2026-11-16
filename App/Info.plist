@@ -28,5 +28,25 @@
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>DeckBridge listens for OSC feedback from Syndicate running on another Mac on your network.</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>DeckBridge controller capture</string>
+			<key>UTTypeIdentifier</key>
+			<string>dev.ericdahl.deckbridge.capture</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>deckbridge-capture</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

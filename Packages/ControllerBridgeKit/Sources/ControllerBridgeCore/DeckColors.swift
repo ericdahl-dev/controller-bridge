@@ -30,11 +30,11 @@ public struct DeckColors: Equatable, Sendable, Codable {
     /// [r, g, b] for a deck, or nil for a deck outside 1-4.
     public subscript(deck: Int) -> [Int]? { rgb[deck] }
 
-    /// The color as the LC6000 shows it, for Settings' preview swatch: the ring's rgb222 velocity, read back as RGB.
-    public static func ledPreview(_ rgb: [Int], mode: RingColors = .exact) -> [Int] {
+    /// The color as the controller shows it, for Settings' preview swatch: the ring's velocity through the running
+    /// profile's color table (#197), read back as RGB.
+    public static func ledPreview(_ rgb: [Int], mode: RingColors = .exact, table: ColorTable = .rgb222) -> [Int] {
         guard rgb.count == 3 else { return [0, 0, 0] }
-        let velocity = Int(mode == .vivid ? vividVelocity(rgb[0], rgb[1], rgb[2]) : rgbToVelocity(rgb[0], rgb[1], rgb[2]))
-        return [velocity >> 4 & 3, velocity >> 2 & 3, velocity & 3].map { $0 * 85 }
+        return table.shown(mode == .vivid ? table.vivid(for: rgb) : table.velocity(for: rgb))
     }
 
     /// Whether the color is black, the one color the LC6000's ring can't show.

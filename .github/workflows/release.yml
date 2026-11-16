@@ -4,10 +4,31 @@ name: Release
 # ShowRecorder ships. Signs with one fixed Apple Distribution certificate and the Mac Installer Distribution
 # certificate (the upload is a signed installer package), so no run creates a certificate. The secrets are org
 # secrets shared with ShowRecorder; see docs/DEVELOPING.md, "Releasing to TestFlight".
-# Pull requests and forks never run this: it only fires on a tag pushed to this repository.
+# After the upload, the distribute job hands the build to testers (#180): What to Test from docs/TESTFLIGHT.md and the
+# "Internal" group. Only a tag whose annotation says [external], or a run by hand with external on, also adds it to the
+# "Syndicate" group and submits it for Beta App Review (#244). A plain tag is internal only. Run the workflow by hand
+# (workflow_dispatch) with a version and build number to distribute a build that's already uploaded, without building
+# it again.
+# Pull requests and forks never run this: it only fires on a tag pushed to this repository, or by hand.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Marketing version of the uploaded build, such as 1.0.1
+        required: true
+      build:
+        description: Its build number, run.attempt, such as 2.1
+        required: true
+      dry_run:
+        description: Read everything and change nothing (prints what it would do)
+        type: boolean
+        default: false
+      external:
+        description: Also send it to the external group and Beta App Review (off means Internal only)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -19,10 +40,14 @@ concurrency:
 jobs:
   testflight:
     name: TestFlight (macOS)
-    if: github.repository == 'ericdahl-dev/controller-bridge'
+    if: github.repository == 'ericdahl-dev/controller-bridge' && github.event_name == 'push'
     # Standard GitHub-hosted runner, as in ci.yml. Avoid -large/-xlarge (always billed).
     runs-on: macos-26
     timeout-minutes: 60
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      build: ${{ steps.tag.outputs.build }}
+      external: ${{ steps.tag.outputs.external }}
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -59,6 +84,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check the tag
+        id: tag
         run: |
           # Only releases from main, so a stray tag on a feature branch can't ship.
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
@@ -69,6 +95,14 @@ jobs:
           # a tag uploads a new, higher build instead of a duplicate.
           echo "MARKETING_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "build=${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+          # External testers only when the annotated tag's message says [external] (#244). Fetch the tag itself so
+          # its annotation is here, not a lightweight copy.
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          external="$(scripts/tag-external.sh "${GITHUB_REF_NAME}")"
+          echo "external=${external}" >> "$GITHUB_OUTPUT"
+          echo "External testers: ${external}"
 
       - name: Show toolchain
         run: |
@@ -195,3 +229,52 @@ jobs:
             ${{ runner.temp }}/archive.log
             ${{ runner.temp }}/upload.log
           retention-days: 14
+
+  distribute:
+    name: Distribute on TestFlight
+    needs: testflight
+    # After a successful upload, or by hand for a build that's already uploaded.
+    if: >-
+      always() && github.repository == 'ericdahl-dev/controller-bridge' &&
+      (github.event_name == 'workflow_dispatch' || needs.testflight.result == 'success')
+    # The API calls need only Python and openssl.
+    runs-on: ubuntu-latest
+    # Processing usually takes 5 to 30 minutes; the script gives up after an hour.
+    timeout-minutes: 75
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      BUNDLE_ID: dev.ericdahl.ControllerBridge
+      VERSION: ${{ inputs.version || needs.testflight.outputs.version }}
+      BUILD_NUMBER: ${{ inputs.build || needs.testflight.outputs.build }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      # Internal only unless asked (#244): [external] in the tag message, or external on when run by hand.
+      EXTERNAL: ${{ (inputs.external || needs.testflight.outputs.external == 'true') && '1' || '' }}
+    steps:
+      - name: Check the version and build number
+        run: |
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::Version '$VERSION' isn't like 1.0.1"; exit 1; }
+          echo "$BUILD_NUMBER" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "::error::Build '$BUILD_NUMBER' isn't like 2.1"; exit 1; }
+          echo "Distributing ${VERSION} (${BUILD_NUMBER}), $([ "$EXTERNAL" = 1 ] && echo 'Internal and external' || echo 'Internal only')"
+
+      - uses: actions/checkout@v4
+
+      - name: Write the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set +x
+          umask 077
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" >> "$GITHUB_ENV"
+
+      # Safe to re-run: each step checks before it changes anything (scripts/testflight_distribute.py).
+      - name: What to Test, groups and Beta App Review
+        run: |
+          set +x
+          python3 -I scripts/testflight_distribute.py
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

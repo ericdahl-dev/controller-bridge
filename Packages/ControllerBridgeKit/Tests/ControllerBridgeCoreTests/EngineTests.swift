@@ -18,6 +18,40 @@ struct EngineTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
     }
 
+    @Test("Profile choices from the pipe reach the Coordinator: a device no profile names runs as the LC6000 (#200)")
+    func profileChoicesFromThePipe() async throws {
+        let mystery = MIDIEndpoint(id: 1006, name: "Mystery DJ 2")
+        let midi = Rig.FakeMIDISystem(sources: [mystery], destinations: [MIDIEndpoint(id: 2006, name: "Mystery DJ 2")])
+        let osc = Rig.FakeOSC(), log = Rig.FakeLog()
+        let coordinator = Coordinator(profiles: try ControllerProfile.bundled(), midi: midi, osc: osc, clock: Rig.FakeClock(), log: log)
+        coordinator.start()
+        let pipe = EventPipe()
+
+        pipe.producer.setProfileChoices(["Mystery DJ 2": "denon-lc6000-prime"])
+        pipe.producer.finish()
+        await Engine(coordinator: coordinator, log: log).run(pipe.events)
+
+        #expect(midi.connected == [mystery.id])
+    }
+
+    @Test("A capture from the pipe pauses the controller, and nil gives it back (#186)")
+    func captureFromThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+
+        pipe.producer.setCapture(source: Rig.lc6000.id)
+        pipe.producer.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        pipe.producer.midi(.noteOff(channel: 0, note: 1, velocity: 0), source: Rig.lc6000.id)
+        pipe.producer.setCapture(source: nil)
+        pipe.producer.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(1)])])
+    }
+
     @Test("A Playing 1 datagram from the pipe is decoded and lights the Play LED full")
     func udpFromThePipeIsDecodedAsFeedback() async throws {
         let rig = try Rig()
@@ -147,7 +181,7 @@ struct EngineTests {
             CoordinatorStatus(
                 controllers: [ControllerStatus(
                     deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true,
-                    lastProfile: "Custom mapping"
+                    lastProfile: "Custom mapping", device: "DENON LC6000 PRIME"
                 )],
                 devices: [DeviceStatus(name: "DENON LC6000 PRIME", profile: "Custom mapping", note: nil)]
             ),
@@ -367,5 +401,24 @@ struct EngineTests {
 
         #expect(seen.values.last?.demo == true)
         #expect(seen.values.last?.controllers.first?.profile == "My LC6000")
+    }
+}
+
+/// The subscription check (#211) judges the DJ's real Syndicate. During the demo the bridge talks to a simulated one,
+/// so the demo's status reports nothing missing.
+@Suite("Demo and the subscription check")
+struct DemoSubscriptionTests {
+    @Test("Demo on, past the Resend answer window: no missing subscriptions, no 'no deck data'")
+    func demoReportsNothingMissing() throws {
+        let rig = try Rig()
+        let demo = EngineTests.demoMaker(rig)(try ControllerProfile.bundled()[0])
+        demo.start()
+        for step in 1...40 {
+            rig.clock.now = Double(step) * 0.1
+            demo.tick()
+        }
+        #expect(demo.status.demo == true)
+        #expect(demo.status.missingSubscriptions == [])
+        #expect(demo.status.noDeckData == false)
     }
 }

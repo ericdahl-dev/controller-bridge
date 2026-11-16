@@ -17,7 +17,7 @@ struct OtherDevicesTests {
     @Test("With no controller connected, the first unmatched device is the orange NO PROFILE row; the rest stay gray")
     func firstIsHighlightedWithoutAController() {
         let devices = OtherDevices(unmatched: ["DDJ-FLX4", "IAC Bus 1"], controllerConnected: false)
-        #expect(devices.highlighted == StatusLight(label: "DDJ-FLX4", word: "NO PROFILE", tone: .attention))
+        #expect(devices.highlighted == StatusLight(label: "DDJ-FLX4", word: "No profile", tone: .attention, kind: .device))
         #expect(devices.summary == "Other MIDI devices (1)")
         #expect(devices.rows == ["IAC Bus 1 · no profile"])
     }
@@ -27,5 +27,34 @@ struct OtherDevicesTests {
         #expect(OtherDevices(unmatched: [], controllerConnected: false) == OtherDevices(unmatched: [], controllerConnected: true))
         let devices = OtherDevices(unmatched: [], controllerConnected: false)
         #expect(devices.highlighted == nil && devices.summary == nil && devices.rows.isEmpty)
+    }
+
+    // MARK: Help add it (#200)
+
+    @Test("The highlighted device gets the offer: it isn't supported yet, Help add it…")
+    func offer() {
+        let devices = OtherDevices(unmatched: ["DDJ-FLX4"], controllerConnected: false)
+        #expect(devices.offer == CaptureOffer(device: "DDJ-FLX4", text: "DDJ-FLX4 isn't supported yet.", action: "Help add it…"))
+        #expect(OtherDevices(unmatched: ["DDJ-FLX4"], controllerConnected: true).offer == nil)
+    }
+
+    @Test("A known controller's other port (the LC6000's WD) is never highlighted or offered: it's listed as part of it")
+    func ownPorts() {
+        let devices = OtherDevices(unmatched: [], ownPorts: [(name: "LC6000 PRIME WD", of: "Denon LC6000 PRIME")], controllerConnected: false)
+        #expect(devices.highlighted == nil)
+        #expect(devices.offer == nil)
+        #expect(devices.summary == "Other MIDI devices (1)")
+        #expect(devices.rows == ["LC6000 PRIME WD · part of the Denon LC6000 PRIME"])
+    }
+
+    @Test("macOS's own virtual ports (IAC Driver, Network sessions) are never taken for the DJ's controller")
+    func virtualPortsAreNotControllers() {
+        let devices = OtherDevices(unmatched: ["IAC Driver Bus 1", "DDJ-FLX4"], controllerConnected: false)
+        #expect(devices.highlighted?.label == "DDJ-FLX4")
+        #expect(devices.rows == ["IAC Driver Bus 1 · no profile"])
+        let virtualOnly = OtherDevices(unmatched: ["IAC Driver Bus 1", "Network Session 1"], controllerConnected: false)
+        #expect(virtualOnly.highlighted == nil)
+        #expect(virtualOnly.offer == nil)
+        #expect(virtualOnly.summary == "Other MIDI devices (2)")
     }
 }

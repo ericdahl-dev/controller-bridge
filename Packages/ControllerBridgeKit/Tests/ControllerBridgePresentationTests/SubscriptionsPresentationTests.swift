@@ -10,33 +10,43 @@ struct SubscriptionsPresentationTests {
     @Test("No deck data: an orange FEEDBACK ● NO DECK DATA light")
     func noDeckDataLight() {
         let status = StatusPresentation(BridgeState(controller: Self.connected, feedback: .noDeckData(port: 9096), deck: 1))
-        #expect(status.lights.contains(StatusLight(label: "FEEDBACK", word: "NO DECK DATA", tone: .attention)))
+        #expect(status.lights.contains(StatusLight(label: "Feedback", word: "No deck data", tone: .attention, kind: .feedback)))
     }
 
-    @Test("No deck data: help names the subscriptions to turn on, and links the guide")
+    /// What the app passes from Core's one list (#211).
+    static let required = Subscription.allCases.map(\.syndicateName)
+
+    static func missing(_ subscriptions: Subscription...) -> [MissingSubscription] {
+        subscriptions.map { MissingSubscription(name: $0.syndicateName, breaks: $0.breaks) }
+    }
+
+    @Test("No deck data: help names the profile's subscriptions to turn on, and links the guide")
     func noDeckDataHelp() {
-        #expect(HelpMessage(BridgeState(controller: Self.connected, feedback: .noDeckData(port: 9096), deck: 1)) == HelpMessage(
+        let state = BridgeState(controller: Self.connected, feedback: .noDeckData(port: 9096), deck: 1,
+                                requiredSubscriptions: Self.required)
+        #expect(HelpMessage(state) == HelpMessage(
             text: "Syndicate isn't sending deck info. In Syndicate › Settings › OSC FEEDBACK, turn on the subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.",
             showsGuide: true
         ))
     }
 
-    @Test("Cues missing on a loaded deck: the light stays LIVE, and help says the pad colors need the Cues subscription")
-    func cuesMissing() {
-        let state = BridgeState(controller: Self.connected, feedback: .live(port: 9096), deck: 1, missingSubscriptions: ["cues"])
-        #expect(StatusPresentation(state).lights.contains(StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live)))
+    @Test("TempoSlider missing (the user's own Syndicate, #211): the light stays LIVE, and help names it and what it breaks")
+    func tempoSliderMissing() {
+        let state = BridgeState(controller: Self.connected, feedback: .live(port: 9096), deck: 1,
+                                missingSubscriptions: Self.missing(.tempoSlider))
+        #expect(StatusPresentation(state).lights.contains(StatusLight(label: "Feedback", word: "Live", tone: .live, kind: .feedback)))
         #expect(HelpMessage(state) == HelpMessage(
-            text: "Hot cue pad colors need the Cues subscription. Turn it on in Syndicate › Settings › OSC FEEDBACK.",
+            text: "TempoSlider/TempoSliderEnabled is off: the pitch fader can jump. Turn it on in Syndicate › Settings › OSC FEEDBACK.",
             showsGuide: true
         ))
     }
 
-    @Test("Several missing: one sentence names each LED and each subscription, in order")
+    @Test("Several missing: each is named with what it breaks, in the guide's order")
     func severalMissing() {
         let state = BridgeState(controller: Self.connected, feedback: .live(port: 9096), deck: 1,
-                                missingSubscriptions: ["playing", "sync", "loop"])
+                                missingSubscriptions: Self.missing(.cues, .loop))
         #expect(HelpMessage(state) == HelpMessage(
-            text: "The Play LED, the Sync LED and the loop LEDs need the Playing, BPM/Sync and Loop subscriptions. Turn them on in Syndicate › Settings › OSC FEEDBACK.",
+            text: "Cues is off: hot cue pads stay dark. Loop is off: the loop LEDs don't follow the deck. Turn them on in Syndicate › Settings › OSC FEEDBACK.",
             showsGuide: true
         ))
     }
@@ -47,9 +57,4 @@ struct SubscriptionsPresentationTests {
         #expect(HelpMessage(state)?.text == "No controller connected. Plug it in over USB; the bridge finds it.")
     }
 
-    @Test("Every LED subscription the bridge checks is named as the setup guide and README name it", arguments: Subscription.allCases)
-    func namesMatchGuide(subscription: Subscription) {
-        let name = SetupGuide.subscriptionName(for: subscription.rawValue)
-        #expect(name.map(SetupGuide.subscriptions.contains) == true, "\(subscription): \(String(describing: name))")
-    }
 }

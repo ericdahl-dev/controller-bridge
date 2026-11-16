@@ -12,10 +12,11 @@ extension Bridge {
     }
 
     private func sendPitch() {
-        let t = tempoSlider(
-            from: join14Bit(msb: pitchMSBValue, lsb: pitchLSBValue),
-            invert: mapping.pitch.invert, deadZone: mapping.pitch.deadZone
-        )
+        let pitch = mapping.pitch
+        // A 7-bit fader is one CC (#195); the LC6000's is an MSB/LSB pair.
+        let t = pitch.bits == 7
+            ? tempoSlider(from7Bit: pitchMSBValue, invert: pitch.invert, deadZone: pitch.deadZone)
+            : tempoSlider(from: join14Bit(msb: pitchMSBValue, lsb: pitchLSBValue), invert: pitch.invert, deadZone: pitch.deadZone)
         let rounded = (t * 100_000).rounded() / 100_000
         // Moving the fader while Syndicate has the slider disabled would queue up a jump.
         guard sliderEnabled, pickedUp(at: rounded) else { return }
@@ -60,8 +61,8 @@ extension Bridge {
 
     /// Dim while the fader waits to be picked up, so it can be caught by feel; otherwise full at the center.
     var pitchCenterVelocity: UInt8 {
-        if mapping.pitch.pickup, pickupArmed, reportedTempo != nil { return Self.dim }
-        return lastTempo == 0 ? Self.full : Self.off
+        if mapping.pitch.pickup, pickupArmed, reportedTempo != nil { return dimLevel }
+        return lastTempo == 0 ? fullLevel : offLevel
     }
 
     func rearmPickup() {
@@ -120,8 +121,19 @@ extension Bridge {
         jog(counts: counts)
     }
 
-    private func jog(counts: Int) {
-        guard counts != 0, platterTouched || !mapping.jog.requireTouch else { return }
+    /// A relative jog's tick on the platter's top (#204), in the profile's encoder format.
+    func jogRelative(_ value: UInt8) {
+        jog(counts: mapping.midi.encoderFormat.ticks(value))
+    }
+
+    /// A relative jog's tick on the platter's edge (#204): it moves without a touch.
+    func jogRelativeEdge(_ value: UInt8) {
+        jog(counts: mapping.midi.encoderFormat.ticks(value), needsTouch: false)
+    }
+
+    private func jog(counts: Int, needsTouch: Bool = true) {
+        guard counts != 0, platterTouched || !mapping.jog.requireTouch || !needsTouch else { return }
+        jogCountsPending += counts
         lastJogTime = clock.now
         if playing {
             let direction = counts > 0 ? 1 : -1

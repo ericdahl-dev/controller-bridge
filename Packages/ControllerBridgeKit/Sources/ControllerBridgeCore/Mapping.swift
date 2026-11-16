@@ -15,6 +15,138 @@ public struct Mapping: Equatable, Sendable, Codable {
     public var browse: Browse
     public var notes: Notes
     public var leds: LEDs
+    /// What the pads play beyond their notes (#196): the roll each pad plays in Roll mode.
+    public var pads: Pads
+
+    enum CodingKeys: String, CodingKey {
+        case midi, osc, deck, jog, pitch, needle, browse, notes, leds, pads
+    }
+
+    /// `pads` may be left out: the LC6000's roll sizes.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        midi = try c.decode(MIDI.self, forKey: .midi)
+        osc = try c.decode(OSC.self, forKey: .osc)
+        deck = try c.decode(Deck.self, forKey: .deck)
+        jog = try c.decode(Jog.self, forKey: .jog)
+        pitch = try c.decode(Pitch.self, forKey: .pitch)
+        needle = try c.decode(Needle.self, forKey: .needle)
+        browse = try c.decode(Browse.self, forKey: .browse)
+        notes = try c.decode(Notes.self, forKey: .notes)
+        leds = try c.decode(LEDs.self, forKey: .leds)
+        pads = try c.decodeIfPresent(Pads.self, forKey: .pads) ?? Pads()
+        if pads.modeSelect == .cycle, notes.buttons["mode_cycle"] == nil {
+            throw ShapeError("pads: mode_select is cycle, but notes has no mode_cycle button")
+        }
+        // Notes per pad mode (#225): one note per pad in every mode.
+        for (name, notes) in pads.modeNotes?.named ?? [] where notes.count != self.notes.pads.count {
+            throw ShapeError("pads.mode_notes.\(name): \(notes.count) notes, but there are \(self.notes.pads.count) pads (notes.pads)")
+        }
+    }
+
+    /// The pads' Roll mode (#196): pad N plays `rollSizes[N - 1]`, by Syndicate's SlipLoop names. A pad past the list
+    /// does nothing in Roll mode.
+    public struct Pads: Equatable, Sendable, Codable {
+        /// Syndicate's slip loop sizes, shortest first.
+        public enum RollSize: String, CaseIterable, Equatable, Sendable, Codable {
+            case thirtySecond = "ThirtySecond", sixteenth = "Sixteenth", eighth = "Eighth", quarter = "Quarter"
+            case half = "Half", one = "One", two = "Two", four = "Four"
+        }
+
+        public var rollSizes: [String]
+        /// The MIDI channel (1-16) the pads use (#224), when not the deck's: the DDJ-400/FLX4's deck 1 pads are on 8.
+        /// Left out (the LC6000), the pads are on the deck's channel.
+        public var channel: Int?
+
+        /// Each pad mode's own notes, one per pad (#225), on controllers whose pads send a different note range per
+        /// mode, as Pioneer's do. Left out (the LC6000), `notes.pads` serves every mode and DeckBridge tracks the mode.
+        public struct ModeNotes: Equatable, Sendable, Codable {
+            public var hotcue: [Int]
+            public var roll: [Int]
+            public var loop: [Int]
+            public var slicer: [Int]
+
+            public init(hotcue: [Int], roll: [Int], loop: [Int], slicer: [Int]) {
+                self.hotcue = hotcue
+                self.roll = roll
+                self.loop = loop
+                self.slicer = slicer
+            }
+            enum CodingKeys: String, CodingKey, CaseIterable { case hotcue, roll, loop, slicer }
+
+            /// All four modes are listed; one left out is named.
+            public init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                func list(_ key: CodingKeys) throws -> [Int] {
+                    guard let notes = try c.decodeIfPresent([Int].self, forKey: key) else {
+                        throw ShapeError("pads.mode_notes: \(key.rawValue) is missing (list all four modes)")
+                    }
+                    return notes
+                }
+                hotcue = try list(.hotcue)
+                roll = try list(.roll)
+                loop = try list(.loop)
+                slicer = try list(.slicer)
+            }
+
+            /// Each mode's list with its name, in mode order.
+            var named: [(String, [Int])] { [("hotcue", hotcue), ("roll", roll), ("loop", loop), ("slicer", slicer)] }
+        }
+
+        public var modeNotes: ModeNotes?
+
+        /// How the pad mode is chosen (#198): the LC6000's four mode buttons, or one button that cycles them.
+        public enum ModeSelect: String, CaseIterable, Equatable, Sendable, Codable {
+            /// `mode_hotcue`, `mode_roll`, `mode_loop` and `mode_slicer`, one per mode.
+            case buttons
+            /// One `mode_cycle` button: Hot Cue → Roll → Loop → Slicer → Hot Cue.
+            case cycle
+        }
+
+        public var modeSelect: ModeSelect
+
+        /// The velocity the `mode_cycle` button's own LED shows in each mode (#198), when it has one: a level or a
+        /// color, as the controller reads it. Left out, DeckBridge leaves that LED alone.
+        public struct ModeVelocities: Equatable, Sendable, Codable {
+            public var hotcue: Int
+            public var roll: Int
+            public var loop: Int
+            public var slicer: Int
+
+            public init(hotcue: Int, roll: Int, loop: Int, slicer: Int) {
+                self.hotcue = hotcue
+                self.roll = roll
+                self.loop = loop
+                self.slicer = slicer
+            }
+        }
+
+        public var modeCycleVelocities: ModeVelocities?
+
+        /// The LC6000's: 1/32 of a beat on pad 1 up to 4 beats on pad 8.
+        public static let lc6000RollSizes = RollSize.allCases.map(\.rawValue)
+
+        public init(rollSizes: [String] = Self.lc6000RollSizes, modeSelect: ModeSelect = .buttons,
+                    modeCycleVelocities: ModeVelocities? = nil) {
+            self.rollSizes = rollSizes
+            self.modeSelect = modeSelect
+            self.modeCycleVelocities = modeCycleVelocities
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case rollSizes = "roll_sizes", channel, modeNotes = "mode_notes"
+            case modeSelect = "mode_select", modeCycleVelocities = "mode_cycle_velocities"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? Self.lc6000RollSizes
+            modeSelect = try c.decodeIfPresent(ModeSelect.self, forKey: .modeSelect) ?? .buttons
+            modeCycleVelocities = try c.decodeIfPresent(ModeVelocities.self, forKey: .modeCycleVelocities)
+            channel = try c.decodeIfPresent(Int.self, forKey: .channel)
+            modeNotes = try c.decodeIfPresent(ModeNotes.self, forKey: .modeNotes)
+        }
+    }
 
     public struct MIDI: Equatable, Sendable, Codable {
         public var input: String
@@ -29,15 +161,19 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var layers: [Layer]
         /// The note the controller sends on a layer's channel as it becomes active (127) or inactive (0).
         public var layerNote: Int?
+        /// How the relative encoders write a turn (#193): two's complement, the LC6000's, unless the profile says.
+        public var encoderFormat: EncoderFormat
 
         enum CodingKeys: String, CodingKey {
             case input, output, channel, layers
             case ignoreNotes = "ignore_notes"
             case layerNote = "layer_note"
+            case encoderFormat = "encoder_format"
         }
 
         public init(
-            input: String, output: String, channel: Int, ignoreNotes: [Int] = [], layers: [Layer] = [], layerNote: Int? = nil
+            input: String, output: String, channel: Int, ignoreNotes: [Int] = [], layers: [Layer] = [], layerNote: Int? = nil,
+            encoderFormat: EncoderFormat = .twosComplement
         ) {
             self.input = input
             self.output = output
@@ -45,9 +181,11 @@ public struct Mapping: Equatable, Sendable, Codable {
             self.ignoreNotes = ignoreNotes
             self.layers = layers
             self.layerNote = layerNote
+            self.encoderFormat = encoderFormat
         }
 
-        /// `ignore_notes`, `layers` and `layer_note` may be left out: nothing ignored, no layers.
+        /// `ignore_notes`, `layers`, `layer_note` and `encoder_format` may be left out: nothing ignored, no layers, two's
+        /// complement.
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             input = try container.decode(String.self, forKey: .input)
@@ -56,6 +194,7 @@ public struct Mapping: Equatable, Sendable, Codable {
             ignoreNotes = try container.decodeIfPresent([Int].self, forKey: .ignoreNotes) ?? []
             layers = try container.decodeIfPresent([Layer].self, forKey: .layers) ?? []
             layerNote = try container.decodeIfPresent(Int.self, forKey: .layerNote)
+            encoderFormat = try container.decodeIfPresent(EncoderFormat.self, forKey: .encoderFormat) ?? .twosComplement
         }
     }
 
@@ -63,10 +202,18 @@ public struct Mapping: Equatable, Sendable, Codable {
     public struct Layer: Equatable, Sendable, Codable {
         public var channel: Int
         public var deck: Int
+        /// The channel this layer's pads use (#224), when not `channel`: the DDJ-400/FLX4's deck 2 pads are on 10.
+        public var padChannel: Int?
 
-        public init(channel: Int, deck: Int) {
+        enum CodingKeys: String, CodingKey {
+            case channel, deck
+            case padChannel = "pad_channel"
+        }
+
+        public init(channel: Int, deck: Int, padChannel: Int? = nil) {
             self.channel = channel
             self.deck = deck
+            self.padChannel = padChannel
         }
     }
 
@@ -111,12 +258,26 @@ public struct Mapping: Equatable, Sendable, Codable {
         public init(number: Int) { self.number = number }
     }
 
-    /// The jog wheel as a 14-bit platter position that counts up going forward and wraps at 16384 (#103). Movement
-    /// is the change in position, scaled per platter revolution.
+    /// The jog wheel. The LC6000's sends a 14-bit platter position that counts up going forward and wraps at 16384
+    /// (#103): movement is the change in position. A relative jog (#204) sends ticks on one CC instead, in the
+    /// profile's encoder format. Either way movement is scaled per platter revolution.
     public struct Jog: Equatable, Sendable, Codable {
-        public var msbCC: Int
-        public var lsbCC: Int
-        /// Position counts in one full platter turn: about 3552 measured on the LC6000 (#103), so 3600.
+        /// How the platter reports movement.
+        public enum Mode: Equatable, Sendable {
+            case absolute(msbCC: Int, lsbCC: Int)
+            /// Ticks on `cc` (the platter's top). `edgeCC`, if the controller has one, is the platter's edge, which
+            /// moves without a touch.
+            case relative(cc: Int, edgeCC: Int?)
+        }
+
+        public var msbCC: Int?
+        public var lsbCC: Int?
+        /// A relative jog's CC (#204). When set, the jog is relative and the 14-bit pair may be left out.
+        public var relativeCC: Int?
+        /// A relative jog's edge CC, which needs no touch (#204).
+        public var relativeEdgeCC: Int?
+        /// Counts in one full platter turn: about 3552 position counts measured on the LC6000 (#103), so 3600. For a
+        /// relative jog, ticks per turn.
         public var countsPerRev: Int
         public var bendReleaseMs: Int
         /// While paused, how far one platter turn moves the playhead.
@@ -125,9 +286,16 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var beatsPerRev: Double
         public var requireTouch: Bool
 
+        public var mode: Mode {
+            if let relativeCC { return .relative(cc: relativeCC, edgeCC: relativeEdgeCC) }
+            return .absolute(msbCC: msbCC ?? 0, lsbCC: lsbCC ?? 0)
+        }
+
         enum CodingKeys: String, CodingKey {
             case msbCC = "msb_cc"
             case lsbCC = "lsb_cc"
+            case relativeCC = "relative_cc"
+            case relativeEdgeCC = "relative_edge_cc"
             case countsPerRev = "counts_per_rev"
             case bendReleaseMs = "bend_release_ms"
             case seekSecondsPerRev = "seek_seconds_per_rev"
@@ -135,12 +303,35 @@ public struct Mapping: Equatable, Sendable, Codable {
             case requireTouch = "require_touch"
         }
 
+        /// A jog needs its 14-bit pair or a relative CC; either is enough (#204).
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            msbCC = try c.decodeIfPresent(Int.self, forKey: .msbCC)
+            lsbCC = try c.decodeIfPresent(Int.self, forKey: .lsbCC)
+            relativeCC = try c.decodeIfPresent(Int.self, forKey: .relativeCC)
+            relativeEdgeCC = try c.decodeIfPresent(Int.self, forKey: .relativeEdgeCC)
+            countsPerRev = try c.decode(Int.self, forKey: .countsPerRev)
+            bendReleaseMs = try c.decode(Int.self, forKey: .bendReleaseMs)
+            seekSecondsPerRev = try c.decode(Double.self, forKey: .seekSecondsPerRev)
+            beatsPerRev = try c.decode(Double.self, forKey: .beatsPerRev)
+            requireTouch = try c.decode(Bool.self, forKey: .requireTouch)
+            guard relativeCC == nil else { return }
+            switch (msbCC, lsbCC) {
+            case (nil, nil): throw JogError.needsPairOrRelative
+            case (nil, _): throw JogError.missing("msb_cc")
+            case (_, nil): throw JogError.missing("lsb_cc")
+            default: break
+            }
+        }
+
         public init(
-            msbCC: Int, lsbCC: Int, countsPerRev: Int, bendReleaseMs: Int, seekSecondsPerRev: Double, beatsPerRev: Double,
-            requireTouch: Bool
+            msbCC: Int?, lsbCC: Int?, countsPerRev: Int, bendReleaseMs: Int, seekSecondsPerRev: Double, beatsPerRev: Double,
+            requireTouch: Bool, relativeCC: Int? = nil, relativeEdgeCC: Int? = nil
         ) {
             self.msbCC = msbCC
             self.lsbCC = lsbCC
+            self.relativeCC = relativeCC
+            self.relativeEdgeCC = relativeEdgeCC
             self.countsPerRev = countsPerRev
             self.bendReleaseMs = bendReleaseMs
             self.seekSecondsPerRev = seekSecondsPerRev
@@ -149,9 +340,31 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
     }
 
+    /// A jog that can't tell how the platter reports movement (#204), in plain words.
+    /// A profile body whose shape the decoder can't use (#195), in the words the DJ sees.
+    public struct ShapeError: Error, Equatable, CustomStringConvertible {
+        public let description: String
+        public init(_ description: String) { self.description = description }
+    }
+
+    public enum JogError: Error, Equatable, CustomStringConvertible {
+        case needsPairOrRelative
+        case missing(String)
+
+        public var description: String {
+            switch self {
+            case .needsPairOrRelative: "jog: needs msb_cc and lsb_cc, or relative_cc"
+            case .missing(let key): "jog: \(key) is missing (or set relative_cc for a relative jog)"
+            }
+        }
+    }
+
     public struct Pitch: Equatable, Sendable, Codable {
+        /// 14 for an MSB/LSB pair (the LC6000), or 7 for one CC, `msbCC` (#195).
+        public var bits: Int
         public var msbCC: Int
-        public var lsbCC: Int
+        /// The pair's LSB; a 7-bit fader has none.
+        public var lsbCC: Int?
         public var invert: Bool
         public var deadZone: Double
         /// After a load or an outside tempo change, ignore the fader until it meets Syndicate's slider (#22).
@@ -160,6 +373,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var pickupTolerance: Double
 
         enum CodingKeys: String, CodingKey {
+            case bits
             case msbCC = "msb_cc"
             case lsbCC = "lsb_cc"
             case invert
@@ -168,7 +382,10 @@ public struct Mapping: Equatable, Sendable, Codable {
             case pickupTolerance = "pickup_tolerance"
         }
 
-        public init(msbCC: Int, lsbCC: Int, invert: Bool, deadZone: Double, pickup: Bool, pickupTolerance: Double) {
+        public init(
+            msbCC: Int, lsbCC: Int?, invert: Bool, deadZone: Double, pickup: Bool, pickupTolerance: Double, bits: Int = 14
+        ) {
+            self.bits = bits
             self.msbCC = msbCC
             self.lsbCC = lsbCC
             self.invert = invert
@@ -178,14 +395,17 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
 
         /// `pickup` and `pickup_tolerance` may be left out of a profile or mapping file: they default to on and 0.02.
+        /// `bits` defaults to 14; a 7-bit fader may leave out `lsb_cc` (#195).
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            bits = try container.decodeIfPresent(Int.self, forKey: .bits) ?? 14
             msbCC = try container.decode(Int.self, forKey: .msbCC)
-            lsbCC = try container.decode(Int.self, forKey: .lsbCC)
+            lsbCC = try container.decodeIfPresent(Int.self, forKey: .lsbCC)
             invert = try container.decode(Bool.self, forKey: .invert)
             deadZone = try container.decode(Double.self, forKey: .deadZone)
             pickup = try container.decodeIfPresent(Bool.self, forKey: .pickup) ?? true
             pickupTolerance = try container.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? 0.02
+            if bits == 14, lsbCC == nil { throw ShapeError("pitch: lsb_cc is missing (or set bits to 7)") }
         }
     }
 
@@ -230,10 +450,14 @@ public struct Mapping: Equatable, Sendable, Codable {
     public struct Notes: Equatable, Sendable, Codable {
         public var buttons: [String: Int]
         public var pads: [Int]
+        /// Shift done in hardware (#226): the note a button sends with Shift held. Empty on the LC6000, whose Shift
+        /// the app works out itself; a button not named here keeps the app's Shift.
+        public var shifted: [String: Int]
 
-        public init(buttons: [String: Int], pads: [Int]) {
+        public init(buttons: [String: Int], pads: [Int], shifted: [String: Int] = [:]) {
             self.buttons = buttons
             self.pads = pads
+            self.shifted = shifted
         }
 
         private struct Key: CodingKey {
@@ -246,8 +470,9 @@ public struct Mapping: Equatable, Sendable, Codable {
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: Key.self)
             pads = try container.decode([Int].self, forKey: Key(stringValue: "pads"))
+            shifted = try container.decodeIfPresent([String: Int].self, forKey: Key(stringValue: "shifted")) ?? [:]
             buttons = [:]
-            for key in container.allKeys where key.stringValue != "pads" {
+            for key in container.allKeys where !["pads", "shifted"].contains(key.stringValue) {
                 buttons[key.stringValue] = try container.decode(Int.self, forKey: key)
             }
         }
@@ -256,6 +481,8 @@ public struct Mapping: Equatable, Sendable, Codable {
             var container = encoder.container(keyedBy: Key.self)
             for (name, note) in buttons { try container.encode(note, forKey: Key(stringValue: name)) }
             try container.encode(pads, forKey: Key(stringValue: "pads"))
+            // Only when named, so a profile without hardware Shift (the LC6000) saves as before.
+            if !shifted.isEmpty { try container.encode(shifted, forKey: Key(stringValue: "shifted")) }
         }
     }
 
@@ -275,6 +502,12 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var pulseMs: Int
         /// What Syndicate's LEDs show once feedback has stopped: dim, or off.
         public var staleIdle: StaleIdle
+        /// The velocities a button LED takes for full, dim and off (#194).
+        public var levels: LEDLevels
+        /// How a pad or ring color becomes a velocity (#197): the LC6000's rgb222 unless a profile lists its own.
+        public var colorTable: ColorTable
+        /// Light a button's shifted note (#226) with the button's own state, on a controller where it has its own LED.
+        public var mirrorShifted: Bool
 
         public enum BeatPulse: String, Equatable, Sendable, Codable, CaseIterable {
             case off, beat, downbeat
@@ -295,12 +528,20 @@ public struct Mapping: Equatable, Sendable, Codable {
             case beatPulse = "beat_pulse"
             case pulseMs = "pulse_ms"
             case staleIdle = "stale_idle"
+            case levels
+            case colorTable = "color_table"
+            case mirrorShifted = "mirror_shifted"
         }
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
-            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true
+            beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000,
+            colorTable: ColorTable = .rgb222,
+            mirrorShifted: Bool = false
         ) {
+            self.levels = levels
+            self.colorTable = colorTable
+            self.mirrorShifted = mirrorShifted
             self.ringFollowsDeck = ringFollowsDeck
             self.pitchCenter = pitchCenter
             self.ring = ring
@@ -324,9 +565,36 @@ public struct Mapping: Equatable, Sendable, Codable {
                 dimUnlitButtons: try c.decode(Bool.self, forKey: .dimUnlitButtons),
                 beatPulse: try c.decode(BeatPulse.self, forKey: .beatPulse), pulseMs: try c.decode(Int.self, forKey: .pulseMs),
                 staleIdle: try c.decode(StaleIdle.self, forKey: .staleIdle),
-                ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true
+                ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true,
+                levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000,
+                colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? .rgb222,
+                mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? false
             )
         }
+    }
+
+    /// A button LED's velocity for full, dim and off (#194). Each member may be left out: the LC6000's 127, 1 and 0.
+    public struct LEDLevels: Equatable, Sendable, Codable {
+        public var full: Int
+        public var dim: Int
+        public var off: Int
+
+        public static let lc6000 = LEDLevels(full: 127, dim: 1, off: 0)
+
+        public init(full: Int, dim: Int, off: Int) {
+            self.full = full
+            self.dim = dim
+            self.off = off
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            full = try c.decodeIfPresent(Int.self, forKey: .full) ?? Self.lc6000.full
+            dim = try c.decodeIfPresent(Int.self, forKey: .dim) ?? Self.lc6000.dim
+            off = try c.decodeIfPresent(Int.self, forKey: .off) ?? Self.lc6000.off
+        }
+
+        enum CodingKeys: String, CodingKey { case full, dim, off }
     }
 
     /// The mapping that ships with the app.
@@ -335,12 +603,16 @@ public struct Mapping: Equatable, Sendable, Codable {
     }
 
     /// A whole mapping body, through the full check (#24) first: every problem at once, or the decoded mapping.
-    static func checked(_ json: Data, schema: OrderedJSON? = nil) throws -> Mapping {
+    static func checked(_ json: Data, schema: OrderedJSON? = nil, whole: Bool = false) throws -> Mapping {
         let problems: [String]
-        do { problems = Self.problems(in: try OrderedJSON(parsing: json), schema: schema) } catch { problems = ["\(error)"] }
+        do { problems = Self.problems(in: try OrderedJSON(parsing: json), schema: schema, whole: whole) } catch { problems = ["\(error)"] }
         guard problems.isEmpty else { throw MappingError.invalid(problems) }
         do {
             return try JSONDecoder().decode(Mapping.self, from: json)
+        } catch let error as JogError {
+            throw MappingError.invalid([error.description])
+        } catch let error as ShapeError {
+            throw MappingError.invalid([error.description])
         } catch let error as DecodingError {
             // The check runs first, so this shouldn't happen; if it does, the DJ still gets words, not a dump (#92).
             throw MappingError.invalid([Self.describe(error)])

@@ -2,7 +2,9 @@
 // Renders the panel in a few states to PNGs, for PR screenshots: `ControllerBridge --render-snapshots <name>`.
 // The app is sandboxed, so the PNGs go to <container tmp>/<name>; the path is printed. Compiled out of Release.
 import AppKit
+import ControllerBridgeCapture
 import ControllerBridgeCore
+import ControllerBridgeRender
 import ControllerBridgePresentation
 import SwiftUI
 
@@ -11,13 +13,18 @@ enum Snapshots {
     /// SNAPSHOT_APPEARANCE=light renders the light theme (#127); dark by default.
     static let scheme: ColorScheme = ProcessInfo.processInfo.environment["SNAPSHOT_APPEARANCE"] == "light" ? .light : .dark
 
+    static let fonts = ["Geist-Regular", "Geist-Medium", "Geist-SemiBold", "Geist-Bold", "GeistMono-Regular", "GeistMono-Medium", "GeistMono-SemiBold"]
+    static var missingFonts: Bool { fonts.contains { NSFont(name: $0, size: 12) == nil } }
+
     static func render(to name: String) {
         // Theme colors resolve against the app's appearance, so set it to match.
         NSApplication.shared.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(name).path
-        for font in ["Inter-Regular", "Inter-SemiBold", "Inter-Bold", "IBMPlexMono", "IBMPlexMono-Medm", "IBMPlexMono-SmBld"] {
+        for font in fonts {
             print("\(font): \(NSFont(name: font, size: 12) == nil ? "MISSING" : "ok")")
         }
+        // A missing font would render in the system font and look almost right: stop instead (#171).
+        if missingFonts { print("A bundled font is missing; no snapshots."); exit(1) }
         let states: [(String, (BridgeStatus) -> Void)] = [
             ("layers", {
                 // The LC6000 following its own layers (#79), switched to layer 2.
@@ -46,6 +53,13 @@ enum Snapshots {
                 $0.syndicateFeedback = .live
                 $0.missingSubscriptions = [.cues]
             }),
+            // The user's own Syndicate had TempoSlider off (#211): named, with what it breaks.
+            ("feedback-tempo-slider-missing", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.missingSubscriptions = [.tempoSlider, .cues]
+            }),
             // Syndicate stopped answering (#21): DROPPED, and the last dropout under the lights.
             ("feedback-dropped", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
@@ -70,6 +84,16 @@ enum Snapshots {
                 $0.devices = [
                     DeviceStatus(name: "DDJ-FLX4", profile: nil, note: "No controller profile matches DDJ-FLX4, so it isn't bridged."),
                     DeviceStatus(name: "IAC Bus 1", profile: nil, note: nil),
+                ]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
+            // The LC6000 and its WD port (#200): the WD is listed as part of it, never offered for capture.
+            ("connected-wd", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", device: "LC6000 PRIME")]
+                $0.devices = [
+                    DeviceStatus(name: "LC6000 PRIME", profile: "Denon LC6000 PRIME", note: nil),
+                    DeviceStatus(name: "LC6000 PRIME WD", profile: nil, note: nil, partOf: "Denon LC6000 PRIME"),
                 ]
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
@@ -112,6 +136,18 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
+            // The longest status lines (#66, #171): the budget must still fit them in natural case.
+            ("four-controllers", {
+                $0.bridges = (1...4).map { ControllerStatus(deck: $0, connected: true, profile: "Denon LC6000 PRIME") }
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
+            ("demo-master", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", master: true)]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.demo = true
+            }),
             ("starting-deck4", { $0.deck = 4 }),
             ("many-lights", {
                 $0.bridges = [ControllerStatus(deck: 2, connected: true, profile: "Denon LC6000 PRIME", master: true)]
@@ -131,6 +167,27 @@ enum Snapshots {
             print("Couldn't create \(directory): \(error)"); return
         }
         write(buttonStates, to: "\(directory)/buttons.png")
+        write(siteStyles, to: "\(directory)/site-styles.png")
+        // The jog display's image (#165), design B, upright, 198×198, for review before any hardware send. The deck
+        // colors are the designer's sample ones; the app uses Syndicate's.
+        let daybreak = JogDisplayContent(deck: 1, color: [255, 49, 93], title: "Daybreak", artist: "Bill Hamel, Jeremus", key: "A#m",
+                                         bpm: 128, playerType: "track")
+        let ten = JogDisplayContent(deck: 4, color: [148, 92, 255], title: "Ten (Original Club Mix)",
+                                    artist: "Mark Knight, Underworld, Sander Van Doorn", key: "A#m", bpm: 128, playerType: "track")
+        let clip = JogDisplayContent(deck: 2, color: [255, 194, 71], playerType: "osc")
+        let emptyDeck = JogDisplayContent(deck: 3, color: [32, 224, 196])
+        let cases: [(String, JogDisplayContent, Int?, Double?)] = [
+            ("deck1-track", daybreak, nil, nil), ("deck4-long-title", ten, nil, nil), ("deck2-osc-clip", clip, nil, nil),
+            ("deck3-empty", emptyDeck, nil, nil),
+            // As the simulator would show the unit: beat 2 lit and the marker at 126°.
+            ("deck4-beat2-marker-simulated", ten, 2, 126.0 / 360),
+        ]
+        for (name, content, beat, marker) in cases {
+            let rgba = JogDisplayRenderer.render(content, litBeat: beat, marker: marker)
+            let png = JogImage.png(rgba: rgba, width: JogImage.size, height: JogImage.size)
+            do { try Data(png).write(to: URL(fileURLWithPath: "\(directory)/jog-display-\(name).png")) } catch { print("Couldn't write: \(error)") }
+        }
+        write(siteStyles.environment(\.forcesIncreasedContrast, true), to: "\(directory)/site-styles-increased-contrast.png")
         for (name, configure) in states {
             let status = BridgeStatus()
             configure(status)
@@ -146,15 +203,37 @@ enum Snapshots {
             }
             write(icons(status.presentation.icon), to: "\(directory)/icon-\(name).png")
         }
-        // Settings (#68), through an NSHostingView: ImageRenderer can't draw its AppKit controls.
+        // Settings (#68), through an NSHostingView: ImageRenderer can't draw its AppKit controls. One PNG per tab (#171):
+        // a hosting view can't draw the Settings window's toolbar, so each pane renders on its own with its footer.
         let defaults = BridgeSettings.defaults(from: try! ControllerProfile.bundled()[0].mapping)
-        writeAppKit(SettingsView(model: BridgeModel(preview: defaults)), to: "\(directory)/settings.png")
+        for tab in SettingsTab.allCases {
+            let name = tab.title.lowercased()
+            writeAppKit(SettingsView(model: BridgeModel(preview: defaults), snapshotTab: tab), to: "\(directory)/settings-\(name).png")
+        }
         var two = defaults
         two.controllers.append(ControllerSettings(deck: 3, input: nil, output: nil))
-        writeAppKit(SettingsView(model: BridgeModel(preview: two)), to: "\(directory)/settings-two-controllers.png")
+        writeAppKit(SettingsView(model: BridgeModel(preview: two), snapshotTab: .controller),
+                    to: "\(directory)/settings-controller-two-controllers.png")
+        // Four controllers in a window as tall as a 13-inch screen allows: the pane scrolls and the footer stays pinned
+        // (#177). Shown at its end by offsetting the pane: a hosting view outside a window can't scroll.
+        var four = defaults
+        for deck in 2...4 { four.controllers.append(ControllerSettings(deck: deck, input: nil, output: nil)) }
+        writeAppKit(SettingsView(model: BridgeModel(preview: four), snapshotTab: .controller, room: 760, scrolledToEnd: true),
+                    to: "\(directory)/settings-controller-four-controllers-end.png")
+        // A refused Apply: the field errors on the Syndicate tab, and the footer naming each problem's tab.
+        var bad = defaults
+        bad.syndicateHost = ""
+        writeAppKit(SettingsView(model: BridgeModel(preview: bad), snapshotTab: .syndicate, problems: bad.fieldProblems),
+                    to: "\(directory)/settings-syndicate-refused.png")
+        // The Controller picker (#200) for an unsupported device, and with nothing connected.
+        let unsupported = BridgeModel(preview: defaults)
+        unsupported.status.bridges = [ControllerStatus(deck: 1, connected: false)]
+        unsupported.status.devices = [DeviceStatus(name: "DDJ-FLX4", profile: nil, note: nil)]
+        writeAppKit(SettingsView(model: unsupported, snapshotTab: .controller), to: "\(directory)/settings-controller-unsupported.png")
         let stopped = BridgeModel(preview: nil)
         stopped.status.problem = "Couldn't start CoreMIDI"
         writeAppKit(SettingsView(model: stopped), to: "\(directory)/settings-stopped.png")
+        captureSnapshots(directory)
         // The Diagnostics window (#26), with lines as the Kit formats them.
         let log = DiagnosticsLog()
         let monitor: [MIDIEvent] = [
@@ -184,13 +263,42 @@ enum Snapshots {
                 log: log, status: connected, sweeping: tab == .sweep, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
                 hiddenNotes: [52], tab: tab, scrolls: false
             )
-            write(window.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name).png")
+            // Through AppKit: the filter field and the pickers (#218) are AppKit controls.
+            writeAppKit(window.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name).png", width: 720)
             let blank = DiagnosticsWindow(
                 log: empty, status: BridgeStatus(), sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
                 tab: tab, scrolls: false
             )
-            write(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png")
+            writeAppKit(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png", width: 720)
         }
+        // The Jog display tab (#221): deck 1 playing on beat 2 with its upload accepted, deck 2 paused and refused.
+        let jog = JogSimulatorLog()
+        let at = Date(timeIntervalSinceReferenceDate: 784_000_000)
+        jog.apply(.connected, at: at)
+        jog.apply(.uploadStarted(slot: 2, content: JogDisplayContent(deck: 2, color: [255, 255, 0], title: "Night Drive",
+                                                                    artist: "Coastal", key: "Fm", bpm: 124, playerType: "track"),
+                                 bytes: 9_406), at: at)
+        jog.apply(.failed(refusal: 3), at: at)
+        jog.apply(.uploadStarted(slot: 1, content: JogDisplayContent(deck: 1, color: [255, 0, 0], title: "Daybreak",
+                                                                    artist: "Untitled", key: "A#m", bpm: 128, playerType: "track"),
+                                 bytes: 14_812), at: at)
+        jog.apply(.shown(slot: 1), at: at)
+        jog.apply(.playLight(true), at: at)
+        jog.apply(.marker(pitchBend: 6_000), at: at)
+        let jogWindow = DiagnosticsWindow(
+            log: log, status: connected, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            jogSimulator: jog, tab: .jog, scrolls: false
+        )
+        writeAppKit(jogWindow.frame(width: 720, height: 460), to: "\(directory)/diagnostics-jog-display-live.png", width: 720)
+        // The OSC log filtered to deck 1, received only, and paused (#218).
+        log.deck = 1
+        log.direction = .received
+        log.togglePause()
+        let filtered = DiagnosticsWindow(
+            log: log, status: connected, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            tab: .osc, scrolls: false
+        )
+        writeAppKit(filtered.frame(width: 720, height: 460), to: "\(directory)/diagnostics-osc-log-filtered.png", width: 720)
     }
 
     /// The shared button styles (#67): normal, selected (bar + heavier text) and keyboard focus (ring).
@@ -208,6 +316,35 @@ enum Snapshots {
         .background(Theme.panel)
     }
 
+    /// The site's components (#171): pills normal, focused and disabled, a segmented control, a chip on a card.
+    private static var siteStyles: some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x4) {
+            HStack(spacing: Theme.Step.x2) {
+                Button("Done: feedback live") {}.buttonStyle(PillButtonStyle(kind: .primary))
+                Button("Settings…") {}.buttonStyle(PillButtonStyle())
+                Button("Quit") {}.buttonStyle(PillButtonStyle(kind: .quiet))
+            }
+            HStack(spacing: Theme.Step.x3) {
+                Button("Focused") {}.buttonStyle({ var style = PillButtonStyle(kind: .primary); style.showsFocusForSnapshot = true; return style }())
+                Button("Focused") {}.buttonStyle({ var style = PillButtonStyle(); style.showsFocusForSnapshot = true; return style }())
+                Button("Apply") {}.buttonStyle(PillButtonStyle(kind: .primary)).disabled(true)
+            }
+            SegmentedPills(options: ["MIDI Monitor", "LED Sweep", "OSC Log"], title: { $0 }, selection: .constant("MIDI Monitor"))
+            VStack(alignment: .leading, spacing: Theme.Step.x2) {
+                Text("Controller").font(Theme.labelFont).foregroundStyle(Theme.caption)
+                HStack {
+                    ToneChip(word: "UNMAPPED", tone: .attention, spoken: "Unmapped")
+                    Spacer()
+                }
+            }
+            .padding(Theme.Step.x3)
+            .card()
+        }
+        .padding(Theme.Step.x6)
+        .frame(width: 400)
+        .background(Theme.panel)
+    }
+
     private static func icons(_ state: IconState) -> some View {
         // The template icon on a light and a dark menu bar.
         HStack(spacing: 0) {
@@ -218,14 +355,14 @@ enum Snapshots {
         }
     }
 
-    /// Renders through a hosting view's display cache, which draws AppKit-backed controls (pickers, text fields).
-    private static func writeAppKit(_ view: some View, to path: String) {
+    /// Through AppKit, so AppKit-backed controls (a text field, a menu picker) draw, which ImageRenderer can't.
+    private static func writeAppKit(_ view: some View, to path: String, width: CGFloat = 440) {
         let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme))
         host.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         // Lay out tall first, so the fitting height is the whole form, then shrink to it.
-        host.frame = NSRect(x: 0, y: 0, width: 440, height: 2000)
+        host.frame = NSRect(x: 0, y: 0, width: width, height: 2000)
         host.layoutSubtreeIfNeeded()
-        host.frame = NSRect(origin: .zero, size: NSSize(width: 440, height: host.fittingSize.height))
+        host.frame = NSRect(origin: .zero, size: NSSize(width: width, height: host.fittingSize.height))
         host.layoutSubtreeIfNeeded()
         guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { print("Couldn't render \(path)"); return }
         host.cacheDisplay(in: host.bounds, to: rep)
@@ -242,6 +379,65 @@ enum Snapshots {
             print("Couldn't render \(path)"); return
         }
         do { try png.write(to: URL(fileURLWithPath: path)); print("Wrote \(path)") } catch { print("Couldn't write \(path): \(error)") }
+    }
+
+    // MARK: The capture window (#186), its states on the demo controller's traffic
+
+    private static func captureSnapshots(_ directory: String) {
+        let lc6000 = MIDIEndpoint(id: 1001, name: "LC6000 PRIME")
+        let choices = [
+            CaptureController.Choice(name: lc6000.name, endpoint: lc6000),
+            CaptureController.Choice(name: "LC6000 PRIME WD", endpoint: MIDIEndpoint(id: 1002, name: "LC6000 PRIME WD")),
+            CaptureController.Choice(name: DemoCapture.deviceName, endpoint: nil),
+        ]
+        let shots: [(String, CaptureController)] = [
+            ("ports", CaptureController(flow: CaptureFlow(appVersion: "1.2.0"), now: 0, choices: choices, picked: choices[0])),
+            ("idle", CaptureController(flow: captureFlow(at: "idle", fed: false), now: 2.2)),
+            ("waiting", CaptureController(flow: captureFlow(at: "deck1.play", fed: false), now: 1e6)),
+            ("jog", CaptureController(flow: captureFlow(at: "deck1.jog.touch", fed: true), now: 1e6)),
+            ("shift", CaptureController(flow: captureFlow(at: "deck1.play.shift", fed: true), now: 1e6)),
+            // Unplugged mid-step (#229): the banner, with End capture.
+            ("disconnected", {
+                var flow = captureFlow(at: "deck1.jog.touch", fed: true)
+                flow.disconnected(at: 1e6)
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
+            ("ended-early", {
+                var flow = captureFlow(at: "deck1.jog.touch", fed: true)
+                flow.endCapture(at: 1e6)
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
+            ("done", CaptureController(flow: captureFlow(at: nil, fed: true), now: 1e6)),
+            ("done-note", {
+                var flow = captureFlow(at: nil, fed: true)
+                flow.note = "Firmware 1.3"
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
+        ]
+        for (name, controller) in shots {
+            writeAppKit(CaptureView(controller: controller), to: "\(directory)/capture-\(name).png", width: 480)
+        }
+    }
+
+    /// The standard list on demo traffic, a step every 10 s from 0, stopped at the prompt `id` (fed its take or not),
+    /// or walked to the end when `id` is nil.
+    private static func captureFlow(at id: String?, fed: Bool) -> CaptureFlow {
+        var flow = CaptureFlow(appVersion: "1.2.0")
+        flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: 0)
+        var now = 0.0
+        while let prompt = flow.prompt {
+            let stop = prompt.id == id
+            if !stop || fed {
+                for message in DemoCapture.take(for: prompt) { flow.receive(message.bytes, at: now + 1 + message.time) }
+            }
+            if stop {
+                flow.tick(at: now + 9)
+                break
+            }
+            now += 10
+            flow.next(at: now)
+        }
+        return flow
     }
 }
 

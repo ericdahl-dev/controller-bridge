@@ -1,3 +1,4 @@
+import ControllerBridgeCore
 import ControllerBridgePresentation
 import Foundation
 import Testing
@@ -5,9 +6,12 @@ import Testing
 /// The first-run guide's steps, in Syndicate's own setting names (#27). Generic: the controller is named by its profile.
 @Suite("Setup guide")
 struct SetupGuideTests {
+    /// Core's one list (#211), as the app passes it.
+    static let subscriptions = Subscription.allCases.map(\.syndicateName)
+
     @Test("Four steps in Syndicate's words: OSC input, feedback destination, subscriptions, and the controller's MIDI input off")
     func steps() {
-        let guide = SetupGuide(controller: "Denon LC6000 PRIME", oscPort: 9090, feedbackPort: 9096)
+        let guide = SetupGuide(controller: "Denon LC6000 PRIME", oscPort: 9090, feedbackPort: 9096, subscriptions: Self.subscriptions)
         #expect(guide.steps.map(\.title) == [
             "Settings → OSC",
             "Settings → OSC FEEDBACK",
@@ -24,7 +28,7 @@ struct SetupGuideTests {
 
     @Test("With no profile yet, the MIDI step says \"your controller\" and names no device")
     func genericController() {
-        let guide = SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096)
+        let guide = SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096, subscriptions: Self.subscriptions)
         #expect(guide.steps.last?.detail.hasPrefix("Turn your controller's MIDI input off.") == true)
     }
 
@@ -33,7 +37,7 @@ struct SetupGuideTests {
         // Tests/ControllerBridgePresentationTests/ → repo root.
         let readme = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../README.md")
         let text = try String(contentsOf: readme, encoding: .utf8)
-        let subscriptions = SetupGuide.subscriptions.dropLast().joined(separator: ", ") + " and " + SetupGuide.subscriptions.last!
+        let subscriptions = Self.subscriptions.dropLast().joined(separator: ", ") + " and " + Self.subscriptions.last!
         #expect(text.contains("Turn on these subscriptions: \(subscriptions)."))
         #expect(text.contains("turn your controller's MIDI input **off**"))
     }
@@ -47,7 +51,7 @@ struct SetupGuideTests {
 
     @Test("Step 3 lists the subscriptions as a checklist, and no step says \"Tick\" (#68)")
     func subscriptionsChecklist() {
-        let guide = SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096)
+        let guide = SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096, subscriptions: Self.subscriptions)
         #expect(guide.steps[2].checklist == [
             "Playing", "PlayPending", "Loaded and TrackInfo", "Position/Progress", "TempoSlider/TempoSliderEnabled", "Cues",
             "BPM/Sync", "Loop",
@@ -58,7 +62,7 @@ struct SetupGuideTests {
 
     @Test("The ports come from settings, not literals (#68)")
     func portsFromSettings() {
-        let guide = SetupGuide(controller: nil, oscPort: 8000, feedbackPort: 8001)
+        let guide = SetupGuide(controller: nil, oscPort: 8000, feedbackPort: 8001, subscriptions: Self.subscriptions)
         #expect(guide.steps[0].detail == "Turn OSC INPUT ENABLED on. The listen port is 8000.")
         #expect(guide.steps[1].detail == "Set DEST IP to 127.0.0.1 and PORT to 8001.")
     }
@@ -72,10 +76,10 @@ struct SetupGuideTests {
 
     @Test("The guide warns that other DJ apps can switch the controller's MIDI mode, in the README's words")
     func otherAppsNote() throws {
-        #expect(SetupGuide(controller: "Denon LC6000 PRIME", oscPort: 9090, feedbackPort: 9096).otherAppsNote
+        #expect(SetupGuide(controller: "Denon LC6000 PRIME", oscPort: 9090, feedbackPort: 9096, subscriptions: Self.subscriptions).otherAppsNote
             == "Quit djay Pro, Engine DJ or any other app using Denon LC6000 PRIME first, and power-cycle Denon LC6000 PRIME if one was open: they can switch its MIDI mode until it restarts.")
         let readme = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../README.md")
         let text = try String(contentsOf: readme, encoding: .utf8)
-        #expect(text.contains(SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096).otherAppsNote))
+        #expect(text.contains(SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096, subscriptions: Self.subscriptions).otherAppsNote))
     }
 }

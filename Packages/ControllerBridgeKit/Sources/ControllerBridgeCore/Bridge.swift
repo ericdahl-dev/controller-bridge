@@ -2,8 +2,7 @@
 ///
 /// Controls are added in extensions (one file per group), each registering its buttons in `buttonHandlers`.
 final class Bridge {
-    static let full: UInt8 = 127
-    static let dim: UInt8 = 1
+    /// A pad or the ring with no color. Button LEDs take the profile's levels instead (#194).
     static let off: UInt8 = 0
 
     /// Button handlers by mapping note name. Each is called with `pressed` on every press and release.
@@ -24,6 +23,7 @@ final class Bridge {
             "mode_roll": { $0.padModeButton(.roll) },
             "mode_loop": { $0.padModeButton(.loop) },
             "mode_slicer": { $0.padModeButton(.slicer) },
+            "mode_cycle": { $0.padModeCycle },
             "platter_touch": { $0.platterTouch },
             // Browse, loops and jumps (Bridge+Browse.swift).
             "track_prev": { $0.trackPrevious },
@@ -52,6 +52,8 @@ final class Bridge {
             "pitch_lsb": { $0.pitchLSB },
             "jog_msb": { $0.jogMSB },
             "jog_lsb": { $0.jogLSB },
+            "jog_relative": { $0.jogRelative },
+            "jog_relative_edge": { $0.jogRelativeEdge },
             "needle_msb": { $0.needleMSB },
             "needle_lsb": { $0.needleLSB },
         ]
@@ -70,6 +72,8 @@ final class Bridge {
     let channel: UInt8
     /// Button names by note, from the mapping.
     private let buttonNames: [Int: String]
+    /// Shift done in hardware (#226): each shifted note's button.
+    private let shiftedNames: [Int: String]
     /// CC names by number: "jog", "pitch_msb", "pitch_lsb", "needle", "select_turn" and "auto_loop_size".
     private let ccNames: [Int: String]
 
@@ -118,6 +122,10 @@ final class Bridge {
     /// The jog's and the Needle Drop's last MSB, and the platter's last position, for 14-bit pairs (#103).
     var jogMSBValue: UInt8 = 0
     var jogPosition: Int?
+    /// The loaded track's TrackInfo, for the jog display (#165): nil when nothing is loaded.
+    var track: (title: String, artist: String, key: String, bpm: Double, playerType: String)?
+    /// Platter counts moved since the Coordinator last read them, for the jog display's marker (#165).
+    var jogCountsPending = 0
     var needleMSBValue: UInt8 = 0
 
     // Syndicate's state, from feedback.
@@ -137,12 +145,17 @@ final class Bridge {
     /// An LED sweep (#26) owns the controller's LEDs.
     var ledsHeld = false
     /// Each hot cue's color slot, 0 for an empty cue.
-    var cues = [Int](repeating: 0, count: 8)
+    lazy var cues = [Int](repeating: 0, count: mapping.notes.pads.count)
     /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
     var palette = Bridge.defaultPalette
 
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
+    /// The same for pad LEDs on the pads' own channel (#224), kept apart: a pad's note can be a button's on another
+    /// channel.
+    private var padLEDCache: [Int: UInt8] = [:]
+    /// The pads' MIDI channel, 0-15 (#224): the deck's unless the profile gives the pads their own.
+    let padChannel: UInt8
     /// Settings' LEDs switch (#19). While off, nothing is sent to the controller's LEDs.
     private(set) var ledsEnabled = true
 
@@ -153,12 +166,21 @@ final class Bridge {
         root = "/" + mapping.osc.root.trimmingSlashes() + "/"
         // A loaded mapping's channel is checked to be 1-16; clamping keeps a hand-built one from trapping.
         channel = UInt8(clamping: mapping.midi.channel - 1)
+        padChannel = UInt8(clamping: (mapping.pads.channel ?? mapping.midi.channel) - 1)
         buttonNames = Dictionary(mapping.notes.buttons.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
+        shiftedNames = Dictionary(mapping.notes.shifted.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         var ccNames: [Int: String] = [:]
-        ccNames[mapping.jog.msbCC] = "jog_msb"
-        ccNames[mapping.jog.lsbCC] = "jog_lsb"
+        switch mapping.jog.mode {
+        case .absolute(let msb, let lsb):
+            ccNames[msb] = "jog_msb"
+            ccNames[lsb] = "jog_lsb"
+        case .relative(let cc, let edge):
+            ccNames[cc] = "jog_relative"
+            if let edge { ccNames[edge] = "jog_relative_edge" }
+        }
         ccNames[mapping.pitch.msbCC] = "pitch_msb"
-        ccNames[mapping.pitch.lsbCC] = "pitch_lsb"
+        // A 7-bit fader has no LSB, even if a merged mapping still names one (#195).
+        if mapping.pitch.bits == 14, let lsb = mapping.pitch.lsbCC { ccNames[lsb] = "pitch_lsb" }
         ccNames[mapping.needle.msbCC] = "needle_msb"
         ccNames[mapping.needle.lsbCC] = "needle_lsb"
         ccNames[mapping.browse.selectTurnCC] = "select_turn"
@@ -174,6 +196,7 @@ final class Bridge {
         layerShown = true
         rearmPickup()
         ledCache.removeAll()
+        padLEDCache.removeAll()
         refreshLEDs()
     }
 
@@ -182,12 +205,28 @@ final class Bridge {
         feedbackStale = stale
         rearmPickup()
         ledCache.removeAll()
+        padLEDCache.removeAll()
         refreshLEDs()
     }
 
     // MARK: MIDI in
 
     func handle(_ event: MIDIEvent) {
+        // Pads on their own channel (#224) play only there; on the deck's channel they're handled with the other notes.
+        if padChannel != channel {
+            switch event {
+            case .noteOn(padChannel, let note, let velocity):
+                _ = padNote(Int(note), pressed: velocity > 0)
+                return
+            case .noteOff(padChannel, let note, _):
+                _ = padNote(Int(note), pressed: false)
+                return
+            case .noteOn(channel, let note, _), .noteOff(channel, let note, _):
+                if pad(for: Int(note)) != nil { return }
+            default:
+                break
+            }
+        }
         switch event {
         case .noteOn(let channel, let note, let velocity) where channel == self.channel:
             handleNote(Int(note), pressed: velocity > 0)
@@ -201,9 +240,20 @@ final class Bridge {
     }
 
     private func handleNote(_ note: Int, pressed: Bool) {
-        if let pad = mapping.notes.pads.firstIndex(of: note) { return handlePad(pad, pressed: pressed) }
+        if padNote(note, pressed: pressed) { return }
         if note == mapping.needle.touchNote {
             needleTouched = pressed
+            return
+        }
+        // A shifted note (#226) is its button with Shift held, for that press or release only; Shift then goes back to
+        // what it was (a handler may clear it, and the app's own Shift may be held).
+        if let name = shiftedNames[note], let handler = Self.buttonHandlers[name] {
+            let wasShifted = shift
+            shift = true
+            handler(self)(pressed)
+            shift = wasShifted
+            // A handler that repainted while Shift was set lit the Shift LED; paint it back (cached, so cheap).
+            refreshLEDs()
             return
         }
         guard let name = buttonNames[note], let handler = Self.buttonHandlers[name] else { return }
@@ -241,21 +291,29 @@ final class Bridge {
             if loaded { rearmPickup() }
             if !loaded {
                 // The track is gone: forget its cues, where it was and how long it was.
-                cues = [Int](repeating: 0, count: 8)
+                cues = [Int](repeating: 0, count: mapping.notes.pads.count)
                 progress = nil
                 duration = nil
+                track = nil
             }
         case "sync": synced = value
         case "temposliderenabled":
             if value != sliderEnabled { rearmPickup() }
             sliderEnabled = value
         case "loop": looping = value
-        case "cues": cues = Self.cueSlots(message.arguments)
+        case "cues": cues = Self.cueSlots(message.arguments, pads: mapping.notes.pads.count)
         case "trackinfo":
             // Title, artist, key, BPM, length in seconds, …: only the length is used, for jog seeking.
             guard message.arguments.count >= 5 else { return }
             let length = message.arguments[4].number ?? 0
             duration = length > 0 ? length : nil
+            // <title> <artist> <key> <bpm> <length> <bars> <beats> <player_type> (the #165 capture): by argument,
+            // never by splitting text, since titles and artists hold spaces and commas.
+            func text(_ index: Int) -> String {
+                if message.arguments.indices.contains(index), case .string(let value) = message.arguments[index] { return value }
+                return ""
+            }
+            track = (text(0), text(1), text(2), message.arguments[3].number ?? 0, text(7))
             return
         case "progress":
             progress = message.arguments.first?.number
@@ -275,22 +333,34 @@ final class Bridge {
         led(mapping.leds.pitchCenter, pitchCenterVelocity)
     }
 
+    /// A button LED's full, dim and off velocities, from the profile (#194).
+    var fullLevel: UInt8 { UInt8(clamping: mapping.leds.levels.full) }
+    var dimLevel: UInt8 { UInt8(clamping: mapping.leds.levels.dim) }
+    var offLevel: UInt8 { UInt8(clamping: mapping.leds.levels.off) }
+
     func buttonLED(_ name: String, on: Bool) {
         guard let note = mapping.notes.buttons[name] else { return }
-        var idle = mapping.leds.dimUnlitButtons ? Self.dim : Self.off
-        if feedbackStale, Self.syndicateButtons.contains(name), mapping.leds.staleIdle == .off { idle = Self.off }
-        led(note, on ? Self.full : idle)
+        var idle = mapping.leds.dimUnlitButtons ? dimLevel : offLevel
+        if feedbackStale, Self.syndicateButtons.contains(name), mapping.leds.staleIdle == .off { idle = offLevel }
+        led(note, on ? fullLevel : idle)
+        // Its shifted note's LED (#226), when the profile mirrors it.
+        if mapping.leds.mirrorShifted, let shifted = mapping.notes.shifted[name] { led(shifted, on ? fullLevel : idle) }
     }
 
     /// An LED write for the LED sweep (#26): straight to the controller, past the cache.
     func sweepLED(_ note: Int, _ velocity: UInt8) {
         guard let output else { return }
-        do { try output.send(.noteOn(channel: channel, note: UInt8(note), velocity: velocity)) } catch { outputFailed = true }
+        // A pad's note goes to the pads' own channel (#224); the sweep only sends pad notes in its color pass.
+        let onPads = mapping.pads.channel != nil && mapping.notes.pads.contains(note)
+        do { try output.send(.noteOn(channel: onPads ? padChannel : channel, note: UInt8(note), velocity: velocity)) } catch {
+            outputFailed = true
+        }
     }
 
     /// Clears the LED cache and repaints every LED from the current state, as after an LED sweep.
     func repaintLEDs() {
         ledCache.removeAll()
+        padLEDCache.removeAll()
         refreshLEDs()
     }
 
@@ -301,9 +371,18 @@ final class Bridge {
         if enabled {
             ledsEnabled = true
             ledCache.removeAll()
+            padLEDCache.removeAll()
             refreshLEDs()
         } else {
-            for (note, velocity) in ledCache.sorted(by: { $0.key < $1.key }) where velocity != Self.off { led(note, Self.off) }
+            // A button goes to the profile's off (#194); a pad or the ring to no color.
+            let colorNotes = Set(mapping.notes.pads + [mapping.leds.ring] + [PadMode.hotCue, .roll, .loop, .slicer].flatMap(padNotes))
+            for (note, velocity) in ledCache.sorted(by: { $0.key < $1.key }) {
+                let off = colorNotes.contains(note) ? Self.off : offLevel
+                if velocity != off { led(note, off) }
+            }
+            for (note, velocity) in padLEDCache.sorted(by: { $0.key < $1.key }) where velocity != Self.off {
+                padLED(note, Self.off)
+            }
             ledsEnabled = false
         }
     }
@@ -329,6 +408,15 @@ final class Bridge {
         }
     }
 
+    /// A pad's LED (#224): on the pads' own channel when the profile gives one, else like any other LED.
+    func padLED(_ note: Int, _ velocity: UInt8) {
+        guard mapping.pads.channel != nil else { return led(note, velocity) }
+        guard !ledsHeld, ledsEnabled, layerShown, padLEDCache[note] != velocity else { return }
+        padLEDCache[note] = velocity
+        guard let output else { return }
+        do { try output.send(.noteOn(channel: padChannel, note: UInt8(note), velocity: velocity)) } catch { outputFailed = true }
+    }
+
     // MARK: OSC out
 
     /// The full address of a path on this Bridge's deck, such as `/Syndicate/Deck/1/PlayPause`.
@@ -350,7 +438,7 @@ final class Bridge {
     }
 }
 
-private extension OSCArgument {
+extension OSCArgument {
     /// Feedback flags arrive as an int or a float; anything nonzero is on.
     var number: Double? {
         switch self {

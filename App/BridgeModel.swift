@@ -26,6 +26,8 @@ final class BridgeStatus {
     var noDeckData = false
     /// LED subscriptions a loaded deck's answer lacked (#150).
     var missingSubscriptions: [Subscription] = []
+    /// What the controllers' profiles need, for the setup guide (#211).
+    var requiredSubscriptions: [Subscription] = Subscription.allCases
     /// The last time Syndicate's feedback stopped, for the menu.
     var lastDropout: String?
     /// When feedback last dropped, as the time to show ("21:14"), stamped as it happens (#66).
@@ -59,6 +61,8 @@ final class BridgeModel {
     let status = BridgeStatus()
     /// What the Diagnostics window shows (#26).
     let diagnostics = DiagnosticsLog()
+    /// What Diagnostics › Jog display shows (#221).
+    let jogSimulator = JogSimulatorLog()
     private var listener: FeedbackListener?
     private var ticker: Ticker?
     private var midi: CoreMIDISystem?
@@ -100,8 +104,15 @@ final class BridgeModel {
     func setDiagnostics(open: Bool) { producer?.diagnostics(open: open) }
     func startLEDSweep(delay: Double) { producer?.ledSweep(delay: delay) }
     func stopLEDSweep() { producer?.stopLEDSweep() }
+    /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
+    func setJogPreviewDeck(_ deck: Int?) { producer?.setJogPreviewDeck(deck) }
     /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.
     func setDemo(_ on: Bool) { producer?.demo(on: on) }
+    /// The device the capture window should preselect when it next opens (#200).
+    var captureDevice: String?
+
+    /// Pauses (a source) or gives back (nil) a controller while the capture window records it (#186).
+    func setCapture(source: MIDIEndpoint.ID?) { producer?.setCapture(source: source) }
 
     /// The panel's deck picker (#66): only that controller's deck changes, through the same path as Settings, so a
     /// held control is released on the old deck first.
@@ -212,6 +223,8 @@ final class BridgeModel {
             producer.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors)
         }
         if new.ringColors != old.ringColors { producer.setRingColors(new.ringColors) }
+        if new.profileChoices != old.profileChoices { producer.setProfileChoices(new.profileChoices) }
+        if new.jogDisplay != old.jogDisplay { producer.setJogDisplay(enabled: new.jogDisplay) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
 
@@ -260,6 +273,7 @@ final class BridgeModel {
         let pipe = EventPipe()
         let status = status
         let diagnostics = diagnostics
+        let jogSimulator = jogSimulator
 
         do {
             midi = try CoreMIDISystem(producer: pipe.producer) { names in
@@ -291,18 +305,22 @@ final class BridgeModel {
         ticker = Ticker(producer: pipe.producer)
         observeSleep(pipe.producer)
         let midi = midi!
+        let jogDisplay = try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)
         // The entries the Coordinator starts with: the saved ones, a controller following its layers as one per layer
         // (#79). It starts straight on them (#105), so nothing is sent after start to correct it.
         let running = ControllerSettings.expanded(settings.controllers, layers: layers)
         engine = Task.detached(name: "Bridge engine") {
             await BridgeHost.run(
                 profiles: profiles, midi: midi, osc: osc, log: log, status: status, diagnostics: diagnostics,
-                controllers: running, ledsEnabled: settings.ledsEnabled, events: pipe.events
+                jogSimulator: jogSimulator, controllers: running, ledsEnabled: settings.ledsEnabled, jogDisplay: jogDisplay, events: pipe.events
             )
         }
         // The saved deck colors (#123), queued behind the Coordinator's start.
         pipe.producer.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors)
         pipe.producer.setRingColors(settings.ringColors)
+        // Profiles chosen by hand (#200): a device only they name connects now.
+        pipe.producer.setProfileChoices(settings.profileChoices)
+        pipe.producer.setJogDisplay(enabled: settings.jogDisplay)
 
     }
 
