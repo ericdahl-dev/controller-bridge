@@ -102,7 +102,8 @@ struct CaptionValue: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(caption.uppercased()).font(Theme.captionFont).foregroundStyle(Theme.caption)
+            // Natural case in, uppercase on screen: VoiceOver reads words, not letters (#67).
+            Text(caption).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
             Text(value).font(Theme.data(15)).foregroundStyle(Theme.text)
         }
         .accessibilityElement(children: .combine)
@@ -115,7 +116,7 @@ struct StatusLightView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(light.label.uppercased()).font(Theme.captionFont).foregroundStyle(Theme.caption)
+            Text(light.label).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
             HStack(spacing: 5) {
                 Circle().fill(Color(light.tone.color)).frame(width: 7, height: 7)
                 // A word never breaks mid-word; the panel lays lights out in a grid instead.
@@ -123,7 +124,8 @@ struct StatusLightView: View {
                     .lineLimit(1).fixedSize()
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(light.spoken)
     }
 }
 
@@ -142,6 +144,9 @@ struct StatusLineView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Theme.background)
+            // One sentence line for VoiceOver, with no "black circle" or "middle dot" (#67).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(presentation.spokenLine)
     }
 
     private var styledLine: Text {
@@ -210,6 +215,30 @@ struct FlatButtonStyle: ButtonStyle {
                 .contentShape(Rectangle())
                 .onHover { hovering = $0 }
                 .accessibilityAddTraits(selected ? .isSelected : [])
+        }
+    }
+}
+
+/// A caption-sized text control (Quit, Copy details, a disclosure): it keeps the look it's given, and adds the focus
+/// ring and a hover lift (#67).
+struct CaptionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Quiet(configuration: configuration)
+    }
+
+    private struct Quiet: View {
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isFocused) private var focused
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .opacity(configuration.isPressed ? 0.7 : 1)
+                .brightness(hovering ? 0.15 : 0)
+                .padding(.horizontal, Theme.Space.xs)
+                .focusRing(focused, shape: RoundedRectangle(cornerRadius: Theme.corner))
+                .contentShape(Rectangle())
+                .onHover { hovering = $0 }
         }
     }
 }
