@@ -216,6 +216,7 @@ final class BridgeModel {
             producer.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors)
         }
         if new.ringColors != old.ringColors { producer.setRingColors(new.ringColors) }
+        if new.jogDisplay != old.jogDisplay { producer.setJogDisplay(enabled: new.jogDisplay) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
 
@@ -295,18 +296,20 @@ final class BridgeModel {
         ticker = Ticker(producer: pipe.producer)
         observeSleep(pipe.producer)
         let midi = midi!
+        let jogDisplay = try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)
         // The entries the Coordinator starts with: the saved ones, a controller following its layers as one per layer
         // (#79). It starts straight on them (#105), so nothing is sent after start to correct it.
         let running = ControllerSettings.expanded(settings.controllers, layers: layers)
         engine = Task.detached(name: "Bridge engine") {
             await BridgeHost.run(
                 profiles: profiles, midi: midi, osc: osc, log: log, status: status, diagnostics: diagnostics,
-                controllers: running, ledsEnabled: settings.ledsEnabled, events: pipe.events
+                controllers: running, ledsEnabled: settings.ledsEnabled, jogDisplay: jogDisplay, events: pipe.events
             )
         }
         // The saved deck colors (#123), queued behind the Coordinator's start.
         pipe.producer.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors)
         pipe.producer.setRingColors(settings.ringColors)
+        pipe.producer.setJogDisplay(enabled: settings.jogDisplay)
 
     }
 

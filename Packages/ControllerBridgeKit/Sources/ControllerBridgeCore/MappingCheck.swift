@@ -207,6 +207,12 @@ extension Mapping {
     private static let optionalKeys: [String: OrderedJSON] = [
         "jog.relative_cc": .number(0, isInteger: true),
         "jog.relative_edge_cc": .number(0, isInteger: true),
+        // One cycling pad-mode button (#198): its note, and its LED's velocity per mode.
+        "notes.mode_cycle": .number(0, isInteger: true),
+        "pads.mode_cycle_velocities": .object([
+            ("hotcue", .number(0, isInteger: true)), ("roll", .number(0, isInteger: true)),
+            ("loop", .number(0, isInteger: true)), ("slicer", .number(0, isInteger: true)),
+        ]),
         // The pads' own MIDI channel (#224), for the deck and for each deck layer.
         "pads.channel": .number(0, isInteger: true),
         "midi.layers[].pad_channel": .number(0, isInteger: true),
@@ -242,6 +248,8 @@ extension Mapping {
             "leds.pitch_center": 0...127, "leds.ring": 0...127,
             "leds.levels.full": 0...127, "leds.levels.dim": 0...127, "leds.levels.off": 0...127,
             "leds.color_table[].rgb[]": 0...255, "leds.color_table[].value": 0...127,
+            "pads.mode_cycle_velocities.hotcue": 0...127, "pads.mode_cycle_velocities.roll": 0...127,
+            "pads.mode_cycle_velocities.loop": 0...127, "pads.mode_cycle_velocities.slicer": 0...127,
             "jog.counts_per_rev": 1...16384, "jog.beats_per_rev": 1...16, "jog.seek_seconds_per_rev": 0...60,
             // Every other number, so no imported value can be absurd (#92).
             "osc.port": 1...65535, "osc.feedback_port": 1...65535,
@@ -264,6 +272,7 @@ extension Mapping {
         "leds.beat_pulse": LEDs.BeatPulse.allRawValues,
         "leds.stale_idle": LEDs.StaleIdle.allRawValues,
         "pads.roll_sizes[]": Pads.RollSize.allRawValues,
+        "pads.mode_select": Pads.ModeSelect.allRawValues,
         "midi.encoder_format": EncoderFormat.allRawValues,
         "leds.color_table": ["rgb222"],
     ]

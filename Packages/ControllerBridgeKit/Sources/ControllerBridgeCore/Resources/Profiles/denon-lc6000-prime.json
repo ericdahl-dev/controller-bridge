@@ -131,7 +131,8 @@
       "color_table": "rgb222"
     },
     "pads": {
-      "roll_sizes": ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]
+      "roll_sizes": ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"],
+      "mode_select": "buttons"
     }
   }
 }

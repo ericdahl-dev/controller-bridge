@@ -18,7 +18,43 @@ struct JogDisplayCoordinatorTests {
             shown.contents.append(content)
             return [UInt8(content.deck), 0, 0, 255]
         })
+        rig.coordinator.setJogDisplay(enabled: true)
         return (port, shown)
+    }
+
+    @Test("Off by default: attached, through a start, a layer change, a load, playing and ticks, nothing goes to either port")
+    func offByDefault() throws {
+        let rig = try Rig()
+        let port = Port()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1) { _ in [0, 0, 0, 255] })
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
+        ))
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(1)]))
+        for step in 1...20 { rig.clock.now = Double(step) * 0.05; rig.coordinator.tick() }
+        #expect(port.controller == [])
+        #expect(port.wd == [])
+    }
+
+    @Test("Turned off while showing: goodbye, then nothing more; on again: hello")
+    func turnOff() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        rig.coordinator.start()
+        port.controller.removeAll()
+        rig.coordinator.setJogDisplay(enabled: false)
+        #expect(port.controller == [JogDisplay.goodbye])
+        port.wd.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.clock.now = 1
+        rig.coordinator.tick()
+        #expect(port.wd == [])
+        rig.coordinator.setJogDisplay(enabled: true)
+        #expect(port.controller == [JogDisplay.goodbye] + JogDisplay.hello)
     }
 
     /// Answers the upload in flight: every ack, then the commit.
@@ -161,5 +197,98 @@ struct JogMarkerCoordinatorTests {
         Self.tick(rig, at: 0.5)
         Self.tick(rig, at: 1.0)
         #expect(Self.lights(port) == [[0x90, 0x01, 0x7F], [0x90, 0x01, 0x00], [0x90, 0x01, 0x7F]])
+    }
+}
+
+/// What the display shows comes from Syndicate's TrackInfo (#165): title, artist, key, BPM and player type, from the
+/// real capture's argument order <title> <artist> <key> <bpm> <length> <bars> <beats> <player_type>. Redrawn only when
+/// it changes.
+@Suite("Jog display content")
+struct JogDisplayContentTests {
+    static func trackInfo(deck: Int = 1, title: String = "Daybreak", key: String = "A#m", bpm: Float = 128) -> OSCMessage {
+        OSCMessage("/Syndicate/Deck/\(deck)/TrackInfo", [
+            .string(title), .string("Bill Hamel, Jeremus"), .string(key), .float(bpm), .float(428.5), .int(229), .int(914), .string("track"),
+        ])
+    }
+
+    static let daybreak = JogDisplayContent(deck: 1, color: [255, 0, 0], title: "Daybreak", artist: "Bill Hamel, Jeremus",
+                                            key: "A#m", bpm: 128, playerType: "track")
+
+    @Test("A loaded track's TrackInfo shows its title, artist, key, BPM and player type")
+    func trackInfo() throws {
+        let rig = try Rig()
+        let (port, shown) = JogDisplayCoordinatorTests.attach(rig)
+        rig.coordinator.start()
+        JogDisplayCoordinatorTests.answer(rig, port)
+        rig.coordinator.feedback(Self.trackInfo())
+        #expect(shown.contents.last == Self.daybreak)
+    }
+
+    @Test("The same TrackInfo again draws nothing new; a key change redraws")
+    func onlyOnChange() throws {
+        let rig = try Rig()
+        let (port, shown) = JogDisplayCoordinatorTests.attach(rig)
+        rig.coordinator.start()
+        JogDisplayCoordinatorTests.answer(rig, port)
+        rig.coordinator.feedback(Self.trackInfo())
+        JogDisplayCoordinatorTests.answer(rig, port)
+        let drawn = shown.contents.count
+        rig.coordinator.feedback(Self.trackInfo())
+        rig.coordinator.tick()
+        #expect(shown.contents.count == drawn)
+        rig.coordinator.feedback(Self.trackInfo(key: "Bm"))
+        #expect(shown.contents.last?.key == "Bm")
+    }
+
+    @Test("Another deck's TrackInfo doesn't change what deck 1's display shows")
+    func otherDeck() throws {
+        let rig = try Rig()
+        let (port, shown) = JogDisplayCoordinatorTests.attach(rig)
+        rig.coordinator.start()
+        JogDisplayCoordinatorTests.answer(rig, port)
+        rig.coordinator.feedback(Self.trackInfo(deck: 2))
+        #expect(shown.contents == [JogDisplayContent(deck: 1, color: [255, 0, 0])])
+    }
+}
+
+/// The jog display's switch and the unit's answers come through the pipe, in order with everything else (#165).
+@Suite("Jog display through the pipe")
+struct JogDisplayPipeTests {
+    @Test("setJogDisplay(enabled: true) from the pipe says hello; a reply from the pipe reaches the driver")
+    func throughThePipe() async throws {
+        let rig = try Rig()
+        let port = JogDisplayDriverTests.FakePort()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1) { _ in [0, 0, 0, 255] })
+        rig.coordinator.start()
+        let pipe = EventPipe()
+        pipe.producer.setJogDisplay(enabled: true)
+        pipe.producer.jogDisplayReply(JogDisplayDriverTests.refused)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        #expect(port.controller == JogDisplay.hello)
+        #expect(rig.log.lines.contains("The jog display refused the image (ack 06); it keeps what it showed"))
+    }
+}
+
+/// Settings' "Show the deck on the jog display" (#165): off by default and in settings saved before it, and rebased
+/// like the other switches.
+@Suite("Jog display setting")
+struct JogDisplaySettingTests {
+    @Test("Off by default, and off in settings saved before it")
+    func offByDefault() throws {
+        let defaults = BridgeSettings.defaults(from: try Mapping.bundledDefault())
+        #expect(defaults.jogDisplay == false)
+        var saved = try JSONSerialization.jsonObject(with: JSONEncoder().encode(defaults)) as! [String: Any]
+        saved["jogDisplay"] = nil
+        let old = try JSONDecoder().decode(BridgeSettings.self, from: JSONSerialization.data(withJSONObject: saved))
+        #expect(old.jogDisplay == false)
+    }
+
+    @Test("A draft that turned it on keeps it on across a rebase")
+    func rebased() throws {
+        let base = BridgeSettings.defaults(from: try Mapping.bundledDefault())
+        var draft = base
+        draft.jogDisplay = true
+        #expect(BridgeSettings.rebased(draft: draft, base: base, onto: base).jogDisplay == true)
     }
 }
