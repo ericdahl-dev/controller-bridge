@@ -60,4 +60,20 @@ struct CaptureSessionTests {
         #expect(file.prompts == Self.prompts)
         #expect(file.note == "Firmware 1.3")
     }
+
+    @Test("LED answers belong to the current step: kept on confirm, thrown away with a redo")
+    func ledAnswers() {
+        var session = Self.session()
+        session.receive([0x90, 0x01, 0x7F], at: 0)
+        session.answerLED(LEDAnswer(sent: [0x90, 0x01, 0x30], lit: true, color: "green"))
+        session.redo()
+        session.receive([0x90, 0x01, 0x7F], at: 1)
+        session.answerLED(LEDAnswer(sent: [0x90, 0x01, 0x30], lit: true, color: "red"))
+        session.answerLED(LEDAnswer(sent: [0x90, 0x01, 0x00], lit: false))
+        session.confirm()
+        #expect(session.file.steps.first?.leds == [
+            LEDAnswer(sent: [0x90, 0x01, 0x30], lit: true, color: "red"),
+            LEDAnswer(sent: [0x90, 0x01, 0x00], lit: false),
+        ])
+    }
 }

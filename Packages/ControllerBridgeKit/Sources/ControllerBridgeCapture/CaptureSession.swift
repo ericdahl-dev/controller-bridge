@@ -15,9 +15,10 @@ public struct CaptureSession: Sendable {
     private typealias Take = [(time: Double, bytes: [UInt8])]
 
     private var index = 0
-    private var finished: [(prompt: CapturePrompt, status: StepStatus, take: Take)] = []
+    private var finished: [(prompt: CapturePrompt, status: StepStatus, take: Take, leds: [LEDAnswer])] = []
     /// The current take: each message with the host time it arrived, in seconds.
     private var take: Take = []
+    private var leds: [LEDAnswer] = []
 
     public init(appVersion: String, device: String, ports: CapturePorts, prompts: [CapturePrompt]) {
         self.appVersion = appVersion
@@ -41,15 +42,26 @@ public struct CaptureSession: Sendable {
         take.append((time, bytes))
     }
 
+    /// The owner's answer to one LED probe message during the current step. The probe itself (what's safe to send)
+    /// lives in the app; the session only keeps the answers.
+    public mutating func answerLED(_ answer: LEDAnswer) {
+        guard current != nil else { return }
+        leds.append(answer)
+    }
+
     /// Keeps the current take and moves to the next prompt.
     public mutating func confirm() { finish(.confirmed) }
 
     /// Throws the current take away and listens again.
-    public mutating func redo() { take = [] }
+    public mutating func redo() {
+        take = []
+        leds = []
+    }
 
     /// Records the prompt as skipped, with nothing captured, and moves on.
     public mutating func skip() {
         take = []
+        leds = []
         finish(.skipped)
     }
 
@@ -58,7 +70,9 @@ public struct CaptureSession: Sendable {
         let noise = idleNoise + repeatedNoise.filter { !idleNoise.contains($0) }
         var steps: [CaptureStep] = []
         for recorded in finished {
-            steps.append(step(recorded.prompt, recorded.status, recorded.take, noise: Set(noise), before: steps))
+            var recordedStep = step(recorded.prompt, recorded.status, recorded.take, noise: Set(noise), before: steps)
+            recordedStep.leds = recorded.leds
+            steps.append(recordedStep)
         }
         return CaptureFile(
             appVersion: appVersion, device: device, ports: ports, note: note, prompts: prompts, noise: noise, steps: steps
@@ -119,8 +133,9 @@ public struct CaptureSession: Sendable {
 
     private mutating func finish(_ status: StepStatus) {
         guard let prompt = current else { return }
-        finished.append((prompt, status, take))
+        finished.append((prompt, status, take, leds))
         take = []
+        leds = []
         index += 1
     }
 }
