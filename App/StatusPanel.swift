@@ -12,7 +12,7 @@ extension BridgeStatus {
         case .portInUse(let port): .portInUse(port: port)
         case .failed: .failed
         }
-        return StatusPresentation(BridgeState(controller: controller, feedback: feedback, deck: deck))
+        return StatusPresentation(BridgeState(controller: controller, feedback: feedback, deck: deck, stopped: problem != nil))
     }
 }
 

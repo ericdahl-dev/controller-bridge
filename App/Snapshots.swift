@@ -17,6 +17,7 @@ enum Snapshots {
             ("not-connected", { $0.feedback = .listening(port: 9096); $0.deck = 2 }),
             ("port-in-use", { $0.controllers = ["DENON LC6000 PRIME"]; $0.feedback = .portInUse(port: 9096); $0.deck = 3 }),
             ("starting-deck4", { $0.deck = 4 }),
+            ("stopped", { $0.problem = "Couldn't start CoreMIDI: status(\"MIDIClientCreateWithBlock\", -10844)" }),
         ]
         do { try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true) } catch {
             print("Couldn't create \(directory): \(error)"); return

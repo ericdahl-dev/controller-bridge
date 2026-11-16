@@ -20,11 +20,14 @@ public struct BridgeState: Equatable, Sendable {
     public var controller: Controller
     public var feedback: Feedback
     public var deck: Int
+    /// The bridge couldn't start at all; the reason goes in the panel and the diagnostics (#26).
+    public var stopped: Bool
 
-    public init(controller: Controller, feedback: Feedback, deck: Int) {
+    public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false) {
         self.controller = controller
         self.feedback = feedback
         self.deck = deck
+        self.stopped = stopped
     }
 }
 
@@ -76,7 +79,7 @@ public struct StatusPresentation: Equatable, Sendable {
         case .portInUse(let port): StatusLight(label: "FEEDBACK", word: "PORT \(port) IN USE", tone: .error)
         case .failed: StatusLight(label: "FEEDBACK", word: "FAILED", tone: .error)
         }
-        lights = [controller, feedback]
+        lights = (state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)] : []) + [controller, feedback]
         line = lights.map { "\($0.label) ● \($0.word)" }.joined(separator: " · ") + " · DECK [\(state.deck)]"
         icon = if lights.contains(where: { $0.tone == .error }) { .error }
             else if lights.allSatisfy({ $0.tone == .live }) { .ok }

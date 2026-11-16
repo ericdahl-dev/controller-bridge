@@ -59,4 +59,12 @@ struct StatusPresentationTests {
     func toneColors(tone: StatusLight.Tone, hex: UInt32) {
         #expect(tone.color == RGB(hex: hex))
     }
+
+    @Test("If the bridge couldn't start (no mapping, CoreMIDI or OSC sender), a red STOPPED light leads and the icon shows an error")
+    func stoppedByAStartupProblem() {
+        let status = StatusPresentation(BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true))
+        #expect(status.line == "BRIDGE ● STOPPED · CONTROLLER ● NOT CONNECTED · FEEDBACK ● STARTING · DECK [1]")
+        #expect(status.lights.first == StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error))
+        #expect(status.icon == .error)
+    }
 }
