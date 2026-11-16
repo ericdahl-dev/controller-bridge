@@ -24,9 +24,9 @@ struct CaptureFileTests {
         {
           "prompt": "deck1.play",
           "status": "confirmed",
-          "messages": [{ "t": 0, "midi": "90 01 7F" }, { "t": 120, "midi": "80 01 00" }],
+          "messages": [{ "t": 0, "port": 0, "midi": "90 01 7F" }, { "t": 120, "port": 0, "midi": "80 01 00" }],
           "controls": [
-            { "kind": "note", "channel": 1, "number": 1, "release": "note_off", "first": 127, "last": 127, "min": 127, "max": 127 }
+            { "kind": "note", "port": 0, "channel": 1, "number": 1, "release": "note_off", "first": 127, "last": 127, "min": 127, "max": 127 }
           ],
           "leds": [{ "sent": "90 01 7F", "lit": true, "color": "red" }]
         },
@@ -40,9 +40,9 @@ struct CaptureFileTests {
         {
           "prompt": "deck1.pitch",
           "status": "confirmed",
-          "messages": [{ "t": 0, "midi": "B0 08 7F" }, { "t": 1, "midi": "B0 28 7F" }],
+          "messages": [{ "t": 0, "port": 1, "midi": "B0 08 7F" }, { "t": 1, "port": 1, "midi": "B0 28 7F" }],
           "controls": [
-            { "kind": "cc", "channel": 1, "number": 8, "lsb": 40, "encoding": "absolute", "first": 16383, "last": 0, "min": 0, "max": 16383 }
+            { "kind": "cc", "port": 1, "channel": 1, "number": 8, "lsb": 40, "encoding": "absolute", "first": 16383, "last": 0, "min": 0, "max": 16383 }
           ],
           "leds": [],
           "shift": { "of": "deck1.play", "channel_offset": 0, "number_offset": 0 }
@@ -73,8 +73,8 @@ struct CaptureFileTests {
             CaptureStep(prompt: "deck1.play.shift", status: .skipped),
             CaptureStep(
                 prompt: "deck1.pitch", status: .confirmed,
-                messages: [CaptureMessage(t: 0, bytes: [0xB0, 0x08, 0x7F]), CaptureMessage(t: 1, bytes: [0xB0, 0x28, 0x7F])],
-                controls: [ControlFacts(kind: .cc, channel: 1, number: 8, lsb: 40, encoding: .absolute, first: 16383, last: 0, min: 0, max: 16383)],
+                messages: [CaptureMessage(t: 0, port: 1, bytes: [0xB0, 0x08, 0x7F]), CaptureMessage(t: 1, port: 1, bytes: [0xB0, 0x28, 0x7F])],
+                controls: [ControlFacts(kind: .cc, port: 1, channel: 1, number: 8, lsb: 40, encoding: .absolute, first: 16383, last: 0, min: 0, max: 16383)],
                 shift: ShiftLayer(of: "deck1.play", channelOffset: 0, numberOffset: 0)
             ),
         ]

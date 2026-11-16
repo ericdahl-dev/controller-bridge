@@ -4,12 +4,14 @@
 struct Voice {
     enum Kind { case noteOn, noteOff, cc, pitchBend }
     var kind: Kind
+    var port: Int
     var channel: Int
     var number: Int
     var value: Int
 
-    init?(_ bytes: [UInt8]) {
+    init?(_ bytes: [UInt8], port: Int = 0) {
         guard bytes.count >= 3 else { return nil }
+        self.port = port
         channel = Int(bytes[0] & 0x0F)
         number = Int(bytes[1] & 0x7F)
         value = Int(bytes[2] & 0x7F)
@@ -33,12 +35,13 @@ struct Voice {
         case .cc: .cc
         case .pitchBend: .pitchBend
         }
-        return ControlKey(kind: controlKind, channel: channel, number: number)
+        return ControlKey(kind: controlKind, port: port, channel: channel, number: number)
     }
 }
 
 struct ControlKey: Hashable {
     var kind: ControlKind
+    var port: Int
     var channel: Int
     var number: Int
 }
@@ -59,8 +62,8 @@ enum Inference {
     }
 
     /// The controls in one step, in the order they first appear.
-    static func controls(in messages: [[UInt8]], gesture: CaptureGesture) -> [ControlFacts] {
-        let voices = messages.compactMap(Voice.init)
+    static func controls(in messages: [(port: Int, bytes: [UInt8])], gesture: CaptureGesture) -> [ControlFacts] {
+        let voices = messages.compactMap { Voice($0.bytes, port: $0.port) }
         let lsbOf = pairs(voices)
         let msbOf = Dictionary(uniqueKeysWithValues: lsbOf.map { ($1, $0) })
         var order: [ControlKey] = []
@@ -86,15 +89,15 @@ enum Inference {
 
     /// The Shift button in a step repeated with Shift held: the step's first message is a note-on, and that note is
     /// still down when another control's first message arrives. When it's let go doesn't matter. Nil otherwise.
-    static func heldAround(_ messages: [[UInt8]]) -> (channel: Int, number: Int)? {
-        let voices = messages.compactMap(Voice.init)
+    static func heldAround(_ messages: [(port: Int, bytes: [UInt8])]) -> ControlKey? {
+        let voices = messages.compactMap { Voice($0.bytes, port: $0.port) }
         guard let first = voices.first, first.kind == .noteOn, first.value > 0,
             let other = voices.firstIndex(where: { $0.control != first.control })
         else { return nil }
         let released = voices[..<other].contains {
             $0.control == first.control && ($0.kind == .noteOff || ($0.kind == .noteOn && $0.value == 0))
         }
-        return released ? nil : (first.channel + 1, first.number)
+        return released ? nil : first.control
     }
 
     /// 14-bit pairs, MSB to LSB, on one channel. CC n and n+32 pair first (the MIDI convention), when both came about
@@ -111,11 +114,11 @@ enum Inference {
 
         var candidates: [(msb: ControlKey, lsb: ControlKey, convention: Bool, count: Int)] = []
         for key in counts.keys where key.number < 32 {
-            let lsb = ControlKey(kind: .cc, channel: key.channel, number: key.number + 32)
+            let lsb = ControlKey(kind: .cc, port: key.port, channel: key.channel, number: key.number + 32)
             if counts[lsb] != nil, similar(key, lsb) { candidates.append((key, lsb, true, counts[key] ?? 0)) }
         }
         var adjacent: [[ControlKey]: Int] = [:]
-        for (a, b) in zip(ccs, ccs.dropFirst()) where a.channel == b.channel && a.number != b.number {
+        for (a, b) in zip(ccs, ccs.dropFirst()) where a.port == b.port && a.channel == b.channel && a.number != b.number {
             adjacent[[a, b], default: 0] += 1
         }
         for (keys, count) in adjacent {
@@ -127,7 +130,7 @@ enum Inference {
         candidates.sort {
             if $0.convention != $1.convention { return $0.convention }
             if $0.count != $1.count { return $0.count > $1.count }
-            return ($0.msb.channel, $0.msb.number, $0.lsb.number) < ($1.msb.channel, $1.msb.number, $1.lsb.number)
+            return ($0.msb.port, $0.msb.channel, $0.msb.number, $0.lsb.number) < ($1.msb.port, $1.msb.channel, $1.msb.number, $1.lsb.number)
         }
 
         var lsbOf: [ControlKey: ControlKey] = [:]
@@ -155,7 +158,7 @@ enum Inference {
         }
         guard let first = values.first, let last = values.last else { return nil }
         return ControlFacts(
-            kind: .cc, channel: key.channel + 1, number: key.number, lsb: lsb?.number,
+            kind: .cc, port: key.port, channel: key.channel + 1, number: key.number, lsb: lsb?.number,
             encoding: lsb == nil && gesture == .turn ? encoding(values) : .absolute,
             first: first, last: last, min: values.min() ?? first, max: values.max() ?? first
         )
@@ -168,7 +171,7 @@ enum Inference {
             voices.contains { $0.kind == .noteOff } ? .noteOff
             : voices.contains { $0.kind == .noteOn && $0.value == 0 } ? .noteOnZero : nil
         return ControlFacts(
-            kind: .note, channel: key.channel + 1, number: key.number, release: release,
+            kind: .note, port: key.port, channel: key.channel + 1, number: key.number, release: release,
             first: first, last: last, min: presses.min() ?? first, max: presses.max() ?? first
         )
     }
@@ -177,7 +180,7 @@ enum Inference {
         let values = voices.map(\.value)
         guard let first = values.first, let last = values.last else { return nil }
         return ControlFacts(
-            kind: .pitchBend, channel: key.channel + 1, first: first, last: last,
+            kind: .pitchBend, port: key.port, channel: key.channel + 1, first: first, last: last,
             min: values.min() ?? first, max: values.max() ?? first
         )
     }

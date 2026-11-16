@@ -163,24 +163,29 @@ public struct CaptureStep: Codable, Equatable, Sendable {
 /// One raw MIDI message, `t` milliseconds after its step's first message. No clock time is kept.
 public struct CaptureMessage: Codable, Equatable, Sendable {
     public var t: Int
+    /// The input port it came on, as an index into the file's `ports.input`.
+    public var port: Int
     public var bytes: [UInt8]
 
-    public init(t: Int, bytes: [UInt8]) {
+    public init(t: Int, port: Int = 0, bytes: [UInt8]) {
         self.t = t
+        self.port = port
         self.bytes = bytes
     }
 
-    enum CodingKeys: String, CodingKey { case t, midi }
+    enum CodingKeys: String, CodingKey { case t, port, midi }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         t = try c.decode(Int.self, forKey: .t)
+        port = try c.decode(Int.self, forKey: .port)
         bytes = try Hex.bytes(c.decode(String.self, forKey: .midi))
     }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(t, forKey: .t)
+        try c.encode(port, forKey: .port)
         try c.encode(Hex.string(bytes), forKey: .midi)
     }
 }
@@ -208,6 +213,8 @@ public enum Encoding: String, Codable, Sendable {
 /// What a step's messages say about one control. Channels are 1-based, as in a profile.
 public struct ControlFacts: Codable, Equatable, Sendable {
     public var kind: ControlKind
+    /// The input port it came on, as an index into the file's `ports.input`.
+    public var port: Int
     public var channel: Int
     /// The note or CC number. Pitch bend has none.
     public var number: Int?
@@ -223,10 +230,11 @@ public struct ControlFacts: Codable, Equatable, Sendable {
     public var max: Int
 
     public init(
-        kind: ControlKind, channel: Int, number: Int? = nil, lsb: Int? = nil, encoding: Encoding? = nil,
+        kind: ControlKind, port: Int = 0, channel: Int, number: Int? = nil, lsb: Int? = nil, encoding: Encoding? = nil,
         release: NoteRelease? = nil, first: Int, last: Int, min: Int, max: Int
     ) {
         self.kind = kind
+        self.port = port
         self.channel = channel
         self.number = number
         self.lsb = lsb

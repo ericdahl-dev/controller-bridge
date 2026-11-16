@@ -12,7 +12,7 @@ public struct CaptureSession: Sendable {
     /// The owner's optional note, the only free text in the file.
     public var note: String?
 
-    private typealias Take = [(time: Double, bytes: [UInt8])]
+    private typealias Take = [(time: Double, port: Int, bytes: [UInt8])]
 
     private var index = 0
     private var finished: [(prompt: CapturePrompt, status: StepStatus, take: Take, leds: [LEDAnswer])] = []
@@ -36,10 +36,11 @@ public struct CaptureSession: Sendable {
         return step(current, .confirmed, take, noise: Set(idleNoise), before: []).controls
     }
 
-    /// One raw MIDI message, at any host clock in seconds. Ignored once the list is done.
-    public mutating func receive(_ bytes: [UInt8], at time: Double) {
+    /// One raw MIDI message, at any host clock in seconds, from an input port (an index into `ports.input`). Ignored
+    /// once the list is done.
+    public mutating func receive(_ bytes: [UInt8], at time: Double, port: Int = 0) {
         guard current != nil else { return }
-        take.append((time, bytes))
+        take.append((time, port, bytes))
     }
 
     /// The owner's answer to one LED probe message during the current step. The probe itself (what's safe to send)
@@ -110,12 +111,12 @@ public struct CaptureSession: Sendable {
     private func step(_ prompt: CapturePrompt, _ status: StepStatus, _ take: Take, noise: Set<[UInt8]>, before: [CaptureStep]) -> CaptureStep {
         let heard = take.filter { !Inference.isRealtime($0.bytes) }
         let kept = prompt.gesture == .idle ? heard : heard.filter { Inference.noiseKey($0.bytes).map { !noise.contains($0) } ?? true }
-        let bytes = kept.map(\.bytes)
+        let bytes = kept.map { (port: $0.port, bytes: $0.bytes) }
         var controls = prompt.gesture == .idle ? [] : Inference.controls(in: bytes, gesture: prompt.gesture)
         var shift: ShiftLayer?
         if let base = prompt.shiftedOf {
             if let held = Inference.heldAround(bytes) {
-                controls.removeAll { $0.kind == .note && $0.channel == held.channel && $0.number == held.number }
+                controls.removeAll { $0.kind == .note && $0.port == held.port && $0.channel == held.channel + 1 && $0.number == held.number }
             }
             shift = shiftLayer(of: base, controls.first, before: before)
         }
@@ -124,7 +125,7 @@ public struct CaptureSession: Sendable {
 
     private func messages(_ take: Take) -> [CaptureMessage] {
         guard let start = take.first?.time else { return [] }
-        return take.map { CaptureMessage(t: Int((($0.time - start) * 1000).rounded()), bytes: $0.bytes) }
+        return take.map { CaptureMessage(t: Int((($0.time - start) * 1000).rounded()), port: $0.port, bytes: $0.bytes) }
     }
 
     /// How a shifted control differs from the same control in the confirmed unshifted step.

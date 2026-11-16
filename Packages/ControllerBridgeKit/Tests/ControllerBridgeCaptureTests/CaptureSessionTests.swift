@@ -90,4 +90,21 @@ struct CaptureSessionTests {
         let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(Set(object.keys) == ["format", "app_version", "device", "ports", "prompts", "noise", "steps"])
     }
+
+    @Test("Each message and control says which input port it came on, as an index into the file's input ports")
+    func ports() {
+        var session = CaptureSession(
+            appVersion: "1.2.0", device: "LC6000 PRIME",
+            ports: CapturePorts(input: ["LC6000 PRIME", "LC6000 PRIME WD"], output: ["LC6000 PRIME"]),
+            prompts: [CapturePrompt(id: "deck1.play", text: "Press Play on deck 1.", gesture: .press)]
+        )
+        session.receive([0x90, 0x01, 0x7F], at: 0.0, port: 1)
+        session.receive([0x90, 0x01, 0x7F], at: 0.1)
+        session.receive([0x80, 0x01, 0x00], at: 0.2)
+        session.confirm()
+        let step = session.file.steps[0]
+        #expect(step.messages.map(\.port) == [1, 0, 0])
+        #expect(step.controls.map(\.port) == [1, 0])
+        #expect(step.controls.map(\.release) == [nil, .noteOff])
+    }
 }
