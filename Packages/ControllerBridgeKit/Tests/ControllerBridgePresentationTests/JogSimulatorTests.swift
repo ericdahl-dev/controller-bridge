@@ -27,4 +27,21 @@ struct JogSimulatorTests {
         #expect(JogUploadStatus.notUploaded.readout(timeZone: utc) == "Nothing uploaded yet")
         #expect(JogUploadStatus.notConnected.readout(timeZone: utc) == "No LC6000 connected: preview only")
     }
+
+    @Test("The marker redraws at most 30 times a second, and a burst still ends on its latest value")
+    func markerLimiter() {
+        var limiter = RedrawLimiter<Int>(interval: 1.0 / 30)
+        // The first value draws at once.
+        #expect(limiter.offer(10, at: 0.000) == 10)
+        // Within 1/30 s (0.0333…) nothing draws; the newest value waits.
+        #expect(limiter.offer(11, at: 0.010) == nil)
+        #expect(limiter.offer(12, at: 0.020) == nil)
+        // The tick after the interval draws the waiting value, the newest one.
+        #expect(limiter.tick(at: 0.030) == nil)
+        #expect(limiter.tick(at: 0.034) == 12)
+        // Nothing waiting: a tick draws nothing.
+        #expect(limiter.tick(at: 0.100) == nil)
+        // A value long after the last draw draws at once.
+        #expect(limiter.offer(13, at: 0.200) == 13)
+    }
 }

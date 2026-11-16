@@ -68,3 +68,35 @@ public enum JogUploadStatus: Equatable, Sendable {
         return out
     }
 }
+
+/// Holds a fast stream (the marker's angle, ~100 updates a second while playing) to at most one redraw per `interval`
+/// (#221: ~30 Hz), always ending on the newest value. The view offers each value as it arrives and ticks on its
+/// display timer; whatever either returns is drawn.
+public struct RedrawLimiter<Value: Sendable>: Sendable {
+    public let interval: Double
+    private var lastDraw: Double?
+    private var waiting: Value?
+
+    public init(interval: Double) {
+        self.interval = interval
+    }
+
+    /// A new value at time `now` (seconds): returned to draw now, or held until the interval has passed.
+    public mutating func offer(_ value: Value, at now: Double) -> Value? {
+        if let lastDraw, now - lastDraw < interval {
+            waiting = value
+            return nil
+        }
+        lastDraw = now
+        waiting = nil
+        return value
+    }
+
+    /// The held value, once the interval since the last draw has passed; nil otherwise.
+    public mutating func tick(at now: Double) -> Value? {
+        guard let value = waiting, let lastDraw, now - lastDraw >= interval else { return nil }
+        self.lastDraw = now
+        waiting = nil
+        return value
+    }
+}
