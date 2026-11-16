@@ -83,6 +83,13 @@ final class Bridge {
     var pitchLSBValue: UInt8 = 0
     /// The last TempoSlider value sent, so a repeat isn't resent.
     var lastTempo: Double?
+    /// Pitch pickup (#22): while armed, the fader is ignored until it meets Syndicate's reported TempoSlider.
+    var pickupArmed = false
+    var reportedTempo: Double?
+    /// Where the fader was on its last move while armed, to see it cross the reported value.
+    var faderPosition: Double?
+    /// TempoSlider values sent lately, with when, so a late echo of one isn't taken for an outside change.
+    var recentTempoSends: [(time: Double, value: Double)] = []
     /// The direction of the PhaseBend being held (1 or -1), or 0 when none is.
     var bendDirection = 0
     var lastJogTime = 0.0
@@ -134,6 +141,7 @@ final class Bridge {
 
     func start() {
         send("Feedback/Resend", .int(1))
+        rearmPickup()
         ledCache.removeAll()
         refreshLEDs()
     }
@@ -186,8 +194,12 @@ final class Bridge {
             playing = value
             if !playing, bendDirection != 0 { endBend() }
         case "playpending": playPending = value
+        case "temposlider":
+            guard let reported = message.arguments.first?.number else { return }
+            tempoReported(reported)
         case "loaded":
             loaded = value
+            if loaded { rearmPickup() }
             if !loaded {
                 // The track is gone: forget its cues, where it was and how long it was.
                 cues = [Int](repeating: 0, count: 8)
@@ -195,7 +207,9 @@ final class Bridge {
                 duration = nil
             }
         case "sync": synced = value
-        case "temposliderenabled": sliderEnabled = value
+        case "temposliderenabled":
+            if value != sliderEnabled { rearmPickup() }
+            sliderEnabled = value
         case "loop": looping = value
         case "cues": cues = Self.cueSlots(message.arguments)
         case "trackinfo":
@@ -219,7 +233,7 @@ final class Bridge {
         refreshTransportLEDs()
         loopLEDs()
         padLEDs()
-        led(mapping.leds.pitchCenter, lastTempo == 0 ? Self.full : Self.off)
+        led(mapping.leds.pitchCenter, pitchCenterVelocity)
     }
 
     func buttonLED(_ name: String, on: Bool) {
