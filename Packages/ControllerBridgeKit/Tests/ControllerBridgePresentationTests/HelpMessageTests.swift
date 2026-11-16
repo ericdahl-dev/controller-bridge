@@ -77,4 +77,15 @@ struct HelpMessageTests {
         let state = BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true, stopReason: reason)
         #expect(HelpMessage(state) == HelpMessage(text: text, showsGuide: false))
     }
+
+    @Test("With several controllers, help names one that needs a hand, even when the first is fine (#89)")
+    func secondControllerHelp() {
+        let state = BridgeState(
+            controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1,
+            others: [BridgeState.ControllerEntry(controller: .unplugged(profile: "Denon LC6000 PRIME"), deck: 2)]
+        )
+        #expect(HelpMessage(state) == HelpMessage(
+            text: "Controller 2 was unplugged. Plug it back in; the bridge picks it up again.", showsGuide: false
+        ))
+    }
 }
