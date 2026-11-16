@@ -39,3 +39,39 @@ struct SevenBitTempoTests {
         #expect(tempoSlider(from7Bit: 66, invert: false, deadZone: 0.02) == 2.0 / 63)
     }
 }
+
+/// The Coordinator seam (#195): a test-only profile whose pitch fader is 7-bit on CC 8. Values rounded to 5 places as
+/// the bridge sends them: 0x60 (96) is 32/63 = 0.50794, 0x70 (112) is 48/63 = 0.76190, 0x00 is -1, 0x40 is 0.
+@Suite("7-bit fader at the Coordinator")
+struct SevenBitFaderCoordinatorTests {
+    static let sevenBit = #"{ "pitch": { "bits": 7 } }"#
+
+    @Test("Each CC 8 value is a tempo on its own: 0x40 is 0, 0x60 is 0.50794, 0x00 is -1; CC 40 does nothing")
+    func tempo() throws {
+        let rig = try PickupTests.started(Self.sevenBit)
+        PickupTests.fader(rig, 0x40)
+        PickupTests.fader(rig, 0x60)
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 40, value: 0x7F), source: Rig.lc6000.id)
+        PickupTests.fader(rig, 0x00)
+        #expect(rig.osc.sent == [PickupTests.tempo(0), PickupTests.tempo(0.50794), PickupTests.tempo(-1)])
+    }
+
+    @Test("Pickup as on 14-bit: after a load at 0.5, nothing until the fader meets it, then it follows")
+    func pickup() throws {
+        let rig = try PickupTests.started(Self.sevenBit)
+        PickupTests.report(rig, "Loaded", .int(1))
+        PickupTests.report(rig, "TempoSlider", .float(0.5))
+        PickupTests.fader(rig, 0x00)
+        #expect(rig.osc.sent == [])
+        PickupTests.fader(rig, 0x60)
+        PickupTests.fader(rig, 0x70)
+        #expect(rig.osc.sent == [PickupTests.tempo(0.50794), PickupTests.tempo(0.7619)])
+    }
+
+    @Test("The LC6000 is unchanged: 14-bit, 0x60 with LSB 0 is 0.50009")
+    func lc6000() throws {
+        let rig = try PickupTests.started()
+        PickupTests.fader(rig, 0x60)
+        #expect(rig.osc.sent == [PickupTests.tempo(0.50009)])
+    }
+}

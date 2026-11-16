@@ -12,10 +12,11 @@ extension Bridge {
     }
 
     private func sendPitch() {
-        let t = tempoSlider(
-            from: join14Bit(msb: pitchMSBValue, lsb: pitchLSBValue),
-            invert: mapping.pitch.invert, deadZone: mapping.pitch.deadZone
-        )
+        let pitch = mapping.pitch
+        // A 7-bit fader is one CC (#195); the LC6000's is an MSB/LSB pair.
+        let t = pitch.bits == 7
+            ? tempoSlider(from7Bit: pitchMSBValue, invert: pitch.invert, deadZone: pitch.deadZone)
+            : tempoSlider(from: join14Bit(msb: pitchMSBValue, lsb: pitchLSBValue), invert: pitch.invert, deadZone: pitch.deadZone)
         let rounded = (t * 100_000).rounded() / 100_000
         // Moving the fader while Syndicate has the slider disabled would queue up a jump.
         guard sliderEnabled, pickedUp(at: rounded) else { return }

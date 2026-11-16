@@ -80,7 +80,7 @@ extension Mapping {
             case .relative(let cc, let edge): [(cc, "jog_relative")] + (edge.map { [($0, "jog_relative_edge")] } ?? [])
             }
             let named: [(Int, String)] = jogNames + [
-                (pitch.msbCC, "pitch_msb"), (pitch.lsbCC ?? -1, "pitch_lsb"), (needle.msbCC, "needle_msb"), (needle.lsbCC, "needle_lsb"),
+                (pitch.msbCC, "pitch_msb"), (pitch.bits == 14 ? pitch.lsbCC ?? -1 : -1, "pitch_lsb"), (needle.msbCC, "needle_msb"), (needle.lsbCC, "needle_lsb"),
                 (browse.selectTurnCC, "select_turn"), (browse.autoLoopSizeCC, "auto_loop_size"),
             ]
             return named.first { $0.0 == cc }?.1 ?? DiagnosticEvent.unmapped
