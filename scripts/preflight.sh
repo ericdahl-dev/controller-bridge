@@ -69,7 +69,7 @@ fi
 # The UI fonts (#171), Geist and Geist Mono under SIL OFL 1.1: a missing one would fall back to the system font
 # silently, and the license must ship with them.
 fonts="$resources/Fonts"
-for font in Geist-Regular.ttf Geist-Medium.ttf Geist-SemiBold.ttf GeistMono-Regular.ttf GeistMono-Medium.ttf GeistMono-SemiBold.ttf Geist-OFL.txt; do
+for font in Geist-Regular.ttf Geist-Medium.ttf Geist-SemiBold.ttf Geist-Bold.ttf GeistMono-Regular.ttf GeistMono-Medium.ttf GeistMono-SemiBold.ttf Geist-OFL.txt; do
   [ -f "$fonts/$font" ] && ok "bundled $font" || bad "Fonts/$font is not in the app bundle"
 done
 

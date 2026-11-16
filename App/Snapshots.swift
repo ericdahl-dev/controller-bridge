@@ -11,7 +11,7 @@ enum Snapshots {
     /// SNAPSHOT_APPEARANCE=light renders the light theme (#127); dark by default.
     static let scheme: ColorScheme = ProcessInfo.processInfo.environment["SNAPSHOT_APPEARANCE"] == "light" ? .light : .dark
 
-    static let fonts = ["Geist-Regular", "Geist-Medium", "Geist-SemiBold", "GeistMono-Regular", "GeistMono-Medium", "GeistMono-SemiBold"]
+    static let fonts = ["Geist-Regular", "Geist-Medium", "Geist-SemiBold", "Geist-Bold", "GeistMono-Regular", "GeistMono-Medium", "GeistMono-SemiBold"]
     static var missingFonts: Bool { fonts.contains { NSFont(name: $0, size: 12) == nil } }
 
     static func render(to name: String) {

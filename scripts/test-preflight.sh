@@ -28,7 +28,7 @@ make_app() {
   cp App/PrivacyInfo.xcprivacy "$app/Contents/Resources/PrivacyInfo.xcprivacy"
   echo icon > "$app/Contents/Resources/Assets.car"
   mkdir -p "$app/Contents/Resources/Fonts"
-  for font in Geist-Regular Geist-Medium Geist-SemiBold GeistMono-Regular GeistMono-Medium GeistMono-SemiBold; do
+  for font in Geist-Regular Geist-Medium Geist-SemiBold Geist-Bold GeistMono-Regular GeistMono-Medium GeistMono-SemiBold; do
     echo font > "$app/Contents/Resources/Fonts/$font.ttf"; done
   echo license > "$app/Contents/Resources/Fonts/Geist-OFL.txt"
   cat > "$work/$1.entitlements" <<PLIST
@@ -81,6 +81,9 @@ done
 # The UI fonts (#171): a missing one would fall back to the system font without a word.
 app=$(make_app font); rm "$app/Contents/Resources/Fonts/GeistMono-Medium.ttf"; sign "$app" "$work/font.entitlements"
 expect_fail "a missing bundled font fails" "$app" "GeistMono-Medium.ttf"
+
+app=$(make_app fontbold); rm "$app/Contents/Resources/Fonts/Geist-Bold.ttf"; sign "$app" "$work/fontbold.entitlements"
+expect_fail "a missing bold weight fails" "$app" "Geist-Bold.ttf"
 
 app=$(make_app fontlicense); rm "$app/Contents/Resources/Fonts/Geist-OFL.txt"; sign "$app" "$work/fontlicense.entitlements"
 expect_fail "fonts without their license fail" "$app" "Geist-OFL.txt"

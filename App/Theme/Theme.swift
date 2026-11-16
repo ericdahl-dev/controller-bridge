@@ -99,7 +99,9 @@ enum Theme {
     /// Geist for UI text, as on the site (#171), with tabular figures so numbers don't jitter.
     static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         let name = switch weight {
-        case .semibold, .bold, .heavy, .black: "Geist-SemiBold"
+        // Bold stays apart from SemiBold, so a selected item's heavier label still shows (#67).
+        case .bold, .heavy, .black: "Geist-Bold"
+        case .semibold: "Geist-SemiBold"
         case .medium: "Geist-Medium"
         default: "Geist-Regular"
         }
