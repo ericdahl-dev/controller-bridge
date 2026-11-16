@@ -148,4 +148,48 @@ struct SettingsTests {
         good.syndicateHost = host
         #expect(good.fieldProblems == [])
     }
+
+    // A stale Settings draft (#90): Settings keeps the settings it loaded as `base`. When the saved settings change
+    // under it (a deck click in the panel), its draft becomes the new settings plus only the fields the DJ edited.
+
+    @Test("A deck picked in the panel while Settings is open survives Apply of another field (#90)")
+    func panelDeckSurvivesSettingsApply() {
+        let base = Self.defaults
+        var draft = base
+        draft.syndicateHost = "192.168.1.20"            // edited in Settings
+        var saved = base
+        saved.controllers[0].deck = 3                  // picked in the panel
+        let rebased = BridgeSettings.rebased(draft: draft, base: base, onto: saved)
+        #expect(rebased.controllers[0].deck == 3)
+        #expect(rebased.syndicateHost == "192.168.1.20")
+    }
+
+    @Test("A field the DJ also edited in Settings keeps the DJ's value")
+    func editedFieldWins() {
+        let base = Self.defaults
+        var draft = base
+        draft.controllers[0].deck = 2
+        var saved = base
+        saved.controllers[0].deck = 3
+        #expect(BridgeSettings.rebased(draft: draft, base: base, onto: saved).controllers[0].deck == 2)
+    }
+
+    @Test("With nothing edited in Settings, the draft is simply the new settings")
+    func nothingEdited() {
+        var saved = Self.defaults
+        saved.controllers[0].deck = 4
+        saved.feedbackPort = 9100
+        #expect(BridgeSettings.rebased(draft: Self.defaults, base: Self.defaults, onto: saved) == saved)
+    }
+
+    @Test("A controller added in Settings stays, and the panel's deck change still lands on controller 1")
+    func addedControllerStays() {
+        let base = Self.defaults
+        var draft = base
+        draft.controllers.append(ControllerSettings(deck: 2, input: nil, output: nil))
+        var saved = base
+        saved.controllers[0].deck = 3
+        let rebased = BridgeSettings.rebased(draft: draft, base: base, onto: saved)
+        #expect(rebased.controllers.map(\.deck) == [3, 2])
+    }
 }

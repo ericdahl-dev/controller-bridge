@@ -159,6 +159,13 @@ public struct CaptionedValue: Equatable, Sendable {
     }
 }
 
+/// The deck picker: usable, shown but off with a reason, or not shown.
+public enum DeckPickerState: Equatable, Sendable {
+    case enabled
+    case disabled(reason: String)
+    case hidden
+}
+
 /// The menu-bar icon's state dot.
 public enum IconState: Equatable, Sendable {
     case ok
@@ -183,6 +190,8 @@ public struct StatusPresentation: Equatable, Sendable {
     public var lastDropout: CaptionedValue?
     /// Whether Quit asks before quitting (#66).
     public var quitAsks: Bool
+    /// Whether the deck picker can be used, and why not (#90).
+    public var deckPicker: DeckPickerState
 
     /// How many characters the panel's status bar holds without truncating (360 pt, 10 pt semibold caps).
     public static let lineBudget = 56
@@ -223,6 +232,9 @@ public struct StatusPresentation: Equatable, Sendable {
         lastDropout = state.lastDropout.map { CaptionedValue(caption: "Last dropout", value: $0) }
         // Quitting stops a working set only while feedback is live, so that's when Quit asks first (#66).
         if case .live = state.feedback { quitAsks = true } else { quitAsks = false }
+        // In demo mode a click would be held for the real controller and jump its deck later, unasked (#90).
+        deckPicker = state.stopped ? .hidden
+            : state.demo ? .disabled(reason: "Demo controller is on, so the deck stays put.") : .enabled
     }
 
     static let separator = " · "

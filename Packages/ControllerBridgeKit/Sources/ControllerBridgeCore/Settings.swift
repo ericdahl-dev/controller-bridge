@@ -39,6 +39,36 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
 }
 
 extension BridgeSettings {
+    /// A Settings draft brought up to date with settings saved since it was loaded (#90): the new settings, plus only
+    /// the fields the DJ edited in the draft (where it differs from `base`, what Settings loaded). So a deck picked in
+    /// the panel while Settings is open isn't reverted by Apply.
+    public static func rebased(draft: BridgeSettings, base: BridgeSettings, onto saved: BridgeSettings) -> BridgeSettings {
+        func pick<T: Equatable>(_ path: KeyPath<BridgeSettings, T>) -> T {
+            draft[keyPath: path] != base[keyPath: path] ? draft[keyPath: path] : saved[keyPath: path]
+        }
+        var out = saved
+        out.syndicateHost = pick(\.syndicateHost)
+        out.syndicatePort = pick(\.syndicatePort)
+        out.feedbackPort = pick(\.feedbackPort)
+        out.feedbackListen = pick(\.feedbackListen)
+        out.ledsEnabled = pick(\.ledsEnabled)
+        // Controllers: the draft's list (an add or remove is the DJ's edit), each field rebased where both had it.
+        out.controllers = draft.controllers.indices.map { index in
+            let edited = draft.controllers[index]
+            guard base.controllers.indices.contains(index), saved.controllers.indices.contains(index) else { return edited }
+            let was = base.controllers[index], now = saved.controllers[index]
+            return ControllerSettings(
+                deck: edited.deck != was.deck ? edited.deck : now.deck,
+                input: edited.input != was.input ? edited.input : now.input,
+                output: edited.output != was.output ? edited.output : now.output,
+                channel: edited.channel != was.channel ? edited.channel : now.channel
+            )
+        }
+        return out
+    }
+}
+
+extension BridgeSettings {
     /// The user-defaults key the settings are kept under, as JSON.
     public static let storageKey = "settings.v1"
 

@@ -83,7 +83,8 @@ struct StatusPanel: View {
                 ForEach(Array(presentation.blocks.enumerated()), id: \.offset) { index, block in
                     if index > 0 { Rectangle().fill(Theme.hairline).frame(height: 1) }
                     ControllerBlockView(
-                        block: block, showsLight: presentation.blocks.count > 1, picks: status.problem == nil,
+                        block: block, showsLight: presentation.blocks.count > 1, picker: presentation.deckPicker,
+                        deckProblem: status.deckProblem,
                         setDeck: { setDeck($0, index) }
                     )
                 }
@@ -186,7 +187,10 @@ struct ControllerBlockView: View {
     let block: ControllerBlock
     let showsLight: Bool
     /// Off while the bridge is stopped: there is nothing to switch.
-    let picks: Bool
+    /// Usable, off with a reason (demo mode), or hidden (stopped), from the tested presentation (#90).
+    let picker: DeckPickerState
+    /// A refused deck change, shown under the picker (#90).
+    let deckProblem: String?
     let setDeck: (Int) -> Void
 
     var body: some View {
@@ -201,7 +205,7 @@ struct ControllerBlockView: View {
                 Spacer(minLength: 0)
                 if showsLight { StatusLightView(light: block.light) }
             }
-            if picks { DeckPicker(deck: block.deck, setDeck: setDeck) }
+            if picker != .hidden { DeckPicker(deck: block.deck, state: picker, problem: deckProblem, setDeck: setDeck) }
         }
     }
 }
@@ -209,9 +213,25 @@ struct ControllerBlockView: View {
 /// The four Syndicate decks as badges (#66): the current one in its deck color, the others quiet. A click switches.
 struct DeckPicker: View {
     let deck: Int
+    var state: DeckPickerState = .enabled
+    var problem: String?
     let setDeck: (Int) -> Void
 
     var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            badges
+                .disabled(state != .enabled)
+                .opacity(state == .enabled ? 1 : 0.4)
+            if case .disabled(let reason) = state {
+                Text(reason).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
+            }
+            if let problem {
+                Text(problem).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.error).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var badges: some View {
         HStack(spacing: Theme.Space.s) {
             ForEach(1...4, id: \.self) { number in
                 Button { setDeck(number) } label: {
