@@ -181,8 +181,8 @@ public struct ProfileDraft: Sendable {
     }
 
     /// Steps repeated with Shift held. The shifted control is the step's first (the held Shift note is already left out).
-    /// The same note and channel as unshifted means the app does Shift; anything else is Shift in hardware (#226), a
-    /// TODO naming what it sent until notes.shifted is in every profile's schema.
+    /// The same note and channel as unshifted means the app does Shift. A button's own note on the deck's channel is
+    /// Shift in hardware: notes.shifted (#226). Anything else (another channel, a pad) is a TODO naming what it sent.
     private mutating func shifted(_ capture: CaptureFile) {
         for step in capture.steps where step.status == .confirmed {
             guard let base = capture.prompts.first(where: { $0.id == step.prompt })?.shiftedOf,
@@ -191,9 +191,15 @@ public struct ProfileDraft: Sendable {
             else { continue }
             guard shifted.kind != unshifted.kind || shifted.number != unshifted.number || shifted.channel != unshifted.channel
             else { continue }
-            let name = Self.buttons.first { $0.prompt == base }?.name ?? (base.hasPrefix("deck1.hotcue") ? "pads" : base)
+            let button = Self.buttons.first { $0.prompt == base }?.name
+            let name = button ?? (base.hasPrefix("deck1.hotcue") ? "pads" : base)
+            if let button, shifted.kind == .note, let note = shifted.number, profile.value(at: "mapping.midi.channel") == .int(shifted.channel) {
+                set("mapping.notes.shifted.\(button)", .int(note))
+                todo("mapping.leds.mirror_shifted", "Shift is done in hardware. Hold Shift and look: if the shifted button lights on its own note, set true.")
+                continue
+            }
             let sends = "\(shifted.kind == .note ? "note" : "CC") \(shifted.number ?? 0) on channel \(shifted.channel)"
-            todo("mapping.notes.shifted.\(name)", "With Shift held, \"\(base)\" sends \(sends): Shift is done in hardware. Set notes.shifted (#226) once it's merged.")
+            todo("mapping.notes.shifted.\(name)", "With Shift held, \"\(base)\" sends \(sends). notes.shifted takes a button's note on the deck's channel, so this needs a new profile key.")
         }
     }
 
