@@ -21,6 +21,11 @@ In short:
 The display shows uploads **rotated 180°**, so images are sent pre-rotated. Uploads move about 3.1 KB/s, so they're
 for what changes rarely, not real-time readouts.
 
+For real-time readouts, djay also sends two channel messages to WD on ch1 (#165):
+- **Pitch bend:** the platter marker. It's the virtual record's angle at 33⅓ rpm, wrapping once per turn, sent at
+  about 50 Hz.
+- **Note 1** at velocity 127 or 0: the play/cue state.
+
 ## Files
 
 | File | What it does |
@@ -47,15 +52,16 @@ A plan is one message per line: `<delay ms> WD|CTL <hex bytes>`, or `<delay ms> 
 waits for that many accepted acks and stops the run on a refusal. Lines starting with `#` are comments.
 
 `jogseq` sends only what the protocol needs:
-- **WD:** the `00 02 0B 7F 10` messages, the identity request, and `90 01 00`.
+- **WD:** the `00 02 0B 7F 10` messages, the identity request, pitch bend on ch1, and note 1 on ch1.
 - **Controller:** Serato SysEx, the `cmd 60` host message, LED note-ons, and the identity request.
 
 It also refuses to send if the port names are ambiguous.
 
 ## Rules
 
-- **Get an OK before sending to the hardware.** A stray note on WD resets the display (#143), and the host hello
-  changes the unit's mode.
+- **Get an OK before sending to the hardware.** The host hello changes the unit's mode, and WD should only ever get
+  the messages above. In #143, the app's LED traffic leaked onto WD and left the display blank. Which message
+  blanked it isn't known: note 1 alone is djay's play/cue state.
 - **No third-party data in this folder:** no other app's images, and no capture files. Test images are our own.
 - **What was verified, and what's still a guess:**
   - Verified: these exact images were uploaded and shown on hardware. Uploads were accepted (acks `00`), with the
