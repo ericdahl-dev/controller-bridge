@@ -82,8 +82,8 @@ extension BridgeStatus {
 }
 
 enum AppInfo {
-    /// Placeholder until the display name is picked (#29). Every window reads it from here.
-    static let displayName = "Controller Bridge"
+    /// The display name (#29). Every window reads it from here.
+    static let displayName = "DeckBridge"
 }
 
 struct StatusPanel: View {

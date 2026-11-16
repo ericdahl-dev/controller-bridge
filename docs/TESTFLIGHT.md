@@ -4,7 +4,7 @@ Paste this into the build's "What to Test" in App Store Connect.
 
 ---
 
-Controller Bridge 1.0 plays Syndicate from a Denon LC6000 PRIME. Please try:
+DeckBridge 1.0 plays Syndicate from a Denon LC6000 PRIME. Please try:
 
 - Setup: follow the setup guide on first launch. FEEDBACK should read LIVE.
 - Play a set: transport, hot cues, loops, jog, the pitch fader and the Needle Drop strip.

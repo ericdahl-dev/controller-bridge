@@ -48,16 +48,19 @@ targets:
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # The name people see (#29). The product and bundle id stay ControllerBridge.
+        CFBundleDisplayName: DeckBridge
+        CFBundleName: DeckBridge
         # Menu bar only: no Dock icon.
         LSUIElement: true
         # Required for a Mac App Store upload (#28).
         LSApplicationCategoryType: public.app-category.music
         ITSAppUsesNonExemptEncryption: false
         # Settings' "All networks" feedback listener, for Syndicate on another Mac (#19).
-        NSLocalNetworkUsageDescription: Controller Bridge listens for OSC feedback from Syndicate running on another Mac on your network.
+        NSLocalNetworkUsageDescription: DeckBridge listens for OSC feedback from Syndicate running on another Mac on your network.
     settings:
       base:
-        # Placeholder until the display name is picked in #29; the bundle id is final.
+        # The display name is DeckBridge (#29), set in Info.plist; the bundle id is final and stays as it is.
         PRODUCT_BUNDLE_IDENTIFIER: dev.ericdahl.ControllerBridge
         # Set by the release workflow (#28), which signs with its App Store profile; empty locally.
         PROVISIONING_PROFILE_SPECIFIER: $(APP_PROFILE_NAME)
