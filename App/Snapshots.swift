@@ -4,6 +4,7 @@
 import AppKit
 import ControllerBridgeCapture
 import ControllerBridgeCore
+import ControllerBridgeRender
 import ControllerBridgePresentation
 import SwiftUI
 

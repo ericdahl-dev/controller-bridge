@@ -3,6 +3,7 @@
 import Dispatch
 import Foundation
 import ControllerBridgeCore
+import ControllerBridgeRender
 import os
 
 /// Makes the Coordinator inside one task and runs the Engine loop there, so that loop is the only code that ever

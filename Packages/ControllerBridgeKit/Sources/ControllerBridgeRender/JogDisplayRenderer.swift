@@ -12,12 +12,13 @@ import CoreGraphics
 import CoreText
 import Foundation
 
-enum JogDisplayRenderer {
-    static let size = JogImage.size
+public enum JogDisplayRenderer {
+    public static let size = JogImage.size
 
     /// RGBA bytes, row by row, top first, upright: what `JogImage.forUnit` turns and encodes. `litBeat` (1–4) lights
     /// that beat's section; `marker` draws the marker that many turns clockwise from 12 o'clock.
-    static func render(_ content: JogDisplayContent, litBeat: Int? = nil, marker: Double? = nil) -> [UInt8] {
+    public static func render(_ content: JogDisplayContent, litBeat: Int? = nil, marker: Double? = nil) -> [UInt8] {
+        _ = fontsRegistered
         var pixels = [UInt8](repeating: 0, count: size * size * 4)
         guard let context = CGContext(
             data: &pixels, width: size, height: size, bitsPerComponent: 8, bytesPerRow: size * 4,
@@ -52,6 +53,15 @@ enum JogDisplayRenderer {
     }
 
     // MARK: Drawing
+
+    /// The Geist faces the design uses, bundled with this target (#221) so the image is the same in the app and under
+    /// `swift test`: unregistered, CoreText would quietly draw another font. Registered once, for this process.
+    static let fontNames = ["Geist-Bold", "Geist-Medium", "GeistMono-SemiBold"]
+    private static let fontsRegistered: Void = {
+        let urls = fontNames.compactMap { Bundle.module.url(forResource: $0, withExtension: "ttf", subdirectory: "Fonts") }
+        // Already registered (the app registers its own copies) is fine: the same faces either way.
+        CTFontManagerRegisterFontURLs(urls as CFArray, .process, true, nil)
+    }()
 
     private static func draw(_ content: JogDisplayContent, litBeat: Int?, in context: CGContext) {
         context.setFillColor(background)
