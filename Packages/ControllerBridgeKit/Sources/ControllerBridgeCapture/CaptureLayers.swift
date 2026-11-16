@@ -65,3 +65,22 @@ public enum CaptureLayers {
         facts.indicator = controls.dropFirst().first { $0.kind != .note || $0.release == nil }
     }
 }
+
+extension LayerFacts {
+    /// "Layer 2: Shift + Note 55 on ch 16 · indicator Note 51 on ch 2", for the select step. Nil before the button.
+    public var selectReadout: String? {
+        guard let select else { return nil }
+        return "Layer \(layer): " + (withShift ? "Shift + " : "") + select.summary + " · "
+            + (indicator.map { "indicator \($0.summary)" } ?? "no indicator")
+    }
+
+    /// "Layer 2: channel +1", or "same message as deck 1", for a layered step. Nil until both steps are in.
+    public var offsetReadout: String? {
+        guard let channelOffset, let numberOffset else { return nil }
+        func signed(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
+        var parts: [String] = []
+        if channelOffset != 0 { parts.append("channel \(signed(channelOffset))") }
+        if numberOffset != 0 { parts.append("number \(signed(numberOffset))") }
+        return "Layer \(layer): " + (parts.isEmpty ? "same message as deck 1" : parts.joined(separator: ", "))
+    }
+}

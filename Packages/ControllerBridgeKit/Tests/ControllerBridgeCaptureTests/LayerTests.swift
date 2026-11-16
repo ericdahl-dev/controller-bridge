@@ -103,4 +103,20 @@ struct LayerTests {
         let plainObject = try #require(try JSONSerialization.jsonObject(with: plain.file.encoded()) as? [String: Any])
         #expect(plainObject["layers"] == nil)
     }
+
+    @Test("Readouts for the layer steps, as the window shows them")
+    func readouts() {
+        let lc6000 = LayerFacts(
+            layer: 2, select: Self.note(16, 55, .noteOff), withShift: true, indicator: Self.note(2, 51, nil),
+            channelOffset: 1, numberOffset: 0
+        )
+        #expect(lc6000.selectReadout == "Layer 2: Shift + Note 55 on ch 16 · indicator Note 51 on ch 2")
+        #expect(lc6000.offsetReadout == "Layer 2: channel +1")
+        let plain = LayerFacts(layer: 2, select: Self.note(1, 70, .noteOff), withShift: false, indicator: nil, channelOffset: 0, numberOffset: 0)
+        #expect(plain.selectReadout == "Layer 2: Note 70 on ch 1 · no indicator")
+        #expect(plain.offsetReadout == "Layer 2: same message as deck 1")
+        let unknown = LayerFacts(layer: 2, select: nil, withShift: false, indicator: nil, channelOffset: nil, numberOffset: nil)
+        #expect(unknown.selectReadout == nil)
+        #expect(unknown.offsetReadout == nil)
+    }
 }
