@@ -29,6 +29,10 @@ struct PaletteTests {
             ("attention orange on surface", p.attention, p.surface),
             ("error red on surface", p.error, p.surface),
             ("ink on the accent pill", p.onAccent, p.accent),
+            // #174: the selected segment is the window color on a text-color fill; a hovered tonal pill is the text
+            // color at 14% over the raised fill
+            ("window color on the selected segment", p.panel, p.text),
+            ("text on a hovered tonal pill", p.text, p.text.over(p.buttonRaised, opacity: 0.14)),
         ]
     }
 

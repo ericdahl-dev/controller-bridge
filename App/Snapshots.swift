@@ -137,6 +137,7 @@ enum Snapshots {
         }
         write(buttonStates, to: "\(directory)/buttons.png")
         write(siteStyles, to: "\(directory)/site-styles.png")
+        write(siteStyles.environment(\.forcesIncreasedContrast, true), to: "\(directory)/site-styles-increased-contrast.png")
         for (name, configure) in states {
             let status = BridgeStatus()
             configure(status)

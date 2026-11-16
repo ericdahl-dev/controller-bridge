@@ -56,6 +56,7 @@ struct PillButtonStyle: ButtonStyle {
         @Environment(\.isFocused) private var focused
         @Environment(\.isEnabled) private var enabled
         @Environment(\.colorSchemeContrast) private var contrast
+        @Environment(\.forcesIncreasedContrast) private var forced
         @State private var hovering = false
 
         var body: some View {
@@ -96,7 +97,7 @@ struct PillButtonStyle: ButtonStyle {
 
         /// No edge, as on the site: the label names the button (#67 item 4). With Increase Contrast on, a 3:1 edge.
         @ViewBuilder private var edge: some View {
-            if contrast == .increased && style.kind != .quiet {
+            if (contrast == .increased || forced) && style.kind != .quiet {
                 Capsule().strokeBorder(Color(\.buttonEdge), lineWidth: 1)
             }
         }
@@ -109,6 +110,8 @@ struct SegmentedPills<Option: Hashable>: View {
     let options: [Option]
     let title: (Option) -> String
     @Binding var selection: Option
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.forcesIncreasedContrast) private var forced
 
     var body: some View {
         HStack(spacing: 2) {
@@ -120,6 +123,8 @@ struct SegmentedPills<Option: Hashable>: View {
         }
         .padding(3)
         .background(Theme.buttonRaised, in: Capsule())
+        // With Increase Contrast on, the track gets a 3:1 edge, as the pills do.
+        .overlay { if contrast == .increased || forced { Capsule().strokeBorder(Color(\.buttonEdge), lineWidth: 1) } }
     }
 }
 
@@ -169,6 +174,12 @@ struct ToneChip: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken ?? word)
     }
+}
+
+extension EnvironmentValues {
+    /// Draws the Increase Contrast look regardless of the system setting. For snapshots, since colorSchemeContrast
+    /// can't be set (#174).
+    @Entry var forcesIncreasedContrast = false
 }
 
 extension View {
