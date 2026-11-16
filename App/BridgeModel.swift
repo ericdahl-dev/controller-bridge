@@ -67,6 +67,8 @@ final class BridgeModel {
     /// The running profile's deck layers (#79): empty for a controller without them.
     private(set) var layers: [Mapping.Layer] = []
     private(set) var settings: BridgeSettings?
+    /// Puts settings into effect (#136): everything but the host at once, the host when it opens.
+    private var applier: SettingsApplier?
     /// The profiles that ship with the app, and the ones running with any import applied (#24). The decisions are
     /// in ControllerBridgeCore's MappingLibrary (#94); this keeps the file.
     private var library: MappingLibrary?
@@ -104,16 +106,18 @@ final class BridgeModel {
     func setDeck(_ deck: Int, controller index: Int) {
         guard var new = settings, new.controllers.indices.contains(index), new.controllers[index].deck != deck else { return }
         new.controllers[index].deck = deck
-        // A refused change says why, under the picker, instead of doing nothing (#90).
-        Task { @MainActor in
-            do throws(SettingsError) {
-                try await apply(new)
-                status.deckProblem = nil
-            } catch {
-                switch error {
-                case .invalid(let list): status.deckProblem = list.joined(separator: " ")
-                case .fields(let list): status.deckProblem = list.map(\.message).joined(separator: " ")
-                }
+        // At once, never waiting on the network (#136). A refused change says why, under the picker (#90).
+        guard let applier else {
+            status.deckProblem = "The bridge isn't running, so the deck can't change. Quit and reopen it."
+            return
+        }
+        do {
+            try applier.applyNow(new)
+            status.deckProblem = nil
+        } catch {
+            switch error {
+            case .invalid(let list): status.deckProblem = list.joined(separator: " ")
+            case .fields(let list): status.deckProblem = list.map(\.message).joined(separator: " ")
             }
         }
     }
@@ -173,7 +177,7 @@ final class BridgeModel {
     func apply(_ new: BridgeSettings) async throws(SettingsError) -> String? {
         var new = new
         new.syndicateHost = new.syndicateHost.trimmingCharacters(in: .whitespaces)
-        guard let old = settings, let producer, let osc else {
+        guard settings != nil, producer != nil, let osc, let applier else {
             // Not running, such as a Syndicate host the sender couldn't open (#88): save valid settings anyway, so a
             // fixed host is used at the next launch. Never a silent success (#62): say a restart is needed.
             guard settings != nil else {
@@ -183,18 +187,16 @@ final class BridgeModel {
             settings = new
             return "Saved. Quit and reopen the bridge to use these settings."
         }
-        let problems = new.problems
-        guard problems.isEmpty else { throw .invalid(problems) }
-        // A new host, or one that never opened (#109): open it first. On failure the old one stays, and the reason
-        // goes under the host field.
-        if new.syndicateHost != old.syndicateHost || new.syndicatePort != old.syndicatePort || !osc.isReady {
-            if let problem = await osc.connect(host: new.syndicateHost, port: new.syndicatePort) {
-                throw .fields([SettingsProblem(field: .host, message: problem)])
-            }
-            if status.stopReason == .oscSender { status.problem = nil }
-        }
-        try new.save(to: storage)
+        // Everything but the host applies at once; a new host opens after, and a failure goes under its field (#136).
+        try await applier.apply(new, senderReady: osc.isReady)
+        if osc.isReady, status.stopReason == .oscSender { status.problem = nil }
+        return nil
+    }
+
+    /// One applied change, from the applier: tell the Coordinator and update the status.
+    private func putIntoEffect(old: BridgeSettings, new: BridgeSettings) {
         settings = new
+        guard let producer else { return }
         if new.controllers != old.controllers {
             // A controller following its own layers runs as one entry per layer (#79).
             producer.setControllers(ControllerSettings.expanded(new.controllers, layers: layers))
@@ -206,7 +208,6 @@ final class BridgeModel {
             producer.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors)
         }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
-        return nil
     }
 
     /// (Re)binds the feedback listener. The old one is closed first; a failure shows in the status, never crashes.
@@ -276,6 +277,9 @@ final class BridgeModel {
         self.osc = osc
         connectOSC(host: settings.syndicateHost, port: settings.syndicatePort)
         producer = pipe.producer
+        applier = SettingsApplier(
+            settings: settings, storage: storage, connect: { [osc] host, port in await osc.connect(host: host, port: port) }
+        ) { [weak self] old, new in self?.putIntoEffect(old: old, new: new) }
         listen(settings)
 
         ticker = Ticker(producer: pipe.producer)
