@@ -145,4 +145,26 @@ struct MappingCheckTests {
             "jog.seek_fallback_ticks_per_beat: 0 is out of range, expected 1-1000",
         ])
     }
+
+    @Test("Every other number has a range too: a port past 65535, a negative time and a huge time are named")
+    func numberRanges() {
+        #expect(Self.problems(#"{"osc": {"port": 70000, "feedback_port": 0, "feedback_quiet_ms": -5, "feedback_answer_ms": 1e300}}"#) == [
+            "osc.port: 70000 is out of range, expected 1-65535",
+            "osc.feedback_port: 0 is out of range, expected 1-65535",
+            "osc.feedback_quiet_ms: -5 is out of range, expected 0-60000",
+            "osc.feedback_answer_ms: 1e+300 is out of range, expected 0-60000",
+        ])
+        #expect(Self.problems(#"{"jog": {"bend_release_ms": 0, "seek_seconds_per_tick": 11}, "pitch": {"dead_zone": 2, "pickup_tolerance": -1}, "leds": {"pulse_ms": 99999}}"#) == [
+            "jog.bend_release_ms: 0 is out of range, expected 1-5000",
+            "jog.seek_seconds_per_tick: 11 is out of range, expected 0-10",
+            "pitch.dead_zone: 2 is out of range, expected 0-1",
+            "pitch.pickup_tolerance: -1 is out of range, expected 0-1",
+            "leds.pulse_ms: 99999 is out of range, expected 0-60000",
+        ])
+    }
+
+    @Test("A number too big to be a real number (1e999 is infinity) is refused where the user wrote it")
+    func infiniteNumber() {
+        #expect(Self.problems(#"{"pitch": {"dead_zone": 1e999}}"#) == ["The file has a number too large to use (near byte 24)."])
+    }
 }

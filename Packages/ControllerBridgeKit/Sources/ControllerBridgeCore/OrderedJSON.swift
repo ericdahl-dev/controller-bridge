@@ -37,6 +37,11 @@ indirect enum OrderedJSON: Equatable {
     /// value can't overflow the stack on a hostile file (#92).
     static let maxDepth = 64
 
+    struct TooLarge: Error, CustomStringConvertible {
+        var offset: Int
+        var description: String { "The file has a number too large to use (near byte \(offset))." }
+    }
+
     struct TooDeep: Error, CustomStringConvertible {
         var description: String { "The file nests deeper than \(OrderedJSON.maxDepth) levels, so it isn't a mapping." }
     }
@@ -151,6 +156,8 @@ indirect enum OrderedJSON: Equatable {
             guard index > start, let value = Double(String(decoding: bytes[start..<index], as: UTF8.self)) else {
                 throw ParseError(offset: start)
             }
+            // 1e999 parses as infinity, which no setting can use and which can't be written back as JSON.
+            guard value.isFinite else { throw TooLarge(offset: start) }
             return .number(value, isInteger: isInteger)
         }
     }
