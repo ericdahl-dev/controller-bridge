@@ -39,6 +39,9 @@ public struct CaptureSession: Sendable {
         self.prompts = prompts
     }
 
+    /// How many prompts are behind: the current one's index.
+    public var finishedCount: Int { index }
+
     /// The prompt being captured, or nil when the list is done.
     public var current: CapturePrompt? { prompts.indices.contains(index) ? prompts[index] : nil }
 

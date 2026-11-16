@@ -31,11 +31,16 @@ public struct CaptureFlow: Sendable {
     public var prompt: CapturePrompt? { phase == .steps ? session?.current : nil }
 
     /// The current step, from 1.
-    public var stepNumber: Int { (session?.file.steps.count ?? 0) + 1 }
+    public var stepNumber: Int { (session?.finishedCount ?? 0) + 1 }
     public var stepCount: Int { prompts.count }
 
-    /// What the current step has detected so far.
-    public var detected: [ControlFacts] { phase == .steps ? session?.currentControls ?? [] : [] }
+    /// What the current step has detected so far. A busy control (a jog spin is hundreds of messages) would make
+    /// working it out on every message too slow, so it's worked out at once for the first detection, then at most
+    /// every `refreshInterval`, and on `tick` for whatever came since.
+    public private(set) var detected: [ControlFacts] = []
+    public static let refreshInterval = 0.1
+    private var lastRefresh = -Double.infinity
+    private var stale = false
 
     /// The capture file, once the steps start.
     public var file: CaptureFile? { session?.file }
@@ -43,6 +48,18 @@ public struct CaptureFlow: Sendable {
     public mutating func receive(_ bytes: [UInt8], at time: Double, port: Int = 0) {
         guard phase == .steps else { return }
         session?.receive(bytes, at: time, port: port)
+        if detected.isEmpty || time - lastRefresh >= Self.refreshInterval { refresh(at: time) } else { stale = true }
+    }
+
+    /// The app's clock, a few times a second: shows what arrived since the last refresh.
+    public mutating func tick(at time: Double) {
+        if stale { refresh(at: time) }
+    }
+
+    private mutating func refresh(at time: Double? = nil) {
+        detected = phase == .steps ? session?.currentControls ?? [] : []
+        stale = false
+        if let time { lastRefresh = time }
     }
 
     /// Whole seconds left before the idle step's Next, or nil on any other step.
@@ -69,6 +86,7 @@ public struct CaptureFlow: Sendable {
         guard prompt != nil else { return }
         session?.redo(at: time)
         stepStart = time
+        refresh()
     }
 
     public mutating func skip(at time: Double) {
@@ -80,6 +98,7 @@ public struct CaptureFlow: Sendable {
     private mutating func moved(at time: Double) {
         stepStart = time
         if session?.current == nil { phase = .done }
+        refresh()
     }
 
     /// What VoiceOver should announce now, if anything: a new prompt, a change in what's detected, or the end. Each

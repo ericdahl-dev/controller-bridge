@@ -75,6 +75,21 @@ struct CaptureFlowTests {
         #expect(flow.file?.device == "LC6000 PRIME")
     }
 
+    @Test("A long burst is worked out at most every 100 ms, the first detection at once, and the rest on the next tick")
+    func throttled() {
+        var flow = Self.started(at: 100)
+        flow.next(at: 105)
+        flow.receive([0x90, 0x01, 0x7F], at: 106.00)
+        #expect(flow.detected.map(\.summary) == ["Note 1 on ch 1"])
+        flow.receive([0x90, 0x02, 0x7F], at: 106.05)
+        #expect(flow.detected.map(\.summary) == ["Note 1 on ch 1"])
+        flow.receive([0x90, 0x03, 0x7F], at: 106.12)
+        #expect(flow.detected.map(\.summary) == ["Note 1 on ch 1", "Note 2 on ch 1", "Note 3 on ch 1"])
+        flow.receive([0x90, 0x04, 0x7F], at: 106.13)
+        flow.tick(at: 106.14)
+        #expect(flow.detected.count == 4)
+    }
+
     @Test("VoiceOver hears each new prompt and each change in what's detected, not every message")
     func announcements() {
         var flow = Self.started(at: 100)
@@ -88,7 +103,9 @@ struct CaptureFlowTests {
         flow.receive([0x80, 0x01, 0x00], at: 106.1)
         flow.receive([0x90, 0x01, 0x7F], at: 106.5)
         #expect(flow.takeAnnouncement() == nil)
-        flow.receive([0x90, 0x02, 0x7F], at: 106.6)
+        flow.receive([0x90, 0x02, 0x7F], at: 106.55)  // within 100 ms of the last refresh: shown on the next tick
+        #expect(flow.takeAnnouncement() == nil)
+        flow.tick(at: 106.8)
         #expect(flow.takeAnnouncement() == "Detected: Note 1 on channel 1, then Note 2 on channel 1.")
 
         flow.redo(at: 107)
