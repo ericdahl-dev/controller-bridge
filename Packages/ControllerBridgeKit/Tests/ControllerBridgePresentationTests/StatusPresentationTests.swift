@@ -7,9 +7,9 @@ struct StatusPresentationTests {
     @Test("Connected and live: both lights green, the icon is OK, and the status line reads like Syndicate's")
     func connectedAndLive() {
         let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1))
-        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
+        #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
         #expect(status.lights == [
-            StatusLight(label: "LC6000", word: "CONNECTED", tone: .live),
+            StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live),
             StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live),
         ])
         #expect(status.icon == .ok)
@@ -26,7 +26,8 @@ struct StatusPresentationTests {
     @Test("Feedback port taken: a red PORT 9096 IN USE light, and the icon shows an error")
     func portInUse() {
         let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .portInUse(port: 9096), deck: 1))
-        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● PORT 9096 IN USE · DECK [1]")
+        // 63 characters with DECK: over the panel's budget, so DECK drops first (#66).
+        #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● PORT 9096 IN USE")
         #expect(status.lights.last == StatusLight(label: "FEEDBACK", word: "PORT 9096 IN USE", tone: .error))
         #expect(status.icon == .error)
     }
@@ -34,8 +35,8 @@ struct StatusPresentationTests {
     @Test("A device with no matching profile (#43): an orange NO PROFILE light under the device's name")
     func noProfile() {
         let status = StatusPresentation(BridgeState(controller: .noProfile(device: "DDJ-FLX4"), feedback: .live(port: 9096), deck: 1))
-        #expect(status.line == "DDJ-FLX4 ● NO PROFILE · FEEDBACK ● LIVE · DECK [1]")
-        #expect(status.lights.first == StatusLight(label: "DDJ-FLX4", word: "NO PROFILE", tone: .attention))
+        #expect(status.line == "CONTROLLER ● NO PROFILE · FEEDBACK ● LIVE · DECK [1]")
+        #expect(status.lights.first == StatusLight(label: "CONTROLLER", word: "NO PROFILE", tone: .attention))
         #expect(status.icon == .attention)
     }
 
@@ -46,7 +47,7 @@ struct StatusPresentationTests {
         #expect(starting.icon == .attention)
 
         let failed = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .failed, deck: 1))
-        #expect(failed.line == "LC6000 ● CONNECTED · FEEDBACK ● FAILED · DECK [1]")
+        #expect(failed.line == "CONTROLLER ● CONNECTED · FEEDBACK ● FAILED · DECK [1]")
         #expect(failed.icon == .error)
     }
 
@@ -76,7 +77,7 @@ struct StatusPresentationTests {
     @Test("Listening, but Syndicate hasn't answered since launch (#21): a gray WAITING, and the icon asks for attention")
     func feedbackWaiting() {
         let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .waiting(port: 9096), deck: 1))
-        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● WAITING · DECK [1]")
+        #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● WAITING · DECK [1]")
         #expect(status.lights.last == StatusLight(label: "FEEDBACK", word: "WAITING", tone: .idle))
         #expect(status.icon == .attention)
     }
@@ -87,7 +88,7 @@ struct StatusPresentationTests {
             controller: .connected(profile: "LC6000"), feedback: .stopped(port: 9096), deck: 1,
             lastDropout: "Syndicate feedback stopped"
         ))
-        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● DROPPED · DECK [1]")
+        #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● DROPPED · DECK [1]")
         #expect(status.lights.last == StatusLight(label: "FEEDBACK", word: "DROPPED", tone: .attention))
         #expect(status.icon == .attention)
         #expect(status.lastDropout == "LAST DROPOUT: Syndicate feedback stopped")
@@ -103,12 +104,12 @@ struct StatusPresentationTests {
     func master() {
         let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1, master: true))
         #expect(status.master == StatusLight(label: "TEMPO", word: "MASTER", tone: .attention))
-        #expect(status.line == "LC6000 ● CONNECTED · FEEDBACK ● LIVE · DECK [1] · MASTER")
+        #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1] · MASTER")
         #expect(status.icon == .ok)
 
         let notMaster = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1))
         #expect(notMaster.master == nil)
-        #expect(notMaster.line == "LC6000 ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
+        #expect(notMaster.line == "CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
     }
 
     @Test("Demo mode (#64): a leading orange DEMO ● CONTROLLER light, DEMO in the status line, and the icon on attention")
@@ -118,10 +119,10 @@ struct StatusPresentationTests {
         ), lineBudget: 100)
         #expect(status.lights == [
             StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention),
-            StatusLight(label: "Denon LC6000 PRIME", word: "CONNECTED", tone: .live),
+            StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live),
             StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live),
         ])
-        #expect(status.line == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
+        #expect(status.line == "DEMO ● CONTROLLER · CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
         // An exception to "the icon is for problems": DEMO must never be mistaken for real hardware.
         #expect(status.icon == .attention)
     }
@@ -136,12 +137,12 @@ struct StatusPresentationTests {
     @Test("DEMO and MASTER: the line drops DECK, then MASTER, then FEEDBACK, then the controller, as the budget shrinks")
     func lineFitsBudget() {
         #expect(StatusPresentation(Self.demoMaster, lineBudget: 100).line
-            == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE · DECK [1] · MASTER")
-        #expect(StatusPresentation(Self.demoMaster, lineBudget: 80).line
-            == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE · MASTER")
-        #expect(StatusPresentation(Self.demoMaster, lineBudget: 70).line
-            == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE")
-        #expect(StatusPresentation(Self.demoMaster, lineBudget: 50).line == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED")
+            == "DEMO ● CONTROLLER · CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1] · MASTER")
+        #expect(StatusPresentation(Self.demoMaster, lineBudget: 75).line
+            == "DEMO ● CONTROLLER · CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · MASTER")
+        #expect(StatusPresentation(Self.demoMaster, lineBudget: 65).line
+            == "DEMO ● CONTROLLER · CONTROLLER ● CONNECTED · FEEDBACK ● LIVE")
+        #expect(StatusPresentation(Self.demoMaster, lineBudget: 45).line == "DEMO ● CONTROLLER · CONTROLLER ● CONNECTED")
         // The top part always stays whole, even over budget: a word is never cut.
         #expect(StatusPresentation(Self.demoMaster, lineBudget: 10).line == "DEMO ● CONTROLLER")
     }
@@ -154,10 +155,10 @@ struct StatusPresentationTests {
 
     @Test("The parts the status bar draws are exactly the line's parts, in order, with each word's tone")
     func linePartsMatchLine() {
-        let status = StatusPresentation(Self.demoMaster, lineBudget: 80)
+        let status = StatusPresentation(Self.demoMaster, lineBudget: 75)
         #expect(status.lineParts == [
             StatusLinePart(label: "DEMO", word: "CONTROLLER", tone: .attention),
-            StatusLinePart(label: "Denon LC6000 PRIME", word: "CONNECTED", tone: .live),
+            StatusLinePart(label: "CONTROLLER", word: "CONNECTED", tone: .live),
             StatusLinePart(label: "FEEDBACK", word: "LIVE", tone: .live),
             StatusLinePart(label: nil, word: "MASTER", tone: .attention),
         ])
@@ -171,5 +172,32 @@ struct StatusPresentationTests {
         #expect(status.lights == [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)])
         #expect(status.line == "BRIDGE ● STOPPED · DECK [1]")
         #expect(status.icon == .error)
+    }
+
+    @Test("Unplugged after a connection is an orange CONTROLLER ● UNPLUGGED, so a DJ notices; never connected stays gray")
+    func unplugged() {
+        let unplugged = StatusPresentation(BridgeState(controller: .unplugged(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1))
+        #expect(unplugged.lights.first == StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention))
+        #expect(unplugged.icon == .attention)
+        let never = StatusPresentation(BridgeState(controller: .notConnected, feedback: .live(port: 9096), deck: 1))
+        #expect(never.lights.first == StatusLight(label: "CONTROLLER", word: "NOT CONNECTED", tone: .idle))
+    }
+
+    @Test("The header names the controller (not the app), with the last event under it; the light label stays CONTROLLER")
+    func header() {
+        let connected = StatusPresentation(BridgeState(
+            controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1, lastEvent: "Connected DENON LC6000 PRIME"
+        ))
+        #expect(connected.header == StatusHeader(title: "Denon LC6000 PRIME", subtitle: "Connected DENON LC6000 PRIME"))
+        #expect(connected.lights.first?.label == "CONTROLLER")
+
+        let unplugged = StatusPresentation(BridgeState(
+            controller: .unplugged(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1, lastEvent: "Unplugged at 21:14"
+        ))
+        #expect(unplugged.header == StatusHeader(title: "Denon LC6000 PRIME", subtitle: "Unplugged at 21:14"))
+        #expect(StatusPresentation(BridgeState(controller: .notConnected, feedback: .live(port: 9096), deck: 1)).header
+            == StatusHeader(title: "No controller", subtitle: nil))
+        #expect(StatusPresentation(BridgeState(controller: .noProfile(device: "DDJ-FLX4"), feedback: .live(port: 9096), deck: 1)).header
+            == StatusHeader(title: "DDJ-FLX4", subtitle: "No controller profile matches it"))
     }
 }

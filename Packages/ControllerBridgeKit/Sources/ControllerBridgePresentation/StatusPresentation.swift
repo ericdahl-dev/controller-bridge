@@ -3,6 +3,9 @@
 public struct BridgeState: Equatable, Sendable {
     public enum Controller: Equatable, Sendable {
         case connected(profile: String)
+        /// Connected earlier this session, now gone (#66): orange, so an unplug mid-set is noticed.
+        case unplugged(profile: String?)
+        /// Never connected since launch.
         case notConnected
         /// A MIDI device is there, but no controller profile matches it (#43).
         case noProfile(device: String)
@@ -33,10 +36,13 @@ public struct BridgeState: Equatable, Sendable {
     public var master: Bool
     /// The built-in demo controller is running (#64), not real hardware.
     public var demo: Bool
+    /// The last connect, disconnect or unplug, for the header's subtitle.
+    public var lastEvent: String?
 
     public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil,
-                master: Bool = false, demo: Bool = false) {
+                master: Bool = false, demo: Bool = false, lastEvent: String? = nil) {
         self.demo = demo
+        self.lastEvent = lastEvent
         self.controller = controller
         self.feedback = feedback
         self.deck = deck
@@ -89,6 +95,17 @@ public struct StatusLinePart: Equatable, Sendable {
     public var text: String { label.map { "\($0) ● \(word)" } ?? word }
 }
 
+/// The panel's header: what controller this is, and what last happened to it.
+public struct StatusHeader: Equatable, Sendable {
+    public var title: String
+    public var subtitle: String?
+
+    public init(title: String, subtitle: String?) {
+        self.title = title
+        self.subtitle = subtitle
+    }
+}
+
 /// The menu-bar icon's state dot.
 public enum IconState: Equatable, Sendable {
     case ok
@@ -100,6 +117,8 @@ public enum IconState: Equatable, Sendable {
 public struct StatusPresentation: Equatable, Sendable {
     public var lights: [StatusLight]
     public var line: String
+    /// The panel's header: the controller's name and its last event (#66).
+    public var header: StatusHeader
     /// The parts of `line`, for the status bar to draw in their tones.
     public var lineParts: [StatusLinePart]
     public var icon: IconState
@@ -113,9 +132,17 @@ public struct StatusPresentation: Equatable, Sendable {
 
     public init(_ state: BridgeState, lineBudget: Int = StatusPresentation.lineBudget) {
         let controller: StatusLight = switch state.controller {
-        case .connected(let profile): StatusLight(label: profile, word: "CONNECTED", tone: .live)
+        // The label is always CONTROLLER, so the lights don't shift sideways; the name is in the header (#66).
+        case .connected: StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live)
+        case .unplugged: StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention)
         case .notConnected: StatusLight(label: "CONTROLLER", word: "NOT CONNECTED", tone: .idle)
-        case .noProfile(let device): StatusLight(label: device, word: "NO PROFILE", tone: .attention)
+        case .noProfile: StatusLight(label: "CONTROLLER", word: "NO PROFILE", tone: .attention)
+        }
+        header = switch state.controller {
+        case .connected(let profile): StatusHeader(title: profile, subtitle: state.lastEvent)
+        case .unplugged(let profile): StatusHeader(title: profile ?? "No controller", subtitle: state.lastEvent)
+        case .notConnected: StatusHeader(title: "No controller", subtitle: state.lastEvent)
+        case .noProfile(let device): StatusHeader(title: device, subtitle: "No controller profile matches it")
         }
         let feedback: StatusLight = switch state.feedback {
         case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)
