@@ -34,21 +34,17 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func form(_ settings: Binding<BridgeSettings>) -> some View {
-        let controller = settings.controllers[0]
-
-        section("Deck") {
-            Picker("Deck", selection: controller.deck) {
-                ForEach(1...4, id: \.self) { Text("\($0)").tag($0) }
+        ForEach(settings.controllers.indices, id: \.self) { index in
+            controllerSection(settings, index)
+        }
+        HStack {
+            if settings.wrappedValue.controllers.count < 4 {
+                Button("Add controller") { settings.wrappedValue.controllers.append(Self.newEntry(after: settings.wrappedValue.controllers)) }
+                    .buttonStyle(FlatButtonStyle())
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
         }
-
-        section("Controller") {
-            devicePicker("MIDI input", selection: controller.input, devices: sources)
-            devicePicker("MIDI output", selection: controller.output, devices: destinations)
-            Toggle("LEDs", isOn: settings.ledsEnabled).font(Theme.ui(12))
-        }
+        Toggle("LEDs", isOn: settings.ledsEnabled).font(Theme.ui(12))
+        ForEach(settings.wrappedValue.warnings, id: \.self) { note($0, color: Theme.attention) }
 
         section("OSC") {
             field("Host", text: settings.syndicateHost)
@@ -84,6 +80,40 @@ struct SettingsView: View {
     }
 
     // MARK: Pieces
+
+    /// One controller entry: its deck, devices and channel (#25).
+    private func controllerSection(_ settings: Binding<BridgeSettings>, _ index: Int) -> some View {
+        // Bounds-checked: right after a removal, SwiftUI can still read the removed row once.
+        let controller = Binding<ControllerSettings>(
+            get: { settings.wrappedValue.controllers.indices.contains(index) ? settings.wrappedValue.controllers[index] : Self.newEntry(after: []) },
+            set: { if settings.wrappedValue.controllers.indices.contains(index) { settings.wrappedValue.controllers[index] = $0 } }
+        )
+        let title = settings.wrappedValue.controllers.count > 1 ? "Controller \(index + 1)" : "Controller"
+        return section(title) {
+            Picker("Deck", selection: controller.deck) {
+                ForEach(1...4, id: \.self) { Text("Deck \($0)").tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            devicePicker("MIDI input", selection: controller.input, devices: sources)
+            devicePicker("MIDI output", selection: controller.output, devices: destinations)
+            Picker("Channel", selection: controller.channel) {
+                Text("From the profile").tag(Int?.none)
+                ForEach(1...16, id: \.self) { Text("\($0)").tag(Int?.some($0)) }
+            }
+            .font(Theme.ui(12))
+            if settings.wrappedValue.controllers.count > 1 {
+                Button("Remove controller \(index + 1)") { settings.wrappedValue.controllers.remove(at: index) }
+                    .buttonStyle(FlatButtonStyle())
+            }
+        }
+    }
+
+    /// A new entry on the first deck no controller drives yet, with automatic devices.
+    private static func newEntry(after entries: [ControllerSettings]) -> ControllerSettings {
+        let used = Set(entries.map(\.deck))
+        return ControllerSettings(deck: (1...4).first { !used.contains($0) } ?? 1, input: nil, output: nil)
+    }
 
     private func section(_ caption: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 6) {
