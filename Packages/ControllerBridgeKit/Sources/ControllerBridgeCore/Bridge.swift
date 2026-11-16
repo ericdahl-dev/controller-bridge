@@ -119,6 +119,8 @@ final class Bridge {
     /// The jog's and the Needle Drop's last MSB, and the platter's last position, for 14-bit pairs (#103).
     var jogMSBValue: UInt8 = 0
     var jogPosition: Int?
+    /// Platter counts moved since the Coordinator last read them, for the jog display's marker (#165).
+    var jogCountsPending = 0
     var needleMSBValue: UInt8 = 0
 
     // Syndicate's state, from feedback.
@@ -368,7 +370,7 @@ final class Bridge {
     }
 }
 
-private extension OSCArgument {
+extension OSCArgument {
     /// Feedback flags arrive as an int or a float; anything nonzero is on.
     var number: Double? {
         switch self {
