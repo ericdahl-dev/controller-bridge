@@ -48,7 +48,7 @@ python3 -m venv .venv
 
 1. **Settings → OSC:** turn **OSC INPUT ENABLED** on. The listen port defaults to 9090.
 2. **Settings → OSC FEEDBACK:** set DEST IP to the bridge's computer (`127.0.0.1` if it's the same one) and PORT to `9096`. Tick these subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.
-3. **Settings → MIDI:** leave the LC6000 input **off**. Otherwise Syndicate's own mapping and the bridge would both react to every button.
+3. **Settings → MIDI:** turn your controller's MIDI input **off** (for example, Denon LC6000 PRIME). Otherwise Syndicate's own mapping and the bridge would both react to every button.
 
 ## Run
 
@@ -95,7 +95,7 @@ A native, sandboxed menu-bar app is replacing the Python bridge (#12). `Packages
 brew install xcodegen && xcodegen generate
 xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configuration Release \
   -derivedDataPath build CODE_SIGN_IDENTITY=- build
-scripts/smoke.sh   # required before a PR: a virtual LC6000 and a fake Syndicate check Play out and the Play LED back
+scripts/smoke.sh   # a virtual LC6000 and a fake Syndicate check Play out and the Play LED back; CI requires it too
 ```
 
 Releases are a version tag on `main`; see [`docs/DEVELOPING.md`](docs/DEVELOPING.md#releasing-to-testflight) for the workflow, its secrets and the one-time setup.
