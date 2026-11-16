@@ -72,4 +72,16 @@ struct ProfileImportTests {
         #expect(ControllerProfile.settingsOwnedKeys(in: Data(file.utf8)) == ["mapping.osc.port", "mapping.deck.number"])
         #expect(ControllerProfile.settingsOwnedKeys(in: Data(#"{"mapping": {"notes": {"play": 60}}}"#.utf8)) == [])
     }
+
+    @Test("Export leaves out the keys Settings owns, so editing them in a file can't look like it worked; it still round-trips")
+    func exportOmitsSettingsOwned() throws {
+        let profile = try Self.importing(#"{"mapping": {"notes": {"play": 60}}}"#)
+        let exported = try profile.exported()
+        let object = try #require(try JSONSerialization.jsonObject(with: exported) as? [String: Any])
+        let mapping = try #require(object["mapping"] as? [String: Any])
+        #expect((mapping["osc"] as? [String: Any]).map { Set($0.keys) } == ["root", "feedback_quiet_ms", "feedback_answer_ms"])
+        #expect(mapping["deck"] == nil)
+        #expect((mapping["midi"] as? [String: Any]).map { Set($0.keys) } == ["input", "output", "ignore_notes"])
+        #expect(try Self.importing(String(decoding: exported, as: UTF8.self)) == profile)
+    }
 }

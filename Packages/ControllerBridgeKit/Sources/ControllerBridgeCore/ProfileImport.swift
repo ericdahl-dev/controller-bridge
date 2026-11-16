@@ -67,7 +67,8 @@ extension ControllerProfile {
             ("id", .string(id)),
             ("name", .string(name)),
             ("device_hints", .array(deviceHints.map { .string($0) })),
-            ("mapping", encoded.ordered(like: schema)),
+            // Settings owns these (#93), so the file never carries values that would silently lose to it.
+            ("mapping", encoded.ordered(like: schema).removing(Self.settingsOwned)),
         ])
         return file.data(pretty: true)
     }
@@ -148,12 +149,14 @@ extension ControllerProfile {
 }
 
 extension OrderedJSON {
-    /// The object without the given section.key paths; anything else unchanged.
+    /// The object without the given section.key paths, and without a section that only had those; anything else
+    /// unchanged.
     func removing(_ paths: [[String]]) -> OrderedJSON {
         guard case .object(let sections) = self else { return self }
-        return .object(sections.map { section, value in
+        return .object(sections.compactMap { section, value in
             guard case .object(let keys) = value else { return (section, value) }
-            return (section, .object(keys.filter { !paths.contains([section, $0.key]) }))
+            let kept = keys.filter { !paths.contains([section, $0.key]) }
+            return kept.isEmpty && !keys.isEmpty ? nil : (section, .object(kept))
         })
     }
 }
