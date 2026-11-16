@@ -1,0 +1,77 @@
+import ControllerBridgeCapture
+import Testing
+
+/// The capture window's model (#186): ports, then the steps, then done. The view only shows it.
+@Suite("Capture flow")
+struct CaptureFlowTests {
+    static let prompts = [
+        CapturePrompt(id: "idle", text: "Don't touch anything for 5 seconds.", gesture: .idle),
+        CapturePrompt(id: "deck1.play", text: "Press and release Play on deck 1.", gesture: .press),
+        CapturePrompt(id: "deck1.cue", text: "Press and release Cue on deck 1.", gesture: .press),
+    ]
+    static let ports = CapturePorts(input: ["LC6000 PRIME"], output: ["LC6000 PRIME"])
+
+    static func started(at time: Double = 100) -> CaptureFlow {
+        var flow = CaptureFlow(prompts: prompts, appVersion: "1.2.0")
+        flow.start(device: "LC6000 PRIME", ports: ports, at: time)
+        return flow
+    }
+
+    @Test("It starts on choosing ports, then walks the steps, numbered 1 of 3")
+    func phases() {
+        var flow = CaptureFlow(prompts: Self.prompts, appVersion: "1.2.0")
+        #expect(flow.phase == .ports)
+        #expect(flow.prompt == nil)
+        flow.start(device: "LC6000 PRIME", ports: Self.ports, at: 100)
+        #expect(flow.phase == .steps)
+        #expect(flow.prompt?.id == "idle")
+        #expect(flow.stepNumber == 1)
+        #expect(flow.stepCount == 3)
+    }
+
+    @Test("The idle step: Next only after 5 seconds, with a countdown; no Skip, no Redo")
+    func idleStep() {
+        var flow = Self.started(at: 100)
+        #expect(!flow.canNext(at: 104.9))
+        #expect(flow.idleSecondsLeft(at: 100) == 5)
+        #expect(flow.idleSecondsLeft(at: 102.2) == 3)
+        #expect(flow.idleSecondsLeft(at: 105) == 0)
+        #expect(flow.canNext(at: 105))
+        #expect(!flow.canSkip)
+        #expect(!flow.canRedo)
+        flow.next(at: 105)
+        #expect(flow.prompt?.id == "deck1.play")
+        #expect(flow.idleSecondsLeft(at: 105) == nil)
+    }
+
+    @Test("A control step: Next once something is detected, Redo once anything arrived, Skip any time")
+    func controlStep() {
+        var flow = Self.started(at: 100)
+        flow.next(at: 105)
+        #expect(!flow.canNext(at: 106))
+        #expect(!flow.canRedo)
+        #expect(flow.canSkip)
+        flow.receive([0x90, 0x01, 0x7F], at: 106)
+        #expect(flow.canRedo)
+        #expect(flow.canNext(at: 106))
+        #expect(flow.detected.map(\.summary) == ["Note 1 on ch 1"])
+        flow.redo(at: 107)
+        #expect(flow.detected.isEmpty)
+        #expect(!flow.canRedo)
+    }
+
+    @Test("Next or Skip on the last step finishes, and the file holds every step")
+    func done() {
+        var flow = Self.started(at: 100)
+        flow.next(at: 105)
+        flow.receive([0x90, 0x01, 0x7F], at: 106)
+        flow.receive([0x80, 0x01, 0x00], at: 106.1)
+        flow.next(at: 107)
+        flow.skip(at: 108)
+        #expect(flow.phase == .done)
+        #expect(flow.prompt == nil)
+        #expect(flow.file?.steps.map(\.prompt) == ["idle", "deck1.play", "deck1.cue"])
+        #expect(flow.file?.steps.map(\.status) == [.confirmed, .confirmed, .skipped])
+        #expect(flow.file?.device == "LC6000 PRIME")
+    }
+}

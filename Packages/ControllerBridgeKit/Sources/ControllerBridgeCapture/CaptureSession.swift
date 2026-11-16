@@ -42,6 +42,12 @@ public struct CaptureSession: Sendable {
     /// The prompt being captured, or nil when the list is done.
     public var current: CapturePrompt? { prompts.indices.contains(index) ? prompts[index] : nil }
 
+    /// Whether anything but clock and noise has arrived in the current take.
+    public var hasTake: Bool {
+        let noise = Set(idleNoise)
+        return take.contains { !Inference.isRealtime($0.bytes) && !(Inference.noiseKey($0.bytes).map(noise.contains) ?? false) }
+    }
+
     /// What the current take has detected so far, for showing live.
     public var currentControls: [ControlFacts] {
         guard let current else { return [] }
