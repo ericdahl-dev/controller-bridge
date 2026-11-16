@@ -89,7 +89,7 @@ struct LayersTests {
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, true, false, false])
     }
 
-    @Test("Leaving a layer releases what was held on its deck, once; the new layer's controls drive the new deck")
+    @Test("Leaving a layer releases what was held on its deck, once, at the note 51 handover; Play on ch2 then goes to deck 2")
     func switchReleasesHolds() throws {
         let rig = try Self.layered()
         Self.note(rig, channel: 1, 2, 127)       // Cue held on layer 1
@@ -99,11 +99,11 @@ struct LayersTests {
         Self.note(rig, channel: 16, 55, 127)     // Shift + deck select
         Self.note(rig, channel: 1, 51, 0)
         Self.note(rig, channel: 2, 51, 127)
-        #expect(rig.osc.sent == [])              // only a hint so far
-        Self.note(rig, channel: 2, 1, 127)       // Play, now on ch2: the unit is on layer 2
-        #expect(rig.osc.sent == [
-            OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)]), OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]),
-        ])
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
+        rig.osc.sent.removeAll()
+
+        Self.note(rig, channel: 2, 1, 127)       // Play on ch2
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
     }
 
     @Test("Switching to a layer repaints its LEDs on its channel from its deck: deck 2 playing lights Play on ch2")
@@ -210,24 +210,25 @@ struct LayersTests {
         Self.off(rig, channel: 16, 55)           // 16.926 deck select up, held about 2.3 s
     }
 
-    @Test("The long hold, from launch: the unit's own traffic says where it is; after ch1 Play it's deck 1, and Play went there")
+    @Test("The long hold, from launch (ch2 note 54, then Play on ch1): the menu and Play agree on the deck")
     func longHoldWithoutHandover() throws {
         let rig = try Self.layered()
         Self.longHoldCapture(rig)
         Self.note(rig, channel: 1, 1, 127)       // 17.826 Play on ch1
-        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
-        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
-        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [1])
+        // The ch2 control made layer 2 active; ch1 controls then go to the active layer. What the user saw (menu 2,
+        // Play to deck 1) can't happen: both say deck 2.
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]))
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [2])
     }
 
-    @Test("From layer 2 (an earlier short press), the long hold leaves the unit on ch1: the menu must not keep saying deck 2")
+    @Test("From layer 2, the long hold then Play on ch1: the menu and Play agree on the deck")
     func longHoldFromLayerTwo() throws {
         let rig = try Self.layered()
-        Self.switchLayer(rig, from: 1, to: 2)    // the earlier short press: a proper note 51 handover
+        Self.switchLayer(rig, from: 1, to: 2)
         Self.longHoldCapture(rig)
-        Self.note(rig, channel: 1, 1, 127)       // 17.826 Play on ch1: the unit is on layer 1 now
-        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
-        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [1])
+        Self.note(rig, channel: 1, 1, 127)       // 17.826 Play on ch1
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]))
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [2])
     }
 
     @Test("The unit's real handovers (vel 0 always on ch1), each confirmed by a control: exactly the new layer is active")
@@ -278,16 +279,50 @@ struct LayersTests {
         #expect(output.sent.isEmpty)
     }
 
-    @Test("Note 51 alone is only a hint: the clean capture's handover to ch2, then Play and Cue on ch1, stays deck 1")
-    func handoverWithoutTrafficIsAHint() throws {
+
+    /// The LC6000 after a power cycle (the CoS's capture): deck select moves only the layer signal, and every control
+    /// stays on ch1. So in this, its normal state, it's a one-channel controller with a layer indicator.
+    @Test("Normal mode: note 51 sets the layer; Play and Cue on ch1 go to that layer's deck; leaving releases its holds")
+    func normalModeCapture() throws {
         let rig = try Self.layered()
-        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 2, 51, 127)   // the unit says layer 2
-        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [1])
-        Self.note(rig, channel: 1, 1, 127)                                        // Play, 2-3 s later, on ch1
-        Self.note(rig, channel: 1, 2, 127)                                        // Cue, on ch1
+        Self.note(rig, channel: 2, 51, 127)      // 29.652 layer 2 (no ch1 v0 this time)
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [2])
+        Self.note(rig, channel: 1, 1, 127)       // 30.549 Play on ch1
+        Self.note(rig, channel: 1, 2, 127)       // 32.329 Cue on ch1, held
         #expect(rig.osc.sent.suffix(2) == [
-            OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]), OSCMessage("/Syndicate/Deck/1/Cue", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]), OSCMessage("/Syndicate/Deck/2/Cue", [.int(1)]),
         ])
-        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [1])
+        rig.osc.sent.removeAll()
+        Self.note(rig, channel: 1, 51, 0)        // 36.354 layer 3
+        Self.note(rig, channel: 3, 51, 127)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/Cue", [.int(0)])])
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [3])
+        Self.note(rig, channel: 1, 1, 127)       // 36.909 Play on ch1
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/3/PlayPause", [.int(1)]))
+    }
+
+    @Test("Normal mode LEDs: the active deck's LEDs go out on ch1, where its controls are, and repaint on a layer change")
+    func normalModeLEDsOnChannelOne() throws {
+        let rig = try Self.layered()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        output.sent.removeAll()
+        Self.note(rig, channel: 2, 51, 127)      // layer 2, controls still on ch1
+        // Deck 2's Play LED (playing: 127), repainted on ch1 (channel 0 counted from 0); nothing on ch2.
+        #expect(output.sent.contains(.noteOn(channel: 0, note: 1, velocity: 127)))
+        #expect(Self.channelsWritten(output) == [1])
+    }
+
+    @Test("Multi-channel mode (capture 2): controls on ch2 go to deck 2, make layer 2 active, and its LEDs go on ch2")
+    func multiChannelMode() throws {
+        let rig = try Self.layered()
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        Self.note(rig, channel: 1, 51, 0); Self.note(rig, channel: 2, 51, 127)
+        Self.note(rig, channel: 2, 1, 127)       // Play on ch2
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]))
+        output.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        #expect(Self.channelsWritten(output) == [2])
+        #expect(rig.coordinator.status.collapsingLayers().controllers.map(\.deck) == [2])
     }
 }

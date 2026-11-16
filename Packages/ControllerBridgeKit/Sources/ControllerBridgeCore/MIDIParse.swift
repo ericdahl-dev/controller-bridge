@@ -25,3 +25,14 @@ public enum MIDIParse {
         return events
     }
 }
+
+extension MIDIEvent {
+    /// The same message on another channel (0-based).
+    func onChannel(_ channel: UInt8) -> MIDIEvent {
+        switch self {
+        case .noteOn(_, let n, let v): .noteOn(channel: channel, note: n, velocity: v)
+        case .noteOff(_, let n, let v): .noteOff(channel: channel, note: n, velocity: v)
+        case .controlChange(_, let c, let v): .controlChange(channel: channel, controller: c, value: v)
+        }
+    }
+}

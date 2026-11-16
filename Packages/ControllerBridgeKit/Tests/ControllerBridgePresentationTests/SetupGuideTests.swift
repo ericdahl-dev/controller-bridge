@@ -69,4 +69,13 @@ struct SetupGuideTests {
         #expect(SetupGuide.doneTitle(feedbackLive: false) == "Done")
         #expect(SetupGuide.doneTitle(feedbackLive: true) == "Done: feedback live")
     }
+
+    @Test("The guide warns that other DJ apps can switch the controller's MIDI mode, in the README's words")
+    func otherAppsNote() throws {
+        #expect(SetupGuide(controller: "Denon LC6000 PRIME", oscPort: 9090, feedbackPort: 9096).otherAppsNote
+            == "Quit djay Pro, Engine DJ or any other app using Denon LC6000 PRIME first, and power-cycle Denon LC6000 PRIME if one was open: they can switch its MIDI mode until it restarts.")
+        let readme = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../README.md")
+        let text = try String(contentsOf: readme, encoding: .utf8)
+        #expect(text.contains(SetupGuide(controller: nil, oscPort: 9090, feedbackPort: 9096).otherAppsNote))
+    }
 }

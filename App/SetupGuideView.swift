@@ -47,6 +47,10 @@ struct SetupGuideView: View {
             Text(SetupGuide.footer)
                 .font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
                 .fixedSize(horizontal: false, vertical: true)
+            // Another DJ app can switch the controller's MIDI mode until it restarts (#79).
+            Text(guide.otherAppsNote)
+                .font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.attention)
+                .fixedSize(horizontal: false, vertical: true)
             // The live check: the panel's lights, so the DJ sees each step take (#68).
             HStack(alignment: .bottom, spacing: Theme.Space.xl) {
                 ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }

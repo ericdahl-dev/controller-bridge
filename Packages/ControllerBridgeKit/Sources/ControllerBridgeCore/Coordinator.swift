@@ -271,48 +271,77 @@ public final class Coordinator {
         if let diagnostics {
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
-        layerHandover(event, source: source)
+        let routed = layerHandover(event, source: source)
         for index in controllers.indices where controllers[index].source?.id == source {
-            controllers[index].bridge.handle(event)
+            controllers[index].bridge.handle(routed)
             for notice in controllers[index].bridge.notices { log.log(notice) }
             controllers[index].bridge.notices.removeAll()
         }
         disconnectFailedOutputs()
     }
 
-    /// The controller's own deck-layer switch (#79): the active layer is wherever the unit's controls last came
-    /// from. The LC6000's note 51 handover is only a hint: its 0 always comes on ch1, and in captures the controls
-    /// sometimes kept coming on ch1 after a 127 on ch2, while a long hold changes layer with no note 51 at all. So the
-    /// layer note is skipped here, and the first other control on a layer's channel moves the layer there.
-    private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) {
+    /// Units seen sending controls on a layer's own channel (#79): the LC6000's multi-channel state. Others are in
+    /// the normal state, every control on ch1.
+    private var multiChannelUnits: Set<MIDIEndpoint.ID> = []
+
+    /// The controller's own deck layers (#79), as the LC6000 really behaves (the CoS's captures):
+    /// - note 51 at 127 on channel N makes layer N active; its note 51 at 0 always comes on ch1 and means nothing;
+    /// - in its normal state every control stays on ch1, so ch1 controls go to the active layer's deck;
+    /// - in the other state seen (controls on the layer's own channel), a control on channel N goes to deck N and
+    ///   makes layer N active.
+    /// Returns the event as the layers should see it: a ch1 control re-addressed to the active layer's channel.
+    private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) -> MIDIEvent {
         let layers = controllers.indices.filter { controllers[$0].source?.id == source && controllers[$0].followsLayers }
-        guard let first = layers.first else { return }
-        let (channel, note): (UInt8, UInt8?) = switch event {
-        case .noteOn(let c, let n, _), .noteOff(let c, let n, _): (c, n)
-        case .controlChange(let c, _, _): (c, nil)
+        guard let first = layers.first else { return event }
+        let (channel, note, velocity): (UInt8, UInt8?, UInt8) = switch event {
+        case .noteOn(let c, let n, let v): (c, n, v)
+        case .noteOff(let c, let n, _): (c, n, 0)
+        case .controlChange(let c, _, let v): (c, nil, v)
         }
-        let isLayerNote = note.map { Int($0) == controllers[first].bridge.mapping.midi.layerNote } ?? false
-        if isLayerNote { return }
-        guard let target = layers.first(where: { controllers[$0].bridge.mapping.midi.channel == Int(channel) + 1 }) else { return }
+        let layerChannel = { (index: Int) in self.controllers[index].bridge.mapping.midi.channel }
         let current = layers.first { status.controllers[$0].activeLayer } ?? first
-        // Traffic on the layer already in front changes nothing (before any handover, layer 1 is in front).
-        if target == current {
-            status.controllers[target].activeLayer = true
-            return
+        if let note, Int(note) == controllers[first].bridge.mapping.midi.layerNote {
+            if velocity > 0, let target = layers.first(where: { layerChannel($0) == Int(channel) + 1 }), target != current {
+                activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
+            }
+            return event
         }
-        activateLayer(target, leaving: current, among: layers)
+        if channel == 0 {
+            // The normal state: controls on ch1. The active layer's LEDs go out where its controls are.
+            if layerChannel(current) != 1 { multiChannelUnits.remove(source) }
+            setLEDChannel(0, for: current)
+            return layerChannel(current) == 1 ? event : event.onChannel(UInt8(layerChannel(current) - 1))
+        }
+        // Controls on a layer's own channel: that layer is the one in use, and the unit is in its multi-channel state.
+        multiChannelUnits.insert(source)
+        guard let target = layers.first(where: { layerChannel($0) == Int(channel) + 1 }) else { return event }
+        if target != current { activateLayer(target, leaving: current, among: layers, multiChannel: true) }
+        status.controllers[target].activeLayer = true
+        setLEDChannel(nil, for: target)
+        return event
     }
 
     /// One handover: the layer left releases what it held and stops writing LEDs; the new one becomes the only active
-    /// layer, repaints and waits for the shared fader's pickup.
-    private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int]) {
+    /// layer and waits for the shared fader's pickup. Its LEDs go out where the unit's controls come: ch1 in the
+    /// normal state, the layer's own channel in the multi-channel state.
+    private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int], multiChannel: Bool) {
         if current != target { controllers[current].bridge.releaseAll() }
         for index in layers where index != target {
             status.controllers[index].activeLayer = false
             controllers[index].bridge.layerShown = false
         }
         status.controllers[target].activeLayer = true
+        controllers[target].bridge.ledChannel = multiChannel || controllers[target].bridge.mapping.midi.channel == 1 ? nil : 0
         controllers[target].bridge.becameActiveLayer()
+    }
+
+    /// Where a layer's LEDs go; repaints there if it moved.
+    private func setLEDChannel(_ channel: UInt8?, for index: Int) {
+        let bridge = controllers[index].bridge
+        let effective = channel == 0 && bridge.mapping.midi.channel == 1 ? nil : channel
+        guard bridge.ledChannel != effective else { return }
+        bridge.ledChannel = effective
+        if bridge.layerShown { bridge.becameActiveLayer() }
     }
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.

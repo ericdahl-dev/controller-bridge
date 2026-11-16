@@ -306,6 +306,9 @@ final class Bridge {
     /// This bridge is a deck layer the controller is showing (#79). A hidden layer keeps its state and repaints when
     /// it comes to the front.
     var layerShown = true
+    /// The channel this layer's LEDs go out on, if not its own (#79): ch1 (0) while the controller sends every
+    /// control on ch1 and only signals the layer.
+    var ledChannel: UInt8?
 
     func led(_ note: Int, _ velocity: UInt8) {
         // During an LED sweep (#26) the bridge's own writes wait; the sweep ends with a repaint.
@@ -314,7 +317,7 @@ final class Bridge {
         ledCache[note] = velocity
         guard let output else { return }
         do {
-            try output.send(.noteOn(channel: channel, note: UInt8(note), velocity: velocity))
+            try output.send(.noteOn(channel: ledChannel ?? channel, note: UInt8(note), velocity: velocity))
         } catch {
             // The Coordinator treats this as an unplug once the current event is handled.
             outputFailed = true

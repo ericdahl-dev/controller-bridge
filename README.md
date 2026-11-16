@@ -57,6 +57,8 @@ Install **Controller Bridge** from the Mac App Store (macOS 26 or later). It liv
 2. **Settings → OSC FEEDBACK:** set DEST IP to the bridge's computer (`127.0.0.1` if it's the same one) and PORT to `9096`. Turn on these subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.
 3. **Settings → MIDI:** turn your controller's MIDI input **off** (for example, Denon LC6000 PRIME). Otherwise Syndicate's own mapping and the bridge would both react to every button.
 
+Quit djay Pro, Engine DJ or any other app using your controller first, and power-cycle your controller if one was open: they can switch its MIDI mode until it restarts.
+
 The menu's **Set up Syndicate** window shows the same steps.
 
 ## Settings
