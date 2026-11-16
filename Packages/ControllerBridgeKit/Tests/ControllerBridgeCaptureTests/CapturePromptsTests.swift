@@ -1,4 +1,5 @@
 import ControllerBridgeCapture
+import Foundation
 import Testing
 
 /// The standard prompt list for a DJ controller (#186): a contract shared with the draft-profile tool (#189) and the
@@ -46,5 +47,16 @@ struct CapturePromptsTests {
     @Test("The pitch prompt says which way to move, so the direction can be read from the values")
     func pitchDirection() {
         #expect(Self.list.first { $0.id == "deck1.pitch" }?.text == "Move the pitch fader slowly all the way from the top to the bottom.")
+    }
+
+    @Test("The list is the JSON file the web capture copies (#190), kept in canonical form: sorted keys, pretty, one trailing newline")
+    func sharedJSON() throws {
+        let json = CapturePrompts.djControllerJSON
+        #expect(try JSONDecoder().decode([CapturePrompt].self, from: json) == Self.list)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        var canonical = try encoder.encode(Self.list)
+        canonical.append(0x0A)
+        #expect(json == canonical)
     }
 }
