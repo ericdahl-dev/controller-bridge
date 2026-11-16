@@ -11,6 +11,23 @@ public struct ControllerProfile: Equatable, Sendable {
     public var deviceHints: [String]
     public var mapping: Mapping
 
+    public init(id: String, name: String, deviceHints: [String], mapping: Mapping) {
+        self.id = id
+        self.name = name
+        self.deviceHints = deviceHints
+        self.mapping = mapping
+    }
+
+    /// The profile for a device name: the one whose matching hint is longest, so a more specific profile wins.
+    static func matching(_ deviceName: String, in profiles: [ControllerProfile]) -> ControllerProfile? {
+        let name = deviceName.lowercased()
+        let scored = profiles.compactMap { profile -> (ControllerProfile, Int)? in
+            let lengths = profile.deviceHints.filter { name.contains($0.lowercased()) }.map(\.count)
+            return lengths.max().map { (profile, $0) }
+        }
+        return scored.max { $0.1 < $1.1 }?.0
+    }
+
     /// The profiles that ship with the app, in Resources/Profiles.
     public static let bundledIDs = ["denon-lc6000-prime"]
 

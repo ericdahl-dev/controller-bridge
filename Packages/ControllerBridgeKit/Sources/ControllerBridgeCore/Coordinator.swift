@@ -8,6 +8,8 @@ public final class Coordinator {
     private let clock: any Clock
     private let log: any LogSink
     private var controllers: [Controller]
+    /// The controller profiles a device can match.
+    private let profiles: [ControllerProfile]
     private var bridges: [Bridge] { controllers.map(\.bridge) }
 
     /// What the menu shows. The app copies it after each call.
@@ -15,24 +17,38 @@ public final class Coordinator {
 
     /// A Bridge and the devices it is connected to.
     private struct Controller {
-        let bridge: Bridge
+        var bridge: Bridge
+        /// The profile the bridge runs, chosen by the connected device's name.
+        var profile: ControllerProfile
         var source: MIDIEndpoint?
         /// The unique id of the last source this controller used, so a replug finds the same unit first.
         var knownSourceID: MIDIEndpoint.ID?
     }
 
-    public init(mapping: Mapping, midi: any MIDISystem, osc: any OSCSender, clock: any Clock, log: any LogSink) {
+    /// One controller, whose profile is chosen by the name of the device that connects. Until one does, it runs the
+    /// first profile. `profiles` must not be empty.
+    public init(profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, clock: any Clock, log: any LogSink) {
+        precondition(!profiles.isEmpty, "A Coordinator needs at least one controller profile")
         self.midiSystem = midi
         self.osc = osc
         self.clock = clock
         self.log = log
-        controllers = [Controller(bridge: Bridge(mapping: mapping, osc: osc, clock: clock))]
-        status = CoordinatorStatus(controllers: [ControllerStatus(deck: mapping.deck.number, connected: false)])
+        self.profiles = profiles
+        let first = profiles[0]
+        controllers = [Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first)]
+        status = CoordinatorStatus(controllers: [ControllerStatus(deck: first.mapping.deck.number, connected: false)])
+    }
+
+    /// One controller running `mapping`, matched to a device whose name contains `mapping.midi.input`.
+    public convenience init(mapping: Mapping, midi: any MIDISystem, osc: any OSCSender, clock: any Clock, log: any LogSink) {
+        let profile = ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: [mapping.midi.input], mapping: mapping)
+        self.init(profiles: [profile], midi: midi, osc: osc, clock: clock, log: log)
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
     /// connected is not an error: it connects when it appears.
     public func start() {
+        refreshDevices()
         for index in controllers.indices {
             if !connect(index) {
                 log.log("No controller matching \"\(controllers[index].bridge.mapping.midi.input)\" yet")
@@ -43,6 +59,7 @@ public final class Coordinator {
 
     /// The MIDI devices changed. Re-reads them, connecting controllers that appeared.
     public func devicesChanged() {
+        refreshDevices()
         for index in controllers.indices {
             if let source = controllers[index].source {
                 if !midiSystem.sources.contains(where: { $0.id == source.id }) { disconnect(index) }
@@ -69,15 +86,23 @@ public final class Coordinator {
         bridge.output?.close()
         bridge.output = nil
         controllers[index].source = nil
+        status.controllers[index].profile = nil
         report(index, "Disconnected \(source.name)" + (reason.map { " (\($0))" } ?? ""))
     }
 
     /// Opens the controller's ports if a matching device is present. Returns whether its input is connected.
     private func connect(_ index: Int) -> Bool {
-        let bridge = controllers[index].bridge
         let sources = midiSystem.sources
         let known = controllers[index].knownSourceID.flatMap { id in sources.first { $0.id == id } }
-        guard let source = known ?? Self.match(sources, bridge.mapping.midi.input) else { return false }
+        let matched = sources.first { ControllerProfile.matching($0.name, in: profiles) != nil }
+        guard let source = known ?? matched, let profile = ControllerProfile.matching(source.name, in: profiles) else {
+            return false
+        }
+        if profile != controllers[index].profile {
+            controllers[index].profile = profile
+            controllers[index].bridge = Bridge(mapping: profile.mapping, osc: osc, clock: clock)
+        }
+        let bridge = controllers[index].bridge
         do {
             try midiSystem.connect(source: source)
         } catch {
@@ -86,6 +111,7 @@ public final class Coordinator {
         }
         controllers[index].source = source
         controllers[index].knownSourceID = source.id
+        status.controllers[index].profile = profile.name
         if let destination = Self.match(midiSystem.destinations, bridge.mapping.midi.output) {
             do { bridge.output = try midiSystem.openOutput(destination: destination) } catch {
                 log.log("Couldn't open MIDI output \(destination.name): \(error)")
@@ -93,6 +119,16 @@ public final class Coordinator {
         }
         report(index, "Connected \(source.name)")
         return true
+    }
+
+    /// Lists every MIDI source with the profile it matches. A source that matches none is listed, not bridged.
+    private func refreshDevices() {
+        status.devices = midiSystem.sources.map { source in
+            if let profile = ControllerProfile.matching(source.name, in: profiles) {
+                return DeviceStatus(name: source.name, profile: profile.name, note: nil)
+            }
+            return DeviceStatus(name: source.name, profile: nil, note: "No controller profile matches \(source.name), so it isn't bridged.")
+        }
     }
 
     private func report(_ index: Int, _ event: String) {
