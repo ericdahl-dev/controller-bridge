@@ -148,3 +148,19 @@ struct PadChannelLC6000Tests {
         #expect(PadChannelCoordinatorTests.led(rig, 32, channel: 2) == nil)
     }
 }
+
+/// The import check (#224), in plain words.
+@Suite("Pad channel in the import check")
+struct PadChannelImportTests {
+    @Test("A pad channel is a MIDI channel, 1-16, for the deck and for each layer")
+    func ranges() {
+        #expect(Mapping.problems(in: Data(#"{"pads": {"channel": 17}}"#.utf8)) == ["pads.channel: 17 is out of range, expected 1-16"])
+        #expect(Mapping.problems(in: Data(#"{"midi": {"layers": [{"channel": 1, "deck": 1, "pad_channel": 0}]}}"#.utf8))
+            == ["midi.layers[0].pad_channel: 0 is out of range, expected 1-16"])
+    }
+
+    @Test("A pad channel is a number")
+    func wrongType() {
+        #expect(Mapping.problems(in: Data(#"{"pads": {"channel": "eight"}}"#.utf8)) == [#"pads.channel: expected a whole number, got "eight""#])
+    }
+}

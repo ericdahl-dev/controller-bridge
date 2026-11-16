@@ -210,6 +210,7 @@ extension Mapping {
             "deck.number": 1...4,
             "midi.layers[].channel": 1...16,
             "midi.layers[].deck": 1...4,
+            "midi.layers[].pad_channel": 1...16, "pads.channel": 1...16,
             "midi.layer_note": 0...127,
             "notes.pads[]": 0...127,
             "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127, "jog.relative_cc": 0...127, "jog.relative_edge_cc": 0...127,
