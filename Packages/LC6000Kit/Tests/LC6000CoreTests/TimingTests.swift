@@ -173,4 +173,25 @@ struct TimingTests {
         rig.clockBeat(1, at: 22.0)
         #expect(rig.ring(at: 22.05) == 11)
     }
+
+    @Test("When the master clock stops for more than 2 s, the ring goes back to solid")
+    func ringSolidWhenClockStops() throws {
+        let rig = try PulseRig(beatPulse: "beat")
+        rig.clockBeat(1, at: 30.0)
+        #expect(rig.ring(at: 30.5) == 0)
+        #expect(rig.ring(at: 31.9) == 0)
+        #expect(rig.ring(at: 32.1) == 11)
+    }
+
+    @Test("A downbeat pulse at a slow tempo stays pulsing: beats 2-4 count as the clock arriving")
+    func slowDownbeatKeepsPulsing() throws {
+        // 60 BPM: a beat every second, a downbeat every 4 s.
+        let rig = try PulseRig(beatPulse: "downbeat")
+        rig.clockBeat(1, at: 40.0)
+        rig.clockBeat(2, at: 41.0)
+        rig.clockBeat(3, at: 42.0)
+        #expect(rig.ring(at: 42.5) == 0)
+        rig.clockBeat(4, at: 43.0)
+        #expect(rig.ring(at: 43.5) == 0)
+    }
 }

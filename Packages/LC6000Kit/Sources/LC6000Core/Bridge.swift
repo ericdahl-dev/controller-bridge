@@ -96,6 +96,8 @@ final class Bridge {
     var playPending = false
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
+    /// When any master clock beat last arrived, pulsed or not.
+    var lastClockTime: Double?
     var loaded = false
     var synced = false
     var sliderEnabled = true
