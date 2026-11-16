@@ -61,4 +61,30 @@ struct LayersTests {
         #expect(entry == ControllerSettings(deck: 3, input: nil, output: nil))
         #expect(entry.followLayers == nil)
     }
+
+    /// A rig with the LC6000 following its layers: four entries on the one unit, channels 1-4 → decks 1-4.
+    static func layered() throws -> Rig {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: lc6000Layers
+        ))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))   // a live Syndicate answered
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    static func note(_ rig: Rig, channel: UInt8, _ note: UInt8, _ velocity: UInt8) {
+        rig.coordinator.midi(.noteOn(channel: channel - 1, note: note, velocity: velocity), source: Rig.lc6000.id)
+    }
+
+    @Test("Note 51 on a layer's channel marks it active (127) or not (0): Shift + deck select from layer 1 to 2")
+    func activeLayer() throws {
+        let rig = try Self.layered()
+        #expect(rig.coordinator.status.controllers.map(\.deck) == [1, 2, 3, 4])
+        Self.note(rig, channel: 16, 55, 127)   // Shift + deck select, on ch16: the unit's own
+        Self.note(rig, channel: 1, 51, 0)
+        Self.note(rig, channel: 2, 51, 127)
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, true, false, false])
+    }
 }

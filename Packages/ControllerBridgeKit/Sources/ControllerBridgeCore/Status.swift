@@ -35,9 +35,12 @@ public struct ControllerStatus: Equatable, Sendable {
     public var master: Bool
     /// The controller's LED output is open, so the LED sweep can run (#70).
     public var outputOpen: Bool
+    /// This entry is a deck layer the controller has switched to (#79): its layer note came in at velocity 127.
+    public var activeLayer: Bool
 
     public init(
-        deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false, outputOpen: Bool = false
+        deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false, outputOpen: Bool = false,
+        activeLayer: Bool = false
     ) {
         self.deck = deck
         self.connected = connected
@@ -45,6 +48,7 @@ public struct ControllerStatus: Equatable, Sendable {
         self.profile = profile
         self.master = master
         self.outputOpen = outputOpen
+        self.activeLayer = activeLayer
     }
 }
 

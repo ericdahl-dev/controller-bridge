@@ -236,8 +236,20 @@ public final class Coordinator {
             let mapping = (controllers.first { $0.source?.id == source } ?? controllers[0]).bridge.mapping
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
-        for controller in controllers where controller.source?.id == source { controller.bridge.handle(event) }
+        for index in controllers.indices where controllers[index].source?.id == source {
+            layerSignal(event, controller: index)
+            controllers[index].bridge.handle(event)
+        }
         disconnectFailedOutputs()
+    }
+
+    /// The controller's own deck-layer switch (#79): its layer note on this entry's channel, 127 as the layer becomes
+    /// active and 0 as it stops being active.
+    private func layerSignal(_ event: MIDIEvent, controller index: Int) {
+        let mapping = controllers[index].bridge.mapping
+        guard let layerNote = mapping.midi.layerNote, case .noteOn(let channel, let note, let velocity) = event,
+              Int(note) == layerNote, Int(channel) + 1 == mapping.midi.channel else { return }
+        status.controllers[index].activeLayer = velocity > 0
     }
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
