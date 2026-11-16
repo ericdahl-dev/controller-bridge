@@ -7,7 +7,8 @@
 //   swift tools/capture-record/record.swift "LC6000" > lc6000-recording.json
 //
 // Each step: do what the prompt says, then press Return to keep it, type r + Return to redo, or s + Return to skip.
-// The output is {"device", "sources", "steps": [{"prompt", "status", "take": [[seconds, "90 01 7F"], ...]}]}.
+// The output is {"device", "sources", "steps": [{"prompt", "status", "take": [[seconds, source, "90 01 7F"], ...]}]},
+// where source is an index into "sources" (the LC6000's main port and its WD port are separate sources).
 import CoreMIDI
 import Foundation
 
@@ -27,18 +28,22 @@ let prompts: [(id: String, text: String)] = [
 
 let match = CommandLine.arguments.dropFirst().first ?? "LC6000"
 let lock = NSLock()
-nonisolated(unsafe) var take: [(Double, String)] = []
+nonisolated(unsafe) var take: [(Double, Int, String)] = []
 
 func log(_ text: String) { FileHandle.standardError.write(Data((text + "\n").utf8)) }
 
-/// MIDI 1.0 channel voice bytes from Universal MIDI Packet words (message type 2). SysEx and the rest are skipped.
+/// MIDI 1.0 bytes from Universal MIDI Packet words: channel voice (type 2) and system real-time / common (type 1).
+/// SysEx and the rest are skipped.
 func messages(_ words: [UInt32]) -> [[UInt8]] {
     let lengths = [1, 1, 1, 2, 2, 4, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4]
     var out: [[UInt8]] = []
     var i = 0
     while i < words.count {
         let w = words[i], type = Int(w >> 28)
-        if type == 2 {
+        if type == 1 {
+            let status = UInt8((w >> 16) & 0xFF)
+            out.append(status >= 0xF8 ? [status] : [status, UInt8((w >> 8) & 0x7F), UInt8(w & 0x7F)])
+        } else if type == 2 {
             let status = UInt8((w >> 16) & 0xFF), d1 = UInt8((w >> 8) & 0x7F), d2 = UInt8(w & 0x7F)
             out.append(status & 0xF0 == 0xC0 || status & 0xF0 == 0xD0 ? [status, d1] : [status, d1, d2])
         }
@@ -50,15 +55,14 @@ func messages(_ words: [UInt32]) -> [[UInt8]] {
 var client = MIDIClientRef()
 var port = MIDIPortRef()
 guard MIDIClientCreateWithBlock("capture-record" as CFString, &client, nil) == noErr,
-    MIDIInputPortCreateWithProtocol(client, "in" as CFString, ._1_0, &port, { list, _ in
+    MIDIInputPortCreateWithProtocol(client, "in" as CFString, ._1_0, &port, { list, refCon in
         let now = ProcessInfo.processInfo.systemUptime
-        var packet = list.pointee.packet
-        for _ in 0..<list.pointee.numPackets {
-            let words = withUnsafeBytes(of: packet.words) { Array($0.bindMemory(to: UInt32.self).prefix(Int(packet.wordCount))) }
+        let source = Int(bitPattern: refCon) - 1
+        for packet in list.unsafeSequence() {
+            let words = Array(packet.words())
             lock.lock()
-            for bytes in messages(words) { take.append((now, bytes.map { String(format: "%02X", $0) }.joined(separator: " "))) }
+            for bytes in messages(words) { take.append((now, source, bytes.map { String(format: "%02X", $0) }.joined(separator: " "))) }
             lock.unlock()
-            packet = MIDIEventPacketNext(&packet).pointee
         }
     }) == noErr
 else { log("Couldn't open CoreMIDI."); exit(1) }
@@ -70,7 +74,7 @@ for index in 0..<MIDIGetNumberOfSources() {
     MIDIObjectGetStringProperty(source, kMIDIPropertyDisplayName, &name)
     let display = name?.takeRetainedValue() as String? ?? ""
     guard display.contains(match) else { continue }
-    MIDIPortConnectSource(port, source, nil)
+    MIDIPortConnectSource(port, source, UnsafeMutableRawPointer(bitPattern: sources.count + 1))
     sources.append(display)
 }
 guard !sources.isEmpty else { log("No MIDI source matches \"\(match)\"."); exit(1) }
@@ -89,7 +93,7 @@ while index < prompts.count {
     let start = kept.first?.0 ?? 0
     steps.append([
         "prompt": prompt.id, "status": skipped ? "skipped" : "confirmed",
-        "take": skipped ? [] : kept.map { [(($0.0 - start) * 1000).rounded() / 1000, $0.1] as [Any] },
+        "take": skipped ? [] : kept.map { [(($0.0 - start) * 1000).rounded() / 1000, $0.1, $0.2] as [Any] },
     ])
     log("  \(skipped ? "skipped" : "kept \(kept.count) messages")")
     index += 1
