@@ -212,6 +212,8 @@ extension Mapping {
             }
         case .array(let items) where colors.contains(pattern) && items.count != 3:
             return "expected 3 values, got \(items.count)"
+        case .array(let items) where pattern == "notes.pads" && items.count != 8:
+            return "expected 8 pads, got \(items.count)"
         case .string(let text):
             if let allowed = choices[pattern], !allowed.contains(text) {
                 return "\(describe(value)) isn't one of \(allowed.joined(separator: ", "))"

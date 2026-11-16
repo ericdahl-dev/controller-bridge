@@ -36,7 +36,7 @@ struct MappingCheckTests {
             "jog.dead: unknown key",
             "pitch.dead_zone: expected a number, got \"small\"",
         ])
-        #expect(Self.problems(#"{"notes": {"pads": [32, "x"]}, "deck": 2}"#) == [
+        #expect(Self.problems(#"{"notes": {"pads": [32, "x", 34, 35, 36, 37, 38, 39]}, "deck": 2}"#) == [
             "notes.pads[1]: expected a whole number, got \"x\"",
             "deck: expected an object, got 2",
         ])
@@ -49,7 +49,7 @@ struct MappingCheckTests {
 
     @Test("Notes and CCs are 0–127, including pads, jog CCs and LED notes")
     func midiRanges() {
-        #expect(Self.problems(#"{"notes": {"play": 128, "pads": [32, -1]}, "jog": {"ccs": [55, 200]}, "leds": {"ring": 300}}"#) == [
+        #expect(Self.problems(#"{"notes": {"play": 128, "pads": [32, -1, 34, 35, 36, 37, 38, 39]}, "jog": {"ccs": [55, 200]}, "leds": {"ring": 300}}"#) == [
             "notes.play: 128 is out of range, expected 0-127",
             "notes.pads[1]: -1 is out of range, expected 0-127",
             "jog.ccs[1]: 200 is out of range, expected 0-127",
@@ -131,5 +131,11 @@ struct MappingCheckTests {
     func deepNesting() {
         let deep = #"{"x": "# + String(repeating: "[", count: 100_000) + String(repeating: "]", count: 100_000) + "}"
         #expect(Self.problems(deep) == ["The file nests deeper than 64 levels, so it isn't a mapping."])
+    }
+
+    @Test("There are exactly 8 pads: 9, or none, is refused")
+    func padCount() {
+        #expect(Self.problems(#"{"notes": {"pads": [32, 33, 34, 35, 36, 37, 38, 39, 41]}}"#) == ["notes.pads: expected 8 pads, got 9"])
+        #expect(Self.problems(#"{"notes": {"pads": []}}"#) == ["notes.pads: expected 8 pads, got 0"])
     }
 }

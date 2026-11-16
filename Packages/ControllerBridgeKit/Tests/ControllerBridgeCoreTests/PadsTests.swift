@@ -257,4 +257,17 @@ struct PadsTests {
         rig.coordinator.feedback(Self.cues([1, 2, 0, 0, 0, 0, 0, 0]))
         #expect(Self.padLEDs(rig) == [0x3F, 0, 0, 0, 0, 0, 0, 0])
     }
+
+    @Test("A hand-built mapping with a 9th pad doesn't crash in Roll mode: the extra pad sends nothing (#92)")
+    func ninthPadInRollMode() throws {
+        var mapping = try Mapping.bundledDefault()
+        mapping.notes.pads.append(41)
+        let rig = try Rig()
+        let coordinator = Coordinator(mapping: mapping, midi: rig.midi, osc: rig.osc, clock: rig.clock, log: rig.log)
+        coordinator.start()
+        coordinator.midi(.noteOn(channel: 0, note: 28, velocity: 127), source: Rig.lc6000.id)   // Roll mode
+        rig.osc.sent.removeAll()
+        coordinator.midi(.noteOn(channel: 0, note: 41, velocity: 127), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [])
+    }
 }
