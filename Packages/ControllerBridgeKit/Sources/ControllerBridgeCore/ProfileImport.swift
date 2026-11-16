@@ -23,8 +23,14 @@ extension ControllerProfile {
             case let ("id", .string(id)) where !bundled.contains(where: { $0.id == id }):
                 problems.append("id: \"\(id)\" isn't a bundled profile (\(bundled.map(\.id).joined(separator: ", ")))")
             case let ("device_hints", .array(hints)):
+                // With no usable hint, no device matches after the next replug or launch (#93).
+                if hints.isEmpty { problems.append("device_hints: needs at least one device name") }
                 for (index, hint) in hints.enumerated() {
-                    if let problem = Mapping.kindProblem(hint, expected: .string("")) { problems.append("device_hints[\(index)]: \(problem)") }
+                    if let problem = Mapping.kindProblem(hint, expected: .string("")) {
+                        problems.append("device_hints[\(index)]: \(problem)")
+                    } else if case .string(let text) = hint, text.trimmingCharacters(in: .whitespaces).isEmpty {
+                        problems.append("device_hints[\(index)]: can't be empty")
+                    }
                 }
             case ("mapping", _):
                 problems += Mapping.problems(in: value).map { "mapping.\($0)" }
@@ -44,7 +50,7 @@ extension ControllerProfile {
         }
         if let mapping = document["mapping"] {
             let base = try OrderedJSON(parsing: mappingJSON(of: bundledFile(id)))
-            profile.mapping = try Mapping.checked(Mapping.merge(base, mapping).data())
+            profile.mapping = try Mapping.checked(Mapping.merge(base, mapping.removing(settingsOwned)).data())
         }
         return profile
     }
@@ -61,7 +67,8 @@ extension ControllerProfile {
             ("id", .string(id)),
             ("name", .string(name)),
             ("device_hints", .array(deviceHints.map { .string($0) })),
-            ("mapping", encoded.ordered(like: schema)),
+            // Settings owns these (#93), so the file never carries values that would silently lose to it.
+            ("mapping", encoded.ordered(like: schema).removing(Self.settingsOwned)),
         ])
         return file.data(pretty: true)
     }
@@ -116,5 +123,49 @@ extension OrderedJSON {
     private static func quoted(_ s: String) -> String {
         let data = (try? JSONSerialization.data(withJSONObject: s, options: .fragmentsAllowed)) ?? Data("\"\"".utf8)
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+extension ControllerProfile {
+    /// Mapping keys Settings owns (#93): the OSC addresses and ports, the deck and the MIDI channel. A file's values
+    /// for them would silently lose to Settings, so an import doesn't apply them and an export doesn't write them.
+    static let settingsOwned: [[String]] = [
+        ["osc", "host"], ["osc", "port"], ["osc", "feedback_host"], ["osc", "feedback_port"], ["deck", "number"], ["midi", "channel"],
+    ]
+
+    /// What Settings says after a good import (#93).
+    public static func importNote(file: String, settingsOwned: [String]) -> String {
+        let base = "Imported \(file). Deck, Channel and the OSC addresses come from Settings"
+        guard !settingsOwned.isEmpty else { return base + "." }
+        let names = settingsOwned.map { $0.hasPrefix("mapping.") ? String($0.dropFirst(8)) : $0 }
+        let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names.last!
+        return base + ", so the file's \(list) \(names.count == 1 ? "wasn't" : "weren't") applied."
+    }
+
+    /// The Settings-owned keys a file sets, as "mapping.osc.port", in document order, so the import can say they
+    /// weren't applied.
+    public static func settingsOwnedKeys(in data: Data) -> [String] {
+        guard let document = try? OrderedJSON(parsing: data), let mapping = document["mapping"] else { return [] }
+        var found: [String] = []
+        if case .object(let sections) = mapping {
+            for (section, value) in sections {
+                guard case .object(let keys) = value else { continue }
+                for (key, _) in keys where settingsOwned.contains([section, key]) { found.append("mapping.\(section).\(key)") }
+            }
+        }
+        return found
+    }
+}
+
+extension OrderedJSON {
+    /// The object without the given section.key paths, and without a section that only had those; anything else
+    /// unchanged.
+    func removing(_ paths: [[String]]) -> OrderedJSON {
+        guard case .object(let sections) = self else { return self }
+        return .object(sections.compactMap { section, value in
+            guard case .object(let keys) = value else { return (section, value) }
+            let kept = keys.filter { !paths.contains([section, $0.key]) }
+            return kept.isEmpty && !keys.isEmpty ? nil : (section, .object(kept))
+        })
     }
 }

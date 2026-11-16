@@ -282,7 +282,9 @@ struct SettingsView: View {
         panel.message = "Choose a mapping file. A bad file is refused, and the current mapping keeps running."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         mappingProblems = model.importMapping(from: url)
-        mappingNote = mappingProblems.isEmpty ? "Imported \(url.lastPathComponent)." : "Not imported: fix these and try again."
+        mappingNote = mappingProblems.isEmpty
+            ? model.lastImportNote ?? "Imported \(url.lastPathComponent)."
+            : "Not imported: fix these and try again."
     }
 
     private func exportMapping() {

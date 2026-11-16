@@ -51,4 +51,47 @@ struct ProfileImportTests {
         #expect(object["id"] as? String == "denon-lc6000-prime")
         #expect(((object["mapping"] as? [String: Any])?["notes"] as? [String: Any])?["cue"] as? Int == 2)
     }
+
+    @Test("device_hints needs at least one non-empty name, or no device would ever match after the next replug (#93)")
+    func deviceHintsNotEmpty() {
+        #expect(throws: MappingError.invalid(["device_hints: needs at least one device name"])) {
+            try Self.importing(#"{"device_hints": []}"#)
+        }
+        #expect(throws: MappingError.invalid(["device_hints[1]: can't be empty"])) {
+            try Self.importing(#"{"device_hints": ["LC6000", " "]}"#)
+        }
+    }
+
+    @Test("Keys Settings owns (OSC addresses, Deck, Channel) aren't applied from a file, and are named so the DJ knows (#93)")
+    func settingsOwnedKeys() throws {
+        let file = #"{"mapping": {"osc": {"port": 9191, "root": "/Syndicate/"}, "deck": {"number": 3}, "notes": {"play": 60}}}"#
+        let profile = try Self.importing(file)
+        #expect(profile.mapping.osc.port == 9090)
+        #expect(profile.mapping.deck.number == 1)
+        #expect(profile.mapping.notes.buttons["play"] == 60)
+        #expect(ControllerProfile.settingsOwnedKeys(in: Data(file.utf8)) == ["mapping.osc.port", "mapping.deck.number"])
+        #expect(ControllerProfile.settingsOwnedKeys(in: Data(#"{"mapping": {"notes": {"play": 60}}}"#.utf8)) == [])
+    }
+
+    @Test("Export leaves out the keys Settings owns, so editing them in a file can't look like it worked; it still round-trips")
+    func exportOmitsSettingsOwned() throws {
+        let profile = try Self.importing(#"{"mapping": {"notes": {"play": 60}}}"#)
+        let exported = try profile.exported()
+        let object = try #require(try JSONSerialization.jsonObject(with: exported) as? [String: Any])
+        let mapping = try #require(object["mapping"] as? [String: Any])
+        #expect((mapping["osc"] as? [String: Any]).map { Set($0.keys) } == ["root", "feedback_quiet_ms", "feedback_answer_ms"])
+        #expect(mapping["deck"] == nil)
+        #expect((mapping["midi"] as? [String: Any]).map { Set($0.keys) } == ["input", "output", "ignore_notes"])
+        #expect(try Self.importing(String(decoding: exported, as: UTF8.self)) == profile)
+    }
+
+    @Test("The import note says Settings owns Deck, Channel and the OSC addresses, and names any the file set")
+    func importNote() {
+        #expect(ControllerProfile.importNote(file: "mine.json", settingsOwned: []) ==
+            "Imported mine.json. Deck, Channel and the OSC addresses come from Settings.")
+        #expect(ControllerProfile.importNote(file: "mine.json", settingsOwned: ["mapping.osc.port", "mapping.deck.number"]) ==
+            "Imported mine.json. Deck, Channel and the OSC addresses come from Settings, so the file's osc.port and deck.number weren't applied.")
+        #expect(ControllerProfile.importNote(file: "mine.json", settingsOwned: ["mapping.midi.channel"]) ==
+            "Imported mine.json. Deck, Channel and the OSC addresses come from Settings, so the file's midi.channel wasn't applied.")
+    }
 }
