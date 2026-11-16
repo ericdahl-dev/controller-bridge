@@ -225,4 +225,14 @@ struct ProfileMatchingTests {
         #expect(rig.midi.connected == [Self.lc6000.id])
         #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
     }
+
+    @Test("Each controller's status names the device it runs on, so Settings can offer a profile for it; none while unplugged")
+    func controllerNamesItsDevice() throws {
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.iac, Self.lc6000])
+        rig.coordinator.start()
+        #expect(rig.coordinator.status.controllers.map(\.device) == ["DENON LC6000 PRIME"])
+        rig.midi.sources = [Self.iac]
+        rig.coordinator.devicesChanged()
+        #expect(rig.coordinator.status.controllers.map(\.device) == [nil])
+    }
 }

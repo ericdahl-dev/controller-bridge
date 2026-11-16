@@ -105,7 +105,7 @@ struct RecoveryTests {
         // lastDisconnect stays as history; connected says it's back (#91).
         #expect(rig.coordinator.status.controllers == [ControllerStatus(
             deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true,
-            lastProfile: "Custom mapping", lastDisconnect: .unplugged
+            lastProfile: "Custom mapping", lastDisconnect: .unplugged, device: "DENON LC6000 PRIME"
         )])
 
         rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)

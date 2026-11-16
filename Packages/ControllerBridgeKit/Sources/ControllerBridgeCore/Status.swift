@@ -74,6 +74,8 @@ public struct ControllerStatus: Equatable, Sendable {
     public var lastProfile: String?
     /// Why it last disconnected, if it has (#91).
     public var lastDisconnect: DisconnectReason?
+    /// The MIDI device it runs on while connected (#200), so Settings can offer a profile for it.
+    public var device: String?
     /// This entry is a deck layer the controller has switched to (#79): its layer note came in at velocity 127.
     public var activeLayer: Bool
     /// This entry is one deck layer of a controller that follows its own layers (#79).
@@ -81,8 +83,10 @@ public struct ControllerStatus: Equatable, Sendable {
 
     public init(
         deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false, outputOpen: Bool = false,
-        lastProfile: String? = nil, lastDisconnect: DisconnectReason? = nil, activeLayer: Bool = false, followsLayers: Bool = false
+        lastProfile: String? = nil, lastDisconnect: DisconnectReason? = nil, activeLayer: Bool = false, followsLayers: Bool = false,
+        device: String? = nil
     ) {
+        self.device = device
         self.lastProfile = lastProfile
         self.lastDisconnect = lastDisconnect
         self.deck = deck

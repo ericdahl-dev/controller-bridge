@@ -181,7 +181,7 @@ struct EngineTests {
             CoordinatorStatus(
                 controllers: [ControllerStatus(
                     deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true,
-                    lastProfile: "Custom mapping"
+                    lastProfile: "Custom mapping", device: "DENON LC6000 PRIME"
                 )],
                 devices: [DeviceStatus(name: "DENON LC6000 PRIME", profile: "Custom mapping", note: nil)]
             ),

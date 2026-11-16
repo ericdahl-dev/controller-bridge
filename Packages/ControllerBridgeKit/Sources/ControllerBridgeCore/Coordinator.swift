@@ -293,6 +293,7 @@ public final class Coordinator {
         if destination == nil || !controllers.contains(where: { $0.destination?.id == destination?.id }) { bridge.output?.close() }
         bridge.output = nil
         status.controllers[index].profile = nil
+        status.controllers[index].device = nil
         status.controllers[index].lastDisconnect = reason
         let detail: String? = switch reason {
         case .sendFailed: "MIDI send failed"
@@ -349,6 +350,7 @@ public final class Coordinator {
         controllers[index].source = source
         controllers[index].knownSourceID = source.id
         status.controllers[index].profile = profile.name
+        status.controllers[index].device = source.name
         status.controllers[index].lastProfile = profile.name
         openOutput(index, for: source, profile: profile)
         report(index, "Connected \(source.name)")
