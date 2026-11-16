@@ -22,7 +22,8 @@ struct CaptureWindowRoot: View {
             // A fresh capture each time the window opens, and any earlier one gives its controller back.
             controller?.end()
             let made = CaptureController(setCapture: model.setCapture(source:))
-            made.refresh(sources: model.sources, destinations: model.destinations)
+            made.refresh(sources: model.sources, destinations: model.destinations, preselect: model.captureDevice)
+            model.captureDevice = nil
             controller = made
         }
         .onDisappear { controller?.end() }

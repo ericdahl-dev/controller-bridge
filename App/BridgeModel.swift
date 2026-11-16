@@ -104,6 +104,9 @@ final class BridgeModel {
     func stopLEDSweep() { producer?.stopLEDSweep() }
     /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.
     func setDemo(_ on: Bool) { producer?.demo(on: on) }
+    /// The device the capture window should preselect when it next opens (#200).
+    var captureDevice: String?
+
     /// Pauses (a source) or gives back (nil) a controller while the capture window records it (#186).
     func setCapture(source: MIDIEndpoint.ID?) { producer?.setCapture(source: source) }
 

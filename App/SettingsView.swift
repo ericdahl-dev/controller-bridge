@@ -186,9 +186,6 @@ struct SettingsView: View {
                 }
                 .buttonStyle(PillButtonStyle(kind: .quiet))
             }
-            // Until #200's "Controller not found?" in the controller picker replaces it.
-            Button("Help add a controller…") { openWindow(id: CaptureWindow.id) }
-                .buttonStyle(PillButtonStyle(kind: .quiet))
         }
         mappingSection
     }
@@ -299,6 +296,7 @@ struct SettingsView: View {
             if !following { deckRow(controller.wrappedValue.deck, index) }
             row("MIDI input") { devicePicker(selection: controller.input, devices: sources) }
             fieldError(.device(controller: index))
+            profileRow(settings, controller.wrappedValue)
             row("MIDI output") { devicePicker(selection: controller.output, devices: destinations) }
             // Deck and channel come from the controller's layers while it follows them (#79).
             if !following { channelRow(controller, index) }
@@ -368,6 +366,43 @@ struct SettingsView: View {
             Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.switch).tint(Self.on)
         }
     }
+
+    /// The Controller picker (#200): Automatic or a profile, saved for the card's device on Apply, and
+    /// Controller not found?, which opens the capture window for that device.
+    private func profileRow(_ settings: Binding<BridgeSettings>, _ entry: ControllerSettings) -> some View {
+        let single = settings.wrappedValue.controllers.count == 1
+        let picker = ProfilePicker(
+            chosenInput: entry.input?.name,
+            connectedDevice: single ? model.status.bridges.compactMap(\.device).first : nil,
+            unsupported: model.status.otherDevices.offer?.device,
+            profiles: model.profiles.map { (id: $0.id, name: $0.name) },
+            choices: settings.wrappedValue.profileChoices
+        )
+        let selection = Binding<String?>(
+            get: { picker.selected },
+            set: { id in
+                if id == Self.notFoundTag {
+                    model.captureDevice = picker.device
+                    openWindow(id: CaptureWindow.id)
+                } else if let device = picker.device {
+                    settings.wrappedValue.profileChoices[device] = id
+                }
+            }
+        )
+        return row("Controller", hint: picker.hint) {
+            Picker("Controller", selection: selection) {
+                ForEach(picker.options, id: \.self) { Text($0.title).tag($0.id) }
+                Divider()
+                Text(ProfilePicker.notFoundTitle).tag(String?.some(Self.notFoundTag))
+            }
+            .labelsHidden()
+            .frame(maxWidth: 220, alignment: .trailing)
+            .disabled(!picker.enabled)
+        }
+    }
+
+    /// The picker's tag for Controller not found?, which opens the capture window instead of choosing.
+    private static let notFoundTag = "controller-not-found"
 
     private func devicePicker(selection: Binding<MIDIEndpoint?>, devices: [MIDIEndpoint]) -> some View {
         Picker("Device", selection: selection) {

@@ -50,10 +50,11 @@ final class CaptureController {
     #endif
 
     /// Lists the ports, with the demo controller last. Called when the window opens.
-    func refresh(sources: [MIDIEndpoint], destinations: [MIDIEndpoint]) {
+    func refresh(sources: [MIDIEndpoint], destinations: [MIDIEndpoint], preselect: String? = nil) {
         guard flow.phase == .ports else { return }
         self.destinations = destinations
         choices = sources.map { Choice(name: $0.name, endpoint: $0) } + [Choice(name: DemoCapture.deviceName, endpoint: nil)]
+        if let preselect, let match = choices.first(where: { $0.name == preselect }) { picked = match }
         if picked.map(choices.contains) != true { picked = choices.first }
     }
 
