@@ -247,17 +247,17 @@ final class BridgeModel {
         ticker = Ticker(producer: pipe.producer)
         observeSleep(pipe.producer)
         let midi = midi!
+        // The entries the Coordinator starts with: the saved ones, a controller following its layers as one per layer
+        // (#79). It starts straight on them (#105), so nothing is sent after start to correct it.
+        let running = ControllerSettings.expanded(settings.controllers, layers: layers)
         engine = Task.detached(name: "Bridge engine") {
             await BridgeHost.run(
-                profiles: profiles, midi: midi, osc: osc, log: log, status: status, diagnostics: diagnostics, events: pipe.events
+                profiles: profiles, midi: midi, osc: osc, log: log, status: status, diagnostics: diagnostics,
+                controllers: running, ledsEnabled: settings.ledsEnabled, events: pipe.events
             )
         }
         // The saved controller settings, queued behind the Coordinator's start.
-        // The entries the Coordinator runs. The LC6000 follows its layers by default (#79), so even the default
-        // settings expand to four entries and are sent.
-        let running = ControllerSettings.expanded(settings.controllers, layers: layers)
-        if running != BridgeSettings.defaults(from: mapping).controllers { pipe.producer.setControllers(running) }
-        if !settings.ledsEnabled { pipe.producer.setLEDs(enabled: false) }
+
     }
 
     // MARK: Mapping import, export and reset (#24)
