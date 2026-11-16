@@ -17,4 +17,5 @@
 - [DeckBridge in Markdown](https://getdeckbridge.app/index.md): what it is, features, requirements, setup, FAQ, status and contact in one clean file
 - [Home](https://getdeckbridge.app/): the product page
 - [Support](https://getdeckbridge.app/support/): setting up Syndicate step by step, FAQ and contact
+- [Help add your controller](https://getdeckbridge.app/capture/): record a DJ controller's MIDI in the browser (Chrome, Edge or Firefox) for a future DeckBridge profile; nothing is uploaded
 - [Privacy](https://getdeckbridge.app/privacy/): the app collects no data; the site counts visits with PostHog, without cookies

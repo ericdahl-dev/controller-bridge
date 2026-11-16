@@ -27,6 +27,7 @@ GOOD = {
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
+    "capture/index.html": page(body='<a href="../">Home</a>'),
     "privacy/index.html": page(body='<h2 id="network">Network</h2><p>DeckBridge collects no data.</p>' + WEBSITE),
     "style.css": '@font-face { font-family: Inter; src: url("fonts/Inter-Regular.ttf"); } body { color: #EDEDEA; }',
     "fonts/Inter-Regular.ttf": "font",

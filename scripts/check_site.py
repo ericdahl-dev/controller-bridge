@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
-PAGES = ["index.html", "support/index.html", "privacy/index.html"]
+PAGES = ["index.html", "support/index.html", "privacy/index.html", "capture/index.html"]
 ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt"]
 SITE = "https://getdeckbridge.app/"
 LLMS_HEADING = "# DeckBridge"
