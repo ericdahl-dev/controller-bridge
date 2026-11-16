@@ -3,15 +3,12 @@
 extension StatusLight {
     /// "Feedback: port 9096 in use". Our own all-caps labels are capitalized; a device's name is kept as named.
     public var spoken: String {
-        "\(Self.spokenLabel(label)): \(word.lowercased())"
+        "\(spokenLabel): \(word.lowercased())"
     }
 
-    /// The labels the bridge itself writes in caps. Anything else is a device or profile name.
-    static let ownLabels: Set<String> = ["FEEDBACK", "CONTROLLER", "BRIDGE", "DEMO", "TEMPO"]
-
-    static func spokenLabel(_ label: String) -> String {
-        guard ownLabels.contains(label) else { return label }
-        return label.prefix(1) + label.dropFirst().lowercased()
+    /// The bridge's own labels are capitalized; a device's name is kept as named.
+    var spokenLabel: String {
+        kind == .device ? label : label.prefix(1) + label.dropFirst().lowercased()
     }
 }
 

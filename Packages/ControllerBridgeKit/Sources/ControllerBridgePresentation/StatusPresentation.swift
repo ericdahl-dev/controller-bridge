@@ -140,14 +140,35 @@ public struct StatusLight: Equatable, Sendable {
         case error
     }
 
+    /// Which light this is, so views and the spoken text never match on display words (#171).
+    public enum Kind: Equatable, Sendable {
+        case controller, feedback, bridge, demo, tempo
+        /// A MIDI device, named as the system names it.
+        case device
+
+        init?(ownLabel label: String) {
+            switch label {
+            case "CONTROLLER": self = .controller
+            case "FEEDBACK": self = .feedback
+            case "BRIDGE": self = .bridge
+            case "DEMO": self = .demo
+            case "TEMPO": self = .tempo
+            default: return nil
+            }
+        }
+    }
+
     public var label: String
     public var word: String
     public var tone: Tone
+    public var kind: Kind
 
-    public init(label: String, word: String, tone: Tone) {
+    /// Without a kind, the bridge's own labels name theirs, and anything else is a device.
+    public init(label: String, word: String, tone: Tone, kind: Kind? = nil) {
         self.label = label
         self.word = word
         self.tone = tone
+        self.kind = kind ?? Kind(ownLabel: label) ?? .device
     }
 
     /// A MIDI source that no controller profile matches (#43): listed, not bridged.
@@ -354,7 +375,7 @@ public struct StatusPresentation: Equatable, Sendable {
 
     /// Lower keeps longer: DEMO and error lights, then the controller, feedback, MASTER, and DECK last.
     private static func priority(of light: StatusLight, controller: StatusLight) -> Int {
-        if light.tone == .error || light.label == "DEMO" { return 0 }
+        if light.tone == .error || light.kind == .demo { return 0 }
         return light == controller ? 1 : 2
     }
 

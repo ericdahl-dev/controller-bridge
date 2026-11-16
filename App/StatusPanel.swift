@@ -113,7 +113,7 @@ struct StatusPanel: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: Theme.Space.xl, alignment: .topLeading)],
                           alignment: .leading, spacing: Theme.Space.m) {
                     // With several controllers, each block shows its own CONTROLLER light; the row keeps the rest.
-                    ForEach(presentation.lights.filter { presentation.blocks.count == 1 || $0.label != "CONTROLLER" }, id: \.label) {
+                    ForEach(presentation.lights.filter { presentation.blocks.count == 1 || $0.kind != .controller }, id: \.label) {
                         StatusLightView(light: $0)
                     }
                     if let master = presentation.master { StatusLightView(light: master) }
