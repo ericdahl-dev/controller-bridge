@@ -3,10 +3,19 @@ public struct CoordinatorStatus: Equatable, Sendable {
     public var controllers: [ControllerStatus]
     /// Every connected MIDI source and the controller profile it matched, if any.
     public var devices: [DeviceStatus]
+    /// Whether Syndicate's feedback is arriving (#21).
+    public var feedback: FeedbackState
+    /// The last time feedback stopped, for the menu.
+    public var lastDropout: String?
 
-    public init(controllers: [ControllerStatus], devices: [DeviceStatus] = []) {
+    public init(
+        controllers: [ControllerStatus], devices: [DeviceStatus] = [], feedback: FeedbackState = .waiting,
+        lastDropout: String? = nil
+    ) {
         self.controllers = controllers
         self.devices = devices
+        self.feedback = feedback
+        self.lastDropout = lastDropout
     }
 }
 
@@ -40,4 +49,14 @@ public struct DeviceStatus: Equatable, Sendable {
         self.profile = profile
         self.note = note
     }
+}
+
+/// Syndicate's feedback, as the bridge sees it.
+public enum FeedbackState: Equatable, Sendable {
+    /// None has arrived since launch.
+    case waiting
+    /// Arriving, or quiet but answering when asked.
+    case live
+    /// Stopped: it didn't answer a resend request. Syndicate's LEDs show idle until it comes back.
+    case stale
 }

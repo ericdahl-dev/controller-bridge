@@ -213,6 +213,7 @@ public final class Coordinator {
     private func feedbackArrived() {
         lastFeedbackAt = clock.now
         resendSentAt = nil
+        status.feedback = .live
     }
 
     private func checkLiveness() {
@@ -220,6 +221,18 @@ public final class Coordinator {
         if let last = lastFeedbackAt, resendSentAt == nil, now - last >= Double(oscSettings.feedbackQuietMs) / 1000 {
             requestResend()
         }
+        if status.feedback == .live, let sent = resendSentAt, now - sent >= Double(oscSettings.feedbackAnswerMs) / 1000 {
+            feedbackStopped()
+        }
+    }
+
+    /// Syndicate didn't answer: show idle for its state until it's back.
+    private func feedbackStopped() {
+        let event = "Syndicate feedback stopped"
+        status.feedback = .stale
+        status.lastDropout = event
+        log.log(event)
+        for bridge in bridges { bridge.clearSyndicateState() }
     }
 
     /// The one place a Resend is sent. One already waiting for its answer isn't sent again.
