@@ -27,12 +27,15 @@ public struct ControllerStatus: Equatable, Sendable {
     public var lastEvent: String?
     /// The name of the controller profile in use, while connected.
     public var profile: String?
+    /// The deck is Syndicate's tempo master: the same rule as the Master LED (#53).
+    public var master: Bool
 
-    public init(deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil) {
+    public init(deck: Int, connected: Bool, lastEvent: String? = nil, profile: String? = nil, master: Bool = false) {
         self.deck = deck
         self.connected = connected
         self.lastEvent = lastEvent
         self.profile = profile
+        self.master = master
     }
 }
 

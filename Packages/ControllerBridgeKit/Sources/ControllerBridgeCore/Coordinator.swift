@@ -194,6 +194,7 @@ public final class Coordinator {
     public func feedback(_ message: OSCMessage) {
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
+        for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
         disconnectFailedOutputs()
     }
 
