@@ -47,3 +47,22 @@ public struct SettingsRefusal: Equatable, Sendable {
         footer = sorted.map { "\(SettingsTab(field: $0.field).title): \($0.message)" } + other
     }
 }
+
+/// How tall a Settings pane shows (#177): whole when it fits the room the screen leaves, else that room, scrolling.
+/// The room never drops below 240 pt, so a pane can't collapse on a small screen.
+public struct SettingsPaneFit: Equatable, Sendable {
+    public static let minimumRoom = 240.0
+
+    public var height: Double
+    public var scrolls: Bool
+
+    public init(height: Double, scrolls: Bool) {
+        self.height = height
+        self.scrolls = scrolls
+    }
+
+    public init(content: Double, room: Double) {
+        let room = max(room, Self.minimumRoom)
+        self.init(height: min(content, room), scrolls: content > room)
+    }
+}

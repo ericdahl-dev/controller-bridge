@@ -64,3 +64,23 @@ struct SettingsTabsTests {
             + "Syndicate: The Syndicate host can't be empty. The bridge isn't running.")
     }
 }
+
+/// A tall pane scrolls, so the Apply footer stays on screen (#177).
+@Suite("Settings pane height")
+struct SettingsPaneHeightTests {
+    @Test("A pane that fits shows whole, with no scroll bar")
+    func fits() {
+        #expect(SettingsPaneFit(content: 420, room: 700) == SettingsPaneFit(height: 420, scrolls: false))
+        #expect(SettingsPaneFit(content: 700, room: 700) == SettingsPaneFit(height: 700, scrolls: false))
+    }
+
+    @Test("A pane taller than the room scrolls in the room's height: four controllers on a 13-inch screen")
+    func scrolls() {
+        #expect(SettingsPaneFit(content: 1_320, room: 640) == SettingsPaneFit(height: 640, scrolls: true))
+    }
+
+    @Test("A tiny room still shows 240 pt of the pane, so it never collapses")
+    func floor() {
+        #expect(SettingsPaneFit(content: 1_320, room: 100) == SettingsPaneFit(height: 240, scrolls: true))
+    }
+}

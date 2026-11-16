@@ -176,6 +176,12 @@ enum Snapshots {
         two.controllers.append(ControllerSettings(deck: 3, input: nil, output: nil))
         writeAppKit(SettingsView(model: BridgeModel(preview: two), snapshotTab: .controller),
                     to: "\(directory)/settings-controller-two-controllers.png")
+        // Four controllers in a window as tall as a 13-inch screen allows: the pane scrolls and the footer stays pinned
+        // (#177). Shown at its end by offsetting the pane: a hosting view outside a window can't scroll.
+        var four = defaults
+        for deck in 2...4 { four.controllers.append(ControllerSettings(deck: deck, input: nil, output: nil)) }
+        writeAppKit(SettingsView(model: BridgeModel(preview: four), snapshotTab: .controller, room: 760, scrolledToEnd: true),
+                    to: "\(directory)/settings-controller-four-controllers-end.png")
         // A refused Apply: the field errors on the Syndicate tab, and the footer naming each problem's tab.
         var bad = defaults
         bad.syndicateHost = ""
