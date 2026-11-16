@@ -9,6 +9,8 @@ public struct CoordinatorStatus: Equatable, Sendable {
     public var lastDropout: String?
     /// Syndicate answered a Resend with no deck or header values: its OSC FEEDBACK subscriptions are off (#150).
     public var noDeckData = false
+    /// LED subscriptions a loaded deck's answer lacked (#150), in `Subscription` order. Empty when none are missing.
+    public var missingSubscriptions: [Subscription] = []
     /// An LED sweep (#26) is running.
     public var sweeping = false
     /// The built-in demo controller (#64) is running instead of the real one.

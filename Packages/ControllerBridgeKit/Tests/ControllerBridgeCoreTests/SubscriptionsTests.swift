@@ -57,4 +57,43 @@ struct SubscriptionsTests {
         Self.tick(rig, at: 2.0)
         #expect(rig.coordinator.status.noDeckData == false)
     }
+
+    /// The launch Resend answered with `messages` at t = 0.3, and its window closed at t = 2.
+    static func answered(_ messages: [OSCMessage]) throws -> Rig {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.clock.now = 0.3
+        for message in [Self.palette, OSCMessage("/Syndicate/Header/BPM", [.float(120)])] + messages {
+            rig.coordinator.feedback(message)
+        }
+        Self.tick(rig, at: 2.0)
+        return rig
+    }
+
+    @Test("A loaded deck without Cues in the answer: the Cues subscription is missing. Empty deck 2 counts for nothing")
+    func loadedDeckWithoutCues() throws {
+        let rig = try Self.answered([
+            OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]),
+            OSCMessage("/Syndicate/Deck/1/Sync", [.int(0)]),
+            OSCMessage("/Syndicate/Deck/1/Loop", [.int(0)]),
+            OSCMessage("/Syndicate/Deck/2/Loaded", [.int(0)]),
+        ])
+        #expect(rig.coordinator.status.noDeckData == false)
+        #expect(rig.coordinator.status.missingSubscriptions == [.cues])
+    }
+
+    @Test("A loaded deck with only Loaded: Playing, Cues, Sync and Loop are all missing")
+    func loadedDeckOnly() throws {
+        let rig = try Self.answered([OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)])])
+        #expect(rig.coordinator.status.missingSubscriptions == [.playing, .cues, .sync, .loop])
+    }
+
+    @Test("A loaded deck with every LED value: nothing is missing")
+    func loadedDeckComplete() throws {
+        let rig = try Self.answered(["Loaded", "Playing", "Cues", "Sync", "Loop"].map {
+            OSCMessage("/Syndicate/Deck/1/\($0)", [.int(1)])
+        })
+        #expect(rig.coordinator.status.missingSubscriptions == [])
+    }
 }

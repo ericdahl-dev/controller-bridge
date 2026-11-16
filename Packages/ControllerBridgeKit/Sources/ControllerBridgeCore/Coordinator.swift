@@ -54,7 +54,7 @@ public final class Coordinator {
     /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
     private var resendSentAt: Double?
     /// The answer to the last Resend (#150): when it went out, and the addresses that arrived within its window.
-    private var answer: (sentAt: Double, addresses: [String])?
+    private var answer: (sentAt: Double, messages: [OSCMessage])?
 
     /// Set while the Diagnostics window is open (#26); nil otherwise, so nothing is built for it during a set.
     /// The LED sweep in progress: when it started, its steps and the next one to send.
@@ -411,7 +411,7 @@ public final class Coordinator {
             }
         }
         diagnostics?(.oscIn(message))
-        answer?.addresses.append(message.address)
+        answer?.messages.append(message)
         if SubscriptionCheck.provesSubscriptions(message.address) { status.noDeckData = false }
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
@@ -467,8 +467,9 @@ public final class Coordinator {
     private func checkSubscriptions() {
         guard let answer, clock.now - answer.sentAt >= Double(oscSettings.feedbackAnswerMs) / 1000 else { return }
         self.answer = nil
-        guard let check = SubscriptionCheck(answer: answer.addresses) else { return }
+        guard let check = SubscriptionCheck(answer: answer.messages) else { return }
         status.noDeckData = check.noDeckData
+        status.missingSubscriptions = check.missing
     }
 
     /// Syndicate didn't answer: show idle for its state until it's back.
