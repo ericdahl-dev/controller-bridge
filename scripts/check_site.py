@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Checks the DeckBridge website (#169) before anyone looks at it or it's published:
 - every page exists, and every internal link and asset resolves
+- robots.txt, sitemap.xml and llms.txt are at the root; the sitemap parses, and each URL in it
+  is under https://getdeckbridge.app/ and is a page in the site
 - nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
   and so are <link rel="canonical"> and <link rel="alternate">
 - every page has a title and a meta description
@@ -13,10 +15,13 @@
 Standard library only. Run: python3 -I scripts/check_site.py [website]   (exits 1 on any problem)
 Tested by scripts/test_check_site.py."""
 import json, os, re, sys
+import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
 PAGES = ["index.html", "support/index.html", "privacy/index.html"]
+ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt"]
+SITE = "https://getdeckbridge.app/"
 PRIVACY = "privacy/index.html"
 PRIVACY_STATEMENT = "collects no data"
 OTHER_COMPANIES = ["Syndicate", "Denon"]
@@ -132,10 +137,31 @@ def check_page(root, file, text):
     return out
 
 
+def check_sitemap(root, files):
+    try:
+        tree = ET.parse(os.path.join(root, "sitemap.xml"))
+    except ET.ParseError as e:
+        return [f"sitemap.xml: doesn't parse as XML: {e}"]
+    locs = [(el.text or "").strip() for el in tree.iter() if el.tag.rsplit("}", 1)[-1] == "loc"]
+    if not locs:
+        return ["sitemap.xml: lists no pages"]
+    out = []
+    for loc in locs:
+        if not loc.startswith(SITE):
+            out.append(f"sitemap.xml: {loc} isn't under {SITE}")
+            continue
+        path = urlsplit(loc).path.lstrip("/")
+        if path == "" or path.endswith("/"):
+            path += "index.html"
+        if not (path.endswith(".html") and path in files):
+            out.append(f"sitemap.xml: {loc} isn't a page in the site")
+    return out
+
+
 def problems(root):
     files = sorted(os.path.relpath(os.path.join(d, f), root).replace(os.sep, "/")
                    for d, _, names in os.walk(root) for f in names)
-    out = [f"{page}: missing" for page in PAGES if page not in files]
+    out = [f"{page}: missing" for page in PAGES + ROOT_FILES if page not in files]
     size = 0
     for file in files:
         path = os.path.join(root, file)
@@ -150,6 +176,8 @@ def problems(root):
             with open(path, encoding="utf-8") as f:
                 css = f.read()
             out += check_refs(root, file, [(a or b, True) for a, b in CSS_REFS.findall(css)])
+    if "sitemap.xml" in files:
+        out += check_sitemap(root, files)
     if size > MAX_BYTES:
         out.append(f"the site is {size / 1_000_000:.1f} MB, over 2 MB")
     return out

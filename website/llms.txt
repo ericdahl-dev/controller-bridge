@@ -1,0 +1,9 @@
+# DeckBridge
+
+> DeckBridge is a native macOS menu-bar app that bridges a Denon LC6000 PRIME controller to Syndicate, the DJ and performance software by Untitled Audio, over MIDI and OSC, with LED feedback.
+
+## Pages
+
+- [Home](https://getdeckbridge.app/): what DeckBridge does, features and requirements
+- [Support](https://getdeckbridge.app/support/): setting up Syndicate, FAQ and contact
+- [Privacy](https://getdeckbridge.app/privacy/): DeckBridge collects no data

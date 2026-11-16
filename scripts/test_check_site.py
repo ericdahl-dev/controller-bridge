@@ -13,6 +13,11 @@ def page(title="DeckBridge", description="A bridge.", body="", head=""):
             f'<meta name="description" content="{description}">{head}</head><body>{body}</body></html>')
 
 
+def sitemap(*locs):
+    urls = "".join(f"<url><loc>{loc}</loc></url>" for loc in locs)
+    return f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
+
+
 GOOD = {
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">',
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
@@ -22,6 +27,9 @@ GOOD = {
     "style.css": '@font-face { font-family: Inter; src: url("fonts/Inter-Regular.ttf"); } body { color: #EDEDEA; }',
     "fonts/Inter-Regular.ttf": "font",
     "img/icon.png": "png",
+    "robots.txt": "User-agent: *\nAllow: /\nSitemap: https://getdeckbridge.app/sitemap.xml\n",
+    "sitemap.xml": sitemap("https://getdeckbridge.app/"),
+    "llms.txt": "# DeckBridge\n\n> A bridge.\n",
 }
 
 
@@ -110,6 +118,31 @@ class CheckSiteTests(unittest.TestCase):
         block = '<script type="application/ld+json">{"name": "DeckBridge &amp; <b>", "a": [1, 2]}</script>'
         root = self.site({"support/index.html": page(head=block, body='<a href="../">Home</a>')})
         self.assertEqual(check_site.problems(root), [])
+
+    def test_robots_sitemap_and_llms_txt_must_exist(self):
+        root = self.site(remove=["robots.txt", "sitemap.xml", "llms.txt"])
+        self.assertEqual(check_site.problems(root), ["robots.txt: missing", "sitemap.xml: missing", "llms.txt: missing"])
+
+    def test_a_sitemap_that_isnt_xml_fails(self):
+        found = check_site.problems(self.site({"sitemap.xml": "<urlset><url><loc>https://getdeckbridge.app/</loc></urlset>"}))
+        self.assertEqual(len(found), 1, found)
+        self.assertTrue(found[0].startswith("sitemap.xml: doesn't parse as XML: "), found)
+
+    def test_a_sitemap_with_no_pages_fails(self):
+        self.assertEqual(check_site.problems(self.site({"sitemap.xml": sitemap()})), ["sitemap.xml: lists no pages"])
+
+    def test_every_sitemap_url_is_on_the_site_and_is_a_page(self):
+        root = self.site({"sitemap.xml": sitemap(
+            "https://getdeckbridge.app/", "https://getdeckbridge.app/support/", "https://getdeckbridge.app/privacy/index.html",
+            "http://getdeckbridge.app/", "https://example.com/", "https://getdeckbridge.app.evil.example/",
+            "https://getdeckbridge.app/faq/", "https://getdeckbridge.app/img/nope.png")})
+        self.assertEqual(check_site.problems(root), [
+            "sitemap.xml: http://getdeckbridge.app/ isn't under https://getdeckbridge.app/",
+            "sitemap.xml: https://example.com/ isn't under https://getdeckbridge.app/",
+            "sitemap.xml: https://getdeckbridge.app.evil.example/ isn't under https://getdeckbridge.app/",
+            "sitemap.xml: https://getdeckbridge.app/faq/ isn't a page in the site",
+            "sitemap.xml: https://getdeckbridge.app/img/nope.png isn't a page in the site",
+        ])
 
     def test_a_page_without_a_title_or_description_fails(self):
         root = self.site({"support/index.html": page(title="", description="", body='<a href="../">Home</a>')})
