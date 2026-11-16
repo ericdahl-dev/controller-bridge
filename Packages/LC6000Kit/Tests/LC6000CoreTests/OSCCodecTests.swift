@@ -24,6 +24,18 @@ struct OSCCodecTests {
         #expect(message.encoded() == expected)
     }
 
+    @Test("A negative int32 is two's complement, big-endian: BeatSkip -1 carries ffffffff")
+    func negativeInt32() {
+        let message = OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(-1)])
+        // "/Syndicate/Deck/1/BeatSkip" is 26 bytes, + 1 NUL, padded to 28.
+        let expected = Self.bytes("""
+            2f53796e 64696361 74652f44 65636b2f 312f4265 6174536b 69700000
+            2c690000
+            ffffffff
+            """)
+        #expect(message.encoded() == expected)
+    }
+
     @Test("A float32 argument: ',f' tag, IEEE 754 big-endian")
     func float32() {
         let message = OSCMessage("/Syndicate/Deck/1/TempoSlider", [.float(-0.25)])

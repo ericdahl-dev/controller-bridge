@@ -19,12 +19,29 @@ final class Bridge {
             "shift": { $0.shiftButton },
             "key_lock": { $0.keyLock },
             "slip": { $0.slip },
+            // Browse, loops and jumps (Bridge+Browse.swift).
+            "track_prev": { $0.trackPrevious },
+            "track_next": { $0.trackNext },
+            "back": { $0.browserBack },
+            "forward": { $0.browserForward },
+            "select_press": { $0.selectPress },
+            "loop_in": { $0.loopIn },
+            "loop_out": { $0.loopOut },
+            "auto_loop": { $0.autoLoop },
+            "beat_jump_back": { $0.beatJumpBack },
+            "beat_jump_forward": { $0.beatJumpForward },
+            "param_back": { $0.paramBack },
+            "param_forward": { $0.paramForward },
         ]
     }
 
     /// CC handlers by name (see `ccNames`). Each is called with the raw 0-127 value.
     static var ccHandlers: [String: (Bridge) -> (UInt8) -> Void] {
-        [:]
+        [
+            // Browse, loops and jumps (Bridge+Browse.swift).
+            "select_turn": { $0.selectTurn },
+            "auto_loop_size": { $0.autoLoopSize },
+        ]
     }
 
     let mapping: Mapping
@@ -49,6 +66,7 @@ final class Bridge {
     var loaded = false
     var synced = false
     var sliderEnabled = true
+    var looping = false
 
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
@@ -114,6 +132,7 @@ final class Bridge {
         case "loaded": loaded = value
         case "sync": synced = value
         case "temposliderenabled": sliderEnabled = value
+        case "loop": looping = value
         default: return
         }
         refreshLEDs()
@@ -124,6 +143,7 @@ final class Bridge {
     func refreshLEDs() {
         buttonLED("play", on: playing)
         refreshTransportLEDs()
+        loopLEDs()
     }
 
     func buttonLED(_ name: String, on: Bool) {
