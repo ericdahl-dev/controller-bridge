@@ -248,4 +248,13 @@ struct PadsTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         #expect(Self.padLEDs(rig) == [0, 0, 0, 0, 0, 0, 0, 0])
     }
+
+    @Test("Color endpoints: a white cue (255, 255, 255) lights at 0x3F, and a black one (0, 0, 0) is off")
+    func colorEndpoints() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(255), .int(255)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(2), .int(0), .int(0), .int(0)]))
+        rig.coordinator.feedback(Self.cues([1, 2, 0, 0, 0, 0, 0, 0]))
+        #expect(Self.padLEDs(rig) == [0x3F, 0, 0, 0, 0, 0, 0, 0])
+    }
 }

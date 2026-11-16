@@ -49,7 +49,7 @@ extension BridgeStatus {
         }
         return BridgeState(
             controller: controller, feedback: feedback, deck: shownDeck, stopped: problem != nil, lastDropout: lastDropout,
-            master: self.controller?.master == true
+            master: self.controller?.master == true, demo: demo
         )
     }
 }
@@ -61,6 +61,8 @@ enum AppInfo {
 
 struct StatusPanel: View {
     let status: BridgeStatus
+    /// Turns the demo controller (#64) on or off.
+    var setDemo: (Bool) -> Void = { _ in }
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -75,10 +77,11 @@ struct StatusPanel: View {
                     }
                     Spacer(minLength: 0)
                 }
-                HStack(alignment: .top, spacing: Theme.Space.xl) {
+                // Two or three lights sit on one row; more (BRIDGE STOPPED, DEMO, MASTER) fold into a second.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: Theme.Space.xl, alignment: .topLeading)],
+                          alignment: .leading, spacing: Theme.Space.m) {
                     ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }
                     if let master = presentation.master { StatusLightView(light: master) }
-                    Spacer(minLength: 0)
                 }
                 let others = status.otherDevices
                 if let highlighted = others.highlighted {
@@ -109,7 +112,11 @@ struct StatusPanel: View {
                     }
                 }
                 // Always there, so the guide can be reopened; the help above says when it's the fix.
-                guideLink
+                HStack(spacing: Theme.Space.m) {
+                    guideLink
+                    Spacer(minLength: 0)
+                    demoToggle
+                }
                 HStack(spacing: Theme.Space.s) {
                     SettingsLink { Text("Settings…") }.buttonStyle(FlatButtonStyle())
                     Button {
@@ -129,7 +136,7 @@ struct StatusPanel: View {
             .padding(Theme.Space.l)
             .background(Theme.panel)
             Rectangle().fill(Theme.hairline).frame(height: 1)
-            StatusLineView(presentation: presentation, deck: status.shownDeck)
+            StatusLineView(presentation: presentation)
         }
         .frame(width: 360)
         .background(Theme.background)
@@ -142,6 +149,15 @@ struct StatusPanel: View {
             .buttonStyle(.plain)
             .font(Theme.ui(Theme.Size.body, .semibold))
             .foregroundStyle(Theme.text)
+            .underline()
+    }
+
+    /// The built-in demo controller (#64), for trying the bridge with no hardware. Low-key, like the guide link.
+    private var demoToggle: some View {
+        Button("Demo controller: \(status.demo ? "On" : "Off")") { setDemo(!status.demo) }
+            .buttonStyle(.plain)
+            .font(Theme.ui(Theme.Size.body, .semibold))
+            .foregroundStyle(status.demo ? Theme.attention : Theme.text)
             .underline()
     }
 

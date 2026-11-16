@@ -9,6 +9,8 @@ public struct CoordinatorStatus: Equatable, Sendable {
     public var lastDropout: String?
     /// An LED sweep (#26) is running.
     public var sweeping = false
+    /// The built-in demo controller (#64) is running instead of the real one.
+    public var demo = false
 
     public init(
         controllers: [ControllerStatus], devices: [DeviceStatus] = [], feedback: FeedbackState = .waiting,

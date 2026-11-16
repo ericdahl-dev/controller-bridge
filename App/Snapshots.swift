@@ -49,7 +49,20 @@ enum Snapshots {
                 $0.bridges = [ControllerStatus(deck: 3, connected: true, profile: "Denon LC6000 PRIME")]
                 $0.feedback = .portInUse(port: 9096)
             }),
+            // The built-in demo controller (#64): DEMO leads, so it is never mistaken for hardware.
+            ("demo", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.demo = true
+            }),
             ("starting-deck4", { $0.deck = 4 }),
+            ("many-lights", {
+                $0.bridges = [ControllerStatus(deck: 2, connected: true, profile: "Denon LC6000 PRIME", master: true)]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.problem = "Couldn't open the OSC sender: connect: Network is unreachable"
+            }),
             ("waiting", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
                 $0.feedback = .listening(port: 9096)

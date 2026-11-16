@@ -15,7 +15,15 @@ enum BridgeHost {
     ) async {
         let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
         coordinator.start()
-        await Engine(coordinator: coordinator, log: log, onStatus: statusSink(status), onDiagnostic: diagnosticsSink(diagnostics)).run(events)
+        // The demo controller (#64) runs the first profile against an in-process controller and an in-memory Syndicate.
+        let demoProfile = profiles[0]
+        let makeDemo: @Sendable () -> DemoSession = {
+            DemoSession(profile: demoProfile, clock: SystemClock(), log: log, ledOutput: DroppedMIDIOutput())
+        }
+        await Engine(
+            coordinator: coordinator, log: log, onStatus: statusSink(status), onDiagnostic: diagnosticsSink(diagnostics),
+            makeDemo: makeDemo
+        ).run(events)
     }
 
     /// Hands each Diagnostics line to the window, one main-actor hop per line. Only called while the window is open.
@@ -33,6 +41,7 @@ enum BridgeHost {
                 status.syndicateFeedback = coordinatorStatus.feedback
                 status.lastDropout = coordinatorStatus.lastDropout
                 status.sweeping = coordinatorStatus.sweeping
+                status.demo = coordinatorStatus.demo
             }
         }
     }
@@ -69,4 +78,10 @@ struct UnifiedLogSink: LogSink {
         Self.logger.info("\(line, privacy: .public)")
         print(line)
     }
+}
+
+/// The demo controller has no LEDs to light (#64): its LED writes go nowhere.
+struct DroppedMIDIOutput: MIDIOutput {
+    func send(_ event: MIDIEvent) throws {}
+    func close() {}
 }

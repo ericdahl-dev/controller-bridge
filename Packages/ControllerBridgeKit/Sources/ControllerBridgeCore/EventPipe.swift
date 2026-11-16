@@ -14,6 +14,8 @@ public enum PipeEvent: Equatable, Sendable {
     /// Start the LED sweep, `delay` seconds per color; or stop it part-way.
     case ledSweep(delay: Double)
     case stopLEDSweep
+    /// The built-in demo controller (#64) on or off.
+    case demo(on: Bool)
     /// Settings changes (#19), in order with the MIDI already queued.
     case setDeck(Int, controller: Int)
     case setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int)
@@ -52,6 +54,7 @@ public struct EventPipe: Sendable {
         public func diagnostics(open: Bool) { continuation.yield(.diagnostics(open: open)) }
         public func ledSweep(delay: Double) { continuation.yield(.ledSweep(delay: delay)) }
         public func stopLEDSweep() { continuation.yield(.stopLEDSweep) }
+        public func demo(on: Bool) { continuation.yield(.demo(on: on)) }
         public func setDeck(_ deck: Int, controller: Int) { continuation.yield(.setDeck(deck, controller: controller)) }
         public func setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int) {
             continuation.yield(.setDevices(input: input, output: output, controller: controller))

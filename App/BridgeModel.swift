@@ -25,6 +25,8 @@ final class BridgeStatus {
     var lastDropout: String?
     /// An LED sweep is running (#26).
     var sweeping = false
+    /// The built-in demo controller is running (#64). Off at launch and never saved.
+    var demo = false
     var feedback: Feedback = .starting
     var problem: String?
     /// The running mapping (#24): the bundled profile's name, or that an imported file is in use.
@@ -71,6 +73,8 @@ final class BridgeModel {
     func setDiagnostics(open: Bool) { producer?.diagnostics(open: open) }
     func startLEDSweep(delay: Double) { producer?.ledSweep(delay: delay) }
     func stopLEDSweep() { producer?.stopLEDSweep() }
+    /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.
+    func setDemo(_ on: Bool) { producer?.demo(on: on) }
 
     func quit(_ done: @escaping @MainActor () -> Void) {
         guard let producer, let engine else { return done() }

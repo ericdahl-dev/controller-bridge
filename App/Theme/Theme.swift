@@ -118,7 +118,9 @@ struct StatusLightView: View {
             Text(light.label.uppercased()).font(Theme.captionFont).foregroundStyle(Theme.caption)
             HStack(spacing: 5) {
                 Circle().fill(Color(light.tone.color)).frame(width: 7, height: 7)
+                // A word never breaks mid-word; the panel lays lights out in a grid instead.
                 Text(light.word).font(Theme.ui(12, .bold)).foregroundStyle(Color(light.tone.color))
+                    .lineLimit(1).fixedSize()
             }
         }
         .accessibilityElement(children: .combine)
@@ -129,14 +131,13 @@ struct StatusLightView: View {
 /// its state color, as in the big lights; labels stay gray. Reads the same as `StatusPresentation.line`.
 struct StatusLineView: View {
     let presentation: StatusPresentation
-    let deck: Int
 
     var body: some View {
         styledLine
             .font(Theme.ui(10, .semibold))
             .foregroundStyle(Theme.caption)
+            // No scaling and no cut words: StatusPresentation already dropped whole parts to fit (#66).
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -144,15 +145,19 @@ struct StatusLineView: View {
     }
 
     private var styledLine: Text {
+        // Non-breaking spaces inside a part, so a part is never split if the line ever has to break.
+        func keep(_ text: String) -> String { text.replacingOccurrences(of: " ", with: "\u{00A0}") }
         let separator = Text(" · ").foregroundStyle(Theme.caption)
         var line = Text("")
-        for light in presentation.lights {
-            line = line + Text("\(light.label.uppercased()) ").foregroundStyle(Theme.caption)
-                + Text("● \(light.word)").foregroundStyle(Color(light.tone.color)) + separator
-        }
-        line = line + Text("DECK [\(deck)]").foregroundStyle(Theme.caption)
-        if let master = presentation.master {
-            line = line + separator + Text(master.word).foregroundStyle(Color(master.tone.color))
+        for (index, part) in presentation.lineParts.enumerated() {
+            if index > 0 { line = line + separator }
+            if let label = part.label {
+                line = line + Text(keep(label.uppercased()) + "\u{00A0}").foregroundStyle(Theme.caption)
+                    + Text(keep("● " + part.word)).foregroundStyle(Color(part.tone.color))
+            } else {
+                // DECK reads as a caption; MASTER keeps its orange.
+                line = line + Text(keep(part.word)).foregroundStyle(part.tone == .idle ? Theme.caption : Color(part.tone.color))
+            }
         }
         return line
     }

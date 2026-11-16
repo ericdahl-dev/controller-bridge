@@ -62,7 +62,8 @@ struct StatusPresentationTests {
 
     @Test("If the bridge couldn't start (no mapping, CoreMIDI or OSC sender), a red STOPPED light leads and the icon shows an error")
     func stoppedByAStartupProblem() {
-        let status = StatusPresentation(BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true))
+        // The full wording, with room for it all; the panel's budget is tested in lineFitsBudget.
+        let status = StatusPresentation(BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true), lineBudget: 100)
         #expect(status.line == "BRIDGE ● STOPPED · CONTROLLER ● NOT CONNECTED · FEEDBACK ● STARTING · DECK [1]")
         #expect(status.lights.first == StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error))
         #expect(status.icon == .error)
@@ -109,5 +110,57 @@ struct StatusPresentationTests {
         let notMaster = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1))
         #expect(notMaster.master == nil)
         #expect(notMaster.line == "LC6000 ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
+    }
+
+    @Test("Demo mode (#64): a leading orange DEMO ● CONTROLLER light, DEMO in the status line, and the icon on attention")
+    func demo() {
+        let status = StatusPresentation(BridgeState(
+            controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1, demo: true
+        ), lineBudget: 100)
+        #expect(status.lights == [
+            StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention),
+            StatusLight(label: "Denon LC6000 PRIME", word: "CONNECTED", tone: .live),
+            StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live),
+        ])
+        #expect(status.line == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
+        // An exception to "the icon is for problems": DEMO must never be mistaken for real hardware.
+        #expect(status.icon == .attention)
+    }
+
+    // The status line fits a character budget (#66): whole parts drop in priority order (DEMO and error lights, then the
+    // controller, feedback, MASTER, DECK), and a word is never cut. Expected lines are written out by hand.
+
+    static let demoMaster = BridgeState(
+        controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1, master: true, demo: true
+    )
+
+    @Test("DEMO and MASTER: the line drops DECK, then MASTER, then FEEDBACK, then the controller, as the budget shrinks")
+    func lineFitsBudget() {
+        #expect(StatusPresentation(Self.demoMaster, lineBudget: 100).line
+            == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE · DECK [1] · MASTER")
+        #expect(StatusPresentation(Self.demoMaster, lineBudget: 80).line
+            == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE · MASTER")
+        #expect(StatusPresentation(Self.demoMaster, lineBudget: 70).line
+            == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED · FEEDBACK ● LIVE")
+        #expect(StatusPresentation(Self.demoMaster, lineBudget: 50).line == "DEMO ● CONTROLLER · Denon LC6000 PRIME ● CONNECTED")
+        // The top part always stays whole, even over budget: a word is never cut.
+        #expect(StatusPresentation(Self.demoMaster, lineBudget: 10).line == "DEMO ● CONTROLLER")
+    }
+
+    @Test("An error light outranks the controller: a taken feedback port stays when the line is short")
+    func errorStays() {
+        let state = BridgeState(controller: .connected(profile: "LC6000"), feedback: .portInUse(port: 9096), deck: 1, master: true)
+        #expect(StatusPresentation(state, lineBudget: 30).line == "FEEDBACK ● PORT 9096 IN USE")
+    }
+
+    @Test("The parts the status bar draws are exactly the line's parts, in order, with each word's tone")
+    func linePartsMatchLine() {
+        let status = StatusPresentation(Self.demoMaster, lineBudget: 80)
+        #expect(status.lineParts == [
+            StatusLinePart(label: "DEMO", word: "CONTROLLER", tone: .attention),
+            StatusLinePart(label: "Denon LC6000 PRIME", word: "CONNECTED", tone: .live),
+            StatusLinePart(label: "FEEDBACK", word: "LIVE", tone: .live),
+            StatusLinePart(label: nil, word: "MASTER", tone: .attention),
+        ])
     }
 }
