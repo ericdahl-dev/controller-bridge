@@ -12,6 +12,17 @@ public enum DiagnosticsTab: String, CaseIterable, Sendable {
         case .osc: "Nothing sent or received yet."
         }
     }
+
+    /// The monitor's note about the notes the profile ignores (#103), so a quiet monitor doesn't look like a dead port.
+    public static func hiddenNotesHint(_ notes: [Int]) -> String? {
+        switch notes.count {
+        case 0: nil
+        case 1: "Note \(notes[0]), the controller's idle heartbeat, is hidden."
+        default:
+            "Notes " + notes.dropLast().map(String.init).joined(separator: ", ") + " and \(notes.last!), which the controller "
+                + "sends on its own, are hidden."
+        }
+    }
 }
 
 /// Whether Start Sweep can run, and if not, why: the sweep lights the controller, so it needs its LED output.

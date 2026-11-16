@@ -42,7 +42,10 @@ struct RecoveryTests {
         rig.coordinator.start()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
         rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)    // Cue held
-        rig.coordinator.midi(.controlChange(channel: 0, controller: 55, value: 1), source: Rig.lc6000.id)  // nudge
+        for lsb in [UInt8(0), 8] {   // nudge: the platter turning forward (#103)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: 7), source: Rig.lc6000.id)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
+        }
         rig.osc.sent.removeAll()
 
         Self.unplug(rig)

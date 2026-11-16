@@ -11,7 +11,10 @@
     "midi": {
       "input": "LC6000",
       "output": "LC6000",
-      "channel": 1
+      "channel": 1,
+      "ignore_notes": [
+        52
+      ]
     },
     "osc": {
       "host": "127.0.0.1",
@@ -26,12 +29,12 @@
       "number": 1
     },
     "jog": {
-      "ccs": [
-        55
-      ],
+      "msb_cc": 17,
+      "lsb_cc": 49,
+      "counts_per_rev": 3600,
       "bend_release_ms": 80,
-      "seek_seconds_per_tick": 0.02,
-      "seek_fallback_ticks_per_beat": 32,
+      "seek_seconds_per_rev": 2.0,
+      "beats_per_rev": 4,
       "require_touch": false
     },
     "pitch": {
@@ -43,7 +46,8 @@
       "pickup_tolerance": 0.02
     },
     "needle": {
-      "cc": 64,
+      "msb_cc": 64,
+      "lsb_cc": 65,
       "touch_note": 70,
       "require_touch": true
     },

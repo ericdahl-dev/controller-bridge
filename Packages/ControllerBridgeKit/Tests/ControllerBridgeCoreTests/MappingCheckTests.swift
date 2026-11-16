@@ -31,8 +31,8 @@ struct MappingCheckTests {
             "midi.channel: expected a whole number, got 1.5",
             "midi.input: expected text, got 5",
         ])
-        #expect(Self.problems(#"{"jog": {"ccs": 55, "dead": 1}, "pitch": {"dead_zone": "small"}}"#) == [
-            "jog.ccs: expected a list, got 55",
+        #expect(Self.problems(#"{"jog": {"msb_cc": [17], "dead": 1}, "pitch": {"dead_zone": "small"}}"#) == [
+            "jog.msb_cc: expected a whole number, got a list",
             "jog.dead: unknown key",
             "pitch.dead_zone: expected a number, got \"small\"",
         ])
@@ -49,10 +49,10 @@ struct MappingCheckTests {
 
     @Test("Notes and CCs are 0–127, including pads, jog CCs and LED notes")
     func midiRanges() {
-        #expect(Self.problems(#"{"notes": {"play": 128, "pads": [32, -1, 34, 35, 36, 37, 38, 39]}, "jog": {"ccs": [55, 200]}, "leds": {"ring": 300}}"#) == [
+        #expect(Self.problems(#"{"notes": {"play": 128, "pads": [32, -1, 34, 35, 36, 37, 38, 39]}, "jog": {"lsb_cc": 200}, "leds": {"ring": 300}}"#) == [
             "notes.play: 128 is out of range, expected 0-127",
             "notes.pads[1]: -1 is out of range, expected 0-127",
-            "jog.ccs[1]: 200 is out of range, expected 0-127",
+            "jog.lsb_cc: 200 is out of range, expected 0-127",
             "leds.ring: 300 is out of range, expected 0-127",
         ])
         #expect(Self.problems(#"{"pitch": {"msb_cc": 128}, "needle": {"touch_note": 999}, "browse": {"select_turn_cc": -5}}"#) == [
@@ -95,11 +95,11 @@ struct MappingCheckTests {
         #expect(Self.problems(#"{"needle": {"touch_note": 21}}"#) == ["needle.touch_note: note 21 is also notes.master"])
     }
 
-    @Test("A CC used by two features is a duplicate; jog listing two different CCs is fine")
+    @Test("A CC used by two features is a duplicate, including the jog's and the strip's 14-bit pairs (#103)")
     func duplicateCCs() {
-        #expect(Self.problems(#"{"needle": {"cc": 8}}"#) == ["needle.cc: CC 8 is also pitch.msb_cc"])
-        #expect(Self.problems(#"{"jog": {"ccs": [55, 54]}}"#) == [])
-        #expect(Self.problems(#"{"jog": {"ccs": [55, 55]}}"#) == ["jog.ccs[1]: CC 55 is also jog.ccs[0]"])
+        #expect(Self.problems(#"{"needle": {"msb_cc": 8}}"#) == ["needle.msb_cc: CC 8 is also pitch.msb_cc"])
+        #expect(Self.problems(#"{"jog": {"lsb_cc": 17}}"#) == ["jog.lsb_cc: CC 17 is also jog.msb_cc"])
+        #expect(Self.problems(#"{"jog": {"msb_cc": 18, "lsb_cc": 50}}"#) == [])
     }
 
     @Test("Notes, CCs and LED notes are separate: the same number in two of them is fine")
@@ -139,10 +139,12 @@ struct MappingCheckTests {
         #expect(Self.problems(#"{"notes": {"pads": []}}"#) == ["notes.pads: expected 8 pads, got 0"])
     }
 
-    @Test("Jog ticks per beat must be at least 1, so the paused-jog fallback never divides by zero")
+    @Test("The jog's turn scaling must be usable: at least 1 count and 1 beat a turn, so nothing divides by zero")
     func ticksPerBeat() {
-        #expect(Self.problems(#"{"jog": {"seek_fallback_ticks_per_beat": 0}}"#) == [
-            "jog.seek_fallback_ticks_per_beat: 0 is out of range, expected 1-1000",
+        #expect(Self.problems(#"{"jog": {"counts_per_rev": 0, "beats_per_rev": 0, "seek_seconds_per_rev": 61}}"#) == [
+            "jog.counts_per_rev: 0 is out of range, expected 1-16384",
+            "jog.beats_per_rev: 0 is out of range, expected 1-16",
+            "jog.seek_seconds_per_rev: 61 is out of range, expected 0-60",
         ])
     }
 
@@ -154,9 +156,8 @@ struct MappingCheckTests {
             "osc.feedback_quiet_ms: -5 is out of range, expected 0-60000",
             "osc.feedback_answer_ms: 1e+300 is out of range, expected 0-60000",
         ])
-        #expect(Self.problems(#"{"jog": {"bend_release_ms": 0, "seek_seconds_per_tick": 11}, "pitch": {"dead_zone": 2, "pickup_tolerance": -1}, "leds": {"pulse_ms": 99999}}"#) == [
+        #expect(Self.problems(#"{"jog": {"bend_release_ms": 0}, "pitch": {"dead_zone": 2, "pickup_tolerance": -1}, "leds": {"pulse_ms": 99999}}"#) == [
             "jog.bend_release_ms: 0 is out of range, expected 1-5000",
-            "jog.seek_seconds_per_tick: 11 is out of range, expected 0-10",
             "pitch.dead_zone: 2 is out of range, expected 0-1",
             "pitch.pickup_tolerance: -1 is out of range, expected 0-1",
             "leds.pulse_ms: 99999 is out of range, expected 0-60000",

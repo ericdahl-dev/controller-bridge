@@ -100,7 +100,7 @@ enum DemoScript {
         let channel = UInt8(clamping: mapping.midi.channel - 1)
         let play = UInt8(clamping: mapping.notes.buttons["play"] ?? 0)
         let pitch = UInt8(clamping: mapping.pitch.msbCC)
-        let jog = UInt8(clamping: mapping.jog.ccs.first ?? 0)
+        let (jogMSB, jogLSB) = (UInt8(clamping: mapping.jog.msbCC), UInt8(clamping: mapping.jog.lsbCC))
         var steps = [
             Step(at: 0.5, event: .noteOn(channel: channel, note: play, velocity: 127)),
             Step(at: 0.6, event: .noteOff(channel: channel, note: play, velocity: 0)),
@@ -109,9 +109,12 @@ enum DemoScript {
         for (index, msb) in [UInt8(0x40), 0x44, 0x48, 0x4C, 0x50].enumerated() {
             steps.append(Step(at: 1.0 + Double(index) * 0.25, event: .controlChange(channel: channel, controller: pitch, value: msb)))
         }
-        // The jog, one tick forward five times: a nudge while playing.
-        for index in 0..<5 {
-            steps.append(Step(at: 3.0 + Double(index) * 0.05, event: .controlChange(channel: channel, controller: jog, value: 0x01)))
+        // The jog, the platter position counting up 8 at a time as a slow forward turn does (#103): a nudge while
+        // playing. The first position is only the starting point.
+        for (index, position) in stride(from: 100, through: 140, by: 8).enumerated() {
+            let at = 3.0 + Double(index) * 0.05
+            steps.append(Step(at: at, event: .controlChange(channel: channel, controller: jogMSB, value: UInt8(position >> 7))))
+            steps.append(Step(at: at, event: .controlChange(channel: channel, controller: jogLSB, value: UInt8(position & 0x7F))))
         }
         steps += [
             Step(at: 6.0, event: .noteOn(channel: channel, note: play, velocity: 127)),
