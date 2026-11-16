@@ -235,4 +235,13 @@ struct PadsTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         #expect(rig.leds[40] == 0)
     }
+
+    @Test("Cues and Loaded feedback for another deck leave this controller's pads and ring alone")
+    func otherDeckLeavesPadsAlone() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(Self.cues([1, 2, 3, 4, 5, 6, 7, 8], deck: 2))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        #expect(Self.padLEDs(rig) == [0, 0, 0, 0, 0, 0, 0, 0])
+        #expect(rig.leds[40] == 0)
+    }
 }
