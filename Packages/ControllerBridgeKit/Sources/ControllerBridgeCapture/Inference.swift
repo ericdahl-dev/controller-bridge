@@ -44,6 +44,18 @@ struct ControlKey: Hashable {
 }
 
 enum Inference {
+    /// Which control a message comes from, for noise: the status with note-off folded into note-on, and the number
+    /// ("90 34" for note 52 on channel 1). Pitch bend is its status alone. Nil for anything else.
+    static func noiseKey(_ bytes: [UInt8]) -> [UInt8]? {
+        guard let voice = Voice(bytes) else { return nil }
+        let channel = UInt8(voice.channel)
+        return switch voice.kind {
+        case .noteOn, .noteOff: [0x90 | channel, UInt8(voice.number)]
+        case .cc: [0xB0 | channel, UInt8(voice.number)]
+        case .pitchBend: [0xE0 | channel]
+        }
+    }
+
     /// The controls in one step, in the order they first appear.
     static func controls(in messages: [[UInt8]], gesture: CaptureGesture) -> [ControlFacts] {
         let voices = messages.compactMap(Voice.init)

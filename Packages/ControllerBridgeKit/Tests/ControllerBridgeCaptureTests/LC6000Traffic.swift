@@ -6,6 +6,14 @@
 enum LC6000Traffic {
     typealias Take = [(time: Double, bytes: [UInt8])]
 
+    /// The host-mode heartbeat: note 52 (0x34), here on channels 1 and 2, every half second.
+    static func heartbeat(from start: Double, count: Int) -> Take {
+        (0..<count).flatMap { i -> Take in
+            let time = start + Double(i) * 0.5
+            return [(time, [0x90, 0x34, 0x7F]), (time + 0.001, [0x91, 0x34, 0x7F])]
+        }
+    }
+
     /// Play on deck 1: note 1, channel 1, released with a note-off.
     static let play: Take = [(0.00, [0x90, 0x01, 0x7F]), (0.12, [0x80, 0x01, 0x00])]
 
