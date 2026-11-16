@@ -25,10 +25,21 @@ No rank depends on retailer charts or press "best-selling" claims.
 
 ## 2. What Syndicate itself supports
 
-- **The claim.** DeckBridge's own [README.md](../../README.md) (line 5) says Syndicate's built-in MIDI mapping (0.3.7) gives LED feedback only to the Pioneer DDJ-FLX4 and DDJ-FLX10.
-- **No primary source found.** Syndicate's site is [untitledaudiosyndicate.com](https://untitledaudiosyndicate.com). Its product page ([/syndicate](https://untitledaudiosyndicate.com/syndicate)) says only that Syndicate has MIDI and OSC control, and that users can map the hardware they already own to anything on screen. Fetched without a browser session, the docs pages ([/docs](https://untitledaudiosyndicate.com/docs), [/docs/getting-started](https://untitledaudiosyndicate.com/docs/getting-started)) return only the site navigation. They may be rendered client-side or need a sign-in; I couldn't tell which. Neither the site's JS bundles nor a web search turned up a controller list.
-- **Status: unverified.** The FLX4/FLX10 claim is the repo's own, and the README doesn't say where it comes from. The whole ranking leans on it, so it is listed as a risk in section 7.
-- **User mapping matters.** Because Syndicate advertises user MIDI mapping, a user may be able to map some controls of any controller by hand, such as faders and EQ. That affects the #207 discussion in section 6.
+Source: Syndicate's own user guide, build 0.3.7 (macOS public beta, updated Nov 14, 2026). Its section 13.9, "What's supported" ([Syndicate User Guide 0.3.7, section 13.9](https://untitledaudiosyndicate.com/user-guide/index.html#c13-9)), is the controller list. The guide loads inside the /docs page from [/user-guide/index.html](https://untitledaudiosyndicate.com/user-guide/index.html), which is why a fetch without a browser saw only the site navigation.
+
+- **Presets with LED feedback: only the DDJ-FLX4 and DDJ-FLX10.** Mapping → CHOOSE PRESET loads a preset for either model, with "their supported MIDI LED feedback" (section 13.1). Section 13.9 lists generic LED or motor feedback over MIDI as **not supported**. So our README's claim holds.
+- **The preset is picked by hand.** The user chooses the model in CHOOSE PRESET; the guide doesn't describe matching by device name. A user could load the FLX4 preset for another controller.
+- **Generic user mapping (section 13.9).**
+  - Supported: absolute MIDI CC 0–119, note on/off with velocity, pitch wheel (14-bit), and the DDJ-FLX4/FLX10 jog and browse CCs.
+  - Not supported: 14-bit CC pairs, NRPN, generic relative or encoder CC, soft takeover, and MIDI shift layers or banks.
+- **What that means for a controller without a preset:**
+  - its 14-bit CC-pair faders and jogs reduce to their 7-bit MSB, or don't work;
+  - its relative jog doesn't work;
+  - its LEDs stay dark;
+  - its Shift layer isn't available.
+  
+  The LC6000's jog and pitch are 14-bit CC pairs, which is why Syndicate's own mapping can't read them at full resolution.
+- **OSC feedback** for other surfaces is configurable (section 14.10, linked from 13.1). DeckBridge uses this.
 
 ## 3. Ranked top 10
 
@@ -43,7 +54,7 @@ Each controller is scored on four things:
 | # | Controller | Why here |
 |---|---|---|
 | 1 | **Pioneer DJ DDJ-400** | Pioneer itself calls it its standard entry-level controller, in the [FLX4 launch news (2022-11-08, German)](https://www.pioneerdj.com/de/news/2022/ddj-flx4-2-channel-dj-controller-for-multiple-dj-applications/), which says the FLX4 keeps the DDJ-400's main layout features. Press coverage calls the FLX4 its replacement ([Digital DJ Tips](https://www.digitaldjtips.com/pioneer-dj-replaces-ddl-400-with-new-more-versatile-ddj-flx4/), secondary). The size of its installed base is my inference, not a cited figure. It is not one of the two units our README says Syndicate lights. Its MIDI is almost the same as the FLX4's: Mixxx's DDJ-400 and FLX4 mappings share 193 of the DDJ-400's 199 input messages and all 110 of its LED outputs (my comparison of the two XML files at `dc4bf99`). So the FLX4's official MIDI list documents most of it. |
-| 2 | **Pioneer DJ DDJ-FLX4** | A current Pioneer 2-channel controller aimed at beginners ([launch news](https://www.pioneerdj.com/de/news/2022/ddj-flx4-2-channel-dj-controller-for-multiple-dj-applications/); [product page](https://www.pioneerdj.com/en/product/dj-controllers/ddj-flx4/)). Officially supported by several apps: [djay](https://www.pioneerdj.com/en/news/2023/ddj-flx4-officially-supports-djay) and [Traktor Play](https://www.pioneerdj.com/ja/news/2025/ddj-flx2-and-ddj-flx4-support-traktor-play/). It has the best public docs of any candidate (official MIDI list, Mixxx mapping and Mixxx manual page). It ranks below the DDJ-400 only because Syndicate already lights it (README claim, unverified). |
+| 2 | **Pioneer DJ DDJ-FLX4** | A current Pioneer 2-channel controller aimed at beginners ([launch news](https://www.pioneerdj.com/de/news/2022/ddj-flx4-2-channel-dj-controller-for-multiple-dj-applications/); [product page](https://www.pioneerdj.com/en/product/dj-controllers/ddj-flx4/)). Officially supported by several apps: [djay](https://www.pioneerdj.com/en/news/2023/ddj-flx4-officially-supports-djay) and [Traktor Play](https://www.pioneerdj.com/ja/news/2025/ddj-flx2-and-ddj-flx4-support-traktor-play/). It has the best public docs of any candidate (official MIDI list, Mixxx mapping and Mixxx manual page). It ranks below the DDJ-400 only because Syndicate already has a preset that lights it (section 2). |
 | 3 | **Denon DJ MC7000** | Denon's 4-deck Serato controller ([product page](https://www.denondj.com/professional-dj-controller-for-serato-mc7000xus)). I found no popularity evidence for it; its rank rests on family fit and docs. It is not one of the two units our README says Syndicate lights. It is an inMusic sibling of the LC6000: two's-complement jog, a 2-bit-per-channel RGB pad color byte like our provisional LC6000 table, MIDI channel = deck, and a startup SysEx with the same `00 20 7F` manufacturer ID as the LC6000's host hello (sources in section 4). Denon publishes no MIDI chart for the MC7000 itself. But its official [MCX8000 MIDI command list](https://cdn.inmusicbrands.com/denondj/MCX8000/Denon_DJ_MCX8000_MIDI_Command_List_v1.0.pdf) uses the same numbers that Mixxx uses for the MC7000, so it serves as an official sibling proxy (section 4). |
 | 4 | **Denon PRIME standalone units in computer mode** (SC6000/SC6000M, Prime 4/4+, Prime 2, Prime Go/Go+, SC Live 2/4) | These are the LC6000's closest relatives and natural partners for LC6000 owners. Without a mixer, the SC6000 would let us ship without [#207](https://github.com/ericdahl-dev/controller-bridge/issues/207). But Denon's [downloads page](https://www.denondj.com/downloads.html) lists a MIDI specification only for the LC6000 among PRIME products, and Mixxx has no mapping for any of them. Docs coverage is close to zero, so it ranks below the MC7000 despite the family fit. |
 | 5 | **Numark Mixtrack Platinum FX** (and **Mixtrack Pro FX**) | Numark's current Mixtrack FX controllers ([Platinum FX](https://www.numark.com/product/mixtrack-platinum-fx), [Pro FX](https://www.numark.com/product/mixtrack-pro-fx)). The Pro FX has 2 decks; the Mixxx manual calls the Platinum FX a 4-deck unit. My only popularity evidence is that both are current products. Not one of the units our README says Syndicate lights. Both have Mixxx mappings and Mixxx manual pages. Same inMusic traits as the MC7000: two's-complement jog, the `00 20 7F` status SysEx, and VU on CC 0x1F. No Numark MIDI chart found. |
@@ -54,7 +65,7 @@ Each controller is scored on four things:
 | 10 | **Native Instruments Traktor Kontrol S2 MK3 / S3** | NI documents a MIDI mode for the S2 MK3 and S3: hold the left FLX button while connecting ([NI support](https://support.native-instruments.com/support/solutions/articles/69000880031-native-instruments-switching-your-controller-to-midi-mode)). But I found no published MIDI assignment for that mode, and Mixxx's mappings use HID instead ([S2 MK3 manual page](https://github.com/mixxxdj/manual/blob/main/source/hardware/controllers/native_instruments_traktor_kontrol_s2_mk3.md)). So it would be capture-only. |
 
 **Considered and left out**
-- **Pioneer DDJ-FLX10.** Syndicate already lights it (README claim). There is an official MIDI list, but the archived copy is truncated (see sources).
+- **Pioneer DDJ-FLX10.** Syndicate already has a preset with LED feedback for it (section 2). There is an official MIDI list, but the archived copy is truncated (see sources).
 - **Pioneer DDJ-FLX2.** A current entry FLX model (named in the [Traktor Play news](https://www.pioneerdj.com/ja/news/2025/ddj-flx2-and-ddj-flx4-support-traktor-play/)). No MIDI list was found in the archive under Pioneer's usual path, and Mixxx has no mapping.
 - **Traktor Kontrol S4 MK3.** It isn't in NI's MIDI-mode table, and Mixxx drives it over HID and USB bulk ([manual page](https://github.com/mixxxdj/manual/blob/main/source/hardware/controllers/native_instruments_traktor_kontrol_s4_mk3.md)). DeckBridge is MIDI-only.
 - **Rane One / Four / Seventy.** No manufacturer MIDI chart found and no Mixxx mapping. Only forum mapping threads exist ([forum, djay](https://community.algoriddim.com/t/rane-one-midi-mapping/26978)).
@@ -318,7 +329,7 @@ The sources are Mixxx's MC7000 mapping, cross-checked against Denon's official M
 **Recommendation.** After [#48](https://github.com/ericdahl-dev/controller-bridge/issues/48), ship the **Pioneer DDJ-400** as the first new profile ([#202](https://github.com/ericdahl-dev/controller-bridge/issues/202)). Draft it from the FLX4's official MIDI list plus Mixxx's DDJ-400 mapping. Ship the **DDJ-FLX4** right after it from the same draft, if Syndicate's own FLX4 support turns out to be partial.
 
 **Why**
-1. **It's the biggest gap Syndicate leaves.** Pioneer calls the DDJ-400 its entry-level standard. It sold for years before the FLX4 replaced it, and Syndicate's built-in mapping doesn't light it (README claim).
+1. **It's the biggest gap Syndicate leaves.** Pioneer calls the DDJ-400 its entry-level standard. It sold for years before the FLX4 replaced it, and Syndicate's built-in mapping doesn't light it (section 2: LED feedback only in the FLX4/FLX10 presets).
 2. **It has the best docs of any unit Syndicate doesn't serve.** Its own chart is missing, but it shares about 97% of its inputs and 100% of its LED outputs with the FLX4 in Mixxx. The FLX4's official list covers transport, pads, jog encoding, the 14-bit pitch, the full mixer and the VU scale. Of the remaining candidates, the MC7000 rests on Mixxx plus a sibling's list, and the PRIME units on nothing public.
 3. **Few of the open profile-key issues apply,** though it needs two or three new #48 rows (see the matrix). Relative jog ([#204](https://github.com/ericdahl-dev/controller-bridge/issues/204)) and offset-64 encoding ([#193](https://github.com/ericdahl-dev/controller-bridge/issues/193)) are merged. The pitch is already a 14-bit pair (no [#195](https://github.com/ericdahl-dev/controller-bridge/issues/195)). It has 8 pads (no [#196](https://github.com/ericdahl-dev/controller-bridge/issues/196)). Its pads are likely single-color, so [#197](https://github.com/ericdahl-dev/controller-bridge/issues/197) reduces to "no color". Its pad modes have separate buttons (no [#198](https://github.com/ericdahl-dev/controller-bridge/issues/198)). It needs no SysEx as far as Mixxx shows (no [#199](https://github.com/ericdahl-dev/controller-bridge/issues/199)).
 4. **The FLX4 then comes almost free.** It needs the same profile plus a check on the keep-alive.
@@ -350,9 +361,9 @@ None of these has an issue yet.
 
 Every all-in-one candidate in the top 10 sends its mixer as MIDI for the software to mix (sections 4 and 5). That covers the DDJ-400/FLX4, MC7000, Mixtracks, Inpulses and REV/1000/FLX6. With the DDJ-400 bridged but no mixer section, DeckBridge would not pass on its channel faders, EQ, trim or filter.
 
-There is one possible workaround, unverified. Syndicate advertises user MIDI mapping (section 2), so a user might map the mixer CCs inside Syndicate while DeckBridge handles the decks and LEDs. Whether Syndicate can open the same MIDI port DeckBridge uses, and take 14-bit pairs, is unknown.
+There is a partial workaround. Syndicate's user mapping takes absolute CC 0–119 ([Syndicate User Guide 0.3.7, section 13.9](https://untitledaudiosyndicate.com/user-guide/index.html#c13-9)), so a user can map the mixer's faders and knobs inside Syndicate, but only at 7 bits (the MSB of each 14-bit pair, since CC pairs aren't supported), with no soft takeover, and with no VU meters on the controller (no generic LED feedback). Whether Syndicate can open the MIDI port while DeckBridge also has it open is still unverified.
 
-Without that workaround, **#207 is on the critical path for the recommended controller**: it should ship with or before #202. Check the workaround first, because it decides #207's priority.
+So the workaround gives a usable but coarse mixer with dark meters. **#207 stays on the critical path for a good DDJ-400 experience**: it should ship with or soon after #202. It's not a hard blocker if the 7-bit user-mapped mixer is acceptable for a first release.
 
 The only candidates that could ship decks-only are the SC6000/SC6000M (no mixer). They have no public MIDI docs and are unverified as USB-MIDI. If #207 must slip, the fallback is to bridge an SC6000 decks-only from an owner's full capture, at the cost of doing it with no docs.
 
@@ -360,16 +371,18 @@ On the plus side, the Pioneer docs make #207's controller side easy to draft. Ev
 
 ## 7. Risks and open points
 
-- **The Syndicate claim is unverified.** The FLX4/FLX10-only statement comes from our own README. I couldn't read Syndicate's docs without a browser session. If Syndicate supports more, the ranking shifts.
-- **Syndicate may already handle a DDJ-400.** The DDJ-400 and FLX4 share all their LED outputs in Mixxx. If Syndicate matches by MIDI behavior rather than device name, its FLX4 mapping might already work on a DDJ-400. Check that with a DDJ-400 owner before building.
+- **The Syndicate claim is now sourced** ([Syndicate User Guide 0.3.7, section 13.9](https://untitledaudiosyndicate.com/user-guide/index.html#c13-9)): LED feedback only in the FLX4/FLX10 presets; no 14-bit CC pairs or relative CC in generic mapping.
+- **A DDJ-400 owner can load Syndicate's FLX4 preset by hand.** The preset is chosen in CHOOSE PRESET, not matched by name (section 2), and the DDJ-400 and FLX4 share 193 of 199 inputs and all LED outputs in Mixxx. So the FLX4 preset may already run a DDJ-400 with lights. Ask a DDJ-400 owner to try it before building: if it works, the DDJ-400's gap is small and the ranking should move to a controller with no preset (MC7000 or a Mixtrack).
 - **No DDJ-400 manufacturer chart.** The draft relies on FLX4 equivalence and on Mixxx. The 6 DDJ-400-only inputs in Mixxx (note 0x47 on channels 1 and 2, notes 0x11 and 0x14 on channel 5, and CC 0x0D/0x2D on channel 7) need a capture to place.
 - **The FLX4 keep-alive is unexplained.** Mixxx sends it every 200 ms, but nobody has documented what fails without it.
-- **#207 may block the first profile.** It does unless users can map the mixer in Syndicate directly (section 6).
+- **#207 shapes the first profile.** Without it, the mixer is only user-mappable in Syndicate at 7 bits with dark meters (section 6).
 - **The MC7000 pitch MSB is disputed.** The official MCX8000 list and Mixxx disagree on which CC is the MSB, so a capture must settle it.
 - **The archived Pioneer PDFs aren't live.** The originals now redirect to AlphaTheta's support site, which refused scripted fetches. The archived copies are faithful, but Pioneer may have newer versions there.
 - **The capture owner is unknown.** #202 needs an owner's capture, and none has been identified for any candidate.
 
 ## Sources
+
+- [Syndicate User Guide 0.3.7, section 13.9](https://untitledaudiosyndicate.com/user-guide/index.html#c13-9): what Syndicate's MIDI mapping supports; build 0.3.7, updated Nov 14, 2026.
 
 **Project**
 - [README.md](../../README.md), line 5: the Syndicate support claim.
