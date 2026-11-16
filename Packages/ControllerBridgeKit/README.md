@@ -16,7 +16,7 @@ swift test
 
 The `mapping` body of `Sources/ControllerBridgeCore/Resources/Profiles/denon-lc6000-prime.json`, the LC6000 controller
 profile, is ported value for value from the Python bridge's
-`lc6000_bridge/default_mapping.toml`, with the same section and key names. A user mapping file merges over it the same
+`lc6000_bridge/default_mapping.toml` (removed in #30; see the git history), with the same section and key names. A user mapping file merges over it the same
 way the Python config merge does: objects merge key by key, and anything else replaces the default whole.
 
 One value deliberately differs from Python: `osc.feedback_host` is `127.0.0.1`, not `0.0.0.0`. The feedback port takes

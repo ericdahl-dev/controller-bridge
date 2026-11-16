@@ -2,7 +2,7 @@ import Foundation
 import ControllerBridgeCore
 import Testing
 
-/// Expected values are typed from lc6000_bridge/default_mapping.toml, the Python default mapping, except
+/// Expected values are typed from lc6000_bridge/default_mapping.toml, the Python default mapping (removed in #30, in the git history), except
 /// `osc.feedback_host`: the app listens on loopback by default (#32), where Python listened on 0.0.0.0, and
 /// `leds.beat_pulse` / `leds.pulse_ms` (#23) and `osc.feedback_quiet_ms` / `osc.feedback_answer_ms` /
 /// `leds.stale_idle` (#21), which Python never had.
