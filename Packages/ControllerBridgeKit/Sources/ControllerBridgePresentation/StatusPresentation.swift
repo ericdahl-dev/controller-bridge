@@ -2,6 +2,25 @@
 /// feedback listener; it has no CoreMIDI or SwiftUI types, so the wording can be tested here.
 /// Why a controller disconnected, as the panel needs it (#91). The app maps Core's DisconnectReason onto this, one to one.
 extension BridgeState {
+    /// Which part of the bridge couldn't start (#88), so the help gives the right fix.
+    public enum StopReason: Equatable, Sendable {
+        /// CoreMIDI couldn't start.
+        case midi
+        /// The OSC sender couldn't open, such as for a Syndicate host that can't be reached.
+        case oscSender
+        /// The controller profiles couldn't load.
+        case profiles
+
+        /// Short, for the header.
+        var short: String {
+            switch self {
+            case .midi: "Couldn't open MIDI"
+            case .oscSender: "Couldn't reach Syndicate"
+            case .profiles: "Couldn't load profiles"
+            }
+        }
+    }
+
     public enum Disconnect: Equatable, Sendable {
         case unplugged, sendFailed, inputFailed, deviceChanged, removed, stopped
     }
@@ -64,6 +83,8 @@ public struct BridgeState: Equatable, Sendable {
     public var demo: Bool
     /// The last connect, disconnect or unplug, for the header's subtitle.
     public var lastEvent: String?
+    /// When `stopped`, which part failed (#88).
+    public var stopReason: StopReason
     /// Further controllers after the first (#25), each with its own deck and last event.
     public var others: [ControllerEntry]
 
@@ -87,7 +108,8 @@ public struct BridgeState: Equatable, Sendable {
 
     public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil,
                 master: Bool = false, demo: Bool = false, lastEvent: String? = nil, others: [ControllerEntry] = [],
-                followsLayers: Bool = false) {
+                stopReason: StopReason = .midi, followsLayers: Bool = false) {
+        self.stopReason = stopReason
         self.followsLayers = followsLayers
         self.demo = demo
         self.lastEvent = lastEvent
@@ -216,6 +238,8 @@ public struct StatusPresentation: Equatable, Sendable {
     public var lastDropout: CaptionedValue?
     /// Whether Quit asks before quitting (#66).
     public var quitAsks: Bool
+    /// Whether the panel offers the demo toggle: not while stopped, when there's nothing to switch it on with (#88).
+    public var showsDemoToggle: Bool
     /// Whether the deck picker can be used, and why not (#90).
     public var deckPicker: DeckPickerState
 
@@ -230,7 +254,11 @@ public struct StatusPresentation: Equatable, Sendable {
                 ControllerBlock(header: Self.header(for: $0.controller, lastEvent: $0.lastEvent), light: Self.light(for: $0.controller),
                                 deck: $0.deck, followsLayers: $0.followsLayers)
             }
+        // A stopped bridge: the header names the bridge's problem, not the controller (#88). The panel draws the
+        // first block's header, so it says it there too.
+        if state.stopped { blocks[0].header = StatusHeader(title: "Bridge stopped", subtitle: state.stopReason.short) }
         header = blocks[0].header
+        showsDemoToggle = !state.stopped
         let feedback: StatusLight = switch state.feedback {
         case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)
         case .live: StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live)
@@ -243,11 +271,12 @@ public struct StatusPresentation: Equatable, Sendable {
         lights = state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)]
             // Orange and first, and it keeps the icon on attention: DEMO must never be mistaken for real hardware.
             : (state.demo ? [StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention)] : []) + [controller, feedback]
-        master = state.master ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
+        // Stopped, nothing runs: no MASTER either (#88).
+        master = state.master && !state.stopped ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
         // The status bar: each light, then the deck, then MASTER, cut to whole parts that fit (#66).
         let parts = lights.map { (StatusLinePart(label: $0.label, word: $0.word, tone: $0.tone), Self.priority(of: $0, controller: controller)) }
             + [(StatusLinePart(label: nil, word: "DECK " + blocks.map { "[\($0.deck)]" }.joined(separator: " "), tone: .idle), 4)]
-            + (state.master ? [(StatusLinePart(label: nil, word: "MASTER", tone: .attention), 3)] : [])
+            + (master != nil ? [(StatusLinePart(label: nil, word: "MASTER", tone: .attention), 3)] : [])
         lineParts = Self.fit(parts, budget: lineBudget)
         line = lineParts.map(\.text).joined(separator: Self.separator)
         // Every controller counts: an unplugged second one needs a look too.

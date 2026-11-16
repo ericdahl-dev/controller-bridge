@@ -55,7 +55,8 @@ extension BridgeStatus {
         return BridgeState(
             controller: first?.controller ?? .notConnected, feedback: feedback, deck: first?.deck ?? deck,
             stopped: problem != nil, lastDropout: lastDropoutTime, master: self.controller?.master == true, demo: demo,
-            lastEvent: first?.lastEvent, others: Array(entries.dropFirst()), followsLayers: first?.followsLayers ?? false
+            lastEvent: first?.lastEvent, others: Array(entries.dropFirst()), stopReason: stopReason,
+            followsLayers: first?.followsLayers ?? false
         )
     }
 
@@ -161,8 +162,11 @@ struct StatusPanel: View {
                 // Quiet controls: the guide, the demo, and Quit kept apart from the main buttons (#66).
                 HStack(spacing: Theme.Space.l) {
                     quietButton("Setup guide") { SetupGuideWindow.open(openWindow) }
-                    quietButton("Demo controller: \(status.demo ? "On" : "Off")", color: status.demo ? Theme.attention : Theme.caption) {
-                        setDemo(!status.demo)
+                    // Not while stopped: there's no pipe to switch the demo on with (#88).
+                    if presentation.showsDemoToggle {
+                        quietButton("Demo controller: \(status.demo ? "On" : "Off")", color: status.demo ? Theme.attention : Theme.caption) {
+                            setDemo(!status.demo)
+                        }
                     }
                     Spacer(minLength: 0)
                     quietButton("Quit") {

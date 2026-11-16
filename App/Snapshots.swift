@@ -99,6 +99,7 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
                 $0.problem = "Couldn't open the OSC sender: connect: Network is unreachable"
+                $0.stopReason = .oscSender
             }),
             ("waiting", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
