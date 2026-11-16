@@ -53,4 +53,62 @@ struct MixerTests {
             try Mapping.bundledDefault(overriddenBy: Data(#"{ "mixer": { "volume": { "msb_cc": 19 } } }"#.utf8))
         }
     }
+
+    // MARK: Faders and knobs (#207), at the Coordinator seam: the LC6000 plus a DDJ-400-like mixer, test-only
+
+    static func started() throws -> Rig {
+        let rig = try Rig(override: section)
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    static func cc(_ rig: Rig, _ controller: UInt8, _ value: UInt8) {
+        rig.coordinator.midi(.controlChange(channel: 0, controller: controller, value: value), source: Rig.lc6000.id)
+    }
+
+    static func mixer(_ path: String, _ value: Float, channel: Int = 1) -> OSCMessage {
+        OSCMessage("/Syndicate/Mixer/" + (path.hasPrefix("filter") ? path.replacingOccurrences(of: "N", with: "\(channel)") : "CH\(channel)/" + path),
+                   [.float(value)])
+    }
+
+    @Test("A 7-bit fader sends 0..1, with 64 exactly 0.5 (the split rule of the 7-bit pitch fader)")
+    func sevenBit() throws {
+        let rig = try Self.started()
+        for value: UInt8 in [0, 1, 64, 126, 127] { Self.cc(rig, 19, value) }
+        #expect(rig.osc.sent == [
+            Self.mixer("Volume", 0), Self.mixer("Volume", 0.00781), Self.mixer("Volume", 0.5),
+            Self.mixer("Volume", 0.99206), Self.mixer("Volume", 1),
+        ])
+    }
+
+    @Test("A 14-bit knob sends when its LSB arrives, 8192 exactly 0.5; trim, EQ and filter each to their own address")
+    func fourteenBitAndAddresses() throws {
+        let rig = try Self.started()
+        Self.cc(rig, 7, 64); Self.cc(rig, 39, 0)
+        Self.cc(rig, 7, 127); Self.cc(rig, 39, 127)
+        Self.cc(rig, 4, 64); Self.cc(rig, 11, 64); Self.cc(rig, 15, 0); Self.cc(rig, 23, 127)
+        #expect(rig.osc.sent == [
+            Self.mixer("EQ/High", 0.5), Self.mixer("EQ/High", 1),
+            Self.mixer("Trim", 0.5), Self.mixer("EQ/Mid", 0.5), Self.mixer("EQ/Low", 0), Self.mixer("filterN.cut", 1),
+        ])
+    }
+
+    @Test("The mixer channel is the deck the controller drives: on deck 2, the fader moves channel 2")
+    func channelFollowsDeck() throws {
+        let rig = try Self.started()
+        rig.coordinator.setDeck(2, controller: 0)
+        rig.osc.sent.removeAll()
+        Self.cc(rig, 19, 127)
+        #expect(rig.osc.sent.last == Self.mixer("Volume", 1, channel: 2))
+    }
+
+    @Test("The LC6000, with no mixer section, sends nothing for those CCs")
+    func lc6000Unchanged() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        for controller: UInt8 in [19, 4, 7, 39, 11, 15, 23] { Self.cc(rig, controller, 100) }
+        #expect(rig.osc.sent == [])
+    }
 }

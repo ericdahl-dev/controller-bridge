@@ -146,6 +146,8 @@ final class Bridge {
     var feedbackStale = false
     /// An LED sweep (#26) owns the controller's LEDs.
     var ledsHeld = false
+    /// The mixer section's state (#207): pair halves, what was sent, what Syndicate reported, and the meter.
+    var mixerState = MixerState()
     /// The capture window is recording this controller (#186, #187): its LEDs are the LED test's, so the bridge paints
     /// none until the capture ends and it repaints.
     var ledsCaptured = false
@@ -266,6 +268,7 @@ final class Bridge {
     }
 
     private func handleCC(_ controller: Int, value: UInt8) {
+        if mixerCC(controller, value: value) { return }
         guard let name = ccNames[controller], let handler = Self.ccHandlers[name] else { return }
         handler(self)(value)
     }
