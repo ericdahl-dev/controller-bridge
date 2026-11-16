@@ -134,10 +134,10 @@ extension BridgeSettings {
         let host = syndicateHost.trimmingCharacters(in: .whitespaces)
         if host.isEmpty {
             out.append(SettingsProblem(field: .host, message: "The Syndicate host can't be empty"))
-        } else if !Self.isIPv4(host) {
-            // The OSC sender takes an IPv4 address only, for now (#62).
+        } else if !Self.isIPv4(host) && !Self.isHostName(host) {
             out.append(SettingsProblem(
-                field: .host, message: "\(host) isn't an IP address. Use the Mac's IP address, like 192.168.1.20 (System Settings › Network)."
+                field: .host,
+                message: "\(host) isn't a host name or IP address. Use the Mac's name, like studio-mac.local, or its IP address, like 192.168.1.20."
             ))
         }
         let ports = 1...65_535
@@ -154,6 +154,18 @@ extension BridgeSettings {
     }
 
     /// Four dot-separated whole numbers, 0-255 each.
+    /// A host name (#84): dot-separated labels of letters, digits and hyphens, none starting or ending with a hyphen,
+    /// and not all digits (that would be a malformed IPv4 address, such as 192.168.1).
+    static func isHostName(_ host: String) -> Bool {
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard !labels.isEmpty, labels.count <= 127, host.count <= 253 else { return false }
+        let valid = labels.allSatisfy { label in
+            (1...63).contains(label.count) && label.first != "-" && label.last != "-"
+                && label.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
+        }
+        return valid && !labels.allSatisfy { $0.allSatisfy(\.isNumber) }
+    }
+
     static func isIPv4(_ host: String) -> Bool {
         let parts = host.split(separator: ".", omittingEmptySubsequences: false)
         return parts.count == 4 && parts.allSatisfy { part in

@@ -130,15 +130,24 @@ struct SettingsTests {
         #expect(bad.problems == bad.fieldProblems.map(\.message))
     }
 
-    @Test("The host must be an IPv4 address for now; a name like studio-mac.local gets a plain way out (#62)", arguments: [
-        "studio-mac.local", "999.1.1.1", "192.168.1", "192.168.1.20.5", "localhost",
+    @Test("A host name is fine too (#84): letters, digits and hyphens in dot-separated labels, .local included", arguments: [
+        "studio-mac.local", "localhost", "syndicate", "Studio-Mac-2.local", " studio-mac.local ",
     ])
-    func hostMustBeIPv4(host: String) {
+    func hostNamesAccepted(host: String) {
+        var good = Self.defaults
+        good.syndicateHost = host
+        #expect(good.fieldProblems == [])
+    }
+
+    @Test("A malformed name, or a numeric address that isn't IPv4, gets one plain problem (#84)", arguments: [
+        "studio mac", "-bad.local", "bad-.local", "a..b", "studio_mac.local", "999.1.1.1", "192.168.1", "192.168.1.20.5",
+    ])
+    func hostMalformed(host: String) {
         var bad = Self.defaults
         bad.syndicateHost = host
         #expect(bad.fieldProblems == [SettingsProblem(
             field: .host,
-            message: "\(host) isn't an IP address. Use the Mac's IP address, like 192.168.1.20 (System Settings › Network)."
+            message: "\(host) isn't a host name or IP address. Use the Mac's name, like studio-mac.local, or its IP address, like 192.168.1.20."
         )])
     }
 
