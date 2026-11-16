@@ -72,6 +72,18 @@ done
 app=$(make_app manifest); rm "$app/Contents/Resources/PrivacyInfo.xcprivacy"; sign "$app" "$work/manifest.entitlements"
 expect_fail "a missing privacy manifest fails" "$app" "PrivacyInfo.xcprivacy"
 
+# The manifest's content (#29): no tracking, no collected data, and the UserDefaults reason the app needs.
+manifest_of() { echo "$1/Contents/Resources/PrivacyInfo.xcprivacy"; }
+app=$(make_app tracking); plutil -replace NSPrivacyTracking -bool true "$(manifest_of "$app")"; sign "$app" "$work/tracking.entitlements"
+expect_fail "a manifest that declares tracking fails" "$app" "NSPrivacyTracking"
+
+app=$(make_app collected); plutil -insert NSPrivacyCollectedDataTypes.0 -xml '<dict><key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeOtherUsageData</string></dict>' "$(manifest_of "$app")"
+sign "$app" "$work/collected.entitlements"
+expect_fail "a manifest that declares collected data fails" "$app" "NSPrivacyCollectedDataTypes"
+
+app=$(make_app defaults); plutil -replace NSPrivacyAccessedAPITypes -xml '<array/>' "$(manifest_of "$app")"; sign "$app" "$work/defaults.entitlements"
+expect_fail "a manifest without the UserDefaults reason fails" "$app" "UserDefaults"
+
 app=$(make_app icon); rm "$app/Contents/Resources/Assets.car"; sign "$app" "$work/icon.entitlements"
 expect_fail "a missing compiled icon fails" "$app" "app icon"
 

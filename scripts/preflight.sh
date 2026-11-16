@@ -41,6 +41,18 @@ category=$(read_key LSApplicationCategoryType)
 manifest="$resources/PrivacyInfo.xcprivacy"
 if [ -f "$manifest" ]; then
   plutil -lint "$manifest" >/dev/null && ok "privacy manifest is valid" || bad "PrivacyInfo.xcprivacy is not a valid plist"
+  # The app tracks nothing and collects nothing, and its one required-reason API is UserDefaults, for its own settings.
+  read_manifest() { /usr/libexec/PlistBuddy -c "Print :$1" "$manifest" 2>/dev/null || true; }
+  [ "$(read_manifest NSPrivacyTracking)" = false ] && ok "privacy manifest: no tracking" \
+    || bad "NSPrivacyTracking must be false (the app tracks nobody)"
+  [ -z "$(read_manifest NSPrivacyCollectedDataTypes:0)" ] && ok "privacy manifest: no collected data" \
+    || bad "NSPrivacyCollectedDataTypes must be empty (the app collects nothing)"
+  if plutil -convert xml1 -o - "$manifest" | tr -d ' \t\n' \
+    | grep -q '<string>NSPrivacyAccessedAPICategoryUserDefaults</string><key>NSPrivacyAccessedAPITypeReasons</key><array><string>CA92.1</string>'; then
+    ok "privacy manifest: UserDefaults with reason CA92.1"
+  else
+    bad "the privacy manifest must declare UserDefaults with reason CA92.1 (the app's own settings)"
+  fi
 else
   bad "PrivacyInfo.xcprivacy is not in the app bundle"
 fi
