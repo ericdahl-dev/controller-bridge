@@ -37,15 +37,20 @@
 #next .db-big { font: var(--display-weight) clamp(64px, 12vw, 184px)/.92 var(--font-display); letter-spacing: var(--display-tracking-xl); margin: var(--s-5) 0 var(--s-6); max-width: 9ch; }
 .db-next { max-width: 46ch; color: var(--muted); }
 /* the coming feature's picture: the art made for the LC6000's round jog-wheel display (tools/lc6000-display, #165),
-   in a round jog frame. Below 1024 the statement's words fill half a screen (liquid-type is plain type on touch
-   screens), so the frame takes the rest instead of an empty ground; on a desktop the words hold the screen alone,
-   and on a short screen (under 720px) the words nearly fill it, so there is no room and no gap for it. */
+   in a round jog frame, under the words below 1024 (liquid-type is plain type on touch screens). On a tablet it
+   takes what the screen leaves under the words, and is left out on a screen under 720px tall, where the words
+   nearly fill it; on a phone the section fits its content, so it has a fixed size. A desktop has none. */
 .db-jog { display: none; }
-@media (max-width: 1023px) and (min-height: 720px) {
+.db-jog__ring { aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
+  background: #0d0d0d; box-shadow: 0 0 0 10px #262626, 0 0 0 11px rgb(255 255 255 / .12), 0 30px 70px -30px rgb(0 0 0 / .8); }
+.db-jog__ring img { width: 74%; height: auto; border-radius: 22%; }
+@media (min-width: 640px) and (max-width: 1023px) and (min-height: 720px) {
   .db-jog { display: flex; flex: 1 1 auto; align-items: center; justify-content: center; margin: var(--s-6) 0 0; }
-  .db-jog__ring { width: min(64vw, 280px, 100svh - 600px);  /* 600: the words above it and the section's padding */ aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
-    background: #0d0d0d; box-shadow: 0 0 0 10px #262626, 0 0 0 11px rgb(255 255 255 / .12), 0 30px 70px -30px rgb(0 0 0 / .8); }
-  .db-jog__ring img { width: 74%; height: auto; border-radius: 22%; }
+  .db-jog__ring { width: min(64vw, 280px, 100svh - 600px); }  /* 600: the words above it and the section's padding */
+}
+@media (max-width: 639px) {
+  .db-jog { display: flex; justify-content: center; margin: var(--s-7) 0 var(--s-3); }
+  .db-jog__ring { width: min(56vw, 220px); }
 }
 
 /* the phone: the pill keeps its first fact; the closing name is set to fit 342px */
@@ -97,11 +102,10 @@ code { font-family: var(--font-mono); font-size: .92em; }
 .db-shotpanel { --p-h: 256px; }
 .db-facts { margin-top: var(--s-6); }
 #why { align-content: start; }
-/* below 1024 the why statement fills about half its screen, so the two resolutions it names stand under it as
-   numbers (7-bit MIDI: 128 positions; 14-bit: 16,384) instead of an empty ground; left out on screens under 720px
-   tall or 360px wide, where the statement nearly fills it, and on a desktop, where it holds the screen alone. */
+/* below 1024 the two resolutions the why statement names stand under it as numbers (7-bit MIDI: 128 positions;
+   14-bit: 16,384); left out under 360px wide, where they crowd it, and on a desktop, where it holds the screen alone. */
 .db-res { display: none; }
-@media (min-width: 360px) and (max-width: 1023px) and (min-height: 720px) {
+@media (min-width: 360px) and (max-width: 1023px) {
   .db-res { display: grid; gap: var(--s-5); margin: auto 0 0; padding-top: var(--s-6); }
   .db-res__row { border-top: 1px solid color-mix(in oklab, var(--ink) 25%, transparent); padding-top: var(--s-3); }
   .db-res dt { font-size: var(--t-small, 14px); color: color-mix(in oklab, var(--ink) 70%, transparent); }
@@ -164,3 +168,13 @@ i.db-wire { display: block; height: 2px; padding: 0; background: linear-gradient
 .db-cap__buttons { display: flex; flex-wrap: wrap; gap: var(--s-3); }
 .db-cap__address { font-family: var(--font-mono); user-select: all; }
 .db-cap select { font: inherit; padding: 6px 10px; border-radius: 8px; }
+
+/* ---------------------------------------------------------------- a phone: tight sections
+   The kit makes every section at least one screen tall (system.css, "one section per screen"). On a phone most
+   of ours hold half a screen of content, which left a tall empty ground under each. Under 640px each section is
+   as tall as its content, with shorter padding; #why also drops its one-screen ground (--g-screen). */
+@media (max-width: 639px) {
+  main > :is(section, .section):not(.hero, .section--hero) { min-height: 0; padding: 64px 0 40px; }  /* no --bar: only the page's foot needs room for the action bar */
+  #why { min-height: 0; }
+  main > :is(section, .section) > .wrap > :is(.fill, .db-split) { flex: none; }
+}
