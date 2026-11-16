@@ -5,13 +5,14 @@
   and so are <link rel="canonical"> and <link rel="alternate">
 - every page has a title and a meta description
 - every <img> has an alt attribute (alt="" for a decorative one)
+- every <script type="application/ld+json"> block parses as JSON
 - no page title or main heading uses another company's name as the product's
 - the privacy page says the app collects no data
 - no other company's logo is in the site
 - the whole site stays under 2 MB
 Standard library only. Run: python3 -I scripts/check_site.py [website]   (exits 1 on any problem)
 Tested by scripts/test_check_site.py."""
-import os, re, sys
+import json, os, re, sys
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
@@ -40,7 +41,9 @@ class Page(HTMLParser):
         self.text = []
         self.refs = []  # (url, loaded): loaded is True for resources, False for links
         self.no_alt = []  # src of every <img> without an alt attribute
+        self.json_ld = []  # the text of each <script type="application/ld+json">
         self._in = None
+        self._ld = None
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -54,6 +57,8 @@ class Page(HTMLParser):
         if tag == "link" and attrs.get("href") is not None:
             rels = (attrs.get("rel") or "").lower().split()
             self.refs.append((attrs["href"], not rels or not set(rels) <= LINK_RELS))
+        if tag == "script" and (attrs.get("type") or "").strip().lower() == "application/ld+json":
+            self._ld = []
         if tag == "img" and "alt" not in attrs:
             self.no_alt.append(attrs.get("src") or "")
         if attrs.get("src") is not None:
@@ -62,8 +67,14 @@ class Page(HTMLParser):
     def handle_endtag(self, tag):
         if tag == self._in:
             self._in = None
+        if tag == "script" and self._ld is not None:
+            self.json_ld.append("".join(self._ld))
+            self._ld = None
 
     def handle_data(self, data):
+        if self._ld is not None:
+            self._ld.append(data)
+            return
         self.text.append(data)
         if self._in:
             setattr(self, self._in, getattr(self, self._in) + data)
@@ -110,6 +121,11 @@ def check_page(root, file, text):
             if words and re.search(rf"\b{name}\b", words, re.IGNORECASE):
                 out.append(f"{file}: the <{part}> names {name}")
     out += [f'{file}: <img src="{src}"> has no alt' for src in page.no_alt]
+    for n, block in enumerate(page.json_ld, 1):
+        try:
+            json.loads(block)
+        except ValueError as e:
+            out.append(f"{file}: JSON-LD block {n} doesn't parse: {e}")
     out += check_refs(root, file, page.refs)
     if file == PRIVACY and PRIVACY_STATEMENT not in " ".join(" ".join(page.text).split()).lower():
         out.append(f'{file}: doesn\'t say "{PRIVACY_STATEMENT}"')
