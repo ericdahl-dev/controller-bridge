@@ -48,6 +48,7 @@ public struct Engine {
             case .resync: coordinator.resync()
             case .setControllers(let entries): coordinator.setControllers(entries)
             case .setProfiles(let profiles): coordinator.setProfiles(profiles)
+            case .setProfileChoices(let choices): coordinator.setProfileChoices(choices)
             default: break
             }
         }
@@ -87,7 +88,8 @@ public struct Engine {
             case .setCapture(let source): coordinator.setCapture(source: source)
             case .ledSweep(let delay): active.startLEDSweep(delay: delay)
             case .stopLEDSweep: active.stopLEDSweep()
-            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setControllers, .setProfiles, .resync:
+            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setControllers, .setProfiles, .setProfileChoices,
+                 .resync:
                 if demo == nil { apply(event) } else { waiting.append(event) }
             case .demo(let on):
                 if on, demo == nil, let makeDemo {

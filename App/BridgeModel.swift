@@ -216,6 +216,7 @@ final class BridgeModel {
             producer.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors)
         }
         if new.ringColors != old.ringColors { producer.setRingColors(new.ringColors) }
+        if new.profileChoices != old.profileChoices { producer.setProfileChoices(new.profileChoices) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
 
@@ -307,6 +308,8 @@ final class BridgeModel {
         // The saved deck colors (#123), queued behind the Coordinator's start.
         pipe.producer.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors)
         pipe.producer.setRingColors(settings.ringColors)
+        // Profiles chosen by hand (#200): a device only they name connects now.
+        pipe.producer.setProfileChoices(settings.profileChoices)
 
     }
 
