@@ -63,4 +63,43 @@ struct PadCountCoordinatorTests {
         #expect(rig.leds[35] == 12)
         #expect([36, 37, 38, 39].map { rig.leds[$0] } == [nil, nil, nil, nil])
     }
+
+    /// Sixteen pads on notes 100-115, free in the LC6000 mapping.
+    static let sixteenPads = #"{ "notes": { "pads": [\#((100...115).map(String.init).joined(separator: ", "))] } }"#
+
+    @Test("Sixteen pads: pad 12 holds hot cue 12; with an 8-slot Cues, pads 9-16 stay off")
+    func sixteenPads() throws {
+        let rig = try Self.started(Self.sixteenPads)
+        #expect(Self.hold(rig, 111) == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(12), .int(1)]),
+                                        OSCMessage("/Syndicate/Deck/1/HotCue", [.int(12), .int(0)])])
+        rig.coordinator.feedback(Self.eightCues)
+        #expect(rig.leds[100] == 48)
+        #expect((108...115).map { rig.leds[UInt8($0)] } == Array(repeating: 0, count: 8))
+    }
+
+    @Test("Sixteen pads with the default eight roll sizes: Roll pad 9 plays nothing")
+    func rollPastTheList() throws {
+        let rig = try Self.started(Self.sixteenPads)
+        PadsTests.press(rig, PadsTests.modeRoll)
+        #expect(Self.hold(rig, 108) == [])
+    }
+
+    @Test("Switching mode releases a held pad 12")
+    func modeReleasesPad12() throws {
+        let rig = try Self.started(Self.sixteenPads)
+        PadsTests.down(rig, 111)
+        rig.osc.sent.removeAll()
+        PadsTests.press(rig, PadsTests.modeLoop)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(12), .int(0)])])
+    }
+
+    @Test("The LC6000 is unchanged: Roll pad 1 plays ThirtySecond, and all 8 pads light from Cues")
+    func lc6000() throws {
+        let rig = try Self.started(nil)
+        rig.coordinator.feedback(Self.eightCues)
+        #expect((32...39).map { rig.leds[UInt8($0)] } == [48, 56, 60, 12, 15, 3, 35, 51])
+        PadsTests.press(rig, PadsTests.modeRoll)
+        #expect(Self.hold(rig, 32) == [OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(1)]),
+                                       OSCMessage("/Syndicate/Deck/1/SlipLoop/ThirtySecond", [.int(0)])])
+    }
 }
