@@ -215,11 +215,11 @@ public struct Mapping: Equatable, Sendable, Codable {
         /// What Syndicate's LEDs show once feedback has stopped: dim, or off.
         public var staleIdle: StaleIdle
 
-        public enum BeatPulse: String, Equatable, Sendable, Codable {
+        public enum BeatPulse: String, Equatable, Sendable, Codable, CaseIterable {
             case off, beat, downbeat
         }
 
-        public enum StaleIdle: String, Equatable, Sendable, Codable {
+        public enum StaleIdle: String, Equatable, Sendable, Codable, CaseIterable {
             case dim, off
         }
 
@@ -256,20 +256,11 @@ public struct Mapping: Equatable, Sendable, Codable {
         try checked(defaultJSON())
     }
 
+    /// A whole mapping body, through the full check (#24) first: every problem at once, or the decoded mapping.
     static func checked(_ json: Data) throws -> Mapping {
-        let mapping = try JSONDecoder().decode(Mapping.self, from: json)
-        let problems = mapping.problems
+        let problems = problems(in: json)
         guard problems.isEmpty else { throw MappingError.invalid(problems) }
-        return mapping
-    }
-
-    /// Readable problems with values the bridge can't run with. The full mapping check (#24) grows this list.
-    var problems: [String] {
-        var out: [String] = []
-        if !(1...16).contains(midi.channel) {
-            out.append("midi.channel: \(midi.channel) is out of range, expected 1-16")
-        }
-        return out
+        return try JSONDecoder().decode(Mapping.self, from: json)
     }
 
     /// The bundled default with a user mapping file merged over it, as the Python config merge does: objects merge

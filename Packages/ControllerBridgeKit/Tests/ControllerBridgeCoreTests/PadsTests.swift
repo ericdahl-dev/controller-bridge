@@ -211,17 +211,11 @@ struct PadsTests {
         #expect(Self.padLEDs(rig) == [0, 0, 0, 0, 0, 0, 0, 0])
     }
 
-    @Test("A user mapping with a color that isn't three numbers turns those pads off instead of crashing")
-    func shortColorIsOff() throws {
-        let mapping = try Mapping.bundledDefault(overriddenBy: Data(#"{ "leds": { "roll_pad_color": [255] } }"#.utf8))
-        let midi = Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out])
-        let coordinator = Coordinator(mapping: mapping, midi: midi, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: Rig.FakeLog())
-        coordinator.start()
-        coordinator.midi(.noteOn(channel: 0, note: Self.modeRoll, velocity: 127), source: Rig.lc6000.id)
-        var leds: [UInt8: UInt8] = [:]
-        for case let .noteOn(_, note, velocity) in midi.outputs[Rig.lc6000Out.id]?.sent ?? [] { leds[note] = velocity }
-        #expect((UInt8(32)...39).map { leds[$0] } == [0, 0, 0, 0, 0, 0, 0, 0])
-        #expect(leds[Self.modeRoll] == 127)
+    @Test("A user mapping with a color that isn't three numbers is refused with a readable problem (#24), never loaded")
+    func shortColorIsRefused() {
+        #expect(throws: MappingError.invalid(["leds.roll_pad_color: expected 3 values, got 1"])) {
+            try Mapping.bundledDefault(overriddenBy: Data(#"{ "leds": { "roll_pad_color": [255] } }"#.utf8))
+        }
     }
 
     @Test("The platter ring (note 40) lights in the ring color (0, 128, 255) while a track is loaded: 0b00_10_11 = 11")

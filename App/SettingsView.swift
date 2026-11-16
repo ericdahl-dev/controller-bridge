@@ -3,6 +3,7 @@
 import AppKit
 import ControllerBridgeCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     let model: BridgeModel
@@ -14,6 +15,8 @@ struct SettingsView: View {
     @State private var saved = false
     @State private var startAtLogin = LoginItem.isEnabled
     @State private var loginProblem: String?
+    @State private var mappingProblems: [String] = []
+    @State private var mappingNote: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -63,6 +66,18 @@ struct SettingsView: View {
             }
         }
 
+        section("Mapping") {
+            note(model.status.mappingInUse)
+            HStack(spacing: Theme.Space.s) {
+                Button("Import…") { importMapping() }.buttonStyle(FlatButtonStyle())
+                Button("Export…") { exportMapping() }.buttonStyle(FlatButtonStyle())
+                Button("Reset to default") { model.resetMapping(); mappingProblems = []; mappingNote = "Back to the bundled mapping." }
+                    .buttonStyle(FlatButtonStyle())
+            }
+            if let mappingNote { note(mappingNote) }
+            ForEach(mappingProblems, id: \.self) { note($0, color: Theme.error) }
+        }
+
         section("Start") {
             Toggle("Start at login", isOn: $startAtLogin)
                 .font(Theme.ui(12))
@@ -76,6 +91,31 @@ struct SettingsView: View {
         HStack {
             Button("Revert") { load() }.buttonStyle(FlatButtonStyle())
             Button("Apply") { apply(settings.wrappedValue) }.buttonStyle(FlatButtonStyle())
+        }
+    }
+
+    // MARK: Mapping (#24)
+
+    private func importMapping() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.message = "Choose a mapping file. A bad file is refused, and the current mapping keeps running."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        mappingProblems = model.importMapping(from: url)
+        mappingNote = mappingProblems.isEmpty ? "Imported \(url.lastPathComponent)." : "Not imported: fix these and try again."
+    }
+
+    private func exportMapping() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(model.profiles.first?.id ?? "mapping").json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try model.exportMapping(to: url)
+            mappingProblems = []
+            mappingNote = "Exported \(url.lastPathComponent)."
+        } catch {
+            mappingProblems = ["Couldn't export: \(error.localizedDescription)"]
         }
     }
 

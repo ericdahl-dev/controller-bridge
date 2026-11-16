@@ -9,7 +9,7 @@ public final class Coordinator {
     private let log: any LogSink
     private var controllers: [Controller]
     /// The controller profiles a device can match.
-    private let profiles: [ControllerProfile]
+    private var profiles: [ControllerProfile]
     /// Unmatched devices already logged, so a device-list change doesn't log them again.
     private var loggedUnmatched: Set<MIDIEndpoint.ID> = []
     /// Devices matching more than one profile, already logged.
@@ -388,6 +388,35 @@ public final class Coordinator {
         let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
         bridge.setLEDsEnabled(ledsEnabled)
         return bridge
+    }
+
+    /// An imported mapping (#24): these profiles replace the current ones. A controller whose profile changed releases
+    /// its held controls first, then runs the new one on the same ports with its settings (deck, channel, LEDs) kept,
+    /// and the bridge resyncs once.
+    public func setProfiles(_ newProfiles: [ControllerProfile]) {
+        guard !newProfiles.isEmpty else { return }
+        profiles = newProfiles
+        var resync = false
+        for index in controllers.indices where swapProfile(index, from: newProfiles) { resync = true }
+        if resync { requestResend() }
+        disconnectFailedOutputs()
+    }
+
+    /// One controller's part of `setProfiles`: returns whether it is connected and now runs a changed profile.
+    /// Its own function, as Xcode 26.6's optimizer crashed on loops that mutate `controllers` inline (#65).
+    private func swapProfile(_ index: Int, from newProfiles: [ControllerProfile]) -> Bool {
+        guard let updated = newProfiles.first(where: { $0.id == controllers[index].profile.id }),
+              updated != controllers[index].profile else { return false }
+        let old = controllers[index].bridge
+        old.releaseAll()
+        let bridge = makeBridge(updated, for: index)
+        bridge.output = old.output
+        controllers[index].bridge = bridge
+        controllers[index].profile = updated
+        guard controllers[index].source != nil else { return false }
+        status.controllers[index].profile = updated.name
+        bridge.start()
+        return true
     }
 
     /// Settings (#19): the LEDs switch, for every controller.
