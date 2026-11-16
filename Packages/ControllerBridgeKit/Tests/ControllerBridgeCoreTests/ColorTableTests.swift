@@ -109,3 +109,34 @@ struct ColorTableImportTests {
         #expect(profile.mapping.leds.colorTable == .list([.init(rgb: [255, 0, 0], value: 5), .init(rgb: [0, 0, 255], value: 9)]))
     }
 }
+
+/// The Coordinator seam (#197): a test-only profile whose pads take red 5, green 9, blue 13 and white 20 by nearest RGB.
+@Suite("Color table at the Coordinator")
+struct ColorTableCoordinatorTests {
+    static let fourColors = #"{ "leds": { "color_table": [{ "rgb": [255, 0, 0], "value": 5 }, { "rgb": [0, 255, 0], "value": 9 }, { "rgb": [0, 0, 255], "value": 13 }, { "rgb": [255, 255, 255], "value": 20 }] } }"#
+
+    @Test("Hot cues take the nearest entry: red 5, orange 5 (nearest red), green 9, blue 13")
+    func hotCues() throws {
+        let rig = try PadCountCoordinatorTests.started(Self.fourColors)
+        rig.coordinator.feedback(PadCountCoordinatorTests.eightCues)
+        // Slots 1, 2, 4, 6: red, orange [255, 128, 0], green, blue.
+        #expect([32, 33, 35, 37].map { rig.leds[$0] } == [5, 5, 9, 13])
+    }
+
+    @Test("Loop pads in the loop color green (9); Roll pads in the roll color orange [255, 140, 0], nearest red (5)")
+    func loopAndRoll() throws {
+        let rig = try PadCountCoordinatorTests.started(Self.fourColors)
+        rig.coordinator.feedback(PadCountCoordinatorTests.eightCues)
+        PadsTests.press(rig, PadsTests.modeLoop)
+        #expect(rig.leds[32] == 9)
+        PadsTests.press(rig, PadsTests.modeRoll)
+        #expect(rig.leds[32] == 5)
+    }
+
+    @Test("The LC6000 is unchanged: red cue 48, green cue 12")
+    func lc6000() throws {
+        let rig = try PadCountCoordinatorTests.started(nil)
+        rig.coordinator.feedback(PadCountCoordinatorTests.eightCues)
+        #expect([rig.leds[32], rig.leds[35]] == [48, 12])
+    }
+}
