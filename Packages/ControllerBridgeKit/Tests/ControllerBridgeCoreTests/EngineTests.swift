@@ -403,3 +403,22 @@ struct EngineTests {
         #expect(seen.values.last?.controllers.first?.profile == "My LC6000")
     }
 }
+
+/// The subscription check (#211) judges the DJ's real Syndicate. During the demo the bridge talks to a simulated one,
+/// so the demo's status reports nothing missing.
+@Suite("Demo and the subscription check")
+struct DemoSubscriptionTests {
+    @Test("Demo on, past the Resend answer window: no missing subscriptions, no 'no deck data'")
+    func demoReportsNothingMissing() throws {
+        let rig = try Rig()
+        let demo = EngineTests.demoMaker(rig)(try ControllerProfile.bundled()[0])
+        demo.start()
+        for step in 1...40 {
+            rig.clock.now = Double(step) * 0.1
+            demo.tick()
+        }
+        #expect(demo.status.demo == true)
+        #expect(demo.status.missingSubscriptions == [])
+        #expect(demo.status.noDeckData == false)
+    }
+}

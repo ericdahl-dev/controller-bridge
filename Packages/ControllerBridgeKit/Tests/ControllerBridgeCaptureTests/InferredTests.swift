@@ -27,4 +27,20 @@ struct InferredTests {
         #expect(filled.noise == Self.app.noise)
         #expect(Self.app.steps.contains { $0.shift != nil }, "the demo capture has a Shift layer to infer")
     }
+
+    @Test("Tails keep their flag through inference (#229): Play's release in Cue's step stays a tail, and the file is unchanged")
+    func tailsKept() throws {
+        let play = CapturePrompt(id: "deck1.play", text: "Play", gesture: .press)
+        let cue = CapturePrompt(id: "deck1.cue", text: "Cue", gesture: .press)
+        var session = CaptureSession(appVersion: "1.2.0", device: "Test", ports: CapturePorts(input: ["Test"], output: []), prompts: [play, cue])
+        session.receive([0x90, 0x0B, 0x7F], at: 1)
+        session.confirm(at: 2)
+        session.receive([0x90, 0x0B, 0x00], at: 2.1)
+        session.receive([0x90, 0x0C, 0x7F], at: 2.3)
+        session.receive([0x90, 0x0C, 0x00], at: 2.4)
+        session.confirm(at: 3)
+        let file = session.file
+        #expect(file.steps[1].messages.contains { $0.tail }, "the release is in the file, flagged")
+        #expect(file.inferred() == file)
+    }
 }

@@ -26,6 +26,8 @@ final class CaptureController {
     private var input: CaptureMIDIInput?
     private var listenTask: Task<Void, Never>?
     private var paused: MIDIEndpoint.ID?
+    /// The picked source, watched for an unplug mid-capture (#229).
+    private var watched: MIDIEndpoint?
     private var demoTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
     private let setCapture: (MIDIEndpoint.ID?) -> Void
@@ -67,6 +69,7 @@ final class CaptureController {
             // The picked endpoint itself, then the device's other ports (the first of each name).
             let listened = [endpoint] + ports.input.dropFirst().compactMap { name in others.first { $0.name == name } }
             paused = endpoint.id
+            watched = endpoint
             setCapture(endpoint.id)
             listen(to: listened)
             flow.start(device: picked.name, ports: ports, at: time)
@@ -78,6 +81,8 @@ final class CaptureController {
     }
 
     func next() { act { flow.next(at: $0) } }
+    /// Ends the capture now, keeping the steps so far (#229).
+    func endCapture() { act { flow.endCapture(at: $0) } }
     func redo() { act { flow.redo(at: $0) } }
     func skip() { act { flow.skip(at: $0) } }
 
@@ -88,7 +93,11 @@ final class CaptureController {
     /// before its LSB).
     private func listen(to sources: [MIDIEndpoint]) {
         let (stream, continuation) = AsyncStream<([UInt8], Double, Int)>.makeStream()
-        input = CaptureMIDIInput(sources: sources) { bytes, time, port in continuation.yield((bytes, time, port)) }
+        input = CaptureMIDIInput(
+            sources: sources,
+            receive: { bytes, time, port in continuation.yield((bytes, time, port)) },
+            changed: { [weak self] in Task { @MainActor in self?.devicesChanged() } }
+        )
         listenTask = Task { [weak self] in
             for await (bytes, time, port) in stream { self?.receive(bytes, at: time, port: port) }
         }
@@ -185,6 +194,22 @@ final class CaptureController {
         service.subject = file.emailSubject
         service.perform(withItems: [file.emailBody, url])
         exportNote = "Your mail app has the message ready. It's sent only when you send it."
+    }
+
+    /// The picked controller went away or came back (#229). Back, it's listened to again, and the bridge pauses it
+    /// again: an unplug had ended that pause.
+    private func devicesChanged() {
+        guard let watched, flow.phase == .steps else { return }
+        let time = ProcessInfo.processInfo.systemUptime
+        let present = CaptureMIDIInput.isPresent(watched)
+        if !present, !flow.isDisconnected {
+            flow.disconnected(at: time)
+        } else if present, flow.isDisconnected {
+            input?.connect()
+            setCapture(watched.id)
+            flow.reconnected(at: time)
+        }
+        announce()
     }
 
     private func tick() {

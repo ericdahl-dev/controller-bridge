@@ -72,6 +72,9 @@ struct DiagnosticsWindow: View {
     var hiddenNotes: [Int] = []
     /// What the Jog display tab shows (#221).
     var jogSimulator = JogSimulatorLog()
+    /// Picks the deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
+    var setJogPreviewDeck: (Int?) -> Void = { _ in }
+    @State private var jogPreviewDeck: Int?
     @State var tab = Tab.monitor
     /// Off only for snapshots: ImageRenderer draws no ScrollView content.
     var scrolls = true
@@ -227,6 +230,15 @@ struct DiagnosticsWindow: View {
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         case .jog:
             explain("What the LC6000's jog display shows, drawn by the same renderer as the upload, with the beat and marker.")
+            // With no controller connected, the preview follows one deck from Syndicate (#221).
+            Picker("Preview follows", selection: $jogPreviewDeck) {
+                Text("First loaded deck").tag(Int?.none)
+                ForEach(1...4, id: \.self) { Text("Deck \($0)").tag(Int?.some($0)) }
+            }
+            .pickerStyle(.menu).fixedSize()
+            .font(Theme.ui(12))
+            .help("With no controller connected, which deck the preview shows")
+            .onChange(of: jogPreviewDeck) { _, deck in setJogPreviewDeck(deck) }
             JogDisplayPane(log: jogSimulator, empty: tab.emptyText(controllerConnected: connected), animates: scrolls)
         }
     }

@@ -124,6 +124,7 @@
         0
       ],
       "dim_unlit_buttons": true,
+      "mirror_shifted": false,
       "beat_pulse": "off",
       "pulse_ms": 100,
       "stale_idle": "dim",

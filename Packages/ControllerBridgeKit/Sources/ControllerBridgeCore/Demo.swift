@@ -40,10 +40,13 @@ public final class DemoSession {
     /// Everything the bridge sent to the in-memory Syndicate, in order.
     public var sentToSyndicate: [OSCMessage] { syndicate.received }
 
-    /// The demo Coordinator's status, marked as the demo.
+    /// The demo Coordinator's status, marked as the demo. The subscription check (#211) judges the DJ's real Syndicate,
+    /// not the simulated one, so the demo reports nothing missing.
     public var status: CoordinatorStatus {
         var status = coordinator.status
         status.demo = true
+        status.missingSubscriptions = []
+        status.noDeckData = false
         return status
     }
 

@@ -14,6 +14,7 @@ extension CaptureFile {
             "\(Self.count(steps.count, "step")): \(captured) captured, \(steps.count - captured) skipped",
             "\(Self.count(messages, "MIDI message")), as the controller sent \(messages == 1 ? "it" : "them")",
         ]
+        if steps.count < prompts.count { lines.append("Ended early: \(steps.count) of \(prompts.count) steps") }
         if leds > 0 { lines.append(Self.count(leds, "LED answer")) }
         lines.append(note.map { "Your note: \($0)" } ?? "No note")
         lines.append("DeckBridge \(appVersion)")

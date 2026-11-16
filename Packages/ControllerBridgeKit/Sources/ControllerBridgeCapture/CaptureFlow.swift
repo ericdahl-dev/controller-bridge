@@ -17,6 +17,10 @@ public struct CaptureFlow: Sendable {
     private var announcedStep: Int?
     private var announcedDetection: [String] = []
     private var announcedDone = false
+    /// The controller went away mid-capture (#229): nothing moves on until it's back or the capture is ended.
+    public private(set) var isDisconnected = false
+    /// A disconnect or reconnect to announce, ahead of anything else.
+    private var connectionNote: String?
     /// The idle step whose Next became available, to be announced once.
     private var idleReadyStep: Int?
     private var announcedIdleReady: Int?
@@ -43,6 +47,9 @@ public struct CaptureFlow: Sendable {
     /// working it out on every message too slow, so it's worked out at once for the first detection, then at most
     /// every `refreshInterval`, and on `tick` for whatever came since.
     public private(set) var detected: [ControlFacts] = []
+    /// For a shifted step, how Shift changed the control: "Shift: same message", "Shift: channel +1, note +60" (#229).
+    /// Nil until the control arrives, and when the step it repeats was skipped.
+    public private(set) var shiftReadout: String?
     public static let refreshInterval = 0.1
     private var lastRefresh = -Double.infinity
     private var stale = false
@@ -59,7 +66,7 @@ public struct CaptureFlow: Sendable {
     public var file: CaptureFile? { session?.file }
 
     public mutating func receive(_ bytes: [UInt8], at time: Double, port: Int = 0) {
-        guard phase == .steps else { return }
+        guard phase == .steps, !isDisconnected else { return }
         session?.receive(bytes, at: time, port: port)
         if detected.isEmpty || time - lastRefresh >= Self.refreshInterval { refresh(at: time) } else { stale = true }
     }
@@ -72,6 +79,7 @@ public struct CaptureFlow: Sendable {
 
     private mutating func refresh(at time: Double? = nil) {
         detected = phase == .steps ? session?.currentControls ?? [] : []
+        shiftReadout = phase == .steps ? session?.currentShift.map { Self.readout($0, kind: detected.first?.kind) } : nil
         stale = false
         if let time { lastRefresh = time }
     }
@@ -83,12 +91,12 @@ public struct CaptureFlow: Sendable {
     }
 
     public func canNext(at now: Double) -> Bool {
-        guard let prompt else { return false }
+        guard let prompt, !isDisconnected else { return false }
         return prompt.gesture == .idle ? now - stepStart >= Self.idleSeconds : !detected.isEmpty
     }
 
-    public var canRedo: Bool { prompt.map { $0.gesture != .idle } == true && session?.hasTake == true }
-    public var canSkip: Bool { prompt.map { $0.gesture != .idle } == true }
+    public var canRedo: Bool { !isDisconnected && prompt.map { $0.gesture != .idle } == true && session?.hasTake == true }
+    public var canSkip: Bool { !isDisconnected && prompt.map { $0.gesture != .idle } == true }
 
     public mutating func next(at time: Double) {
         guard canNext(at: time) else { return }
@@ -97,7 +105,7 @@ public struct CaptureFlow: Sendable {
     }
 
     public mutating func redo(at time: Double) {
-        guard prompt != nil else { return }
+        guard prompt != nil, !isDisconnected else { return }
         session?.redo(at: time)
         stepStart = time
         refresh()
@@ -115,19 +123,52 @@ public struct CaptureFlow: Sendable {
         refresh()
     }
 
-    /// What VoiceOver should announce now, if anything: a new prompt, a change in what's detected, or the end. Each
-    /// is said once; the app calls this after every update.
+    /// Ends the capture now, keeping the steps so far (#229). The rest of the prompts are left out of the file.
+    public mutating func endCapture(at time: Double) {
+        guard phase == .steps else { return }
+        isDisconnected = false
+        connectionNote = nil
+        phase = .done
+        refresh(at: time)
+    }
+
+    /// The controller being captured went away (#229).
+    public mutating func disconnected(at time: Double) {
+        guard phase == .steps, !isDisconnected else { return }
+        isDisconnected = true
+        connectionNote = "Controller disconnected. Plug it back in to continue, or end the capture."
+    }
+
+    /// It's back: the same step starts again, its partial take thrown away.
+    public mutating func reconnected(at time: Double) {
+        guard isDisconnected else { return }
+        isDisconnected = false
+        session?.redo(at: time)
+        stepStart = time
+        refresh(at: time)
+        announcedStep = stepNumber
+        announcedDetection = []
+        connectionNote = "Controller reconnected. Step \(stepNumber) of \(stepCount). \(prompt?.text ?? "")"
+    }
+
+    /// What VoiceOver should announce now, if anything: a disconnect or reconnect, a new prompt, a change in what's
+    /// detected, or the end. Each is said once; the app calls this after every update.
     public mutating func takeAnnouncement() -> String? {
+        if let note = connectionNote {
+            connectionNote = nil
+            return note
+        }
         switch phase {
         case .ports: return nil
         case .done:
             guard !announcedDone else { return nil }
             announcedDone = true
             let steps = file?.steps ?? []
+            if steps.count < stepCount { return "Capture ended early: \(steps.count) of \(stepCount) steps." }
             let skipped = steps.filter { $0.status == .skipped }.count
             return "Capture finished: \(steps.count) steps, \(skipped) skipped."
         case .steps:
-            let detection = detected.map(\.spoken)
+            let detection = detected.map(\.spoken) + (shiftReadout.map { [$0] } ?? [])
             if announcedStep != stepNumber, let prompt {
                 announcedStep = stepNumber
                 announcedDetection = detection
@@ -139,7 +180,17 @@ public struct CaptureFlow: Sendable {
             }
             guard detection != announcedDetection else { return nil }
             announcedDetection = detection
-            return detection.isEmpty ? nil : "Detected: " + detection.joined(separator: ", then ") + "."
+            guard !detected.isEmpty else { return nil }
+            return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + "." + (shiftReadout.map { " \($0)." } ?? "")
         }
+    }
+
+    /// "Shift: same message", or what moved: "Shift: channel +1, note +60" (a CC says CC).
+    static func readout(_ shift: ShiftLayer, kind: ControlKind?) -> String {
+        func signed(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
+        var parts: [String] = []
+        if shift.channelOffset != 0 { parts.append("channel \(signed(shift.channelOffset))") }
+        if shift.numberOffset != 0 { parts.append("\(kind == .cc ? "CC" : "note") \(signed(shift.numberOffset))") }
+        return "Shift: " + (parts.isEmpty ? "same message" : parts.joined(separator: ", "))
     }
 }

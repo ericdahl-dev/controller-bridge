@@ -450,10 +450,14 @@ public struct Mapping: Equatable, Sendable, Codable {
     public struct Notes: Equatable, Sendable, Codable {
         public var buttons: [String: Int]
         public var pads: [Int]
+        /// Shift done in hardware (#226): the note a button sends with Shift held. Empty on the LC6000, whose Shift
+        /// the app works out itself; a button not named here keeps the app's Shift.
+        public var shifted: [String: Int]
 
-        public init(buttons: [String: Int], pads: [Int]) {
+        public init(buttons: [String: Int], pads: [Int], shifted: [String: Int] = [:]) {
             self.buttons = buttons
             self.pads = pads
+            self.shifted = shifted
         }
 
         private struct Key: CodingKey {
@@ -466,8 +470,9 @@ public struct Mapping: Equatable, Sendable, Codable {
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: Key.self)
             pads = try container.decode([Int].self, forKey: Key(stringValue: "pads"))
+            shifted = try container.decodeIfPresent([String: Int].self, forKey: Key(stringValue: "shifted")) ?? [:]
             buttons = [:]
-            for key in container.allKeys where key.stringValue != "pads" {
+            for key in container.allKeys where !["pads", "shifted"].contains(key.stringValue) {
                 buttons[key.stringValue] = try container.decode(Int.self, forKey: key)
             }
         }
@@ -476,6 +481,8 @@ public struct Mapping: Equatable, Sendable, Codable {
             var container = encoder.container(keyedBy: Key.self)
             for (name, note) in buttons { try container.encode(note, forKey: Key(stringValue: name)) }
             try container.encode(pads, forKey: Key(stringValue: "pads"))
+            // Only when named, so a profile without hardware Shift (the LC6000) saves as before.
+            if !shifted.isEmpty { try container.encode(shifted, forKey: Key(stringValue: "shifted")) }
         }
     }
 
@@ -499,6 +506,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var levels: LEDLevels
         /// How a pad or ring color becomes a velocity (#197): the LC6000's rgb222 unless a profile lists its own.
         public var colorTable: ColorTable
+        /// Light a button's shifted note (#226) with the button's own state, on a controller where it has its own LED.
+        public var mirrorShifted: Bool
 
         public enum BeatPulse: String, Equatable, Sendable, Codable, CaseIterable {
             case off, beat, downbeat
@@ -521,15 +530,18 @@ public struct Mapping: Equatable, Sendable, Codable {
             case staleIdle = "stale_idle"
             case levels
             case colorTable = "color_table"
+            case mirrorShifted = "mirror_shifted"
         }
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
             beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000,
-            colorTable: ColorTable = .rgb222
+            colorTable: ColorTable = .rgb222,
+            mirrorShifted: Bool = false
         ) {
             self.levels = levels
             self.colorTable = colorTable
+            self.mirrorShifted = mirrorShifted
             self.ringFollowsDeck = ringFollowsDeck
             self.pitchCenter = pitchCenter
             self.ring = ring
@@ -555,7 +567,8 @@ public struct Mapping: Equatable, Sendable, Codable {
                 staleIdle: try c.decode(StaleIdle.self, forKey: .staleIdle),
                 ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true,
                 levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000,
-                colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? .rgb222
+                colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? .rgb222,
+                mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? false
             )
         }
     }
