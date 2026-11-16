@@ -58,4 +58,13 @@ struct DeckColorTests {
         Self.palette(rig, slot: 3, 255, 0, 0)
         #expect(output.sent == [.noteOn(channel: 0, note: 40, velocity: 48)])
     }
+
+    @Test("The status carries the deck colors in use, for the app's badges: the defaults, then slot 3's red as deck 2")
+    func statusCarriesDeckColors() throws {
+        let rig = try Self.onDeck(1)
+        #expect(rig.coordinator.status.deckColors == .defaults)
+        Self.palette(rig, slot: 3, 255, 0, 0)
+        #expect(rig.coordinator.status.deckColors[2] == [255, 0, 0])
+        #expect(rig.coordinator.status.deckColors[1] == DeckColors.defaults[1])
+    }
 }

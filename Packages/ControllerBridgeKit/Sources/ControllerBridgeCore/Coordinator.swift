@@ -29,6 +29,7 @@ public final class Coordinator {
 
     /// Gives every Bridge the deck colors in use; each repaints its ring.
     private func applyDeckColors() {
+        status.deckColors = deckColors
         for bridge in bridges { bridge.setDeckColors(deckColors) }
     }
 
