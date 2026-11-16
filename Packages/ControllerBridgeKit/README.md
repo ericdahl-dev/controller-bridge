@@ -80,6 +80,11 @@ Checked on hardware (2026-11-15, see #12 and #103):
   hot cue N, and in Roll mode plays `roll_sizes[N-1]`, by Syndicate's SlipLoop names (`ThirtySecond`, `Sixteenth`,
   `Eighth`, `Quarter`, `Half`, `One`, `Two`, `Four`); a pad past the list does nothing in Roll mode. Left out,
   `roll_sizes` is the LC6000's eight, shortest first. Syndicate sends 8 cue slots, so pads 9–16 stay dark.
+- `pads.mode_select` (#198): `buttons` on the LC6000, whose four buttons (`mode_hotcue`, `mode_roll`, `mode_loop`,
+  `mode_slicer`) each pick a pad mode. A controller with one pad-mode button sets `cycle` and maps that button as
+  `notes.mode_cycle`: each press moves Hot Cue → Roll → Loop → Slicer → Hot Cue, releasing a held pad first. Any
+  `mode_*` notes it maps still light as indicators. Optional `pads.mode_cycle_velocities` (`hotcue`, `roll`, `loop`,
+  `slicer`, each 0–127) lights the cycle button's own LED per mode; left out, DeckBridge leaves that LED alone.
 - `pads.channel` and `midi.layers[].pad_channel` (#224): the MIDI channel (1–16) a deck's pads use when it isn't the
   deck's own, such as a Pioneer DDJ-400/FLX4 profile's 8 for deck 1 and 10 for deck 2. Pads then play only on that
   channel (the same note on the deck's channel isn't a pad), and their LEDs, and the LED sweep's color pass, go out on
