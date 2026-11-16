@@ -57,7 +57,10 @@ struct EngineTests {
         let rig = try Rig()
         rig.coordinator.start()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
-        rig.coordinator.midi(.controlChange(channel: 0, controller: 55, value: 0x7E), source: Rig.lc6000.id)
+        for (msb, lsb) in [(UInt8(7), UInt8(100)), (7, 90)] {   // the platter turning back (#103)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: msb), source: Rig.lc6000.id)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
+        }
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(-1)]))
         rig.clock.now = 0.2
         let pipe = EventPipe()

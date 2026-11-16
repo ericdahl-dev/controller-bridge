@@ -43,7 +43,7 @@ struct ProfileImportTests {
 
     @Test("Export writes the whole merged profile, and importing it gives the same profile back")
     func exportRoundTrips() throws {
-        let edited = try Self.importing(#"{"name": "My LC6000", "device_hints": ["LC6000", "PRIME"], "mapping": {"notes": {"play": 60}, "jog": {"ccs": [55, 54]}, "leds": {"beat_pulse": "downbeat"}}}"#)
+        let edited = try Self.importing(#"{"name": "My LC6000", "device_hints": ["LC6000", "PRIME"], "mapping": {"notes": {"play": 60}, "jog": {"msb_cc": 18, "lsb_cc": 50}, "leds": {"beat_pulse": "downbeat"}}}"#)
         let exported = try edited.exported()
         #expect(try Self.importing(String(decoding: exported, as: UTF8.self)) == edited)
         // Whole, not a diff: a value left at its default is written too.

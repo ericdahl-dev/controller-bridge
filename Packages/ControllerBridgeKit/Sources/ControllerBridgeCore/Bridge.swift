@@ -50,8 +50,10 @@ final class Bridge {
             // Pitch, jog and Needle Drop (Bridge+Continuous.swift).
             "pitch_msb": { $0.pitchMSB },
             "pitch_lsb": { $0.pitchLSB },
-            "jog": { $0.jog },
-            "needle": { $0.needle },
+            "jog_msb": { $0.jogMSB },
+            "jog_lsb": { $0.jogLSB },
+            "needle_msb": { $0.needleMSB },
+            "needle_lsb": { $0.needleLSB },
         ]
     }
 
@@ -102,7 +104,11 @@ final class Bridge {
     var progress: Double?
     var duration: Double?
     /// Paused jog ticks not yet worth a whole beat.
-    var seekTickRemainder = 0
+    var seekCountRemainder = 0
+    /// The jog's and the Needle Drop's last MSB, and the platter's last position, for 14-bit pairs (#103).
+    var jogMSBValue: UInt8 = 0
+    var jogPosition: Int?
+    var needleMSBValue: UInt8 = 0
 
     // Syndicate's state, from feedback.
     var playing = false
@@ -139,10 +145,12 @@ final class Bridge {
         channel = UInt8(clamping: mapping.midi.channel - 1)
         buttonNames = Dictionary(mapping.notes.buttons.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         var ccNames: [Int: String] = [:]
-        for cc in mapping.jog.ccs { ccNames[cc] = "jog" }
+        ccNames[mapping.jog.msbCC] = "jog_msb"
+        ccNames[mapping.jog.lsbCC] = "jog_lsb"
         ccNames[mapping.pitch.msbCC] = "pitch_msb"
         ccNames[mapping.pitch.lsbCC] = "pitch_lsb"
-        ccNames[mapping.needle.cc] = "needle"
+        ccNames[mapping.needle.msbCC] = "needle_msb"
+        ccNames[mapping.needle.lsbCC] = "needle_lsb"
         ccNames[mapping.browse.selectTurnCC] = "select_turn"
         ccNames[mapping.browse.autoLoopSizeCC] = "auto_loop_size"
         self.ccNames = ccNames

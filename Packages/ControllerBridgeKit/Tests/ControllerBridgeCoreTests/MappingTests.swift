@@ -12,15 +12,20 @@ struct MappingTests {
     func defaultMapping() throws {
         let mapping = try Mapping.bundledDefault()
 
-        #expect(mapping.midi == .init(input: "LC6000", output: "LC6000", channel: 1))
+        // ignore_notes is new (#103): the LC6000's idle heartbeat.
+        #expect(mapping.midi == .init(input: "LC6000", output: "LC6000", channel: 1, ignoreNotes: [52]))
         #expect(mapping.osc == .init(host: "127.0.0.1", port: 9090, root: "/Syndicate/", feedbackHost: "127.0.0.1", feedbackPort: 9096,
             feedbackQuietMs: 10000, feedbackAnswerMs: 2000
         ))
         #expect(mapping.deck.number == 1)
-        #expect(mapping.jog == .init(ccs: [55], bendReleaseMs: 80, seekSecondsPerTick: 0.02, seekFallbackTicksPerBeat: 32, requireTouch: false))
+        // The jog as the hardware sends it (#103, captured 2026-11-15): a 14-bit position on CC 17/49. counts_per_rev,
+        // seek_seconds_per_rev and beats_per_rev are PROVISIONAL until one slow full turn is measured.
+        #expect(mapping.jog == .init(
+            msbCC: 17, lsbCC: 49, countsPerRev: 16384, bendReleaseMs: 80, seekSecondsPerRev: 2.0, beatsPerRev: 4, requireTouch: false
+        ))
         // pickup and pickup_tolerance are new in the app (#22): Python had no pickup.
         #expect(mapping.pitch == .init(msbCC: 8, lsbCC: 40, invert: false, deadZone: 0.005, pickup: true, pickupTolerance: 0.02))
-        #expect(mapping.needle == .init(cc: 64, touchNote: 70, requireTouch: true))
+        #expect(mapping.needle == .init(msbCC: 64, lsbCC: 65, touchNote: 70, requireTouch: true))
         #expect(mapping.browse == .init(selectTurnCC: 6, autoLoopSizeCC: 3))
         #expect(mapping.notes.buttons == [
             "play": 1, "cue": 2, "beat_jump_back": 3, "beat_jump_forward": 4, "track_prev": 5, "track_next": 6,
@@ -42,7 +47,7 @@ struct MappingTests {
             {
               "deck": { "number": 2 },
               "notes": { "play": 11, "pads": [50, 51, 52, 53, 54, 55, 56, 57] },
-              "jog": { "ccs": [55, 54] },
+              "jog": { "msb_cc": 18, "lsb_cc": 50 },
               "leds": { "ring_color": [255, 0, 0] }
             }
             """.utf8)
@@ -53,7 +58,8 @@ struct MappingTests {
         #expect(mapping.notes.buttons["play"] == 11)
         #expect(mapping.notes.buttons["cue"] == 2)
         #expect(mapping.notes.pads == [50, 51, 52, 53, 54, 55, 56, 57])
-        #expect(mapping.jog.ccs == [55, 54])
+        #expect(mapping.jog.msbCC == 18)
+        #expect(mapping.jog.lsbCC == 50)
         #expect(mapping.jog.bendReleaseMs == 80)
         #expect(mapping.leds.ringColor == [255, 0, 0])
         #expect(mapping.leds.ring == 40)

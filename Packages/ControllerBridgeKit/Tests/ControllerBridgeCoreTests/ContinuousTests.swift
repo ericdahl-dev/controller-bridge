@@ -49,37 +49,74 @@ struct ContinuousTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/" + path, arguments))
     }
 
-    @Test("While playing, the jog nudges with PhaseBend ±1, and PhaseBend 0 follows 80 ms after the wheel stops")
+    // MARK: The jog, as the real LC6000 sends it (#103): a 14-bit platter position on CC 17 (MSB) then CC 49 (LSB)
+
+    /// The platter at `position` (0-16383): the MSB, then the LSB, as the hardware sends them.
+    static func platterAt(_ rig: Rig, _ position: Int) {
+        cc(rig, 17, UInt8(position >> 7))
+        cc(rig, 49, UInt8(position & 0x7F))
+    }
+
+    @Test("Playing, the captured positions 0/79, 0/86, 0/94 nudge forward once; going back nudges back")
+    func jogPositionBends() throws {
+        let rig = try Self.started()
+        Self.feedback(rig, "Playing", [.int(1)])
+        Self.cc(rig, 17, 0); Self.cc(rig, 49, 79)   // the first position: nothing to compare yet
+        Self.cc(rig, 17, 0); Self.cc(rig, 49, 86)
+        Self.cc(rig, 17, 0); Self.cc(rig, 49, 94)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
+        Self.cc(rig, 17, 0); Self.cc(rig, 49, 86)
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(-1)]))
+    }
+
+    @Test("A carry into the MSB (0/120, 0/127, 1/1) is still forward: the position is read when the LSB arrives")
+    func jogMSBCarry() throws {
+        let rig = try Self.started()
+        Self.feedback(rig, "Playing", [.int(1)])
+        Self.cc(rig, 17, 0); Self.cc(rig, 49, 120)
+        Self.cc(rig, 17, 0); Self.cc(rig, 49, 127)
+        Self.cc(rig, 17, 1); Self.cc(rig, 49, 1)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
+    }
+
+    @Test("Crossing the wrap (127/120 = 16376, then 0/3 = 3) is 11 forward, not 16373 back")
+    func jogWrap() throws {
+        let rig = try Self.started()
+        Self.feedback(rig, "Playing", [.int(1)])
+        Self.cc(rig, 17, 127); Self.cc(rig, 49, 120)
+        Self.cc(rig, 17, 0); Self.cc(rig, 49, 3)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
+        Self.cc(rig, 17, 127); Self.cc(rig, 49, 120)   // and back across it
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(-1)]))
+    }
+
+    @Test("While playing, PhaseBend 0 follows 80 ms after the wheel stops")
     func jogBendThenRelease() throws {
         let rig = try Self.started()
         Self.feedback(rig, "Playing", [.int(1)])
-        Self.cc(rig, 55, 0x03)
-        Self.cc(rig, 55, 0x02)
-        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
-        Self.cc(rig, 55, 0x7E)
-        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(-1)]))
-
+        Self.platterAt(rig, 1000)
+        Self.platterAt(rig, 1008)
         rig.clock.now = 0.05
         rig.coordinator.tick()
-        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(-1)]))
-
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
         rig.clock.now = 0.2
         rig.coordinator.tick()
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]))
-        #expect(rig.osc.sent.count == 3)
+        #expect(rig.osc.sent.count == 2)
     }
 
     @Test("The nudge is a held control: release-all sends PhaseBend 0 once, and the next turn nudges afresh")
     func bendIsHeld() throws {
         let rig = try Self.started()
         Self.feedback(rig, "Playing", [.int(1)])
-        Self.cc(rig, 55, 0x01)
+        Self.platterAt(rig, 1000)
+        Self.platterAt(rig, 1008)
         rig.osc.sent.removeAll()
 
         rig.coordinator.willSleep()   // release-all, ports left open
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)])])
 
-        Self.cc(rig, 55, 0x01)
+        Self.platterAt(rig, 1016)
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)]))
 
         rig.osc.sent.removeAll()
@@ -93,7 +130,8 @@ struct ContinuousTests {
     func stopPlayingEndsBend() throws {
         let rig = try Self.started()
         Self.feedback(rig, "Playing", [.int(1)])
-        Self.cc(rig, 55, 0x01)
+        Self.platterAt(rig, 1000)
+        Self.platterAt(rig, 1008)
         Self.feedback(rig, "Playing", [.int(0)])
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]))
         #expect(rig.osc.sent.count == 2)
@@ -104,7 +142,8 @@ struct ContinuousTests {
         let rig = try Self.started()
         Self.feedback(rig, "Playing", [.int(1)])
         rig.coordinator.midi(.noteOn(channel: 0, note: 40, velocity: 127), source: Rig.lc6000.id)
-        Self.cc(rig, 55, 0x01)
+        Self.platterAt(rig, 1000)
+        Self.platterAt(rig, 1008)
         rig.coordinator.midi(.noteOff(channel: 0, note: 40, velocity: 0), source: Rig.lc6000.id)
         #expect(rig.osc.sent == [
             OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)]),
@@ -112,41 +151,59 @@ struct ContinuousTests {
         ])
     }
 
-    @Test("While paused, the jog moves the playhead: 10 ticks × 0.02 s over a 200 s track from 0.5 seeks to 0.501")
+    /// 1000 counts a turn, a turn seeks 4 s or skips 4 beats: easy numbers to check by hand.
+    static let scaled = #"{ "jog": { "counts_per_rev": 1000, "seek_seconds_per_rev": 4, "beats_per_rev": 4 } }"#
+
+    @Test("Paused, half a turn (500 of 1000 counts) seeks half of seek_seconds_per_rev: 2 s of 200 s, from 0.5 to 0.51")
     func jogSeeksWhilePaused() throws {
-        let rig = try Self.started()
+        let rig = try Self.started(Self.scaled)
         Self.feedback(rig, "TrackInfo", [.string("t"), .string("a"), .string("8A"), .float(120), .float(200), .int(100), .int(400), .string("track")])
         Self.feedback(rig, "Progress", [.float(0.5)])
-        Self.cc(rig, 55, 10)
+        Self.platterAt(rig, 2000)
+        Self.platterAt(rig, 2500)
         guard case .float(let position)? = rig.osc.sent.last?.arguments.first else {
             Issue.record("expected a float WaveformSeek, got \(rig.osc.sent)")
             return
         }
         #expect(rig.osc.sent.last?.address == "/Syndicate/Deck/1/WaveformSeek")
-        #expect(abs(position - 0.501) < 0.000_01)
+        #expect(abs(position - 0.51) < 0.000_01)
     }
 
-    @Test("Paused with no track length, 32 jog ticks skip one beat")
+    @Test("Paused with no track length, a quarter turn (250 of 1000 counts, 4 beats a turn) skips one beat")
     func jogFallsBackToBeatSkip() throws {
-        let rig = try Self.started()
-        for _ in 0..<4 { Self.cc(rig, 55, 0x08) }
+        let rig = try Self.started(Self.scaled)
+        Self.platterAt(rig, 2000)
+        Self.platterAt(rig, 2125)
+        #expect(rig.osc.sent == [])                   // an eighth of a turn: not a beat yet
+        Self.platterAt(rig, 2250)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(1)])])
-        for _ in 0..<4 { Self.cc(rig, 55, 0x78) }   // 4 × -8 ticks: one beat back
+        Self.platterAt(rig, 2000)
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(-1)]))
         #expect(rig.osc.sent.count == 2)
     }
 
-    @Test("Needle Drop seeks only while the strip is touched: 127 seeks to the end")
+    // MARK: Needle Drop: a 14-bit position on CC 64 (MSB) then CC 65 (LSB) (#103)
+
+    static func strip(_ rig: Rig, _ msb: UInt8, _ lsb: UInt8) {
+        cc(rig, 64, msb)
+        cc(rig, 65, lsb)
+    }
+
+    @Test("Needle Drop seeks only while the strip is touched: 127/127 seeks to the end, 64/0 just past the middle")
     func needleSeeksWhileTouched() throws {
         let rig = try Self.started()
-        Self.cc(rig, 64, 64)
+        Self.strip(rig, 64, 0)
         #expect(rig.osc.sent == [])
         rig.coordinator.midi(.noteOn(channel: 0, note: 70, velocity: 127), source: Rig.lc6000.id)
-        Self.cc(rig, 64, 127)
-        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/WaveformSeek", [.float(1.0)])])
+        Self.strip(rig, 127, 127)
+        Self.strip(rig, 64, 0)   // 8192 / 16383
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/WaveformSeek", [.float(1.0)]),
+            OSCMessage("/Syndicate/Deck/1/WaveformSeek", [.float(0.500_030_5)]),
+        ])
         rig.coordinator.midi(.noteOff(channel: 0, note: 70, velocity: 0), source: Rig.lc6000.id)
-        Self.cc(rig, 64, 0)
-        #expect(rig.osc.sent.count == 1)
+        Self.strip(rig, 0, 0)
+        #expect(rig.osc.sent.count == 2)
     }
 
     @Test("Release-all clears the needle touch: afterwards, moving the strip seeks nothing")
@@ -154,7 +211,7 @@ struct ContinuousTests {
         let rig = try Self.started()
         rig.coordinator.midi(.noteOn(channel: 0, note: 70, velocity: 127), source: Rig.lc6000.id)
         rig.coordinator.willSleep()   // release-all, ports left open
-        Self.cc(rig, 64, 100)
+        Self.strip(rig, 100, 0)
         #expect(rig.osc.sent == [])
     }
 
@@ -162,16 +219,17 @@ struct ContinuousTests {
     func releaseAllClearsPlatterTouch() throws {
         let rig = try Self.started(#"{ "jog": { "require_touch": true } }"#)
         Self.feedback(rig, "Playing", [.int(1)])
-        Self.cc(rig, 55, 0x01)
+        Self.platterAt(rig, 1000)
+        Self.platterAt(rig, 1008)
         #expect(rig.osc.sent == [])
 
         rig.coordinator.midi(.noteOn(channel: 0, note: 40, velocity: 127), source: Rig.lc6000.id)
-        Self.cc(rig, 55, 0x01)
+        Self.platterAt(rig, 1016)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
 
         rig.coordinator.willSleep()   // release-all, ports left open
         rig.osc.sent.removeAll()
-        Self.cc(rig, 55, 0x01)
+        Self.platterAt(rig, 1024)
         #expect(rig.osc.sent == [])
     }
 
@@ -188,24 +246,28 @@ struct ContinuousTests {
 
     @Test("Loaded 0 forgets the track's progress and length: a paused jog then falls back to BeatSkip")
     func unloadForgetsTrack() throws {
-        let rig = try Self.started()
+        let rig = try Self.started(Self.scaled)
         Self.feedback(rig, "Loaded", [.int(1)])
         Self.feedback(rig, "TrackInfo", [.string("t"), .string("a"), .string("8A"), .float(120), .float(200), .int(100), .int(400), .string("track")])
         Self.feedback(rig, "Progress", [.float(0.5)])
         Self.feedback(rig, "Loaded", [.int(0)])
-        for _ in 0..<4 { Self.cc(rig, 55, 0x08) }
+        Self.platterAt(rig, 2000)
+        Self.platterAt(rig, 2250)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(1)])])
     }
 
-    @Test("A hand-built mapping with 0 ticks per beat doesn't crash a paused jog: it skips nothing (#92)")
-    func zeroTicksPerBeat() throws {
+    @Test("A hand-built mapping with 0 counts per turn doesn't crash a paused jog: it moves nothing (#92)")
+    func zeroCountsPerRev() throws {
         var mapping = try Mapping.bundledDefault()
-        mapping.jog.seekFallbackTicksPerBeat = 0
+        mapping.jog.countsPerRev = 0
         let rig = try Rig()
         let coordinator = Coordinator(mapping: mapping, midi: rig.midi, osc: rig.osc, clock: rig.clock, log: rig.log)
         coordinator.start()
         rig.osc.sent.removeAll()
-        coordinator.midi(.controlChange(channel: 0, controller: 55, value: 0x08), source: Rig.lc6000.id)
+        for (msb, lsb) in [(UInt8(7), UInt8(0)), (7, 100)] {
+            coordinator.midi(.controlChange(channel: 0, controller: 17, value: msb), source: Rig.lc6000.id)
+            coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
+        }
         #expect(rig.osc.sent == [])
     }
 }

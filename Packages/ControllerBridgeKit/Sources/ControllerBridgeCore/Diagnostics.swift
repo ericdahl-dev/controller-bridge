@@ -75,9 +75,9 @@ extension Mapping {
             return notes.buttons.first { $0.value == note }?.key ?? DiagnosticEvent.unmapped
         case .controlChange(_, let controller, _):
             let cc = Int(controller)
-            if jog.ccs.contains(cc) { return "jog" }
             let named: [(Int, String)] = [
-                (pitch.msbCC, "pitch_msb"), (pitch.lsbCC, "pitch_lsb"), (needle.cc, "needle"),
+                (jog.msbCC, "jog_msb"), (jog.lsbCC, "jog_lsb"),
+                (pitch.msbCC, "pitch_msb"), (pitch.lsbCC, "pitch_lsb"), (needle.msbCC, "needle_msb"), (needle.lsbCC, "needle_lsb"),
                 (browse.selectTurnCC, "select_turn"), (browse.autoLoopSizeCC, "auto_loop_size"),
             ]
             return named.first { $0.0 == cc }?.1 ?? DiagnosticEvent.unmapped
