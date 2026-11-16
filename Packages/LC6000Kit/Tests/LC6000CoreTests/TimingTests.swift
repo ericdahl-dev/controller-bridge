@@ -194,4 +194,21 @@ struct TimingTests {
         rig.clockBeat(4, at: 43.0)
         #expect(rig.ring(at: 43.5) == 0)
     }
+
+    @Test("With beat pulse off (the default), master clock beats leave the ring solid")
+    func pulseOffKeepsRingSolid() throws {
+        let rig = try PulseRig(beatPulse: "off")
+        rig.clockBeat(1, at: 50.0)
+        #expect(rig.ring(at: 50.5) == 11)
+        rig.clockBeat(2, at: 51.0)
+        #expect(rig.ring(at: 51.5) == 11)
+    }
+
+    @Test("With no track loaded the ring stays off, even on a pulsed beat")
+    func pulseNeedsLoadedTrack() throws {
+        let rig = try PulseRig(beatPulse: "beat")
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
+        rig.clockBeat(1, at: 60.0)
+        #expect(rig.ring(at: 60.05) == 0)
+    }
 }
