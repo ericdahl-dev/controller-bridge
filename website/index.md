@@ -89,7 +89,7 @@ No. DeckBridge collects no data: no account, no analytics, no tracking.
 
 ## Status and availability
 
-- **Version 1.0.0** is in beta on TestFlight now. Until the public link is live, email deckbridge@ericdahl.dev to join the beta. <!-- TODO(user): TestFlight public link -->
+- **Version 1.0.1** is in beta on TestFlight now. Until the public link is live, email deckbridge@ericdahl.dev to join the beta. <!-- TODO(user): TestFlight public link -->
 - **Mac App Store:** coming soon.
 - **Price:** pricing has not been announced. <!-- TODO(user): price -->
 
