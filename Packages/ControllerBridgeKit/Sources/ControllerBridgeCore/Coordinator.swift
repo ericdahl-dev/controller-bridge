@@ -351,6 +351,7 @@ public final class Coordinator {
     private func disconnect(_ index: Int, reason: DisconnectReason) {
         guard let source = controllers[index].source else { return }
         if capturing == source.id { capturing = nil }
+        controllers[index].bridge.ledsCaptured = false
         let bridge = controllers[index].bridge
         bridge.releaseAll()
         controllers[index].source = nil
@@ -495,9 +496,15 @@ public final class Coordinator {
     /// the jog's position, so the first message after only seeds it, and re-arms the pitch pickup. `nil`, an unplug or
     /// stop ends the capture.
     public func setCapture(source: MIDIEndpoint.ID?) {
+        // The controller given back paints its LEDs again, from the state now.
+        for controller in controllers where controller.bridge.ledsCaptured && controller.source?.id != source {
+            controller.bridge.ledsCaptured = false
+            controller.bridge.repaintLEDs()
+        }
         capturing = source
         guard let source else { return }
         for controller in controllers where controller.source?.id == source {
+            controller.bridge.ledsCaptured = true
             controller.bridge.releaseAll()
             controller.bridge.jogPosition = nil
             // The capture sweeps the pitch fader, so it waits for pickup after, instead of jumping the tempo.

@@ -146,6 +146,9 @@ final class Bridge {
     var feedbackStale = false
     /// An LED sweep (#26) owns the controller's LEDs.
     var ledsHeld = false
+    /// The capture window is recording this controller (#186, #187): its LEDs are the LED test's, so the bridge paints
+    /// none until the capture ends and it repaints.
+    var ledsCaptured = false
     /// Each hot cue's color slot, 0 for an empty cue.
     lazy var cues = [Int](repeating: 0, count: mapping.notes.pads.count)
     /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
@@ -400,7 +403,7 @@ final class Bridge {
     func led(_ note: Int, _ velocity: UInt8) {
         // During an LED sweep (#26) the bridge's own writes wait; the sweep ends with a repaint.
         // A deck layer the controller isn't showing writes nothing: the unit shows one layer at a time (#79).
-        guard !ledsHeld, ledsEnabled, layerShown, ledCache[note] != velocity else { return }
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, ledCache[note] != velocity else { return }
         ledCache[note] = velocity
         guard let output else { return }
         do {
@@ -414,7 +417,7 @@ final class Bridge {
     /// A pad's LED (#224): on the pads' own channel when the profile gives one, else like any other LED.
     func padLED(_ note: Int, _ velocity: UInt8) {
         guard mapping.pads.channel != nil else { return led(note, velocity) }
-        guard !ledsHeld, ledsEnabled, layerShown, padLEDCache[note] != velocity else { return }
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, padLEDCache[note] != velocity else { return }
         padLEDCache[note] = velocity
         guard let output else { return }
         do { try output.send(.noteOn(channel: padChannel, note: UInt8(note), velocity: velocity)) } catch { outputFailed = true }

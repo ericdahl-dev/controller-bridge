@@ -103,4 +103,19 @@ struct CapturePauseTests {
         LayersTests.note(rig, channel: 1, 1, 127)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
     }
+
+    @Test("While captured, Syndicate's feedback paints no LEDs on it, so the LED test (#187) isn't painted over; after, a repaint")
+    func ledsHeldWhileCapturing() throws {
+        let rig = try Self.started()  // Playing 1: Play lit full
+        #expect(rig.leds[1] == 127)
+        rig.coordinator.setCapture(source: Rig.lc6000.id)
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        output.sent.removeAll()
+
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))
+        #expect(output.sent == [])
+
+        rig.coordinator.setCapture(source: nil)
+        #expect(rig.leds[1] == 1)  // repainted from the state now: stopped, dim
+    }
 }

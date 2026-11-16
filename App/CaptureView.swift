@@ -25,8 +25,12 @@ struct CaptureWindowRoot: View {
             made.refresh(sources: model.sources, destinations: model.destinations, preselect: model.captureDevice)
             model.captureDevice = nil
             controller = made
+            model.endCapture = { [weak made] in made?.end() }
         }
-        .onDisappear { controller?.end() }
+        .onDisappear {
+            controller?.end()
+            model.endCapture = nil
+        }
     }
 }
 
@@ -39,6 +43,7 @@ struct CaptureView: View {
             case .ports: CapturePortsPage(controller: controller)
             case .steps: CaptureStepPage(controller: controller)
             case .done: CaptureDonePage(controller: controller)
+            case .leds: CaptureLEDPage(controller: controller)
             }
         }
         .padding(Theme.Step.x6)
@@ -67,7 +72,11 @@ private struct CapturePortsPage: View {
 
     var body: some View {
         CaptureHeading(eyebrow: "Help add a controller", title: "Capture your controller")
-        Text("DeckBridge listens while you press, move and turn each control, and records what it sends. The capture sends nothing to your controller or anywhere else. It takes about five minutes.")
+        Text("DeckBridge listens while you press, move and turn each control, and records what it sends. "
+            + (controller.flow.ledTest
+                ? "Nothing is sent to your controller unless you choose the LED test at the end, and nothing"
+                : "Nothing is sent to your controller, and nothing")
+            + " leaves this Mac unless you save or email the file. It takes about five minutes.")
             .font(Theme.ui(13)).foregroundStyle(Theme.caption)
             .fixedSize(horizontal: false, vertical: true)
         Picker("Controller", selection: $controller.picked) {
@@ -167,6 +176,7 @@ private struct CaptureDonePage: View {
         TextField("Note (optional), such as your firmware version", text: $controller.note, axis: .vertical)
             .lineLimit(1...3)
             .font(Theme.ui(13))
+        if controller.canTestLEDs { CaptureLEDOffer(controller: controller) }
         CaptureExportButtons(controller: controller) { dismissWindow(id: CaptureWindow.id) }
         if let note = controller.exportNote {
             Text(note).font(Theme.ui(12)).foregroundStyle(Theme.caption)
@@ -224,5 +234,104 @@ private struct CaptureDisconnected: View {
         }
         .padding(Theme.Step.x3)
         .card()
+    }
+}
+
+/// The done page's offer of the LED test (#187): Quick or Full, then Test LEDs.
+private struct CaptureLEDOffer: View {
+    @Bindable var controller: CaptureController
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x2) {
+            Text("LED test").font(Theme.labelFont).foregroundStyle(Theme.caption)
+            Text("Optional: DeckBridge lights each button and pad in turn and asks what you see, so your controller's lights can work too. It turns everything off again.")
+                .font(Theme.ui(12)).foregroundStyle(Theme.caption)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Theme.Step.x2) {
+                SegmentedPills(options: [LEDProbe.Scope.quick, .full], title: { $0 == .quick ? "Quick" : "Full" }, selection: $controller.ledScope)
+                Spacer()
+                Button("Test LEDs") { controller.startLEDs() }.buttonStyle(PillButtonStyle())
+            }
+        }
+        .padding(Theme.Step.x4)
+        .card()
+    }
+}
+
+/// One LED probe (#187): the question, and its answers as pills.
+private struct CaptureLEDPage: View {
+    let controller: CaptureController
+
+    var body: some View {
+        let flow = controller.flow
+        CaptureHeading(eyebrow: "LED test \(flow.ledProbeNumber) of \(flow.ledProbeCount)", title: flow.ledProbe?.text ?? "")
+        CaptureLEDChoices(
+            question: flow.ledProbe?.question ?? .lit, enabled: flow.canAnswerLED, sameAsLast: flow.canSameAsLast
+        ) { controller.answerLED($0) }
+        HStack {
+            Spacer()
+            Button("Skip LED test") { controller.skipLEDs() }.buttonStyle(PillButtonStyle(kind: .quiet))
+        }
+    }
+}
+
+private struct CaptureLEDChoices: View {
+    let question: LEDProbe.Question
+    /// Off until the probe has lit on the controller.
+    let enabled: Bool
+    let sameAsLast: Bool
+    let answer: (CaptureFlow.LEDChoice) -> Void
+
+    var body: some View {
+        switch question {
+        case .lit:
+            pills([("Yes, it lit", .lit(true)), ("No", .lit(false))])
+        case .level:
+            pills([("Dim", .level(.dim)), ("Bright", .level(.bright)), ("Off", .level(nil))])
+        case .color:
+            VStack(alignment: .leading, spacing: Theme.Step.x2) {
+                pills(CaptureFlow.ledColors.map { ($0.capitalized, .color($0)) })
+                pills([("Off", .color(nil)), ("Same as last", .sameAsLast)])
+            }
+        }
+    }
+
+    private func pills(_ choices: [(String, CaptureFlow.LEDChoice)]) -> some View {
+        FlowRow(spacing: Theme.Step.x2) {
+            ForEach(choices, id: \.0) { choice in
+                Button(choice.0) { answer(choice.1) }
+                    .buttonStyle(PillButtonStyle(small: true))
+                    .disabled(!enabled || (choice.1 == .sameAsLast && !sameAsLast))
+            }
+        }
+    }
+}
+
+/// Lays its children out left to right, wrapping to a new line when the width runs out.
+private struct FlowRow: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, row: CGFloat = 0, widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += row + spacing; row = 0 }
+            x += size.width + spacing
+            row = max(row, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: widest, height: y + row)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, row: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += row + spacing; row = 0 }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            row = max(row, size.height)
+        }
     }
 }

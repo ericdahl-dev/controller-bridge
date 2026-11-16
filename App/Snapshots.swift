@@ -416,6 +416,30 @@ enum Snapshots {
                 return CaptureController(flow: flow, now: 1e6)
             }()),
             ("done", CaptureController(flow: captureFlow(at: nil, fed: true), now: 1e6)),
+            // The LED test (#187): a lit question, and a pad color question.
+            // The LED test with its flag on, as for the supervised check; "done" above shows it off (the default).
+            ("done-led-offer", CaptureController(flow: captureFlow(at: nil, fed: true, ledTest: true), now: 1e6)),
+            ("led-lit", {
+                var flow = captureFlow(at: nil, fed: true, ledTest: true)
+                flow.startLEDs(scope: .full, at: 1e6)
+                _ = flow.dueSends(at: 1e6)  // Play lit, so the answers are on
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
+            ("led-color", {
+                var flow = captureFlow(at: nil, fed: true, ledTest: true)
+                flow.startLEDs(scope: .full, at: 1e6)
+                // Each answer waits for its probe to go out: let the sends out, 100 ms apart, between answers.
+                var now = 1e6
+                func shown() { while flow.hasPendingSends { _ = flow.dueSends(at: now); now += 0.1 } }
+                shown()
+                while flow.ledProbe?.question != .color {
+                    flow.answerLED(.lit(true), at: now)
+                    shown()
+                }
+                flow.answerLED(.color("red"), at: now)
+                shown()
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
             ("done-note", {
                 var flow = captureFlow(at: nil, fed: true)
                 flow.note = "Firmware 1.3"
@@ -429,8 +453,8 @@ enum Snapshots {
 
     /// The standard list on demo traffic, a step every 10 s from 0, stopped at the prompt `id` (fed its take or not),
     /// or walked to the end when `id` is nil.
-    private static func captureFlow(at id: String?, fed: Bool) -> CaptureFlow {
-        var flow = CaptureFlow(appVersion: "1.2.0")
+    private static func captureFlow(at id: String?, fed: Bool, ledTest: Bool = false) -> CaptureFlow {
+        var flow = CaptureFlow(appVersion: "1.2.0", ledTest: ledTest)
         flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: 0)
         var now = 0.0
         while let prompt = flow.prompt {

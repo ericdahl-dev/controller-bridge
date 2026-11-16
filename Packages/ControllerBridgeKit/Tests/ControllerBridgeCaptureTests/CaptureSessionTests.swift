@@ -107,4 +107,25 @@ struct CaptureSessionTests {
         #expect(step.controls.map(\.port) == [1, 0])
         #expect(step.controls.map(\.release) == [nil, .noteOff])
     }
+
+    @Test("LED probe answers are kept with the step they're about, after the steps are done (#187)")
+    func ledAnswersForFinishedSteps() throws {
+        var session = Self.session()
+        session.receive([0x90, 0x01, 0x7F], at: 0)
+        session.confirm()
+        session.skip()
+        session.skip()
+        session.answerLED(LEDAnswer(sent: [0x90, 0x01, 0x7F], lit: true), forStep: "deck1.play")
+        session.answerLED(LEDAnswer(sent: [0x90, 0x01, 0x01], lit: true, level: .dim), forStep: "deck1.play")
+        session.answerLED(LEDAnswer(sent: [0x90, 0x63, 0x7F], lit: true), forStep: "nowhere")
+        #expect(session.file.steps[0].leds == [
+            LEDAnswer(sent: [0x90, 0x01, 0x7F], lit: true), LEDAnswer(sent: [0x90, 0x01, 0x01], lit: true, level: .dim),
+        ])
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(session.file.steps[0].leds)) as? NSArray
+        let literal = try JSONSerialization.jsonObject(with: Data("""
+            [{ "sent": "90 01 7F", "lit": true }, { "sent": "90 01 01", "lit": true, "level": "dim" }]
+            """.utf8)) as? NSArray
+        #expect(json != nil)
+        #expect(json == literal)
+    }
 }
