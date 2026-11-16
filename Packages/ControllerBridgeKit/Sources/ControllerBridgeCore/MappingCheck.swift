@@ -188,6 +188,7 @@ extension Mapping {
             "needle.cc": 0...127, "needle.touch_note": 0...127,
             "browse.select_turn_cc": 0...127, "browse.auto_loop_size_cc": 0...127,
             "leds.pitch_center": 0...127, "leds.ring": 0...127,
+            "jog.seek_fallback_ticks_per_beat": 1...1000,
         ]
         for color in ["ring_color", "roll_pad_color", "loop_pad_color"] { table["leds.\(color)[]"] = 0...255 }
         return table

@@ -102,6 +102,8 @@ extension Bridge {
             sendDeck("WaveformSeek", .float(Float(moved)))
         } else {
             // No track length: skip whole beats, keeping the remainder for the next turn.
+            // The check requires at least 1; a hand-built mapping with 0 mustn't trap (#92).
+            guard mapping.jog.seekFallbackTicksPerBeat > 0 else { return }
             seekTickRemainder += ticks
             let beats = seekTickRemainder / mapping.jog.seekFallbackTicksPerBeat
             guard beats != 0 else { return }

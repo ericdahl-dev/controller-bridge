@@ -196,4 +196,16 @@ struct ContinuousTests {
         for _ in 0..<4 { Self.cc(rig, 55, 0x08) }
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/BeatSkip", [.int(1)])])
     }
+
+    @Test("A hand-built mapping with 0 ticks per beat doesn't crash a paused jog: it skips nothing (#92)")
+    func zeroTicksPerBeat() throws {
+        var mapping = try Mapping.bundledDefault()
+        mapping.jog.seekFallbackTicksPerBeat = 0
+        let rig = try Rig()
+        let coordinator = Coordinator(mapping: mapping, midi: rig.midi, osc: rig.osc, clock: rig.clock, log: rig.log)
+        coordinator.start()
+        rig.osc.sent.removeAll()
+        coordinator.midi(.controlChange(channel: 0, controller: 55, value: 0x08), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [])
+    }
 }

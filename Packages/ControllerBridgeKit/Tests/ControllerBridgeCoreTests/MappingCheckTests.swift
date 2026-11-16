@@ -138,4 +138,11 @@ struct MappingCheckTests {
         #expect(Self.problems(#"{"notes": {"pads": [32, 33, 34, 35, 36, 37, 38, 39, 41]}}"#) == ["notes.pads: expected 8 pads, got 9"])
         #expect(Self.problems(#"{"notes": {"pads": []}}"#) == ["notes.pads: expected 8 pads, got 0"])
     }
+
+    @Test("Jog ticks per beat must be at least 1, so the paused-jog fallback never divides by zero")
+    func ticksPerBeat() {
+        #expect(Self.problems(#"{"jog": {"seek_fallback_ticks_per_beat": 0}}"#) == [
+            "jog.seek_fallback_ticks_per_beat: 0 is out of range, expected 1-1000",
+        ])
+    }
 }
