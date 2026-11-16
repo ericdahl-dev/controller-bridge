@@ -95,6 +95,10 @@ struct SettingsView: View {
                     hint("For Syndicate on another Mac. macOS asks once for local-network permission; allow it, or no feedback arrives.")
                 }
             }
+            // What to set on Syndicate's side is in the guide, reachable from here as well as the panel (#66 item 6).
+            row("") {
+                Button("Setup Guide…") { SetupGuideWindow.open(openWindow) }.buttonStyle(LinkButtonStyle())
+            }
 
             heading("Mapping")
             row("In use") {
