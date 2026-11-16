@@ -190,6 +190,7 @@ public final class Coordinator {
     private func report(_ index: Int, _ event: String) {
         log.log(event)
         status.controllers[index].connected = controllers[index].source != nil
+        status.controllers[index].outputOpen = controllers[index].bridge.output != nil
         status.controllers[index].lastEvent = event
     }
 
