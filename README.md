@@ -58,11 +58,13 @@ Install **Controller Bridge** from the Mac App Store (macOS 26 or later). It liv
 3. **Settings → OSC FEEDBACK → SUBSCRIPTIONS:** Turn on these subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.
 4. **Settings → MIDI:** turn your controller's MIDI input **off** (for example, Denon LC6000 PRIME). Otherwise Syndicate's own mapping and the bridge would both react to every button.
 
+Quit djay Pro, Engine DJ or any other app using your controller first, and power-cycle your controller if one was open: they can switch its MIDI mode until it restarts.
+
 The **Setup guide** button in the panel, and **Setup Guide…** in Settings, show the same steps. The guide shows the panel's status lights as you go, and its button reads **Done: feedback live** once Syndicate answers.
 
 ## Four decks from one LC6000
 
-The LC6000 has four deck layers: **Shift + deck select** steps it through channels 1–4. The bridge follows it. Each layer drives the Syndicate deck with the same number, so one unit plays all four decks.
+The LC6000 has four deck layers: **Shift + deck select** steps through them, and the bridge follows. Layer N drives Syndicate deck N, so one unit plays all four decks. On its own the LC6000 keeps every control on MIDI channel 1 and only signals the layer; the bridge sends those controls to the active layer's deck. (Another DJ app can switch it to one channel per layer until it restarts; the bridge follows that too, but quit those apps first.)
 
 - **Switching layers:** anything held on the old layer is released on its deck, and the LEDs repaint from the new deck's state.
 - **Pitch fader:** all layers share the one fader, so on the new layer it waits until it meets that deck's tempo (pickup), and the tempo doesn't jump.

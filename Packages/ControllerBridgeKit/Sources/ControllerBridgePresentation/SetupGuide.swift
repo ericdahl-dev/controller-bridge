@@ -31,10 +31,16 @@ public struct SetupGuide: Equatable, Sendable {
     }
 
     public var steps: [Step]
+    /// Another DJ app's handshake can put the controller into a different MIDI mode (the LC6000's multi-channel
+    /// state, #79), so the guide says to quit them.
+    public var otherAppsNote: String
 
     /// `controller` is the profile's name, such as "Denon LC6000 PRIME", or nil when there is none yet.
     public init(controller: String?, oscPort: Int, feedbackPort: Int) {
         let device = controller.map { "\($0)'s" } ?? "your controller's"
+        let unit = controller ?? "your controller"
+        otherAppsNote = "Quit djay Pro, Engine DJ or any other app using \(unit) first, and power-cycle \(unit) if one was "
+            + "open: they can switch its MIDI mode until it restarts."
         steps = [
             Step(title: "Settings → OSC", detail: "Turn OSC INPUT ENABLED on. The listen port is \(oscPort)."),
             Step(title: "Settings → OSC FEEDBACK", detail: "Set DEST IP to 127.0.0.1 and PORT to \(feedbackPort)."),
