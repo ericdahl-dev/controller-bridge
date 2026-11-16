@@ -40,7 +40,7 @@ concurrency:
 jobs:
   testflight:
     name: TestFlight (macOS)
-    if: github.repository == 'ericdahl-dev/controller-bridge' && github.event_name == 'push'
+    if: github.repository == 'ericdahl-dev/deckbridge' && github.event_name == 'push'
     # Standard GitHub-hosted runner, as in ci.yml. Avoid -large/-xlarge (always billed).
     runs-on: macos-26
     timeout-minutes: 60
@@ -235,7 +235,7 @@ jobs:
     needs: testflight
     # After a successful upload, or by hand for a build that's already uploaded.
     if: >-
-      always() && github.repository == 'ericdahl-dev/controller-bridge' &&
+      always() && github.repository == 'ericdahl-dev/deckbridge' &&
       (github.event_name == 'workflow_dispatch' || needs.testflight.result == 'success')
     # The API calls need only Python and openssl.
     runs-on: ubuntu-latest
