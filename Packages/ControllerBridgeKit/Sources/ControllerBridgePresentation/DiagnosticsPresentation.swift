@@ -13,3 +13,18 @@ public enum DiagnosticsTab: String, CaseIterable, Sendable {
         }
     }
 }
+
+/// Whether Start Sweep can run, and if not, why: the sweep lights the controller, so it needs its LED output.
+public struct SweepAvailability: Equatable, Sendable {
+    public var enabled: Bool
+    public var reason: String?
+
+    public init(enabled: Bool, reason: String?) {
+        self.enabled = enabled
+        self.reason = reason
+    }
+
+    public init(outputOpen: Bool) {
+        self.init(enabled: outputOpen, reason: outputOpen ? nil : "No controller output. Plug in the controller.")
+    }
+}

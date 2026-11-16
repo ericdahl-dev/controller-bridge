@@ -11,4 +11,10 @@ struct DiagnosticsPresentationTests {
         #expect(DiagnosticsTab.sweep.emptyText(controllerConnected: true) == "Press Start Sweep. Watch the pads and ring.")
         #expect(DiagnosticsTab.osc.emptyText(controllerConnected: false) == "Nothing sent or received yet.")
     }
+
+    @Test("Start Sweep needs the controller's LED output: without one it's disabled, with the reason")
+    func sweepAvailability() {
+        #expect(SweepAvailability(outputOpen: true) == SweepAvailability(enabled: true, reason: nil))
+        #expect(SweepAvailability(outputOpen: false) == SweepAvailability(enabled: false, reason: "No controller output. Plug in the controller."))
+    }
 }
