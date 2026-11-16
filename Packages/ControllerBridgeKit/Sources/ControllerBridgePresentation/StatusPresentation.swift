@@ -29,12 +29,17 @@ public struct BridgeState: Equatable, Sendable {
     /// The last time Syndicate's feedback stopped (#21), if it has.
     public var lastDropout: String?
 
-    public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil) {
+    /// The deck is Syndicate's tempo master (#53). Not a problem, so it never changes the icon.
+    public var master: Bool
+
+    public init(controller: Controller, feedback: Feedback, deck: Int, stopped: Bool = false, lastDropout: String? = nil,
+                master: Bool = false) {
         self.controller = controller
         self.feedback = feedback
         self.deck = deck
         self.stopped = stopped
         self.lastDropout = lastDropout
+        self.master = master
     }
 }
 
@@ -78,6 +83,8 @@ public struct StatusPresentation: Equatable, Sendable {
     public var lights: [StatusLight]
     public var line: String
     public var icon: IconState
+    /// The orange MASTER light, apart from `lights` so it never counts toward the icon (#53).
+    public var master: StatusLight?
     /// "LAST DROPOUT: …" for the panel, once Syndicate's feedback has stopped at least once (#21).
     public var lastDropout: String?
 
@@ -96,7 +103,9 @@ public struct StatusPresentation: Equatable, Sendable {
         case .failed: StatusLight(label: "FEEDBACK", word: "FAILED", tone: .error)
         }
         lights = (state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)] : []) + [controller, feedback]
+        master = state.master ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
         line = lights.map { "\($0.label) ● \($0.word)" }.joined(separator: " · ") + " · DECK [\(state.deck)]"
+            + (state.master ? " · MASTER" : "")
         icon = if lights.contains(where: { $0.tone == .error }) { .error }
             else if lights.allSatisfy({ $0.tone == .live }) { .ok }
             else { .attention }
