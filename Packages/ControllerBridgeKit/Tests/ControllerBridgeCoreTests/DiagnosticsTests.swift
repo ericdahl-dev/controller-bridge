@@ -125,4 +125,34 @@ struct DiagnosticsTests {
         Self.tick(rig, at: 100 + 63 * 0.6 + 0.001)
         #expect(events.sweep.last == "  velocity 63 (0x3F) = rgb222 r3 g3 b3")
     }
+
+    @Test("After the colors, the pads and ring go off; then every other note lights full, dim, then off, 0.2 s apart")
+    func sweepButtons() throws {
+        let (rig, events) = try Self.openRig()
+        rig.clock.now = 100
+        rig.coordinator.startLEDSweep()
+        Self.tick(rig, at: 100 + 63 * 0.6 + 0.001)
+        _ = Self.takeSent(rig)
+
+        Self.tick(rig, at: 100 + 64 * 0.6 + 0.001)
+        #expect(events.sweep.last == "Button sweep: each note at full, then dim, then off.")
+        let start = Self.takeSent(rig)
+        #expect(start.prefix(9).map(\.0) == Self.padsAndRing)
+        #expect(start.prefix(9).map(\.1) == Array(repeating: 0, count: 9))
+        #expect(start.dropFirst(9).map { [$0.0, $0.1] } == [[0, 127]])
+
+        Self.tick(rig, at: 100 + 64 * 0.6 + 0.201)
+        Self.tick(rig, at: 100 + 64 * 0.6 + 0.401)
+        #expect(Self.takeSent(rig).map { [$0.0, $0.1] } == [[0, 1], [0, 0]])
+        #expect(events.sweep.last == "  note 0")
+
+        // Run to the end: every note but the pads and ring, each at 127, 1, 0.
+        Self.tick(rig, at: 1000)
+        let rest = Self.takeSent(rig)
+        let expectedNotes = (UInt8(1)...127).filter { !Self.padsAndRing.contains($0) }
+        #expect(rest.map { [$0.0, $0.1] } == expectedNotes.flatMap { [[$0, 127], [$0, 1], [$0, 0]] })
+        #expect(events.sweep.last == "LED sweep done.")
+        Self.tick(rig, at: 2000)
+        #expect(Self.takeSent(rig).isEmpty)
+    }
 }
