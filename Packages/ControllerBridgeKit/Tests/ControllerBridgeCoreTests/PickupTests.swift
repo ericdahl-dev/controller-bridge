@@ -144,4 +144,54 @@ struct PickupTests {
         Self.fader(rig, 0x5A)
         #expect(rig.osc.sent == [Self.tempo(0.40634)])
     }
+
+    /// TempoSlider messages sent to a deck, ignoring the Resend and anything else.
+    static func tempoSends(_ rig: Rig, deck: Int) -> [OSCMessage] {
+        rig.osc.sent.filter { $0.address == "/Syndicate/Deck/\(deck)/TempoSlider" }
+    }
+
+    /// Picked up on deck 1 at 0.5, then switched to deck 2 at t = 10.
+    static func switchedToDeck2() throws -> Rig {
+        let rig = try Self.started()
+        Self.report(rig, "Loaded", .int(1))
+        Self.report(rig, "TempoSlider", .float(0.5))
+        Self.fader(rig, 0x60)
+        rig.clock.now = 10
+        rig.coordinator.setDeck(2, controller: 0)
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    @Test("After a deck switch, the fader waits for the new deck's tempo instead of jumping it, then picks up as usual (#62)")
+    func deckSwitchWaitsForTempo() throws {
+        let rig = try Self.switchedToDeck2()
+        rig.clock.now = 10.5
+        Self.fader(rig, 0x70)
+        #expect(Self.tempoSends(rig, deck: 2) == [])
+
+        rig.clock.now = 10.6
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/TempoSlider", [.float(0.25)]))
+        Self.fader(rig, 0x60)
+        #expect(Self.tempoSends(rig, deck: 2) == [])
+        Self.fader(rig, 0x50)
+        #expect(Self.tempoSends(rig, deck: 2) == [OSCMessage("/Syndicate/Deck/2/TempoSlider", [.float(0.25008)])])
+    }
+
+    @Test("After a deck switch with no tempo report within 2 s (feedback_answer_ms), the fader passes through again")
+    func deckSwitchWaitEnds() throws {
+        let rig = try Self.switchedToDeck2()
+        rig.clock.now = 11.9
+        Self.fader(rig, 0x70)
+        #expect(Self.tempoSends(rig, deck: 2) == [])
+        rig.clock.now = 12.1
+        Self.fader(rig, 0x50)
+        #expect(Self.tempoSends(rig, deck: 2) == [OSCMessage("/Syndicate/Deck/2/TempoSlider", [.float(0.25008)])])
+    }
+
+    @Test("At launch, with no feedback at all, the fader passes through at once, as before")
+    func launchPassesThrough() throws {
+        let rig = try Self.started()
+        Self.fader(rig, 0x60)
+        #expect(Self.tempoSends(rig, deck: 1) == [Self.tempo(0.50009)])
+    }
 }

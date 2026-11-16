@@ -11,11 +11,16 @@ import os
 enum BridgeHost {
     static func run(
         profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, log: any LogSink, status: BridgeStatus,
-        events: AsyncStream<PipeEvent>
+        diagnostics: DiagnosticsLog, events: AsyncStream<PipeEvent>
     ) async {
         let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
         coordinator.start()
-        await Engine(coordinator: coordinator, log: log, onStatus: statusSink(status)).run(events)
+        await Engine(coordinator: coordinator, log: log, onStatus: statusSink(status), onDiagnostic: diagnosticsSink(diagnostics)).run(events)
+    }
+
+    /// Hands each Diagnostics line to the window, one main-actor hop per line. Only called while the window is open.
+    private nonisolated static func diagnosticsSink(_ log: DiagnosticsLog) -> @Sendable (DiagnosticEvent) -> Void {
+        { event in Task { @MainActor in log.append(event) } }
     }
 
     /// Copies each Coordinator status change into the menu's status, with one main-actor hop per change. Made here,
@@ -27,6 +32,7 @@ enum BridgeHost {
                 status.devices = coordinatorStatus.devices
                 status.syndicateFeedback = coordinatorStatus.feedback
                 status.lastDropout = coordinatorStatus.lastDropout
+                status.sweeping = coordinatorStatus.sweeping
             }
         }
     }

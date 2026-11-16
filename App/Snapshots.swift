@@ -19,6 +19,13 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
+            // Syndicate stopped answering (#21): DROPPED, and the last dropout under the lights.
+            ("feedback-dropped", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .stale
+                $0.lastDropout = "Syndicate feedback stopped"
+            }),
             ("connected-master-others", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME", master: true)]
                 $0.devices = [
@@ -59,6 +66,27 @@ enum Snapshots {
             write(StatusPanel(status: status), to: "\(directory)/panel-\(name).png")
             if name == "connected" { write(SetupGuideView(guide: status.setupGuide), to: "\(directory)/setup-guide.png") }
             write(icons(status.presentation.icon), to: "\(directory)/icon-\(name).png")
+        }
+        // The Diagnostics window (#26), with lines as the Kit formats them.
+        let log = DiagnosticsLog()
+        let monitor: [MIDIEvent] = [
+            .noteOn(channel: 0, note: 1, velocity: 127), .noteOff(channel: 0, note: 1, velocity: 0),
+            .noteOn(channel: 0, note: 32, velocity: 127), .controlChange(channel: 0, controller: 55, value: 1),
+            .controlChange(channel: 0, controller: 99, value: 64),
+        ]
+        for (index, event) in monitor.enumerated() {
+            log.append(.midiIn(event, label: ["play", "play", "pad1", "jog", "UNMAPPED"][index], at: 1234.5 + Double(index) * 0.1))
+        }
+        for line in ["Color sweep: velocity shown on every pad and the ring. Note what each looks like.",
+                     "  velocity  0 (0x00) = rgb222 r0 g0 b0", "  velocity  1 (0x01) = rgb222 r0 g0 b1"] {
+            log.append(.sweep(line))
+        }
+        log.append(.oscOut(OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])))
+        log.append(.oscIn(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)])))
+        log.append(.oscIn(OSCMessage("/Syndicate/Deck/1/Progress", [.float(0.25)])))
+        for tab in DiagnosticsWindow.Tab.allCases {
+            let window = DiagnosticsWindow(log: log, sweeping: tab == .sweep, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {}, tab: tab, scrolls: false)
+            write(window.frame(width: 720, height: 420), to: "\(directory)/diagnostics-\(tab.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")).png")
         }
     }
 

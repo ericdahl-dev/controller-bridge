@@ -7,6 +7,8 @@ public struct CoordinatorStatus: Equatable, Sendable {
     public var feedback: FeedbackState
     /// The last time feedback stopped, for the menu.
     public var lastDropout: String?
+    /// An LED sweep (#26) is running.
+    public var sweeping = false
     /// The built-in demo controller (#64) is running instead of the real one.
     public var demo = false
 

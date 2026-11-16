@@ -86,6 +86,9 @@ final class Bridge {
     /// Pitch pickup (#22): while armed, the fader is ignored until it meets Syndicate's reported TempoSlider.
     var pickupArmed = false
     var reportedTempo: Double?
+    /// After a deck switch, the new deck's tempo isn't known yet: until this time the fader waits for Syndicate's
+    /// report instead of jumping the new deck (#62). Nil when not waiting.
+    var tempoWaitUntil: Double?
     /// Where the fader was on its last move while armed, to see it cross the reported value.
     var faderPosition: Double?
     /// TempoSlider values sent lately, with when, so a late echo of one isn't taken for an outside change.
@@ -115,6 +118,8 @@ final class Bridge {
     var looping = false
     /// Syndicate's feedback has stopped (#21): its LEDs show `leds.stale_idle`.
     var feedbackStale = false
+    /// An LED sweep (#26) owns the controller's LEDs.
+    var ledsHeld = false
     /// Each hot cue's color slot, 0 for an empty cue.
     var cues = [Int](repeating: 0, count: 8)
     /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
@@ -249,6 +254,19 @@ final class Bridge {
         led(note, on ? Self.full : idle)
     }
 
+    /// An LED write for the LED sweep (#26): straight to the controller, past the cache.
+    func sweepLED(_ note: Int, _ velocity: UInt8) {
+        guard let output else { return }
+        do { try output.send(.noteOn(channel: channel, note: UInt8(note), velocity: velocity)) } catch { outputFailed = true }
+    }
+
+    /// Clears the LED cache and repaints every LED from the current state, as after an LED sweep.
+    func repaintLEDs() {
+        ledCache.removeAll()
+        refreshLEDs()
+    }
+
+
     /// Turns the LEDs off (each lit one once, then nothing more) or back on (a full repaint).
     func setLEDsEnabled(_ enabled: Bool) {
         guard enabled != ledsEnabled else { return }
@@ -263,7 +281,8 @@ final class Bridge {
     }
 
     func led(_ note: Int, _ velocity: UInt8) {
-        guard ledsEnabled, ledCache[note] != velocity else { return }
+        // During an LED sweep (#26) the bridge's own writes wait; the sweep ends with a repaint.
+        guard !ledsHeld, ledsEnabled, ledCache[note] != velocity else { return }
         ledCache[note] = velocity
         guard let output else { return }
         do {
