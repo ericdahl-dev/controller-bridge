@@ -94,6 +94,8 @@ final class Bridge {
     var playing = false
     /// A quantized start is waiting for the beat.
     var playPending = false
+    /// When the last pulsed beat of Syndicate's master clock arrived, if any.
+    var lastPulseTime: Double?
     var loaded = false
     var synced = false
     var sliderEnabled = true
@@ -167,6 +169,8 @@ final class Bridge {
         let address = message.address.lowercased()
         // Cue colors are for every deck, so they come before the deck check.
         if address == (root + "ColorPalette").lowercased() { return colorPalette(message.arguments) }
+        // The master clock is one for all decks too.
+        if address == (root + "Header/Clock").lowercased() { return headerClock(message.arguments) }
         let deckPrefix = (root + "Deck/\(mapping.deck.number)/").lowercased()
         guard address.hasPrefix(deckPrefix) else { return }
         let key = address.dropFirst(deckPrefix.count)

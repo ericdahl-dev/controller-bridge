@@ -1,3 +1,4 @@
+import Foundation
 import LC6000Core
 import Testing
 
@@ -106,5 +107,54 @@ struct TimingTests {
 
         rig.coordinator.midi(.noteOff(channel: 0, note: 32, velocity: 0), source: Rig.lc6000.id)
         #expect([rig.leds[32], rig.leds[33]] == [2, 48])
+    }
+
+    /// A started controller whose mapping sets `leds.beat_pulse`, with a track loaded so the ring is lit.
+    final class PulseRig {
+        let midi = Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out])
+        let clock = Rig.FakeClock()
+        let coordinator: Coordinator
+
+        init(beatPulse: String) throws {
+            let override = Data(#"{ "leds": { "beat_pulse": "\#(beatPulse)" } }"#.utf8)
+            coordinator = Coordinator(
+                mapping: try Mapping.bundledDefault(overriddenBy: override),
+                midi: midi, osc: Rig.FakeOSC(), clock: clock, log: Rig.FakeLog()
+            )
+            coordinator.start()
+            coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        }
+
+        /// The ring LED (note 40) after a tick at `time`.
+        func ring(at time: Double) -> UInt8? {
+            clock.now = time
+            coordinator.tick()
+            var latest: UInt8?
+            for case let .noteOn(_, 40, velocity) in midi.outputs[Rig.lc6000Out.id]?.sent ?? [] { latest = velocity }
+            return latest
+        }
+
+        /// Syndicate's master clock: beat-in-bar 1-4 on every master beat, 1 is the downbeat.
+        func clockBeat(_ beat: Int32, at time: Double) {
+            clock.now = time
+            coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(beat)]))
+        }
+    }
+
+    // The ring color (0, 128, 255) is 0b00_10_11 = 11. Pulses last pulse_ms, 100 ms by default.
+
+    @Test("With beat pulse on, the ring is solid until a clock arrives, then lit for 100 ms after each beat")
+    func ringPulsesOnBeat() throws {
+        let rig = try PulseRig(beatPulse: "beat")
+        #expect(rig.ring(at: 9.0) == 11)
+
+        rig.clockBeat(2, at: 10.0)
+        #expect(rig.ring(at: 10.0) == 11)
+        #expect(rig.ring(at: 10.09) == 11)
+        #expect(rig.ring(at: 10.11) == 0)
+
+        rig.clockBeat(3, at: 10.5)
+        #expect(rig.ring(at: 10.5) == 11)
+        #expect(rig.ring(at: 10.61) == 0)
     }
 }

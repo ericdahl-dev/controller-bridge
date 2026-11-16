@@ -66,7 +66,7 @@ extension Bridge {
         let modes: [(String, PadMode)] = [("mode_hotcue", .hotCue), ("mode_roll", .roll), ("mode_loop", .loop), ("mode_slicer", .slicer)]
         for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
         for (note, velocity) in zip(mapping.notes.pads, padColors()) { led(note, velocity) }
-        led(mapping.leds.ring, loaded ? Self.velocity(mapping.leds.ringColor) : Self.off)
+        ringLED()
     }
 
     /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad in the roll color.
