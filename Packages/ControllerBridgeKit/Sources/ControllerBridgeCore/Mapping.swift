@@ -215,11 +215,11 @@ public struct Mapping: Equatable, Sendable, Codable {
         /// What Syndicate's LEDs show once feedback has stopped: dim, or off.
         public var staleIdle: StaleIdle
 
-        public enum BeatPulse: String, Equatable, Sendable, Codable {
+        public enum BeatPulse: String, Equatable, Sendable, Codable, CaseIterable {
             case off, beat, downbeat
         }
 
-        public enum StaleIdle: String, Equatable, Sendable, Codable {
+        public enum StaleIdle: String, Equatable, Sendable, Codable, CaseIterable {
             case dim, off
         }
 

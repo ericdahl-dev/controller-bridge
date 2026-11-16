@@ -46,4 +46,43 @@ struct MappingCheckTests {
     func numberForms() {
         #expect(Self.problems(#"{"deck": {"number": 2.0}, "pitch": {"dead_zone": 0}}"#) == [])
     }
+
+    @Test("Notes and CCs are 0–127, including pads, jog CCs and LED notes")
+    func midiRanges() {
+        #expect(Self.problems(#"{"notes": {"play": 128, "pads": [32, -1]}, "jog": {"ccs": [55, 200]}, "leds": {"ring": 300}}"#) == [
+            "notes.play: 128 is out of range, expected 0-127",
+            "notes.pads[1]: -1 is out of range, expected 0-127",
+            "jog.ccs[1]: 200 is out of range, expected 0-127",
+            "leds.ring: 300 is out of range, expected 0-127",
+        ])
+        #expect(Self.problems(#"{"pitch": {"msb_cc": 128}, "needle": {"touch_note": 999}, "browse": {"select_turn_cc": -5}}"#) == [
+            "pitch.msb_cc: 128 is out of range, expected 0-127",
+            "needle.touch_note: 999 is out of range, expected 0-127",
+            "browse.select_turn_cc: -5 is out of range, expected 0-127",
+        ])
+    }
+
+    @Test("Channel is 1–16 and deck 1–4")
+    func channelAndDeck() {
+        #expect(Self.problems(#"{"midi": {"channel": 0}, "deck": {"number": 5}}"#) == [
+            "midi.channel: 0 is out of range, expected 1-16",
+            "deck.number: 5 is out of range, expected 1-4",
+        ])
+    }
+
+    @Test("A color is exactly 3 values, each 0–255")
+    func colors() {
+        #expect(Self.problems(#"{"leds": {"ring_color": [0, 128], "roll_pad_color": [255, 256, 0]}}"#) == [
+            "leds.ring_color: expected 3 values, got 2",
+            "leds.roll_pad_color[1]: 256 is out of range, expected 0-255",
+        ])
+    }
+
+    @Test("A choice must be one of its values")
+    func choices() {
+        #expect(Self.problems(#"{"leds": {"beat_pulse": "bar", "stale_idle": "dark"}}"#) == [
+            "leds.beat_pulse: \"bar\" isn't one of off, beat, downbeat",
+            "leds.stale_idle: \"dark\" isn't one of dim, off",
+        ])
+    }
 }
