@@ -9,8 +9,8 @@ func relativeTicks(_ value: UInt8) -> Int {
 
 /// An LC6000 pad or ring color velocity for an 8-bit RGB color.
 ///
-/// PROVISIONAL (check with the LED sweep): the 64-entry color table, velocities 0x00-0x3F, is 2 bits per channel
-/// laid out 0b00RRGGBB. A dim color that rounds to black lights its brightest channel at the lowest level instead,
+/// The 64-entry color table, velocities 0x00-0x3F, is 2 bits per channel laid out 0b00RRGGBB, confirmed on a real
+/// LC6000 (2026-11-15, #12: 48 red, 12 green, 3 blue, 63 white). A dim color that rounds to black lights its brightest channel at the lowest level instead,
 /// so a cue is never dark by accident. Ties go to red, then green, as in the Python bridge.
 func rgbToVelocity(_ red: Int, _ green: Int, _ blue: Int) -> UInt8 {
     func level(_ channel: Int) -> Int { max(0, min(3, Int((Double(channel) / 255 * 3).rounded()))) }
