@@ -269,3 +269,26 @@ struct JogDisplayPipeTests {
         #expect(rig.log.lines.contains("The jog display refused the image (ack 06); it keeps what it showed"))
     }
 }
+
+/// Settings' "Show the deck on the jog display" (#165): off by default and in settings saved before it, and rebased
+/// like the other switches.
+@Suite("Jog display setting")
+struct JogDisplaySettingTests {
+    @Test("Off by default, and off in settings saved before it")
+    func offByDefault() throws {
+        let defaults = BridgeSettings.defaults(from: try Mapping.bundledDefault())
+        #expect(defaults.jogDisplay == false)
+        var saved = try JSONSerialization.jsonObject(with: JSONEncoder().encode(defaults)) as! [String: Any]
+        saved["jogDisplay"] = nil
+        let old = try JSONDecoder().decode(BridgeSettings.self, from: JSONSerialization.data(withJSONObject: saved))
+        #expect(old.jogDisplay == false)
+    }
+
+    @Test("A draft that turned it on keeps it on across a rebase")
+    func rebased() throws {
+        let base = BridgeSettings.defaults(from: try Mapping.bundledDefault())
+        var draft = base
+        draft.jogDisplay = true
+        #expect(BridgeSettings.rebased(draft: draft, base: base, onto: base).jogDisplay == true)
+    }
+}
