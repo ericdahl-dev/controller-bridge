@@ -46,4 +46,11 @@ struct ShiftLayerTests {
         let shifted = Self.steps(base: [], shifted: LC6000Traffic.shiftPlay, skipBase: true)[1]
         #expect(shifted.shift == nil)
     }
+
+    @Test("Shift let go before Play is still Shift: it's the note already down when the other control starts")
+    func shiftReleasedFirst() {
+        let shifted = Self.steps(base: LC6000Traffic.play, shifted: LC6000Traffic.shiftPlayEarlyRelease)[1]
+        #expect(shifted.controls.map(\.number) == [1])
+        #expect(shifted.shift == ShiftLayer(of: "deck1.play", channelOffset: 0, numberOffset: 0))
+    }
 }

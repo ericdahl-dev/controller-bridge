@@ -79,15 +79,17 @@ enum Inference {
         }
     }
 
-    /// The Shift button in a step repeated with Shift held: a note pressed before everything else and released after,
-    /// around at least one other control. Nil when there's no such note.
+    /// The Shift button in a step repeated with Shift held: the step's first message is a note-on, and that note is
+    /// still down when another control's first message arrives. When it's let go doesn't matter. Nil otherwise.
     static func heldAround(_ messages: [[UInt8]]) -> (channel: Int, number: Int)? {
         let voices = messages.compactMap(Voice.init)
-        guard let first = voices.first, let last = voices.last, first.kind == .noteOn, first.value > 0,
-            last.control == first.control, last.kind == .noteOff || (last.kind == .noteOn && last.value == 0),
-            voices.contains(where: { $0.control != first.control })
+        guard let first = voices.first, first.kind == .noteOn, first.value > 0,
+            let other = voices.firstIndex(where: { $0.control != first.control })
         else { return nil }
-        return (first.channel + 1, first.number)
+        let released = voices[..<other].contains {
+            $0.control == first.control && ($0.kind == .noteOff || ($0.kind == .noteOn && $0.value == 0))
+        }
+        return released ? nil : (first.channel + 1, first.number)
     }
 
     /// 14-bit pairs, MSB to LSB, on one channel. CC n and n+32 pair first (the MIDI convention), when both came about

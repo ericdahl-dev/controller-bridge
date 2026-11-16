@@ -25,6 +25,11 @@ enum LC6000Traffic {
         (0.0, [0x90, 26, 0x7F]), (0.3, [0x90, 0x01, 0x7F]), (0.4, [0x80, 0x01, 0x00]), (0.6, [0x80, 26, 0x00]),
     ]
 
+    /// The same, with Shift let go before Play.
+    static let shiftPlayEarlyRelease: Take = [
+        (0.0, [0x90, 26, 0x7F]), (0.3, [0x90, 0x01, 0x7F]), (0.4, [0x80, 26, 0x00]), (0.5, [0x80, 0x01, 0x00]),
+    ]
+
     /// The jog wheel's edge spun forward: a 14-bit position on CC 17 (MSB) and CC 49 (LSB), 8000 to 8200.
     static let jogSpin: Take = pairs(msb: 17, lsb: 49, values: Array(stride(from: 8000, through: 8200, by: 40)))
 
