@@ -147,4 +147,18 @@ struct RelativeJogCoordinatorTests {
         Self.turn(rig, 0x41)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
     }
+
+    @Test("The LC6000 is unchanged: CC 33 does nothing, and its 14-bit pair (17/49) still nudges by position")
+    func lc6000Unchanged() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        Self.playing(rig)
+        Self.turn(rig, 0x41)                                      // not a jog CC on the LC6000
+        for (msb, lsb) in [(UInt8(7), UInt8(104)), (7, 112)] {   // position 1000, then 1008: 8 counts forward
+            Self.turn(rig, cc: 17, msb)
+            Self.turn(rig, cc: 49, lsb)
+        }
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
+    }
 }
