@@ -66,6 +66,23 @@ struct DiagnosticsPresentationTests {
         #expect(lines.shown(.osc).count == 11)
     }
 
+    @Test("The search field shows only lines containing its text, any case; empty shows all; nothing is dropped (#218)")
+    func textFilter() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/2/TrackInfo \"Song\"")
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Mixer/CH1/Volume 1.0")
+        lines.append(to: .osc, message: "OSC -> /Syndicate/Deck/1/PlayPause 1")
+        lines.append(to: .monitor, message: "       1.500  ch1  note_on channel=0 note=1 velocity=127 time=0 ", label: "play")
+        lines.filter.text = "trackinfo"
+        #expect(lines.shown(.osc).map(\.message) == ["OSC <- /Syndicate/Deck/2/TrackInfo \"Song\""])
+        lines.filter.text = "MIXER"
+        #expect(lines.shown(.osc).map(\.message) == ["OSC <- /Syndicate/Mixer/CH1/Volume 1.0"])
+        lines.filter.text = "play"
+        #expect(lines.shown(.monitor).map(\.label) == ["play"], "the monitor's mapping label counts too")
+        lines.filter.text = ""
+        #expect(lines.shown(.osc).count == 3)
+    }
+
     @Test("Hidden streaming lines can't push the rest out: after 20,100 of them, the Playing line is still shown (#97)")
     func hiddenLinesDontEvict() {
         var lines = DiagnosticsLines()

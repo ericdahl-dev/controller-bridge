@@ -45,6 +45,22 @@ public struct SweepAvailability: Equatable, Sendable {
     }
 }
 
+/// How the window narrows a Diagnostics list (#218): by text for now. Display only.
+public struct DiagnosticsFilter: Equatable, Sendable {
+    /// Lines containing this, in any case; empty matches every line.
+    public var text = ""
+
+    public init(text: String = "") {
+        self.text = text
+    }
+
+    var isEmpty: Bool { text.isEmpty }
+
+    func matches(_ line: DiagnosticsLines.Line) -> Bool {
+        text.isEmpty || line.text.localizedCaseInsensitiveContains(text)
+    }
+}
+
 /// The three Diagnostics lists. Each keeps its newest lines only, so a long set doesn't grow without bound.
 /// Memory (#218): at most `limit` lines per list, plus `limit` streaming lines for the OSC log. A line is about 100 bytes
 /// of text plus its fields, so a full OSC log holds roughly 2 × 20,000 × ~150 B ≈ 6 MB, and the three tabs under 15 MB.
@@ -63,6 +79,8 @@ public struct DiagnosticsLines: Equatable, Sendable {
 
     /// Syndicate's streaming feedback (#218), many lines a second each while playing; hidden by default.
     public var hideStreaming = true
+    /// What the window narrows the lists to (#218). Display only: nothing is dropped from the history.
+    public var filter = DiagnosticsFilter()
     private var lists: [DiagnosticsTab: Ring] = [:]
     /// The OSC tab's streaming lines, kept apart so their flood can't push the other lines out (#97).
     private var streaming = Ring()
@@ -86,8 +104,14 @@ public struct DiagnosticsLines: Equatable, Sendable {
         if tab == .osc { streaming = Ring() }
     }
 
-    /// What a tab shows, oldest first.
+    /// What a tab shows, oldest first: its kept lines, through the streaming toggle and the filter.
     public func shown(_ tab: DiagnosticsTab) -> [Line] {
+        let kept = kept(tab)
+        return filter.isEmpty ? kept : kept.filter(filter.matches)
+    }
+
+    /// A tab's kept lines, with or without the streaming ones, oldest first.
+    private func kept(_ tab: DiagnosticsTab) -> [Line] {
         let list = lists[tab, default: Ring()].lines
         guard tab == .osc, !hideStreaming else { return list }
         // Both kept lists, back in arrival order, and still no more than the limit.
