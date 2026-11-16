@@ -44,12 +44,13 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 
 **Not possible:**
 - Scratching: Syndicate has no scratch or scrub OSC route.
-- The platter's center display: it needs SysEx that Denon doesn't document.
 - Slicer mode: it is unmapped.
+
+**Coming in v1.1:** the platter's center display showing the active deck (#165).
 
 ## Install
 
-Install **DeckBridge** from the Mac App Store (macOS 26 or later). It lives in the menu bar and has no Dock icon. On first launch it opens a short setup guide for Syndicate.
+DeckBridge is in public beta on TestFlight: join at **[testflight.apple.com/join/HWcpqqpz](https://testflight.apple.com/join/HWcpqqpz)**, then install it from the TestFlight app (macOS 26 or later). The Mac App Store release is coming. It lives in the menu bar and has no Dock icon. On first launch it opens a short setup guide for Syndicate.
 
 ## Set up Syndicate
 
