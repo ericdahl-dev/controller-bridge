@@ -4,7 +4,8 @@
 - robots.txt, sitemap.xml and llms.txt are at the root; the sitemap parses, and each URL in it
   is under https://getdeckbridge.app/ and is a page in the site; llms.txt starts with "# DeckBridge"
 - nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
-  and so are <link rel="canonical"> and <link rel="alternate">
+  and so are <link rel="canonical"> and <link rel="alternate">. The one exception is the PostHog loader script
+  (POSTHOG_LOADER), which website/analytics.js adds to count visits; the privacy page discloses it
 - every page has a title and a meta description
 - every <img> has an alt attribute (alt="" for a decorative one)
 - every <script type="application/ld+json"> block parses as JSON
@@ -27,6 +28,7 @@ PRIVACY = "privacy/index.html"
 PRIVACY_STATEMENT = "collects no data"
 OTHER_COMPANIES = ["Syndicate", "Denon"]
 MAX_BYTES = 2_000_000
+POSTHOG_LOADER = "https://us-assets.i.posthog.com/static/array.js"  # allowed only as a <script src>
 LINK_RELS = {"canonical", "alternate"}  # a <link> with only these rels points somewhere; any other rel loads it
 
 
@@ -45,7 +47,7 @@ class Page(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.title, self.h1, self.description = None, None, None
         self.text = []
-        self.refs = []  # (url, loaded): loaded is True for resources, False for links
+        self.refs = []  # (url, loaded): loaded is "script" for a <script src>, True for other resources, False for links
         self.no_alt = []  # src of every <img> without an alt attribute
         self.json_ld = []  # the text of each <script type="application/ld+json">
         self._in = None
@@ -68,7 +70,7 @@ class Page(HTMLParser):
         if tag == "img" and "alt" not in attrs:
             self.no_alt.append(attrs.get("src") or "")
         if attrs.get("src") is not None:
-            self.refs.append((attrs["src"], True))
+            self.refs.append((attrs["src"], "script" if tag == "script" else True))
 
     def handle_endtag(self, tag):
         if tag == self._in:
@@ -114,7 +116,7 @@ def check_refs(root, file, refs):
         if skip(url):
             continue
         if is_external(url):
-            if loaded:
+            if loaded and not (loaded == "script" and url == POSTHOG_LOADER):
                 out.append(f"{file}: loads {url} from another site")
         elif not resolves(root, file, url):
             out.append(f"{file}: link to {url} doesn't resolve")

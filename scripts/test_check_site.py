@@ -89,6 +89,18 @@ class CheckSiteTests(unittest.TestCase):
             "style.css: loads https://x.example/bg.png from another site",
         ])
 
+    def test_only_the_posthog_loader_may_load_from_another_site(self):
+        root = self.site({"index.html": GOOD["index.html"].replace(
+            "</head>", '<script async src="https://us-assets.i.posthog.com/static/array.js"></script>'
+                       '<script src="https://cdn.jsdelivr.net/npm/posthog-js/dist/array.js"></script>'
+                       '<script src="https://us-assets.i.posthog.com/static/recorder.js"></script>'
+                       '<img src="https://us-assets.i.posthog.com/static/array.js" alt=""></head>')})
+        self.assertEqual(check_site.problems(root), [
+            "index.html: loads https://cdn.jsdelivr.net/npm/posthog-js/dist/array.js from another site",
+            "index.html: loads https://us-assets.i.posthog.com/static/recorder.js from another site",
+            "index.html: loads https://us-assets.i.posthog.com/static/array.js from another site",
+        ])
+
     def test_canonical_and_alternate_links_are_links_not_loads(self):
         root = self.site({"index.html": GOOD["index.html"].replace(
             "</head>", '<link rel="canonical" href="https://getdeckbridge.app/">'
