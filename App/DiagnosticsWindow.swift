@@ -86,14 +86,16 @@ struct DiagnosticsWindow: View {
         HStack(spacing: Theme.Space.s) {
             HStack(spacing: 0) {
                 ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, item in
-                    TabButton(title: item.rawValue, selected: tab == item) { tab = item }
+                    Button(item.rawValue) { tab = item }
+                        .buttonStyle(FlatButtonStyle(selected: tab == item))
+                        .frame(width: 140)
                         .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }
             }
             .overlay(RoundedRectangle(cornerRadius: Theme.corner).strokeBorder(Theme.hairline, lineWidth: 1))
             Spacer(minLength: 0)
             Button("Clear log") { log.clear(tab) }
-                .buttonStyle(QuietButtonStyle())
+                .buttonStyle(LinkButtonStyle())
                 .keyboardShortcut("k", modifiers: .command)
                 .accessibilityLabel("Clear the \(tab.rawValue)")
         }
@@ -152,42 +154,6 @@ struct DiagnosticsWindow: View {
     /// Explanatory sentences: body text in sentence case, not captions.
     private func explain(_ text: String) -> some View {
         Text(text).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
-    }
-}
-
-/// One segment of the tab strip. Selected shows a bottom bar and bold text, not only a fill, and says so to VoiceOver.
-private struct TabButton: View {
-    let title: String
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(Theme.ui(Theme.Size.label, selected ? .bold : .regular))
-                .foregroundStyle(selected ? Theme.text : Theme.caption)
-                .padding(.horizontal, Theme.Space.l)
-                .frame(minHeight: 26)
-                .background(selected ? Theme.buttonRaised : Theme.button)
-                .overlay(alignment: .bottom) {
-                    if selected { Color(Palette.live).frame(height: 2) }
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-/// A small, quiet action: text only, so it never reads as a fourth tab.
-private struct QuietButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Theme.ui(Theme.Size.body, .semibold))
-            .foregroundStyle(configuration.isPressed ? Theme.text : Theme.caption)
-            .padding(.horizontal, Theme.Space.s)
-            .frame(minHeight: 22)
-            .contentShape(Rectangle())
     }
 }
 
