@@ -129,4 +129,21 @@ struct RecoveryTests {
         #expect(rig.coordinator.status.controllers.map(\.connected) == [false])
         #expect(rig.log.lines.last == "Disconnected DENON LC6000 PRIME (MIDI send failed)")
     }
+
+    @Test("A read error on the controller's input counts as an unplug; one on another device changes nothing")
+    func readErrorIsUnplug() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 7, velocity: 127), source: Rig.lc6000.id)   // Censor held
+        rig.osc.sent.removeAll()
+
+        rig.coordinator.inputFailed(source: Self.iac.id)
+        #expect(rig.osc.sent == [])
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+
+        rig.coordinator.inputFailed(source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Reverse", [.int(0)])])
+        #expect(rig.midi.connected == [])
+        #expect(rig.log.lines.last == "Disconnected DENON LC6000 PRIME (MIDI input failed)")
+    }
 }

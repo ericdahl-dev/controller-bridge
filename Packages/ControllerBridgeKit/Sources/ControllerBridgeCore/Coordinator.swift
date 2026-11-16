@@ -53,6 +53,13 @@ public final class Coordinator {
         disconnectFailedOutputs()
     }
 
+    /// Reading from a source failed, such as a reconnect that couldn't attach. Counts as that controller's unplug.
+    public func inputFailed(source: MIDIEndpoint.ID) {
+        for index in controllers.indices where controllers[index].source?.id == source {
+            disconnect(index, reason: "MIDI input failed")
+        }
+    }
+
     /// Releases everything the controller held, exactly once, and closes its ports.
     private func disconnect(_ index: Int, reason: String? = nil) {
         guard let source = controllers[index].source else { return }
