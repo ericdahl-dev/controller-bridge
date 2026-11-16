@@ -118,6 +118,19 @@ struct LivenessTests {
         #expect([rig.leds[1], rig.leds[2], rig.leds[22], rig.leds[26]] == [0, 0, 1, 1])
     }
 
+    @Test("A profile swap while stale keeps the stale look: with stale_idle \"off\", the new Play note stays off (#134)",
+          arguments: [("off", 0), ("dim", 1)] as [(String, UInt8)])
+    func swapWhileStale(staleIdle: String, play: UInt8) throws {
+        let rig = try StaleIdleRig(staleIdle: staleIdle)
+        rig.tick(at: 10.5)
+        rig.tick(at: 12.5)
+        var mapping = try Mapping.bundledDefault(overriddenBy: Data(#"{ "leds": { "stale_idle": "\#(staleIdle)" } }"#.utf8))
+        mapping.notes.buttons["play"] = 60
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: [mapping.midi.input], mapping: mapping)])
+        #expect(rig.coordinator.status.feedback == .stale)
+        #expect(rig.leds[60] == play)
+    }
+
     /// Live, then stale at t = 12.5 (probe at 10.5, no answer), with everything sent so far cleared.
     static func staleRig() throws -> Rig {
         let rig = try liveRig()

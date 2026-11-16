@@ -27,6 +27,8 @@ public final class OSCDestination: OSCSender {
         /// The host and port asked for last, kept for re-resolving.
         var target: (host: String, port: Int)?
         var reresolving = false
+        /// Counts connects (#135): only the latest may install its destination or report a failure.
+        var generation = 0
     }
 
     private let resolver: any HostResolver
@@ -65,34 +67,47 @@ public final class OSCDestination: OSCSender {
 
     /// Points the destination at `host`, an IPv4 address or a name resolved off the caller. Returns why it couldn't,
     /// with the old destination still in use; nil when the new one is open.
+    /// A connect that a newer one overtook changes nothing and returns nil: the newer one owns the destination (#135).
     public func connect(host: String, port: Int) async -> String? {
-        state.withLock { $0.target = (host, port) }
+        let generation = state.withLock { state -> Int in
+            state.target = (host, port)
+            state.generation += 1
+            return state.generation
+        }
         let address: String
         if BridgeSettings.isIPv4(host) {
             address = host
         } else {
-            guard let resolved = await lookUp(host) else { return failed("Can't find \(host) on the network") }
+            guard let resolved = await lookUp(host) else { return failed("Can't find \(host) on the network", generation) }
             address = resolved
         }
+        guard isLatest(generation) else { return nil }
         do {
             let sink = try open(address, port)
-            let ready = state.withLock { state -> (@Sendable () -> Void)? in
+            let ready = state.withLock { state -> (@Sendable () -> Void)?? in
+                guard state.generation == generation else { return .none }
                 state.sink = sink
                 state.address = "\(address):\(port)"
                 state.lastError = nil
-                return state.onReady
+                return .some(state.onReady)
             }
-            ready?()
+            if case .some(let callback) = ready { callback?() }
             return nil
         } catch {
-            return failed("Couldn't send OSC to \(address):\(port)")
+            return failed("Couldn't send OSC to \(address):\(port)", generation)
         }
     }
 
-    /// Records why a connect failed and returns it; the old destination, if any, stays.
-    private func failed(_ problem: String) -> String {
-        state.withLock { $0.lastError = problem }
-        return problem
+    private func isLatest(_ generation: Int) -> Bool { state.withLock { $0.generation == generation } }
+
+    /// Records why the latest connect failed and returns it; the old destination, if any, stays. An overtaken
+    /// connect's failure is nobody's business: nil.
+    private func failed(_ problem: String, _ generation: Int) -> String? {
+        state.withLock { state -> String? in
+            guard state.generation == generation else { return nil }
+            state.lastError = problem
+            return problem
+        }
     }
 
     /// Looks the current host up again and moves there (on failing sends, or after wake): a `.local` Mac can rejoin the

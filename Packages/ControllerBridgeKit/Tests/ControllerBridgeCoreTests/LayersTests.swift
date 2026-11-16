@@ -380,4 +380,39 @@ struct LayersTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, false, false, false])
     }
+
+    @Test("Swap to a flat profile and back: layer-following is on again, and ch1 Play after a switch to layer 2 goes to deck 2 (#133)")
+    func swapBackFollows() throws {
+        let rig = try Self.layered()
+        var flat = try Mapping.bundledDefault()
+        flat.midi.layers = []
+        flat.midi.layerNote = nil
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: flat)])
+        var layered = try Mapping.bundledDefault()
+        layered.osc.port = 9091   // a change, so the swap back happens
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: layered)])
+        #expect(rig.coordinator.status.controllers.map(\.followsLayers) == [true, true, true, true])
+        Self.switchLayer(rig, from: 1, to: 2)
+        Self.touch(rig, channel: 1)              // the unit's normal state: controls on ch1, whatever the layer
+        rig.osc.sent.removeAll()
+        Self.note(rig, channel: 1, 1, 127)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
+    }
+
+    @Test("An entry set not to follow layers stays not following through a swap to flat and back (#133)")
+    func swapBackKeepsOptOut() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        var entries = ControllerSettings.expanded([ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: Self.lc6000Layers)
+        entries[1].followLayers = false
+        rig.coordinator.setControllers(entries)
+        var flat = try Mapping.bundledDefault()
+        flat.midi.layers = []
+        flat.midi.layerNote = nil
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: flat)])
+        var layered = try Mapping.bundledDefault()
+        layered.osc.port = 9091
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: layered)])
+        #expect(rig.coordinator.status.controllers.map(\.followsLayers) == [true, false, true, true])
+    }
 }

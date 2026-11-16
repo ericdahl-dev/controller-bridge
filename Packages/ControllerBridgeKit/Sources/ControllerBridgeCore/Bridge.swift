@@ -175,8 +175,9 @@ final class Bridge {
         refreshLEDs()
     }
 
-    func start() {
-        feedbackStale = false
+    /// Paints from scratch. `stale` keeps the stale look, for a bridge that replaces one while feedback is stale (#134).
+    func start(stale: Bool = false) {
+        feedbackStale = stale
         rearmPickup()
         ledCache.removeAll()
         refreshLEDs()

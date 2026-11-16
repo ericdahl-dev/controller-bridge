@@ -231,6 +231,54 @@ struct SettingsTests {
         #expect(settings.fieldProblems == [])
     }
 
+    // #136: only a host change waits on the network; everything else applies at once, and nothing reverts anything.
+
+    @Test("A deck, LED or color change needs no connect, even while the sender isn't ready")
+    func deckChangeNeedsNoConnect() {
+        var new = Self.defaults
+        new.controllers[0].deck = 3
+        new.ledsEnabled = false
+        new.followSyndicateDeckColors = false
+        #expect(BridgeSettings.connection(to: new, from: Self.defaults, senderReady: true) == nil)
+        #expect(BridgeSettings.connection(to: new, from: Self.defaults, senderReady: false, retry: false) == nil)
+    }
+
+    @Test("A host or port change connects; so does Settings' Apply while the sender never opened (#109)")
+    func hostChangeConnects() {
+        var new = Self.defaults
+        new.syndicateHost = "studio.local"
+        #expect(BridgeSettings.connection(to: new, from: Self.defaults, senderReady: true)
+            == BridgeSettings.Connection(host: "studio.local", port: 9090))
+        new = Self.defaults
+        new.syndicatePort = 9191
+        #expect(BridgeSettings.connection(to: new, from: Self.defaults, senderReady: true)
+            == BridgeSettings.Connection(host: "127.0.0.1", port: 9191))
+        #expect(BridgeSettings.connection(to: Self.defaults, from: Self.defaults, senderReady: false)
+            == BridgeSettings.Connection(host: "127.0.0.1", port: 9090))
+    }
+
+    @Test("The immediate part is everything but the host and port")
+    func immediatePart() {
+        var new = Self.defaults
+        new.syndicateHost = "studio.local"
+        new.syndicatePort = 9191
+        new.controllers[0].deck = 2
+        let now = BridgeSettings.immediate(new, keeping: Self.defaults)
+        #expect(now.syndicateHost == "127.0.0.1")
+        #expect(now.syndicatePort == 9090)
+        #expect(now.controllers[0].deck == 2)
+    }
+
+    @Test("A host that opens after a deck click lands on the settings as they are then: the deck stays")
+    func connectedKeepsLaterChanges() {
+        var current = Self.defaults
+        current.controllers[0].deck = 4                 // clicked while the host was resolving
+        let after = current.connected(host: "studio.local", port: 9191)
+        #expect(after.controllers[0].deck == 4)
+        #expect(after.syndicateHost == "studio.local")
+        #expect(after.syndicatePort == 9191)
+    }
+
     @Test("A field the DJ also edited in Settings keeps the DJ's value")
     func editedFieldWins() {
         let base = Self.defaults

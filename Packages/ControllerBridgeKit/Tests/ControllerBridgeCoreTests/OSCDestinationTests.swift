@@ -203,4 +203,57 @@ struct OSCDestinationTests {
         rig.coordinator.resync()
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Feedback/Resend", [.int(1)])])
     }
+
+    // #135: of two connects in flight, the newer one wins, whichever finishes last.
+
+    @Test("A slow lookup that finishes after a newer connect changes nothing: sends go to the newer host, onReady fires once")
+    func lateLookupLoses() async throws {
+        let sinks = FakeSinks(), resolver = GatedResolver(), ready = Count()
+        let destination = OSCDestination(resolver: resolver, open: { try sinks.open($0, $1) }, clock: Rig.FakeClock(),
+                                         lookupTimeout: .seconds(30))
+        destination.onReady = { ready.value += 1 }
+        let slow = Task { await destination.connect(host: "old-studio.local", port: 9090) }
+        await resolver.waitForLookup()
+        #expect(await destination.connect(host: "192.168.1.20", port: 9090) == nil)
+        resolver.answer("10.0.0.9")
+        #expect(await slow.value == nil)                // superseded: nothing to report
+        destination.send(OSCMessage("/Syndicate/Feedback/Resend", [.int(1)]))
+        #expect(sinks.sink("192.168.1.20:9090")?.sent.count == 1)
+        #expect(sinks.sink("10.0.0.9:9090") == nil)    // never opened
+        #expect(ready.value == 1)
+    }
+
+    @Test("A slow lookup that fails after a newer connect opened doesn't set lastError")
+    func lateFailureLoses() async throws {
+        let sinks = FakeSinks(), resolver = GatedResolver()
+        sinks.refuse = ["10.0.0.9"]
+        let destination = OSCDestination(resolver: resolver, open: { try sinks.open($0, $1) }, clock: Rig.FakeClock(),
+                                         lookupTimeout: .seconds(30))
+        let slow = Task { await destination.connect(host: "old-studio.local", port: 9090) }
+        await resolver.waitForLookup()
+        #expect(await destination.connect(host: "192.168.1.20", port: 9090) == nil)
+        resolver.answer("10.0.0.9")
+        #expect(await slow.value == nil)
+        #expect(destination.lastError == nil)
+        #expect(destination.isReady)
+    }
+
+    @Test("A re-resolve started before an Apply doesn't undo it: sends go to the applied host")
+    func reresolveLosesToApply() async throws {
+        let sinks = FakeSinks(), resolver = GatedResolver()
+        let destination = OSCDestination(resolver: resolver, open: { try sinks.open($0, $1) }, clock: Rig.FakeClock(),
+                                         lookupTimeout: .seconds(30))
+        let first = Task { await destination.connect(host: "studio.local", port: 9090) }
+        await resolver.waitForLookup()
+        resolver.answer("10.0.0.5")
+        _ = await first.value
+        let again = Task { await destination.reresolve() }       // after a wake, say
+        await resolver.waitForLookup()
+        #expect(await destination.connect(host: "192.168.1.20", port: 9090) == nil)
+        resolver.answer("10.0.0.9")
+        await again.value
+        destination.send(OSCMessage("/Syndicate/Feedback/Resend", [.int(1)]))
+        #expect(sinks.sink("192.168.1.20:9090")?.sent.count == 1)
+        #expect(sinks.sink("10.0.0.9:9090") == nil)
+    }
 }
