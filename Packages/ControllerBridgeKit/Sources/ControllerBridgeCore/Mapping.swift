@@ -603,9 +603,9 @@ public struct Mapping: Equatable, Sendable, Codable {
     }
 
     /// A whole mapping body, through the full check (#24) first: every problem at once, or the decoded mapping.
-    static func checked(_ json: Data, schema: OrderedJSON? = nil) throws -> Mapping {
+    static func checked(_ json: Data, schema: OrderedJSON? = nil, whole: Bool = false) throws -> Mapping {
         let problems: [String]
-        do { problems = Self.problems(in: try OrderedJSON(parsing: json), schema: schema) } catch { problems = ["\(error)"] }
+        do { problems = Self.problems(in: try OrderedJSON(parsing: json), schema: schema, whole: whole) } catch { problems = ["\(error)"] }
         guard problems.isEmpty else { throw MappingError.invalid(problems) }
         do {
             return try JSONDecoder().decode(Mapping.self, from: json)

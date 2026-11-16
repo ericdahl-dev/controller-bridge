@@ -54,7 +54,8 @@ public struct ControllerProfile: Equatable, Sendable {
         name = header.name
         deviceHints = header.deviceHints
         excludeHints = header.excludeHints ?? []
-        mapping = try Mapping.checked(Self.mappingJSON(of: data))
+        // A whole profile: duplicates among its own keys only (#251).
+        mapping = try Mapping.checked(Self.mappingJSON(of: data), whole: true)
     }
 
     private struct Header: Decodable {

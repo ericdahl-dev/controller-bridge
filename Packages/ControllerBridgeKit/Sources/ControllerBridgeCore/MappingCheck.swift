@@ -3,21 +3,24 @@ import Foundation
 extension Mapping {
     /// Every problem in a mapping body (a whole mapping, or a partial one to merge over the default), named by key
     /// path, in document order (#24). The bundled default mapping is the schema. An empty list means it's usable.
-    public static func problems(in json: Data) -> [String] {
+    /// `whole`: the mapping of a whole profile file (#251), checked for duplicates against its own keys only, not merged
+    /// over the LC6000's, so a second controller doesn't collide with LC6000 buttons it doesn't have.
+    public static func problems(in json: Data, whole: Bool = false) -> [String] {
         do {
-            return problems(in: try OrderedJSON(parsing: json))
+            return problems(in: try OrderedJSON(parsing: json), whole: whole)
         } catch {
             return ["\(error)"]
         }
     }
 
     /// `schema` is the body of the profile being changed (#94); by default the bundled LC6000's.
-    static func problems(in document: OrderedJSON, schema given: OrderedJSON? = nil) -> [String] {
+    static func problems(in document: OrderedJSON, schema given: OrderedJSON? = nil, whole: Bool = false) -> [String] {
         guard let schema = given ?? (try? OrderedJSON(parsing: defaultJSON())) else { return ["The default mapping can't be read."] }
         if let problem = kindProblem(document, expected: schema) { return ["mapping: \(problem)"] }
         var out: [String] = []
         walk(document, schema: schema, path: "", into: &out)
-        out += duplicates(in: merge(schema, known(document, schema: schema)), written: Set(leafPaths(document)))
+        let checked = known(document, schema: schema)
+        out += duplicates(in: whole ? checked : merge(schema, checked), written: Set(leafPaths(document)))
         // Document order: by where the problem's path first appears in what the user wrote.
         let order = Dictionary(leafPaths(document).enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         return out.enumerated().sorted { a, b in
@@ -94,21 +97,47 @@ extension Mapping {
     /// A number used twice in one namespace, reported at the path the user wrote (the later one if they wrote both).
     private static func duplicates(in merged: OrderedJSON, written: Set<String>) -> [String] {
         let (notes, ccs) = uses(merged)
+        let (deck, pads) = channels(merged)
+        // A note can arrive on the pads' channels or the deck's (#251): two notes collide only where those meet.
+        let noteChannels = notes.map { (path: $0.0, n: $0.1, channels: $0.0.hasPrefix("notes.pads[") ? pads : deck) }
+        let anyChannel = ccs.map { (path: $0.0, n: $0.1, channels: deck) }
+        let layers = layerChannels(merged).map { (path: $0.0, n: $0.1, channels: Set([0.0])) }
         var out: [String] = []
-        for (kind, list) in [("note", notes), ("CC", ccs), ("channel", layerChannels(merged))] {
-            var firstUse: [Double: String] = [:]
-            var reported: [Double: [String]] = [:]
-            for (path, n) in list {
-                guard let other = firstUse[n] else { firstUse[n] = path; continue }
-                reported[n, default: [other]].append(path)
+        for (kind, list) in [("note", noteChannels), ("CC", anyChannel), ("channel", layers)] {
+            var groups: [(n: Double, channels: Set<Double>, paths: [String])] = []
+            for use in list {
+                if let index = groups.firstIndex(where: { $0.n == use.n && !$0.channels.isDisjoint(with: use.channels) }) {
+                    groups[index].paths.append(use.path)
+                    groups[index].channels.formUnion(use.channels)
+                } else {
+                    groups.append((use.n, use.channels, [use.path]))
+                }
             }
-            for (n, paths) in reported {
-                guard let at = paths.last(where: written.contains) else { continue }
-                let others = paths.filter { $0 != at }.joined(separator: " and ")
-                out.append("\(at): \(kind) \(Int(n)) is also \(others)")
+            for group in groups where group.paths.count > 1 {
+                guard let at = group.paths.last(where: written.contains) else { continue }
+                let others = group.paths.filter { $0 != at }.joined(separator: " and ")
+                out.append("\(at): \(kind) \(Int(group.n)) is also \(others)")
             }
         }
         return out
+    }
+
+    /// The channels the deck's buttons arrive on (midi.channel and every layer's) and the pads' (pads.channel, or each
+    /// layer's pad_channel, else the deck's) (#224, #251).
+    private static func channels(_ merged: OrderedJSON) -> (deck: Set<Double>, pads: Set<Double>) {
+        func number(_ value: OrderedJSON?) -> Double? { if case .number(let n, _)? = value { n } else { nil } }
+        var deck = Set([number(merged["midi"]?["channel"]) ?? 1])
+        var pads: Set<Double> = []
+        let padChannel = number(merged["pads"]?["channel"])
+        if case .array(let layers)? = merged["midi"]?["layers"], !layers.isEmpty {
+            for layer in layers {
+                guard let channel = number(layer["channel"]) else { continue }
+                deck.insert(channel)
+                pads.insert(number(layer["pad_channel"]) ?? padChannel ?? channel)
+            }
+        }
+        if pads.isEmpty { pads = padChannel.map { [$0] } ?? deck }
+        return (deck, pads)
     }
 
     /// Each layer's channel: two layers can't share one (#79).
