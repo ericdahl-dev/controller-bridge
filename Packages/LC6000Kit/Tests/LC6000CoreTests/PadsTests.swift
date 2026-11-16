@@ -138,4 +138,24 @@ struct PadsTests {
         Self.press(rig, Self.modeLoop)
         #expect(Self.modeLEDs(rig) == [1, 1, 1, 127])
     }
+
+    /// The eight pad LEDs, notes 32-39.
+    static func padLEDs(_ rig: Rig) -> [UInt8?] {
+        (UInt8(32)...39).map { rig.leds[$0] }
+    }
+
+    /// Syndicate's Cues feedback: a color slot and a name for each of the 8 hot cues (slot 0 is an empty cue).
+    static func cues(_ slots: [Int32], deck: Int = 1) -> OSCMessage {
+        OSCMessage("/Syndicate/Deck/\(deck)/Cues", slots.flatMap { [OSCArgument.int($0), .string($0 == 0 ? "" : "Cue")] })
+    }
+
+    @Test("Hot cue pads show their cue colors from Syndicate's default palette: red 48, orange 56, empty off")
+    func cueColorsDefaultPalette() throws {
+        let rig = try Self.startedRig()
+        #expect(Self.padLEDs(rig) == [0, 0, 0, 0, 0, 0, 0, 0])
+
+        // Slot 1 is red (255, 0, 0): 0b11_00_00 = 48. Slot 2 is orange (255, 128, 0): 0b11_10_00 = 56.
+        rig.coordinator.feedback(Self.cues([1, 0, 2, 0, 0, 0, 0, 0]))
+        #expect(Self.padLEDs(rig) == [48, 0, 56, 0, 0, 0, 0, 0])
+    }
 }

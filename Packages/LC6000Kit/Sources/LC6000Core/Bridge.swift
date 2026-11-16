@@ -73,6 +73,10 @@ final class Bridge {
     var synced = false
     var sliderEnabled = true
     var looping = false
+    /// Each hot cue's color slot, 0 for an empty cue.
+    var cues = [Int](repeating: 0, count: 8)
+    /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
+    var palette = Bridge.defaultPalette
 
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
@@ -141,6 +145,7 @@ final class Bridge {
         case "sync": synced = value
         case "temposliderenabled": sliderEnabled = value
         case "loop": looping = value
+        case "cues": cues = Self.cueSlots(message.arguments)
         default: return
         }
         refreshLEDs()

@@ -6,3 +6,12 @@ func relativeTicks(_ value: UInt8) -> Int {
     let value = Int(value & 0x7F)
     return value < 0x40 ? value : value - 0x80
 }
+
+/// An LC6000 pad or ring color velocity for an 8-bit RGB color.
+///
+/// PROVISIONAL (check with the LED sweep): the 64-entry color table, velocities 0x00-0x3F, is 2 bits per channel
+/// laid out 0b00RRGGBB.
+func rgbToVelocity(_ red: Int, _ green: Int, _ blue: Int) -> UInt8 {
+    func level(_ channel: Int) -> Int { max(0, min(3, Int((Double(channel) / 255 * 3).rounded()))) }
+    return UInt8(level(red) << 4 | level(green) << 2 | level(blue))
+}

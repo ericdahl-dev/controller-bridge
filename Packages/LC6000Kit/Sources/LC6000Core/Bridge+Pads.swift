@@ -6,6 +6,21 @@ enum PadMode {
 }
 
 extension Bridge {
+    /// Syndicate's default cue colors by slot.
+    static let defaultPalette: [Int: [Int]] = [
+        1: [255, 0, 0], 2: [255, 128, 0], 3: [255, 255, 0], 4: [0, 255, 0],
+        5: [0, 255, 255], 6: [0, 0, 255], 7: [128, 0, 255], 8: [255, 0, 255],
+    ]
+
+    /// The color slots from Cues feedback: a slot and a name per cue, 8 cues.
+    static func cueSlots(_ arguments: [OSCArgument]) -> [Int] {
+        let slots = stride(from: 0, to: arguments.count, by: 2).prefix(8).map { index -> Int in
+            if case .int(let slot) = arguments[index] { return Int(slot) }
+            return 0
+        }
+        return slots + Array(repeating: 0, count: 8 - slots.count)
+    }
+
     /// Slip roll sizes, pad 1 to pad 8.
     static let rollSizes = ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]
 
@@ -41,5 +56,14 @@ extension Bridge {
     func padLEDs() {
         let modes: [(String, PadMode)] = [("mode_hotcue", .hotCue), ("mode_roll", .roll), ("mode_loop", .loop), ("mode_slicer", .slicer)]
         for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
+        for (note, velocity) in zip(mapping.notes.pads, padColors()) { led(note, velocity) }
+    }
+
+    func padColors() -> [UInt8] {
+        cues.map { slot in
+            guard slot != 0 else { return Self.off }
+            let rgb = palette[slot] ?? [255, 255, 255]
+            return rgbToVelocity(rgb[0], rgb[1], rgb[2])
+        }
     }
 }
