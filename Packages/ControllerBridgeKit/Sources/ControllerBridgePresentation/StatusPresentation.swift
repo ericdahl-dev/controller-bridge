@@ -237,8 +237,10 @@ public struct StatusPresentation: Equatable, Sendable {
         let controller = Self.light(for: state.controller)
         blocks = ([BridgeState.ControllerEntry(controller: state.controller, deck: state.deck, lastEvent: state.lastEvent)] + state.others)
             .map { ControllerBlock(header: Self.header(for: $0.controller, lastEvent: $0.lastEvent), light: Self.light(for: $0.controller), deck: $0.deck) }
-        // A stopped bridge: the header names the bridge's problem, not the controller (#88).
-        header = state.stopped ? StatusHeader(title: "Bridge stopped", subtitle: state.stopReason.short) : blocks[0].header
+        // A stopped bridge: the header names the bridge's problem, not the controller (#88). The panel draws the
+        // first block's header, so it says it there too.
+        if state.stopped { blocks[0].header = StatusHeader(title: "Bridge stopped", subtitle: state.stopReason.short) }
+        header = blocks[0].header
         showsDemoToggle = !state.stopped
         let feedback: StatusLight = switch state.feedback {
         case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)

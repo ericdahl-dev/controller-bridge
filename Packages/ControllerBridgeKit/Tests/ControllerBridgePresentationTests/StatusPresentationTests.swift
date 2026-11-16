@@ -314,6 +314,8 @@ struct StatusPresentationTests {
             controller: .notConnected, feedback: .starting, deck: 1, stopped: true, stopReason: reason
         ))
         #expect(status.header == StatusHeader(title: "Bridge stopped", subtitle: subtitle))
+        // The panel draws each block's header, so the first block says it too.
+        #expect(status.blocks.first?.header == StatusHeader(title: "Bridge stopped", subtitle: subtitle))
     }
 
     @Test("The demo toggle is offered only while the bridge runs: stopped, there's nothing to switch it on with")

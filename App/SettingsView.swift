@@ -20,6 +20,8 @@ struct SettingsView: View {
     @State private var fieldProblems: [SettingsProblem] = []
     @State private var otherProblems: [String] = []
     @State private var saved = false
+    /// What Apply said about the save, such as needing a restart (#88).
+    @State private var savedNote: String?
     @State private var startAtLogin = LoginItem.isEnabled
     @State private var loginProblem: String?
     @State private var mappingProblems: [String] = []
@@ -123,7 +125,7 @@ struct SettingsView: View {
         let dirty = settings.wrappedValue != model.settings
         HStack(spacing: Theme.Space.m) {
             Button("Revert") { load() }.buttonStyle(FlatButtonStyle()).disabled(!dirty).opacity(dirty ? 1 : 0.4).frame(width: 110)
-            Text(saved && !dirty ? "Saved." : "Changes apply when you press Apply.")
+            Text(saved && !dirty ? (savedNote ?? "Saved.") : "Changes apply when you press Apply.")
                 .font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -321,7 +323,7 @@ struct SettingsView: View {
             return
         }
         do {
-            try model.apply(settings)
+            savedNote = try model.apply(settings)
             draft = model.settings
             base = model.settings
             fieldProblems = []
