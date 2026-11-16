@@ -36,6 +36,17 @@
 /* the statement moments */
 #next .db-big { font: var(--display-weight) clamp(64px, 12vw, 184px)/.92 var(--font-display); letter-spacing: var(--display-tracking-xl); margin: var(--s-5) 0 var(--s-6); max-width: 9ch; }
 .db-next { max-width: 46ch; color: var(--muted); }
+/* the coming feature's picture: the art made for the LC6000's round jog-wheel display (tools/lc6000-display, #165),
+   in a round jog frame. Below 1024 the statement's words fill half a screen (liquid-type is plain type on touch
+   screens), so the frame takes the rest instead of an empty ground; on a desktop the words hold the screen alone,
+   and on a short screen (under 720px) the words nearly fill it, so there is no room and no gap for it. */
+.db-jog { display: none; }
+@media (max-width: 1023px) and (min-height: 720px) {
+  .db-jog { display: flex; flex: 1 1 auto; align-items: center; justify-content: center; margin: var(--s-6) 0 0; }
+  .db-jog__ring { width: min(64vw, 280px, 100svh - 600px);  /* 600: the words above it and the section's padding */ aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
+    background: #0d0d0d; box-shadow: 0 0 0 10px #262626, 0 0 0 11px rgb(255 255 255 / .12), 0 30px 70px -30px rgb(0 0 0 / .8); }
+  .db-jog__ring img { width: 74%; height: auto; border-radius: 22%; }
+}
 
 /* the phone: the pill keeps its first fact; the closing name is set to fit 342px */
 @media (max-width: 639px) { .pill__more { display: none; } .close__word { font-size: 15.5vw; } }
