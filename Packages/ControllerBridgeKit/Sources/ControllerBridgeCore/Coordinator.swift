@@ -86,6 +86,8 @@ public final class Coordinator {
         /// One of the deck layers of a controller that follows its own layers (#79): it shares the unit with the
         /// other layers, on its own channel.
         var followsLayers = false
+        /// The entry's own setting (#133): it follows layers whenever its profile has them.
+        var wantsLayers = false
         /// The destination its LEDs go to, once open.
         var destination: MIDIEndpoint?
     }
@@ -505,8 +507,8 @@ public final class Coordinator {
         }
         status.controllers[index].deck = entry.deck
         controllers[index].channel = entry.channel
-        controllers[index].followsLayers = entry.followLayers == true
-        status.controllers[index].followsLayers = controllers[index].followsLayers
+        controllers[index].wantsLayers = entry.followLayers == true
+        deriveFollowing(index)
         controllers[index].chosenInput = entry.input?.id
         controllers[index].chosenOutput = entry.output?.id
         controllers[index].knownSourceID = entry.input?.id
@@ -521,16 +523,16 @@ public final class Coordinator {
         status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
         var controller = Controller(bridge: makeBridge( first.mapping), profile: first)
         controller.channel = entry.channel
-        controller.followsLayers = entry.followLayers == true
+        controller.wantsLayers = entry.followLayers == true
         controllers.append(controller)
-        status.controllers[index].followsLayers = controller.followsLayers
+        deriveFollowing(index)
         controllers[index].bridge = makeBridge(first, for: index)
         setDevices(input: entry.input, output: entry.output, controller: index)
     }
 
     private func update(_ index: Int, to entry: ControllerSettings) {
-        controllers[index].followsLayers = entry.followLayers == true
-        status.controllers[index].followsLayers = controllers[index].followsLayers
+        controllers[index].wantsLayers = entry.followLayers == true
+        deriveFollowing(index)
         setDeck(entry.deck, controller: index)
         if entry.channel != controllers[index].channel {
             controllers[index].channel = entry.channel
@@ -585,6 +587,15 @@ public final class Coordinator {
         disconnectFailedOutputs()
     }
 
+    /// Follows layers when the entry asks to and its profile has them (#133). A profile without layers can't be
+    /// followed: the entry falls back to its own deck, with no layer active (#115).
+    private func deriveFollowing(_ index: Int) {
+        let follows = controllers[index].wantsLayers && !controllers[index].profile.mapping.midi.layers.isEmpty
+        controllers[index].followsLayers = follows
+        status.controllers[index].followsLayers = follows
+        if !follows { status.controllers[index].activeLayer = false }
+    }
+
     /// One controller's part of `setProfiles`: returns whether it is connected and now runs a changed profile.
     /// Its own function, as Xcode 26.6's optimizer crashed on loops that mutate `controllers` inline (#65).
     private func swapProfile(_ index: Int, from newProfiles: [ControllerProfile]) -> Bool {
@@ -592,23 +603,19 @@ public final class Coordinator {
               updated != controllers[index].profile else { return false }
         let old = controllers[index].bridge
         old.releaseAll()
-        // A profile without layers can't be followed: each entry falls back to its own deck, with no layer active (#115).
-        if updated.mapping.midi.layers.isEmpty, controllers[index].followsLayers {
-            controllers[index].followsLayers = false
-            status.controllers[index].followsLayers = false
-            status.controllers[index].activeLayer = false
-        }
+        let wasFollowing = controllers[index].followsLayers
+        controllers[index].profile = updated
+        deriveFollowing(index)
         let bridge = makeBridge(updated, for: index)
         bridge.output = old.output
         bridge.carrySyndicateState(from: old)
         bridge.carryOwnState(from: old)
         // The active layer's LEDs keep going where the unit's controls come from (#79).
-        if controllers[index].followsLayers { bridge.ledChannel = old.ledChannel }
+        if wasFollowing, controllers[index].followsLayers { bridge.ledChannel = old.ledChannel }
         controllers[index].bridge = bridge
-        controllers[index].profile = updated
         guard controllers[index].source != nil else { return false }
         status.controllers[index].profile = updated.name
-        bridge.start()
+        bridge.start(stale: old.feedbackStale)
         return true
     }
 
@@ -619,7 +626,6 @@ public final class Coordinator {
         requestResend()
     }
 
-    /// Settings (#19): the LEDs switch, for every controller.
     /// Settings' deck colors (#123): the ring repaints, and the status carries them to the badges.
     public func setDeckColors(followSyndicate: Bool, custom: DeckColors) {
         followSyndicateDeckColors = followSyndicate
@@ -628,6 +634,7 @@ public final class Coordinator {
         disconnectFailedOutputs()
     }
 
+    /// Settings (#19): the LEDs switch, for every controller.
     public func setLEDs(enabled: Bool) {
         ledsEnabled = enabled
         for bridge in bridges { bridge.setLEDsEnabled(enabled) }
