@@ -46,8 +46,10 @@ public struct SweepAvailability: Equatable, Sendable {
 }
 
 /// The three Diagnostics lists. Each keeps its newest lines only, so a long set doesn't grow without bound.
+/// Memory (#218): at most `limit` lines per list, plus `limit` streaming lines for the OSC log. A line is about 100 bytes
+/// of text plus its fields, so a full OSC log holds roughly 2 × 20,000 × ~150 B ≈ 6 MB, and the three tabs under 15 MB.
 public struct DiagnosticsLines: Equatable, Sendable {
-    public static let limit = 500
+    public static let limit = 20_000
 
     /// One line: the message, and for the monitor its mapping label, which the window colors when it's UNMAPPED.
     public struct Line: Identifiable, Equatable, Sendable {
@@ -61,9 +63,9 @@ public struct DiagnosticsLines: Equatable, Sendable {
 
     /// Progress and Time feedback arrive many times a second while playing; hidden by default.
     public var hideProgressAndTime = true
-    private var lists: [DiagnosticsTab: [Line]] = [:]
+    private var lists: [DiagnosticsTab: Ring] = [:]
     /// The OSC tab's Progress and Time lines, kept apart so their flood can't push the other lines out (#97).
-    private var progressAndTime: [Line] = []
+    private var progressAndTime = Ring()
     private var nextID = 0
 
     public init() {}
@@ -73,27 +75,56 @@ public struct DiagnosticsLines: Equatable, Sendable {
         let line = Line(id: nextID, message: message, label: label, isUnmapped: isUnmapped)
         if tab == .osc, Self.isProgressOrTime(line.text) {
             progressAndTime.append(line)
-            if progressAndTime.count > Self.limit { progressAndTime.removeFirst(progressAndTime.count - Self.limit) }
             return
         }
-        var list = lists[tab, default: []]
-        list.append(line)
-        if list.count > Self.limit { list.removeFirst(list.count - Self.limit) }
-        lists[tab] = list
+        lists[tab, default: Ring()].append(line)
     }
 
     /// Empties one tab's list; the others stay.
     public mutating func clear(_ tab: DiagnosticsTab) {
-        lists[tab] = []
-        if tab == .osc { progressAndTime = [] }
+        lists[tab] = Ring()
+        if tab == .osc { progressAndTime = Ring() }
     }
 
     /// What a tab shows, oldest first.
     public func shown(_ tab: DiagnosticsTab) -> [Line] {
-        let list = lists[tab, default: []]
+        let list = lists[tab, default: Ring()].lines
         guard tab == .osc, !hideProgressAndTime else { return list }
         // Both kept lists, back in arrival order, and still no more than the limit.
-        return Array((list + progressAndTime).sorted { $0.id < $1.id }.suffix(Self.limit))
+        return Array(Self.merged(list, progressAndTime.lines).suffix(Self.limit))
+    }
+
+    /// Two lists already in arrival order, merged into one in arrival order, in one pass.
+    private static func merged(_ a: [Line], _ b: [Line]) -> [Line] {
+        var out: [Line] = []
+        out.reserveCapacity(a.count + b.count)
+        var i = 0, j = 0
+        while i < a.count, j < b.count {
+            if a[i].id < b[j].id { out.append(a[i]); i += 1 } else { out.append(b[j]); j += 1 }
+        }
+        out += a[i...]
+        out += b[j...]
+        return out
+    }
+
+    /// The newest `limit` lines in a fixed array, overwriting the oldest: appending costs the same at 20,000 as at 1.
+    struct Ring: Equatable, Sendable {
+        private var storage: [Line] = []
+        private var start = 0
+
+        mutating func append(_ line: Line) {
+            if storage.count < DiagnosticsLines.limit {
+                storage.append(line)
+            } else {
+                storage[start] = line
+                start = (start + 1) % storage.count
+            }
+        }
+
+        /// Oldest first.
+        var lines: [Line] { start == 0 ? storage : Array(storage[start...] + storage[..<start]) }
+
+        static func == (a: Ring, b: Ring) -> Bool { a.lines == b.lines }
     }
 
     /// What a tab shows, as plain text to copy or save (#162): one line each, ending in a newline. UNMAPPED keeps its

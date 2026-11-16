@@ -30,13 +30,14 @@ struct DiagnosticsPresentationTests {
         #expect(lines.shown(.sweep).count == 1)
     }
 
-    @Test("Each list keeps its newest 500 lines")
+    @Test("Each list keeps its newest 20,000 lines (#218): about a minute of busy feedback, not one second")
     func limit() {
         var lines = DiagnosticsLines()
-        for n in 1...501 { lines.append(to: .osc, message: "OSC -> /Syndicate/Browser/Down \(n)") }
+        for n in 1...20_001 { lines.append(to: .osc, message: "OSC -> /Syndicate/Browser/Down \(n)") }
         let shown = lines.shown(.osc)
-        #expect(shown.count == 500)
+        #expect(shown.count == 20_000)
         #expect(shown.first?.message == "OSC -> /Syndicate/Browser/Down 2")
+        #expect(shown.last?.message == "OSC -> /Syndicate/Browser/Down 20001")
     }
 
     @Test("Progress and Time feedback are hidden by default, and shown when the box is unticked")
@@ -50,20 +51,20 @@ struct DiagnosticsPresentationTests {
         #expect(lines.shown(.osc).count == 3)
     }
 
-    @Test("Hidden Progress and Time lines can't push the rest out: after 600 of them, the Playing line is still shown (#97)")
+    @Test("Hidden Progress and Time lines can't push the rest out: after 20,100 of them, the Playing line is still shown (#97)")
     func hiddenLinesDontEvict() {
         var lines = DiagnosticsLines()
         lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 1")
-        for n in 1...600 { lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Progress 0.\(n)") }
+        for n in 1...20_100 { lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Progress 0.\(n)") }
         #expect(lines.shown(.osc).map(\.message) == ["OSC <- /Syndicate/Deck/1/Playing 1"])
 
-        // Unticking the box shows everything in arrival order, newest 500: 501 lines in, so the oldest (Playing) and the
-        // first 100 Progress lines are past the limit; Progress 0.101 through 0.600 remain.
+        // Unticking the box shows everything in arrival order, newest 20,000: the Progress list kept its newest 20,000
+        // (0.101 to 0.20100), and with Playing that is 20,001 lines, so the oldest of them (Playing) is past the limit.
         lines.hideProgressAndTime = false
         let all = lines.shown(.osc)
-        #expect(all.count == 500)
+        #expect(all.count == 20_000)
         #expect(all.first?.message == "OSC <- /Syndicate/Deck/1/Progress 0.101")
-        #expect(all.last?.message == "OSC <- /Syndicate/Deck/1/Progress 0.600")
+        #expect(all.last?.message == "OSC <- /Syndicate/Deck/1/Progress 0.20100")
     }
 
     @Test("The monitor says which notes it hides, so a quiet port doesn't look dead; with none hidden it says nothing")
