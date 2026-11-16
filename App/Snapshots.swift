@@ -163,7 +163,8 @@ enum Snapshots {
 
     private static func write(_ view: some View, to path: String) {
         let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark))
-        renderer.scale = 2
+        // 2 by default; SNAPSHOT_SCALE=4 renders big enough for Mac App Store screenshots (#29).
+        renderer.scale = Double(ProcessInfo.processInfo.environment["SNAPSHOT_SCALE"] ?? "") ?? 2
         guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
             print("Couldn't render \(path)"); return
