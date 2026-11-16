@@ -5,11 +5,12 @@ import Testing
 /// sit in a quiet gray list, unless no controller is connected: then the first one is probably the user's controller.
 @Suite("Other MIDI devices")
 struct OtherDevicesTests {
+    // Natural case, so VoiceOver reads words rather than letters; the view shows it uppercase (#67).
     @Test("With a controller connected, unmatched devices are one quiet gray list, with no orange")
     func quietListWhileConnected() {
         let devices = OtherDevices(unmatched: ["IAC Bus 1", "DDJ-FLX4"], controllerConnected: true)
         #expect(devices.highlighted == nil)
-        #expect(devices.summary == "OTHER MIDI DEVICES (2)")
+        #expect(devices.summary == "Other MIDI devices (2)")
         #expect(devices.rows == ["IAC Bus 1 · no profile", "DDJ-FLX4 · no profile"])
     }
 
@@ -17,7 +18,7 @@ struct OtherDevicesTests {
     func firstIsHighlightedWithoutAController() {
         let devices = OtherDevices(unmatched: ["DDJ-FLX4", "IAC Bus 1"], controllerConnected: false)
         #expect(devices.highlighted == StatusLight(label: "DDJ-FLX4", word: "NO PROFILE", tone: .attention))
-        #expect(devices.summary == "OTHER MIDI DEVICES (1)")
+        #expect(devices.summary == "Other MIDI devices (1)")
         #expect(devices.rows == ["IAC Bus 1 · no profile"])
     }
 

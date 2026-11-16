@@ -157,7 +157,7 @@ struct SettingsView: View {
 
     private func section(_ caption: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(caption.uppercased()).font(Theme.captionFont).foregroundStyle(Theme.caption)
+            Text(caption).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
             content()
         }
     }
