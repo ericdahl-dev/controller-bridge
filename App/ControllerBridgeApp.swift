@@ -25,14 +25,32 @@ struct ControllerBridgeApp: App {
         MenuBarExtra {
             StatusPanel(status: model.status)
         } label: {
-            let presentation = model.status.presentation
-            Image(nsImage: MenuBarIcon.image(presentation.icon))
-                .accessibilityLabel(MenuBarIcon.accessibilityLabel(presentation))
+            MenuBarLabel(status: model.status)
         }
         .menuBarExtraStyle(.window)
+
+        // The first-run guide (#27): opens itself on first launch, and from the panel's "Setup guide…".
+        Window("Set up Syndicate", id: SetupGuideWindow.id) {
+            SetupGuideView(guide: model.status.setupGuide)
+        }
+        .windowResizability(.contentSize)
+        .defaultLaunchBehavior(.suppressed)
 
         Settings {
             SettingsView(model: model)
         }
+    }
+}
+
+/// The menu-bar icon. It exists from launch, so it also opens the setup guide the first time (#27).
+struct MenuBarLabel: View {
+    let status: BridgeStatus
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        let presentation = status.presentation
+        Image(nsImage: MenuBarIcon.image(presentation.icon))
+            .accessibilityLabel(MenuBarIcon.accessibilityLabel(presentation))
+            .task { SetupGuideWindow.openIfNew(openWindow) }
     }
 }

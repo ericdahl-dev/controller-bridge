@@ -48,7 +48,7 @@ python3 -m venv .venv
 
 1. **Settings → OSC:** turn **OSC INPUT ENABLED** on. The listen port defaults to 9090.
 2. **Settings → OSC FEEDBACK:** set DEST IP to the bridge's computer (`127.0.0.1` if it's the same one) and PORT to `9096`. Tick these subscriptions: Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.
-3. **Settings → MIDI:** leave the LC6000 input **off**. Otherwise Syndicate's own mapping and the bridge would both react to every button.
+3. **Settings → MIDI:** turn your controller's MIDI input **off** (for example, Denon LC6000 PRIME). Otherwise Syndicate's own mapping and the bridge would both react to every button.
 
 ## Run
 
