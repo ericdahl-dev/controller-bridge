@@ -12,6 +12,9 @@ struct SettingsView: View {
     #if DEBUG
     /// Snapshots only: one pane, without the TabView, whose toolbar a hosting view can't draw (#171).
     var snapshotTab: SettingsTab?
+    /// Snapshots only: the window height to fit in, and whether a scrolling pane shows its end (#177).
+    var snapshotRoom: Double?
+    var snapshotScrollsToEnd = false
     #endif
 
     @Environment(\.openWindow) private var openWindow
@@ -35,12 +38,18 @@ struct SettingsView: View {
     /// The tab on show (#171). The draft lives here, above the tabs, so switching tabs never loses an edit.
     @State private var tab: SettingsTab = .controller
     @FocusState private var focused: SettingsField?
+    /// Each pane's full height and the footer's, measured, so a tall pane can scroll (#177).
+    @State private var paneHeights: [SettingsTab: CGFloat] = [:]
+    @State private var footerHeight: CGFloat = 0
 
     #if DEBUG
     /// Snapshots only: a refused Apply's field problems, shown without pressing Apply.
-    init(model: BridgeModel, snapshotTab: SettingsTab? = nil, problems: [SettingsProblem] = []) {
+    init(model: BridgeModel, snapshotTab: SettingsTab? = nil, problems: [SettingsProblem] = [],
+         room: Double? = nil, scrolledToEnd: Bool = false) {
         self.model = model
         self.snapshotTab = snapshotTab
+        snapshotRoom = room
+        snapshotScrollsToEnd = scrolledToEnd
         _fieldProblems = State(initialValue: problems)
     }
     #endif
@@ -88,17 +97,51 @@ struct SettingsView: View {
     }
 
     private func page(_ tab: SettingsTab, _ settings: Binding<BridgeSettings>) -> some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: Theme.Step.x4) { pane(tab, settings) }
-                .padding(Theme.Step.x4)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        let fit = SettingsPaneFit(content: Double(paneHeights[tab] ?? 0), room: room)
+        return VStack(spacing: 0) {
+            scrollingPane(tab, settings, fit: fit)
+                .frame(height: paneHeights[tab] == nil ? nil : CGFloat(fit.height), alignment: .bottom)
+                .clipped()
             footer(settings)
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { footerHeight = $0 }
         }
         .frame(width: 440)
         .background(Theme.panel)
         // ⌘1–4 pick the tabs; a Settings TabView doesn't add them itself.
         .background { shortcuts }
     }
+
+    /// A pane taller than the screen allows scrolls; the footer stays pinned under it (#177).
+    @ViewBuilder
+    private func scrollingPane(_ tab: SettingsTab, _ settings: Binding<BridgeSettings>, fit: SettingsPaneFit) -> some View {
+        let content = VStack(alignment: .leading, spacing: Theme.Step.x4) { pane(tab, settings) }
+            .padding(Theme.Step.x4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { paneHeights[tab] = $0 }
+        #if DEBUG
+        // Snapshots only: the pane at its end, bottom-aligned in its clipped frame (a hosting view can't scroll).
+        if snapshotScrollsToEnd {
+            content.fixedSize(horizontal: false, vertical: true)
+        } else {
+            ScrollView(.vertical) { content }.scrollDisabled(!fit.scrolls).scrollIndicators(fit.scrolls ? .automatic : .hidden)
+        }
+        #else
+        ScrollView(.vertical) { content }.scrollDisabled(!fit.scrolls).scrollIndicators(fit.scrolls ? .automatic : .hidden)
+        #endif
+    }
+
+    /// The height a pane may take: the screen's visible height less the title bar and toolbar, and the footer.
+    private var room: Double {
+        #if DEBUG
+        // A snapshot renders each pane whole unless it's given a window height.
+        if snapshotTab != nil { return (snapshotRoom ?? .infinity) - Double(footerHeight) }
+        #endif
+        let screen = NSScreen.main?.visibleFrame.height ?? 800
+        return Double(screen) - Self.windowChrome - Double(footerHeight)
+    }
+
+    /// The Settings window's title bar and toolbar of tabs, about 80 pt, plus a margin.
+    private static let windowChrome = 100.0
 
     @ViewBuilder
     private func pane(_ tab: SettingsTab, _ settings: Binding<BridgeSettings>) -> some View {
