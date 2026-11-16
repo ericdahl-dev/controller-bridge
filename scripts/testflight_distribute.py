@@ -175,6 +175,16 @@ def submit_for_review(http, app, build):
     raise DistributeError(f"Couldn't submit for Beta App Review: {status} {text}")
 
 
+def dry_run(http):
+    """Reads everything, changes nothing: each change is printed instead of sent."""
+    def wrapped(method, path, body=None, query=None):
+        if method == "GET":
+            return http(method, path, body, query)
+        print(f"dry run: would {method} {path}")
+        return (201 if method == "POST" else 200), {"data": {"id": "dry-run"}}
+    return wrapped
+
+
 def run(http, bundle_id, version, build_number, doc_path, sleep):
     """The whole distribution. Internal testers get the build even when the external half can't go on (missing Test
     Information): that half is reported as failed and the run exits non-zero. Returns the exit code."""
@@ -219,11 +229,12 @@ def api_http(method, path, body=None, query=None):
 
 
 def main():
-    """Environment: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH, BUNDLE_ID, VERSION, BUILD_NUMBER, and WHAT_TO_TEST
-    (default docs/TESTFLIGHT.md)."""
+    """Environment: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH, BUNDLE_ID, VERSION, BUILD_NUMBER, WHAT_TO_TEST
+    (default docs/TESTFLIGHT.md), and DRY_RUN=1 to read everything and change nothing."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     doc = os.environ.get("WHAT_TO_TEST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "TESTFLIGHT.md"))
-    return run(api_http, os.environ["BUNDLE_ID"], os.environ["VERSION"], os.environ["BUILD_NUMBER"], doc, time.sleep)
+    http = dry_run(api_http) if os.environ.get("DRY_RUN") in ("1", "true") else api_http
+    return run(http, os.environ["BUNDLE_ID"], os.environ["VERSION"], os.environ["BUILD_NUMBER"], doc, time.sleep)
 
 
 if __name__ == "__main__":

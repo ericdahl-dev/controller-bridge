@@ -19,6 +19,10 @@ on:
       build:
         description: Its build number, run.attempt, such as 2.1
         required: true
+      dry_run:
+        description: Read everything and change nothing (prints what it would do)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -230,6 +234,7 @@ jobs:
       BUNDLE_ID: dev.ericdahl.ControllerBridge
       VERSION: ${{ inputs.version || needs.testflight.outputs.version }}
       BUILD_NUMBER: ${{ inputs.build || needs.testflight.outputs.build }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
     steps:
       - name: Check the version and build number
         run: |

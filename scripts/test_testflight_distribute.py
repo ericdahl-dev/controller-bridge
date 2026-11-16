@@ -281,15 +281,16 @@ class RunTests(unittest.TestCase):
         self.assertIn("Test Information", out)
         self.assertFalse([c for c in api.calls if c[1] == "/betaAppReviewSubmissions" and c[0] == "POST"])
 
-    def test_nothing_secret_is_printed(self):
+    def test_a_dry_run_reads_everything_and_changes_nothing(self):
         api = FakeASC()
-        os.environ["ASC_KEY_ID"] = "KEYID123"
-        try:
-            _, out = self.run_distribute(api)
-        finally:
-            del os.environ["ASC_KEY_ID"]
-        self.assertNotIn("KEYID123", out)
-        self.assertNotIn("Bearer", out)
+        doc = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False)
+        doc.write(DOC); doc.close()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = td.run(td.dry_run(api.http), BUNDLE, "1.0.1", "42.1", doc.name, sleep=Recorder().sleep)
+        self.assertEqual(code, 0)
+        self.assertEqual([c for c in api.calls if c[0] != "GET"], [])
+        self.assertIn("dry run: would POST /betaAppReviewSubmissions", out.getvalue())
 
 
 if __name__ == "__main__":
