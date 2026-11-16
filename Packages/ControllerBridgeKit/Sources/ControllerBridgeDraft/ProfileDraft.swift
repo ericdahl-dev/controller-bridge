@@ -1,4 +1,5 @@
 import ControllerBridgeCapture
+import ControllerBridgeCore
 import Foundation
 
 /// A draft controller profile from a capture (#189): what the capture shows, set; what it doesn't, listed as a TODO
@@ -8,6 +9,23 @@ public struct ProfileDraft: Sendable {
     public var profile: DraftJSON
     /// Keys the draft leaves out, each with how to find its value.
     public var todos: [Todo]
+    /// Keys the docs filled, with their source.
+    public var fromDocs: [FromDocs] = []
+    /// Where the capture and the docs disagree. The capture's value is kept.
+    public var conflicts: [Conflict] = []
+
+    public struct FromDocs: Equatable, Sendable {
+        public var key: String
+        public var value: DraftJSON
+        public var source: String?
+    }
+
+    public struct Conflict: Equatable, Sendable {
+        public var key: String
+        public var capture: DraftJSON
+        public var docs: DraftJSON
+        public var source: String?
+    }
 
     public struct Todo: Equatable, Sendable {
         /// The key path in the profile ("mapping.notes.play").
@@ -15,7 +33,7 @@ public struct ProfileDraft: Sendable {
         public var how: String
     }
 
-    public static func make(capture: CaptureFile) -> ProfileDraft {
+    public static func make(capture: CaptureFile, docs: DocsFacts = DocsFacts()) -> ProfileDraft {
         var draft = ProfileDraft(profile: .object([]), todos: [])
         draft.identity(capture)
         draft.buttons(capture)
@@ -27,6 +45,8 @@ public struct ProfileDraft: Sendable {
         draft.needle(capture)
         draft.browse(capture)
         draft.shifted(capture)
+        draft.merge(docs)
+        draft.unknowns()
         return draft
     }
 
@@ -120,6 +140,37 @@ public struct ProfileDraft: Sendable {
         }
         todo("mapping.pads.mode_notes", "Only if the pads send other notes in Roll, Loop and Slicer modes (#225): press pad 1–8 in each mode and list them. The capture only records Hot Cue mode.")
         todo("mapping.pads.mode_select", "Four mode buttons (\"buttons\") or one that cycles (\"cycle\", #198)? From the manual, or by pressing the mode buttons in MIDI Monitor.")
+    }
+
+    /// The docs fill what the capture didn't set; where both say something, the capture wins and it's listed.
+    private mutating func merge(_ docs: DocsFacts) {
+        for (key, value) in docs.facts {
+            let source = docs.sources[key]
+            if let captured = profile.value(at: key) {
+                if captured != value { conflicts.append(Conflict(key: key, capture: captured, docs: value, source: source)) }
+            } else {
+                set(key, value)
+                fromDocs.append(FromDocs(key: key, value: value, source: source))
+                todos.removeAll { $0.key == key || $0.key.hasPrefix(key + ".") || key.hasPrefix($0.key + ".") }
+            }
+        }
+    }
+
+    /// What neither the capture nor the docs set and a controller must say for itself: its other buttons and its
+    /// LEDs. Everything else (OSC, timings, tolerances) inherits the defaults on import.
+    private mutating func unknowns() {
+        guard let data = try? Mapping.defaultMappingJSON(),
+              let schema = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        for section in ["notes", "leds"] {
+            for key in ((schema[section] as? [String: Any]) ?? [:]).keys.sorted() where key != "pads" && key != "shifted" {
+                let path = "mapping.\(section).\(key)"
+                guard profile.value(at: path) == nil, !todos.contains(where: { $0.key == path }) else { continue }
+                todo(path, section == "notes"
+                     ? "Not in the capture or the docs. Press it in MIDI Monitor, or find it in the MIDI chart; leave it out if the controller has no such button."
+                     : "Not in the capture or the docs. LEDs need the controller's MIDI chart or a probe with the owner (the capture's LED answers are free text).")
+            }
+        }
+        todo("mapping.mixer", "Mixer keys (#207) aren't in profiles yet. Note the faders, EQ and VU from the MIDI chart for when they are.")
     }
 
     /// Steps repeated with Shift held. The shifted control is the step's first (the held Shift note is already left out).
