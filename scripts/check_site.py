@@ -2,7 +2,7 @@
 """Checks the DeckBridge website (#169) before anyone looks at it or it's published:
 - every page exists, and every internal link and asset resolves
 - robots.txt, sitemap.xml and llms.txt are at the root; the sitemap parses, and each URL in it
-  is under https://getdeckbridge.app/ and is a page in the site
+  is under https://getdeckbridge.app/ and is a page in the site; llms.txt starts with "# DeckBridge"
 - nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
   and so are <link rel="canonical"> and <link rel="alternate">
 - every page has a title and a meta description
@@ -22,6 +22,7 @@ from urllib.parse import urlsplit
 PAGES = ["index.html", "support/index.html", "privacy/index.html"]
 ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt"]
 SITE = "https://getdeckbridge.app/"
+LLMS_HEADING = "# DeckBridge"
 PRIVACY = "privacy/index.html"
 PRIVACY_STATEMENT = "collects no data"
 OTHER_COMPANIES = ["Syndicate", "Denon"]
@@ -176,6 +177,10 @@ def problems(root):
             with open(path, encoding="utf-8") as f:
                 css = f.read()
             out += check_refs(root, file, [(a or b, True) for a, b in CSS_REFS.findall(css)])
+    if "llms.txt" in files:
+        with open(os.path.join(root, "llms.txt"), encoding="utf-8") as f:
+            if f.readline().rstrip() != LLMS_HEADING:
+                out.append(f'llms.txt: doesn\'t start with "{LLMS_HEADING}"')
     if "sitemap.xml" in files:
         out += check_sitemap(root, files)
     if size > MAX_BYTES:

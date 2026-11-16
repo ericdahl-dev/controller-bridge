@@ -144,6 +144,10 @@ class CheckSiteTests(unittest.TestCase):
             "sitemap.xml: https://getdeckbridge.app/img/nope.png isn't a page in the site",
         ])
 
+    def test_llms_txt_starts_with_the_product_name(self):
+        root = self.site({"llms.txt": "# Controller Bridge\n\n> A bridge.\n"})
+        self.assertEqual(check_site.problems(root), ['llms.txt: doesn\'t start with "# DeckBridge"'])
+
     def test_a_page_without_a_title_or_description_fails(self):
         root = self.site({"support/index.html": page(title="", description="", body='<a href="../">Home</a>')})
         self.assertEqual(check_site.problems(root), ["support/index.html: no <title>",
