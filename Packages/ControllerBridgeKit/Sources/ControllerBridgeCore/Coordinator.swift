@@ -555,6 +555,7 @@ public final class Coordinator {
         old.releaseAll()
         let bridge = makeBridge(updated, for: index)
         bridge.output = old.output
+        bridge.carrySyndicateState(from: old)
         controllers[index].bridge = bridge
         controllers[index].profile = updated
         guard controllers[index].source != nil else { return false }

@@ -96,17 +96,17 @@ struct SetProfilesTests {
         #expect(rig.midi.outputs[Rig.lc6000Out.id]?.sent.count == before)
     }
 
-    @Test("A profile swap repaints the LEDs on the controller's output at once, then Syndicate's answer to the Resend lights them (#94)")
+    @Test("A profile swap keeps Syndicate's deck state: the repaint right after it already shows Play lit, with one Resend (#115)")
     func swapRepaints() throws {
         let rig = try Rig()
         rig.coordinator.start()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.osc.sent.removeAll()
         var mapping = try Mapping.bundledDefault()
         mapping.notes.buttons["play"] = 60          // the Play LED moves to note 60
         rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)])
-        #expect(rig.leds[60] == 1)                  // painted on the output, idle until Syndicate's state comes back
-        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
-        #expect(rig.leds[60] == 127)
+        #expect(rig.leds[60] == 127)                // no idle blink while the Resend is answered
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Feedback/Resend", [.int(1)])])
     }
 
     @Test("A controller unplugged during a swap picks the new profile up when it comes back (#94)")
