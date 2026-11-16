@@ -83,6 +83,10 @@ Checked on hardware (2026-11-15, see #12 and #103):
 - `leds.levels` (#194): a button LED's velocity at full, dim and off, 127, 1 and 0 on the LC6000. Another controller's
   profile can set any of them (each 0–127; one left out keeps the LC6000's). They drive the button and pitch-center
   LEDs, turning the LEDs off, and the LED sweep's button pass; pad and ring colors don't use them.
+- `leds.color_table` (#197): how a pad or ring color becomes a velocity. `"rgb222"` (the LC6000, and the default) packs
+  2 bits per channel. Another controller lists its own: `[{ "rgb": [255, 0, 0], "value": 5 }, …]`, and a color takes
+  the nearest entry's value (the first of equally near ones). Black is off; a dim color never rounds to a black entry
+  but takes the nearest lit one. Each `rgb` is three values 0–255, each `value` 0–127.
 
 Still PROVISIONAL:
 
