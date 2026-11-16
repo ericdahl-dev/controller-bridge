@@ -34,6 +34,8 @@ public enum PipeEvent: Equatable, Sendable {
     /// Settings' jog display switch (#165), and a message from the display's WD port (the unit's upload answers).
     case setJogDisplay(enabled: Bool)
     case jogDisplayReply([UInt8])
+    /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
+    case setJogPreviewDeck(Int?)
     /// Quit: release everything and end the loop. Always the last event.
     case stop
 }
@@ -82,6 +84,7 @@ public struct EventPipe: Sendable {
         public func setProfileChoices(_ choices: [String: String]) { continuation.yield(.setProfileChoices(choices)) }
         public func setJogDisplay(enabled: Bool) { continuation.yield(.setJogDisplay(enabled: enabled)) }
         public func jogDisplayReply(_ bytes: [UInt8]) { continuation.yield(.jogDisplayReply(bytes)) }
+        public func setJogPreviewDeck(_ deck: Int?) { continuation.yield(.setJogPreviewDeck(deck)) }
         /// Quit. Queues the stop behind everything already sent, then closes the pipe, so nothing after it is handled.
         public func stop() {
             continuation.yield(.stop)

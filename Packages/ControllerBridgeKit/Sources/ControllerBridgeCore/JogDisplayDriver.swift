@@ -52,7 +52,8 @@ public final class JogDisplayDriver {
     /// Called with each thing the driver does (#221).
     public var onEvent: ((JogDisplayEvent) -> Void)?
 
-    private let port: any JogDisplayPort
+    /// The unit's ports; nil when there's no LC6000 jog display, and the driver only previews (#221).
+    private let port: (any JogDisplayPort)?
     private let clock: any Clock
     private let log: any LogSink
     /// The image's width and height: 198 on the unit.
@@ -74,9 +75,11 @@ public final class JogDisplayDriver {
     private var wanted: JogDisplayContent?
     /// The slot shown; the next upload goes into the other one.
     private var shownSlot: UInt8 = 2
+    /// The last content drawn and its image (#221): what the preview drew goes to the unit when it connects, unredrawn.
+    private var drawn: (content: JogDisplayContent, image: [UInt8])?
     private var upload: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)?
 
-    public init(port: any JogDisplayPort, clock: any Clock, log: any LogSink, size: Int = JogImage.size,
+    public init(port: (any JogDisplayPort)?, clock: any Clock, log: any LogSink, size: Int = JogImage.size,
                 render: @escaping (JogDisplayContent) -> [UInt8]) {
         self.port = port
         self.clock = clock
@@ -85,10 +88,15 @@ public final class JogDisplayDriver {
         self.render = render
     }
 
-    /// The unit is attached: say hello as a host, then show what's wanted.
+    /// The unit is attached: say hello as a host, then show what's wanted. With no port it stays a preview.
     public func connect() {
-        guard !connected else { return }
+        guard !connected, let port else { return }
         connected = true
+        // What the preview showed goes to the unit now, and the marker and light are sent afresh.
+        if wanted == nil { wanted = current }
+        current = nil
+        lastMarker = nil
+        lastPlayLight = nil
         for message in JogDisplay.hello { port.sendController(message) }
         onEvent?(.connected)
         next()
@@ -102,7 +110,7 @@ public final class JogDisplayDriver {
         lastMarker = nil
         lastPlayLight = nil
         current = nil
-        port.sendController(JogDisplay.goodbye)
+        port?.sendController(JogDisplay.goodbye)
         onEvent?(.disconnected)
     }
 
@@ -114,17 +122,17 @@ public final class JogDisplayDriver {
 
     /// The marker at `pitchBend` (0...16383): pitch bend on WD ch1. Only a change goes out.
     public func marker(_ pitchBend: Int) {
-        guard connected, pitchBend != lastMarker else { return }
+        guard pitchBend != lastMarker else { return }
         lastMarker = pitchBend
-        port.sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)])
+        if connected { port?.sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)]) }
         onEvent?(.marker(pitchBend: pitchBend))
     }
 
     /// The play light: note 1 on WD ch1, 127 or 0. Only a change goes out.
     public func playLight(_ on: Bool) {
-        guard connected, on != lastPlayLight else { return }
+        guard on != lastPlayLight else { return }
         lastPlayLight = on
-        port.sendWD([0x90, 0x01, on ? 0x7F : 0x00])
+        if connected { port?.sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
         onEvent?(.playLight(on))
     }
 
@@ -136,7 +144,7 @@ public final class JogDisplayDriver {
             running.acks += 1
             if running.acks == running.upload.expectedAcks {
                 running.finished = true
-                for message in running.upload.finish { port.sendWD(message) }
+                for message in running.upload.finish { port?.sendWD(message) }
             }
             upload = running
         case .refused(let status):
@@ -144,7 +152,7 @@ public final class JogDisplayDriver {
             fail()
             onEvent?(.failed(refusal: status))
         case .committed where running.finished:
-            port.sendWD(running.upload.show)
+            port?.sendWD(running.upload.show)
             shownSlot = running.slot
             onEvent?(.shown(slot: running.slot))
             upload = nil
@@ -171,12 +179,25 @@ public final class JogDisplayDriver {
     }
 
     private func next() {
-        guard connected, upload == nil, let content = wanted, content != current else { return }
+        guard upload == nil, let content = wanted, content != current else { return }
         wanted = nil
         current = content
         let slot: UInt8 = shownSlot == 1 ? 2 : 1
-        let image = JogImage.forUnit(rgba: render(content), width: size, height: size)
+        let image: [UInt8]
+        if let drawn, drawn.content == content {
+            image = drawn.image
+        } else {
+            image = JogImage.forUnit(rgba: render(content), width: size, height: size)
+            drawn = (content, image)
+        }
         let job = JogDisplay.Upload(image: image, slot: slot)
+        // A preview (#221): no unit, so nothing is sent and nothing waits for an answer; it's shown at once.
+        guard connected, let port else {
+            shownSlot = slot
+            onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
+            onEvent?(.shown(slot: slot))
+            return
+        }
         upload = (job, slot, 0, false, clock.now)
         for message in job.start + job.body { port.sendWD(message) }
         onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
