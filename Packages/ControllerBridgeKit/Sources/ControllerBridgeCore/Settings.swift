@@ -49,11 +49,37 @@ extension BridgeSettings {
         return settings
     }
 
-    public func save(to storage: any SettingsStorage) {
+    /// Saves the settings, or throws every problem and leaves the saved settings as they were.
+    public func save(to storage: any SettingsStorage) throws(SettingsError) {
+        let problems = problems
+        guard problems.isEmpty else { throw .invalid(problems) }
         // Encoding plain values can't fail.
         guard let data = try? JSONEncoder().encode(self) else { return }
         storage.set(data, forKey: Self.storageKey)
     }
+
+    /// What's wrong, in Syndicate's words, so the DJ can fix it.
+    public var problems: [String] {
+        var out: [String] = []
+        for controller in controllers where !(1...4).contains(controller.deck) {
+            out.append("Deck \(controller.deck) is out of range, expected 1-4")
+        }
+        if syndicateHost.trimmingCharacters(in: .whitespaces).isEmpty {
+            out.append("The Syndicate host can't be empty")
+        }
+        let ports = 1...65_535
+        if !ports.contains(syndicatePort) { out.append("OSC port \(syndicatePort) is out of range, expected 1-65535") }
+        if !ports.contains(feedbackPort) { out.append("Feedback port \(feedbackPort) is out of range, expected 1-65535") }
+        if syndicatePort == feedbackPort {
+            out.append("The OSC port and the Feedback port can't both be \(syndicatePort)")
+        }
+        return out
+    }
+}
+
+/// Settings that can't be saved, with a plain message for each problem.
+public enum SettingsError: Error, Equatable {
+    case invalid([String])
 }
 
 /// Where settings are kept: user defaults in the app.

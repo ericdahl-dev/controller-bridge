@@ -40,7 +40,7 @@ struct SettingsTests {
         changed.syndicateHost = "192.168.1.20"
         changed.feedbackListen = .allNetworks
         changed.ledsEnabled = false
-        changed.save(to: store)
+        try changed.save(to: store)
         #expect(BridgeSettings.load(from: store, defaults: Self.defaults) == changed)
     }
 
@@ -56,5 +56,32 @@ struct SettingsTests {
     func listenAddress() {
         #expect(FeedbackListen.thisMac.address == "127.0.0.1")
         #expect(FeedbackListen.allNetworks.address == "0.0.0.0")
+    }
+
+    @Test("Bad settings are refused with every problem in plain words, and the saved settings stay as they were")
+    func badSettingsRefused() throws {
+        let store = MemoryStore()
+        try Self.defaults.save(to: store)
+        var bad = Self.defaults
+        bad.controllers[0].deck = 5
+        bad.syndicateHost = "  "
+        bad.syndicatePort = 0
+        bad.feedbackPort = 70_000
+        #expect(throws: SettingsError.invalid([
+            "Deck 5 is out of range, expected 1-4",
+            "The Syndicate host can't be empty",
+            "OSC port 0 is out of range, expected 1-65535",
+            "Feedback port 70000 is out of range, expected 1-65535",
+        ])) { try bad.save(to: store) }
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults) == Self.defaults)
+    }
+
+    @Test("The OSC port and the Feedback port can't be the same")
+    func portsMustDiffer() {
+        var bad = Self.defaults
+        bad.feedbackPort = 9090
+        #expect(throws: SettingsError.invalid(["The OSC port and the Feedback port can't both be 9090"])) {
+            try bad.save(to: MemoryStore())
+        }
     }
 }
