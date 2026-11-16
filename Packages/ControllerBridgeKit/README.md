@@ -80,6 +80,11 @@ Checked on hardware (2026-11-15, see #12 and #103):
   hot cue N, and in Roll mode plays `roll_sizes[N-1]`, by Syndicate's SlipLoop names (`ThirtySecond`, `Sixteenth`,
   `Eighth`, `Quarter`, `Half`, `One`, `Two`, `Four`); a pad past the list does nothing in Roll mode. Left out,
   `roll_sizes` is the LC6000's eight, shortest first. Syndicate sends 8 cue slots, so pads 9–16 stay dark.
+- `pads.mode_select` (#198): `buttons` on the LC6000, whose four buttons (`mode_hotcue`, `mode_roll`, `mode_loop`,
+  `mode_slicer`) each pick a pad mode. A controller with one pad-mode button sets `cycle` and maps that button as
+  `notes.mode_cycle`: each press moves Hot Cue → Roll → Loop → Slicer → Hot Cue, releasing a held pad first. Any
+  `mode_*` notes it maps still light as indicators. Optional `pads.mode_cycle_velocities` (`hotcue`, `roll`, `loop`,
+  `slicer`, each 0–127) lights the cycle button's own LED per mode; left out, DeckBridge leaves that LED alone.
 - `leds.levels` (#194): a button LED's velocity at full, dim and off, 127, 1 and 0 on the LC6000. Another controller's
   profile can set any of them (each 0–127; one left out keeps the LC6000's). They drive the button and pitch-center
   LEDs, turning the LEDs off, and the LED sweep's button pass; pad and ring colors don't use them.
