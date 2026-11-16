@@ -4,15 +4,27 @@
 public struct Engine {
     private let coordinator: Coordinator
     private let log: any LogSink
+    private let onStatus: (@Sendable (CoordinatorStatus) -> Void)?
 
-    public init(coordinator: Coordinator, log: any LogSink) {
+    /// `onStatus` gets the Coordinator's status when the loop starts and again each time it changes, on the loop's
+    /// task. The app hops it to the main actor once per change.
+    public init(coordinator: Coordinator, log: any LogSink, onStatus: (@Sendable (CoordinatorStatus) -> Void)? = nil) {
         self.coordinator = coordinator
         self.log = log
+        self.onStatus = onStatus
     }
 
     /// Returns when the pipe finishes, or right after a stop.
     public func run(_ events: AsyncStream<PipeEvent>) async {
+        var reported = coordinator.status
+        onStatus?(reported)
         for await event in events {
+            defer {
+                if coordinator.status != reported {
+                    reported = coordinator.status
+                    onStatus?(reported)
+                }
+            }
             switch event {
             case .midi(let midi, let source): coordinator.midi(midi, source: source)
             case .udp(let datagram):
