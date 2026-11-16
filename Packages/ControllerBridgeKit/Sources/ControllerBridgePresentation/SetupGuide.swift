@@ -12,6 +12,14 @@ public struct SetupGuide: Equatable, Sendable {
         "BPM/Sync", "Loop",
     ]
 
+    /// Bump when the steps change in a way a returning user should see.
+    public static let version = 1
+
+    /// Whether to open the guide at launch, given the last version this Mac saw (nil: never).
+    public static func shouldShowAtLaunch(seenVersion: Int?) -> Bool {
+        (seenVersion ?? 0) < version
+    }
+
     public var steps: [Step]
 
     /// `controller` is the profile's name, such as "Denon LC6000 PRIME", or nil when there is none yet.

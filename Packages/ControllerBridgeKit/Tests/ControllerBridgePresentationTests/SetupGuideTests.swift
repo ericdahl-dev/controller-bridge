@@ -37,4 +37,11 @@ struct SetupGuideTests {
         #expect(text.contains("Tick these subscriptions: \(subscriptions)."))
         #expect(text.contains("turn your controller's MIDI input **off**"))
     }
+
+    @Test("The guide opens on first launch and again when its content changes, but not on every launch")
+    func firstRun() {
+        #expect(SetupGuide.shouldShowAtLaunch(seenVersion: nil))
+        #expect(!SetupGuide.shouldShowAtLaunch(seenVersion: SetupGuide.version))
+        #expect(SetupGuide.shouldShowAtLaunch(seenVersion: SetupGuide.version - 1))
+    }
 }
