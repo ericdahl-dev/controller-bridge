@@ -21,6 +21,8 @@ public enum PipeEvent: Equatable, Sendable {
     case setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int)
     case setLEDs(enabled: Bool)
     case setDeckColors(followSyndicate: Bool, custom: DeckColors)
+    /// The OSC destination opened late (#84): ask Syndicate to resend its state, since what was sent before was dropped.
+    case resync
     case setControllers([ControllerSettings])
     /// An imported mapping (#24): the controller profiles to run from now on.
     case setProfiles([ControllerProfile])
@@ -64,6 +66,7 @@ public struct EventPipe: Sendable {
         public func setDeckColors(followSyndicate: Bool, custom: DeckColors) {
             continuation.yield(.setDeckColors(followSyndicate: followSyndicate, custom: custom))
         }
+        public func resync() { continuation.yield(.resync) }
         public func setControllers(_ entries: [ControllerSettings]) { continuation.yield(.setControllers(entries)) }
         public func setProfiles(_ profiles: [ControllerProfile]) { continuation.yield(.setProfiles(profiles)) }
         /// Quit. Queues the stop behind everything already sent, then closes the pipe, so nothing after it is handled.

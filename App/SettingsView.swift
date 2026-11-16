@@ -18,6 +18,8 @@ struct SettingsView: View {
     @State private var destinations: [MIDIEndpoint] = []
     /// Problems from the last Apply, shown under their fields; the rest (such as the bridge not running) below.
     @State private var fieldProblems: [SettingsProblem] = []
+    /// The host name being looked up by Apply, while it is (#84).
+    @State private var checkingHost: String?
     @State private var otherProblems: [String] = []
     @State private var saved = false
     /// What Apply said about the save, such as needing a restart (#88).
@@ -148,10 +150,13 @@ struct SettingsView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
+            if let checkingHost {
+                Text("Checking \(checkingHost)…").font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
+            }
             Button("Apply") { apply(settings.wrappedValue) }
                 .buttonStyle(FlatButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                .disabled(!dirty)
+                .disabled(!dirty || checkingHost != nil)
                 .opacity(dirty ? 1 : 0.4)
                 .frame(width: 110)
         }
@@ -412,16 +417,25 @@ struct SettingsView: View {
             otherProblems = []
             return
         }
-        do {
-            savedNote = try model.apply(settings)
-            draft = model.settings
-            base = model.settings
-            fieldProblems = []
-            otherProblems = []
-            saved = true
-        } catch {
-            if case .invalid(let list) = error { otherProblems = list }
-            saved = false
+        // A host name is looked up off the main actor (#84): the window stays usable and says it's checking.
+        checkingHost = BridgeSettings.isIPv4(settings.syndicateHost.trimmingCharacters(in: .whitespaces))
+            ? nil : settings.syndicateHost.trimmingCharacters(in: .whitespaces)
+        Task { @MainActor in
+            defer { checkingHost = nil }
+            do throws(SettingsError) {
+                savedNote = try await model.apply(settings)
+                draft = model.settings
+                base = model.settings
+                fieldProblems = []
+                otherProblems = []
+                saved = true
+            } catch {
+                switch error {
+                case .invalid(let list): otherProblems = list
+                case .fields(let list): fieldProblems = list
+                }
+                saved = false
+            }
         }
     }
 

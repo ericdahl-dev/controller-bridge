@@ -121,6 +121,12 @@ enum Snapshots {
             let status = BridgeStatus()
             configure(status)
             write(StatusPanel(status: status), to: "\(directory)/panel-\(name).png")
+            if name == "connected" {
+                // Quit pressed while feedback is live: the question in the panel (#131).
+                var asking = QuitFlow()
+                _ = asking.pressQuit(asks: true)
+                write(StatusPanel(status: status, quitFlow: asking), to: "\(directory)/panel-quit-confirm.png")
+            }
             if name == "connected" || name == "waiting" {
                 write(SetupGuideView(guide: status.setupGuide, presentation: status.presentation), to: "\(directory)/setup-guide-\(name).png")
             }
