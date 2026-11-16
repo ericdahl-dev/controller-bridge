@@ -96,17 +96,17 @@ struct SetProfilesTests {
         #expect(rig.midi.outputs[Rig.lc6000Out.id]?.sent.count == before)
     }
 
-    @Test("A profile swap repaints the LEDs on the controller's output at once, then Syndicate's answer to the Resend lights them (#94)")
+    @Test("A profile swap keeps Syndicate's deck state: the repaint right after it already shows Play lit, with one Resend (#115)")
     func swapRepaints() throws {
         let rig = try Rig()
         rig.coordinator.start()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.osc.sent.removeAll()
         var mapping = try Mapping.bundledDefault()
         mapping.notes.buttons["play"] = 60          // the Play LED moves to note 60
         rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)])
-        #expect(rig.leds[60] == 1)                  // painted on the output, idle until Syndicate's state comes back
-        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
-        #expect(rig.leds[60] == 127)
+        #expect(rig.leds[60] == 127)                // no idle blink while the Resend is answered
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Feedback/Resend", [.int(1)])])
     }
 
     @Test("A controller unplugged during a swap picks the new profile up when it comes back (#94)")
@@ -119,5 +119,56 @@ struct SetProfilesTests {
         rig.osc.sent.removeAll()
         rig.coordinator.midi(.noteOn(channel: 0, note: 60, velocity: 127), source: Rig.lc6000.id)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
+    }
+
+    @Test("Cues carry over a swap: the hot-cue pads keep their colors (#115)")
+    func cuesCarry() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(PadsTests.cues([1, 2, 0, 0, 0, 0, 0, 0]))
+        rig.coordinator.setProfiles(try Self.newPlay())
+        #expect(PadsTests.padLEDs(rig) == [48, 56, 0, 0, 0, 0, 0, 0])
+    }
+
+    @Test("The track's length and position carry over a swap: a paused jog right after it seeks, not BeatSkip (#115)")
+    func trackCarries() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [.string("t"), .string("a"), .string("8A"), .float(120), .float(200), .int(100), .int(400), .string("track")]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Progress", [.float(0.5)]))
+        rig.coordinator.setProfiles(try Self.newPlay())
+        rig.osc.sent.removeAll()
+        ContinuousTests.platterAt(rig, 1000)
+        ContinuousTests.platterAt(rig, 1900)
+        #expect(rig.osc.sent.last?.address == "/Syndicate/Deck/1/WaveformSeek")
+    }
+
+    @Test("Syndicate's reported tempo carries over a swap: the fader still waits to meet it instead of jumping (#115)")
+    func pickupCarries() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TempoSlider", [.float(0.5)]))
+        rig.coordinator.setProfiles(try Self.newPlay())
+        rig.osc.sent.removeAll()
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 8, value: 0x00), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("The bridge's own state carries over a swap: Key Lock, Slip and Roll mode stay lit, and Key Lock toggles off next (#115)")
+    func ownStateCarries() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        for note: UInt8 in [22, 23, 28] {   // Key Lock, Slip, Roll mode
+            rig.coordinator.midi(.noteOn(channel: 0, note: note, velocity: 127), source: Rig.lc6000.id)
+            rig.coordinator.midi(.noteOff(channel: 0, note: note, velocity: 0), source: Rig.lc6000.id)
+        }
+        rig.coordinator.setProfiles(try Self.newPlay())
+        #expect(rig.leds[22] == 127)
+        #expect(rig.leds[23] == 127)
+        #expect(PadsTests.modeLEDs(rig) == [1, 127, 1, 1])
+        rig.osc.sent.removeAll()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 22, velocity: 127), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PitchPreserve", [.int(0)])])
     }
 }

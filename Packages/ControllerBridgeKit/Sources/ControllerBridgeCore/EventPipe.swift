@@ -20,6 +20,7 @@ public enum PipeEvent: Equatable, Sendable {
     case setDeck(Int, controller: Int)
     case setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int)
     case setLEDs(enabled: Bool)
+    case setDeckColors(followSyndicate: Bool, custom: DeckColors)
     /// The OSC destination opened late (#84): ask Syndicate to resend its state, since what was sent before was dropped.
     case resync
     case setControllers([ControllerSettings])
@@ -62,6 +63,9 @@ public struct EventPipe: Sendable {
             continuation.yield(.setDevices(input: input, output: output, controller: controller))
         }
         public func setLEDs(enabled: Bool) { continuation.yield(.setLEDs(enabled: enabled)) }
+        public func setDeckColors(followSyndicate: Bool, custom: DeckColors) {
+            continuation.yield(.setDeckColors(followSyndicate: followSyndicate, custom: custom))
+        }
         public func resync() { continuation.yield(.resync) }
         public func setControllers(_ entries: [ControllerSettings]) { continuation.yield(.setControllers(entries)) }
         public func setProfiles(_ profiles: [ControllerProfile]) { continuation.yield(.setProfiles(profiles)) }

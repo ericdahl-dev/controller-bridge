@@ -34,6 +34,8 @@ final class BridgeStatus {
     var deckProblem: String?
     /// An LED sweep is running (#26).
     var sweeping = false
+    /// The deck colors in use, for the badges (#123).
+    var deckColors = DeckColors.defaults
     /// The built-in demo controller is running (#64). Off at launch and never saved.
     var demo = false
     var feedback: Feedback = .starting
@@ -200,6 +202,9 @@ final class BridgeModel {
         }
         status.oscPort = new.syndicatePort
         if new.ledsEnabled != old.ledsEnabled { producer.setLEDs(enabled: new.ledsEnabled) }
+        if new.followSyndicateDeckColors != old.followSyndicateDeckColors || new.customDeckColors != old.customDeckColors {
+            producer.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors)
+        }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
         return nil
     }
@@ -285,7 +290,8 @@ final class BridgeModel {
                 controllers: running, ledsEnabled: settings.ledsEnabled, events: pipe.events
             )
         }
-        // The saved controller settings, queued behind the Coordinator's start.
+        // The saved deck colors (#123), queued behind the Coordinator's start.
+        pipe.producer.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors)
 
     }
 

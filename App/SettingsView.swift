@@ -102,6 +102,8 @@ struct SettingsView: View {
                 Button("Setup Guide…") { SetupGuideWindow.open(openWindow) }.buttonStyle(LinkButtonStyle())
             }
 
+            decksSection(settings)
+
             heading("Mapping")
             row("In use") {
                 note(model.status.mappingInUse)
@@ -264,6 +266,59 @@ struct SettingsView: View {
         if fieldProblems.contains(where: { $0.field == field }) {
             RoundedRectangle(cornerRadius: Theme.corner).strokeBorder(Theme.error, lineWidth: 1)
         }
+    }
+
+    // MARK: Decks (#123)
+
+    /// The deck colors: Syndicate's (cue palette slots 1, 3, 5 and 7) or the DJ's own, each with the LC6000's version.
+    @ViewBuilder
+    private func decksSection(_ settings: Binding<BridgeSettings>) -> some View {
+        heading("Decks")
+        row("Colors") {
+            Toggle("Use Syndicate's deck colors", isOn: settings.followSyndicateDeckColors)
+                .font(Theme.ui(Theme.Size.label)).tint(Self.on)
+            hint(settings.wrappedValue.followSyndicateDeckColors
+                 ? "Cue palette slots 1, 3, 5 and 7 in Syndicate's CUE COLORS, as they change"
+                 : "Your own colors, for the app's badges and the LC6000's ring")
+        }
+        ForEach(1...4, id: \.self) { deck in
+            row("Deck \(deck)") {
+                HStack(spacing: Theme.Space.m) {
+                    DeckBadgeView(deck: deck)
+                    if !settings.wrappedValue.followSyndicateDeckColors {
+                        ColorPicker("Deck \(deck) color", selection: Self.color(settings, deck: deck), supportsOpacity: false)
+                            .labelsHidden()
+                    }
+                    // What the LC6000's ring will show: rgb222, so a subtle color may come out plainer.
+                    let shown = settings.wrappedValue.followSyndicateDeckColors ? deckColors[deck] : settings.wrappedValue.customDeckColors[deck]
+                    RoundedRectangle(cornerRadius: Theme.corner)
+                        .fill(Color(RGB(deckColor: DeckColors.ledPreview(shown ?? [0, 0, 0]))))
+                        .frame(width: 26, height: 26)
+                        .accessibilityLabel("Deck \(deck) on the LC6000")
+                    hint("On the LC6000")
+                }
+                fieldError(.deckColor(deck: deck))
+            }
+        }
+        if !settings.wrappedValue.followSyndicateDeckColors {
+            row("") {
+                Button("Reset to default") { settings.wrappedValue.customDeckColors = .defaults }.buttonStyle(LinkButtonStyle())
+            }
+        }
+    }
+
+    @Environment(\.deckColors) private var deckColors
+
+    /// A custom deck color as a SwiftUI color, written back as [r, g, b] in sRGB.
+    private static func color(_ settings: Binding<BridgeSettings>, deck: Int) -> Binding<Color> {
+        Binding(
+            get: { Color(RGB(deckColor: settings.wrappedValue.customDeckColors[deck] ?? [0, 0, 0])) },
+            set: { color in
+                guard let srgb = NSColor(color).usingColorSpace(.sRGB) else { return }
+                settings.wrappedValue.customDeckColors.rgb[deck] = [srgb.redComponent, srgb.greenComponent, srgb.blueComponent]
+                    .map { Int(($0 * 255).rounded()) }
+            }
+        )
     }
 
     /// The problems that belong to a field, right under it (#68).
