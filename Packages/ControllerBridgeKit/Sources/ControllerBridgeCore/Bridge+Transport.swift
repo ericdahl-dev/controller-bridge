@@ -89,11 +89,14 @@ extension Bridge {
 // MARK: LEDs
 
 extension Bridge {
+    /// The deck is Syndicate's tempo master: synced, with its tempo slider enabled. The Master LED and the status share it.
+    var isMaster: Bool { synced && sliderEnabled }
+
     /// The transport LEDs: Cue, Sync and Master follow Syndicate; Key Lock, Slip and Shift show the bridge's state.
     func refreshTransportLEDs() {
         buttonLED("cue", on: loaded && !playing)
         buttonLED("sync", on: synced)
-        buttonLED("master", on: synced && sliderEnabled)
+        buttonLED("master", on: isMaster)
         buttonLED("key_lock", on: keyLockOn)
         buttonLED("slip", on: slipOn)
         buttonLED("shift", on: shift)

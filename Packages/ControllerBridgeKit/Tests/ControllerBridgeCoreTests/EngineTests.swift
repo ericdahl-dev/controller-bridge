@@ -196,4 +196,25 @@ struct EngineTests {
         var values: [CoordinatorStatus] = []
         func append(_ status: CoordinatorStatus) { values.append(status) }
     }
+
+    @Test("Settings changes from the pipe reach the Coordinator in order: deck, devices, LEDs")
+    func settingsFromThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)   // Cue held
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+
+        pipe.producer.setDeck(2, controller: 0)
+        pipe.producer.setDevices(input: Rig.lc6000, output: Rig.lc6000Out, controller: 0)
+        pipe.producer.setLEDs(enabled: false)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent.first == OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)]))
+        #expect(rig.coordinator.status.controllers.map(\.deck) == [2])
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+        #expect(rig.leds.values.allSatisfy { $0 == 0 })
+    }
 }

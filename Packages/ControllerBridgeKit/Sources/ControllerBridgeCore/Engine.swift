@@ -47,6 +47,10 @@ public struct Engine {
                 if open, let sink = onDiagnostic { coordinator.diagnostics = { sink($0) } } else { coordinator.diagnostics = nil }
             case .ledSweep(let delay): coordinator.startLEDSweep(delay: delay)
             case .cancelLEDSweep: coordinator.cancelLEDSweep()
+            case .setDeck(let deck, let controller): coordinator.setDeck(deck, controller: controller)
+            case .setDevices(let input, let output, let controller):
+                coordinator.setDevices(input: input, output: output, controller: controller)
+            case .setLEDs(let enabled): coordinator.setLEDs(enabled: enabled)
             case .stop:
                 // Releases are sent synchronously, so they have all gone out once run() returns.
                 coordinator.stop()

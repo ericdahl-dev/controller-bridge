@@ -28,6 +28,8 @@ public final class Coordinator {
     public var diagnostics: ((DiagnosticEvent) -> Void)? {
         didSet { (osc as? OSCTap)?.onSend = diagnostics.map { sink in { sink(.oscOut($0)) } } }
     }
+    /// Settings' LEDs switch, kept so a Bridge rebuilt for another profile honors it.
+    private var ledsEnabled = true
 
     /// What the menu shows. The app copies it after each call.
     public private(set) var status: CoordinatorStatus
@@ -40,6 +42,9 @@ public final class Coordinator {
         var source: MIDIEndpoint?
         /// The unique id of the last source this controller used, so a replug finds the same unit first.
         var knownSourceID: MIDIEndpoint.ID?
+        /// The devices picked in Settings (#19). Nil is automatic: the first device a profile matches.
+        var chosenInput: MIDIEndpoint.ID?
+        var chosenOutput: MIDIEndpoint.ID?
     }
 
     /// One controller, whose profile is chosen by the name of the device that connects. Until one does, it runs the
@@ -113,14 +118,26 @@ public final class Coordinator {
     /// Opens the controller's ports if a matching device is present. Returns whether its input is connected.
     private func connect(_ index: Int) -> Bool {
         let sources = midiSystem.sources
-        let known = controllers[index].knownSourceID.flatMap { id in sources.first { $0.id == id } }
-        let matched = sources.first { ControllerProfile.matching($0.name, in: profiles) != nil }
-        guard let source = known ?? matched, let profile = ControllerProfile.matching(source.name, in: profiles) else {
+        let source: MIDIEndpoint?
+        if let chosen = controllers[index].chosenInput {
+            source = sources.first { $0.id == chosen }
+        } else {
+            let known = controllers[index].knownSourceID.flatMap { id in sources.first { $0.id == id } }
+            source = known ?? sources.first { ControllerProfile.matching($0.name, in: profiles) != nil }
+        }
+        guard let source else { return false }
+        // A device picked in Settings runs even if no profile names it: then it keeps the current profile.
+        let matchedProfile = ControllerProfile.matching(source.name, in: profiles)
+        guard let profile = matchedProfile ?? (controllers[index].chosenInput != nil ? controllers[index].profile : nil) else {
             return false
         }
         if profile != controllers[index].profile {
             controllers[index].profile = profile
-            controllers[index].bridge = Bridge(mapping: profile.mapping, osc: osc, clock: clock)
+            var mapping = profile.mapping
+            // The deck is a setting, not part of the profile.
+            mapping.deck.number = status.controllers[index].deck
+            controllers[index].bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
+            controllers[index].bridge.setLEDsEnabled(ledsEnabled)
         }
         let bridge = controllers[index].bridge
         do {
@@ -132,7 +149,9 @@ public final class Coordinator {
         controllers[index].source = source
         controllers[index].knownSourceID = source.id
         status.controllers[index].profile = profile.name
-        if let destination = Self.match(midiSystem.destinations, bridge.mapping.midi.output) {
+        let destinations = midiSystem.destinations
+        let chosenOutput = controllers[index].chosenOutput.flatMap { id in destinations.first { $0.id == id } }
+        if let destination = chosenOutput ?? Self.match(destinations, bridge.mapping.midi.output) {
             do { bridge.output = try midiSystem.openOutput(destination: destination) } catch {
                 log.log("Couldn't open MIDI output \(destination.name): \(error)")
             }
@@ -209,6 +228,7 @@ public final class Coordinator {
         diagnostics?(.oscIn(message))
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
+        for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
         disconnectFailedOutputs()
     }
 
@@ -263,6 +283,38 @@ public final class Coordinator {
         status.lastDropout = event
         log.log(event)
         for bridge in bridges { bridge.clearSyndicateState() }
+    }
+
+    /// Settings (#19): the controller drives another deck from now on. Held controls are released on the old one,
+    /// then the controller resyncs.
+    public func setDeck(_ deck: Int, controller index: Int) {
+        guard controllers.indices.contains(index), controllers[index].bridge.mapping.deck.number != deck else { return }
+        controllers[index].bridge.switchDeck(to: deck)
+        status.controllers[index].deck = deck
+        requestResend()
+        disconnectFailedOutputs()
+    }
+
+    /// Settings (#19): the controller uses these devices from now on, or nil for automatic. Held controls are
+    /// released and the old ports closed first, then the controller connects and resyncs.
+    public func setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller index: Int) {
+        guard controllers.indices.contains(index) else { return }
+        controllers[index].chosenInput = input?.id
+        controllers[index].chosenOutput = output?.id
+        controllers[index].knownSourceID = input?.id
+        disconnect(index)
+        if connect(index) {
+            controllers[index].bridge.start()
+            requestResend()
+        }
+        disconnectFailedOutputs()
+    }
+
+    /// Settings (#19): the LEDs switch, for every controller.
+    public func setLEDs(enabled: Bool) {
+        ledsEnabled = enabled
+        for bridge in bridges { bridge.setLEDsEnabled(enabled) }
+        disconnectFailedOutputs()
     }
 
     /// The one place a Resend is sent. One already waiting for its answer isn't sent again.

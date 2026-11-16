@@ -12,6 +12,11 @@ extension BridgeStatus {
 
     var shownDeck: Int { controller?.deck ?? deck }
 
+    /// Unmatched devices: a quiet gray list, or one orange NO PROFILE row when no controller is connected (#43).
+    var otherDevices: OtherDevices {
+        OtherDevices(unmatched: unmatchedDevices.map(\.name), controllerConnected: controller?.connected == true)
+    }
+
     /// The status in Syndicate's words.
     var presentation: StatusPresentation {
         let controller: BridgeState.Controller =
@@ -29,7 +34,8 @@ extension BridgeStatus {
         case .failed: .failed
         }
         return StatusPresentation(BridgeState(
-            controller: controller, feedback: feedback, deck: shownDeck, stopped: problem != nil, lastDropout: lastDropout
+            controller: controller, feedback: feedback, deck: shownDeck, stopped: problem != nil, lastDropout: lastDropout,
+            master: self.controller?.master == true
         ))
     }
 }
@@ -57,15 +63,16 @@ struct StatusPanel: View {
                 }
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }
+                    if let master = presentation.master { StatusLightView(light: master) }
                     Spacer(minLength: 0)
                 }
-                if !status.unmatchedDevices.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(status.unmatchedDevices.prefix(3), id: \.name) { device in
-                            StatusLightView(light: StatusLight(unmatchedDevice: device.name))
-                                .help(device.note ?? "")
-                        }
-                    }
+                let others = status.otherDevices
+                if let highlighted = others.highlighted {
+                    StatusLightView(light: highlighted)
+                        .help(status.unmatchedDevices.first { $0.name == highlighted.label }?.note ?? "")
+                }
+                if let summary = others.summary {
+                    OtherDevicesList(summary: summary, rows: others.rows)
                 }
                 HStack(spacing: 16) {
                     CaptionValue(caption: "Deck", value: "\(status.shownDeck)")
@@ -101,7 +108,7 @@ struct StatusPanel: View {
             Rectangle().fill(Theme.hairline).frame(height: 1)
             StatusLineView(presentation: presentation, deck: status.shownDeck)
         }
-        .frame(width: 320)
+        .frame(width: 360)
         .background(Theme.background)
         .environment(\.colorScheme, .dark)
     }
@@ -146,5 +153,33 @@ enum MenuBarIcon {
 
     static func accessibilityLabel(_ presentation: StatusPresentation) -> String {
         presentation.lights.map { "\($0.label) \($0.word)" }.joined(separator: ", ")
+    }
+}
+
+/// The quiet gray list of MIDI devices no profile matches: one muted line that expands to the names.
+struct OtherDevicesList: View {
+    let summary: String
+    let rows: [String]
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Button {
+                expanded.toggle()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.system(size: 8, weight: .bold))
+                    Text(summary).font(Theme.captionFont)
+                }
+                .foregroundStyle(Theme.caption)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(summary), \(expanded ? "expanded" : "collapsed")")
+            if expanded {
+                ForEach(rows, id: \.self) { row in
+                    Text(row).font(Theme.ui(11)).foregroundStyle(Theme.caption).padding(.leading, 12)
+                }
+            }
+        }
     }
 }

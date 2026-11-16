@@ -55,7 +55,7 @@ final class Bridge {
         ]
     }
 
-    let mapping: Mapping
+    var mapping: Mapping
     var output: (any MIDIOutput)? {
         didSet { outputFailed = false }
     }
@@ -124,6 +124,8 @@ final class Bridge {
 
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
+    /// Settings' LEDs switch (#19). While off, nothing is sent to the controller's LEDs.
+    private(set) var ledsEnabled = true
 
     init(mapping: Mapping, osc: any OSCSender, clock: any Clock) {
         self.mapping = mapping
@@ -261,10 +263,23 @@ final class Bridge {
         refreshLEDs()
     }
 
+
+    /// Turns the LEDs off (each lit one once, then nothing more) or back on (a full repaint).
+    func setLEDsEnabled(_ enabled: Bool) {
+        guard enabled != ledsEnabled else { return }
+        if enabled {
+            ledsEnabled = true
+            ledCache.removeAll()
+            refreshLEDs()
+        } else {
+            for (note, velocity) in ledCache.sorted(by: { $0.key < $1.key }) where velocity != Self.off { led(note, Self.off) }
+            ledsEnabled = false
+        }
+    }
+
     func led(_ note: Int, _ velocity: UInt8) {
-        // During an LED sweep the bridge's own writes wait; the sweep ends with a repaint.
-        guard !ledsHeld else { return }
-        guard ledCache[note] != velocity else { return }
+        // During an LED sweep (#26) the bridge's own writes wait; the sweep ends with a repaint.
+        guard !ledsHeld, ledsEnabled, ledCache[note] != velocity else { return }
         ledCache[note] = velocity
         guard let output else { return }
         do {

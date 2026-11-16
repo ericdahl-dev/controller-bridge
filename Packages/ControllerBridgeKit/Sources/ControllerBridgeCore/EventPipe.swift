@@ -14,6 +14,10 @@ public enum PipeEvent: Equatable, Sendable {
     /// Start the LED sweep, `delay` seconds per color; or stop it part-way.
     case ledSweep(delay: Double)
     case cancelLEDSweep
+    /// Settings changes (#19), in order with the MIDI already queued.
+    case setDeck(Int, controller: Int)
+    case setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int)
+    case setLEDs(enabled: Bool)
     /// Quit: release everything and end the loop. Always the last event.
     case stop
 }
@@ -45,6 +49,11 @@ public struct EventPipe: Sendable {
         public func diagnostics(open: Bool) { continuation.yield(.diagnostics(open: open)) }
         public func ledSweep(delay: Double) { continuation.yield(.ledSweep(delay: delay)) }
         public func cancelLEDSweep() { continuation.yield(.cancelLEDSweep) }
+        public func setDeck(_ deck: Int, controller: Int) { continuation.yield(.setDeck(deck, controller: controller)) }
+        public func setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int) {
+            continuation.yield(.setDevices(input: input, output: output, controller: controller))
+        }
+        public func setLEDs(enabled: Bool) { continuation.yield(.setLEDs(enabled: enabled)) }
         /// Quit. Queues the stop behind everything already sent, then closes the pipe, so nothing after it is handled.
         public func stop() {
             continuation.yield(.stop)
