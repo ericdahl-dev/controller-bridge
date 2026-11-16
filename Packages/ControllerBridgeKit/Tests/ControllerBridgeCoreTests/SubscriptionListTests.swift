@@ -1,4 +1,4 @@
-import ControllerBridgeCore
+@testable import ControllerBridgeCore
 import Testing
 
 /// The one list of Syndicate OSC FEEDBACK subscriptions (#211): the setup guide shows it and the check judges it.
@@ -79,5 +79,28 @@ struct EverySubscriptionTests {
     @Test("Deck values with no Loaded or TrackInfo from any deck: Loaded and TrackInfo is off (nothing else can be judged)")
     func loadedMissing() throws {
         #expect(try Self.missing(leaving: .loaded) == [.loaded])
+    }
+}
+
+/// Which subscriptions a profile needs (#211): only those are asked for and judged, so later mixer and player-type ones
+/// (#207, #210) are asked for only by profiles that use them.
+@Suite("Required subscriptions")
+struct RequiredSubscriptionsTests {
+    @Test("The LC6000 needs all eight")
+    func lc6000() throws {
+        #expect(Subscription.required(for: try Mapping.bundledDefault()) == Subscription.allCases)
+    }
+
+    @Test("Only the required ones are judged: a deck with only Loaded, when only Cues is required, misses only Cues")
+    func onlyRequired() {
+        let check = SubscriptionCheck(answer: [OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)])], required: [.cues])
+        #expect(check?.missing == [.cues])
+    }
+
+    @Test("The Coordinator reports what its controllers' profiles need, for the setup guide")
+    func reported() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        #expect(rig.coordinator.status.requiredSubscriptions == Subscription.allCases)
     }
 }

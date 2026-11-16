@@ -19,6 +19,10 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         }
     }
 
+    /// The subscriptions a profile needs, the only ones asked for and judged (#211). Every profile needs these eight
+    /// today; mixer and player-type ones (#207, #210) join when a profile uses them.
+    public static func required(for mapping: Mapping) -> [Subscription] { allCases }
+
     /// What goes wrong without it, to follow "<name> is off: ".
     public var breaks: String {
         switch self {
@@ -58,7 +62,7 @@ struct SubscriptionCheck: Equatable {
     var missing: [Subscription]
 
     /// Nil for no answer at all: silence says nothing about subscriptions.
-    init?(answer messages: [OSCMessage]) {
+    init?(answer messages: [OSCMessage], required: [Subscription] = Subscription.allCases) {
         guard !messages.isEmpty else { return nil }
         noDeckData = !messages.contains { Self.provesSubscriptions($0.address) }
         // Each deck's values, by deck number: the last two parts of /Syndicate/Deck/<n>/<Value>.
@@ -74,11 +78,11 @@ struct SubscriptionCheck: Equatable {
         // With Loaded and TrackInfo on, every deck sends Loaded, an empty one 0 (#211 capture). Deck values without it
         // mean that subscription is off, and then no deck can be judged loaded.
         let anyLoadedValue = values.values.contains { $0.contains("loaded") || $0.contains("trackinfo") }
-        if !values.isEmpty, !anyLoadedValue {
+        if !values.isEmpty, !anyLoadedValue, required.contains(.loaded) {
             missing = [.loaded]
             return
         }
-        missing = Subscription.allCases.filter { subscription in
+        missing = required.filter { subscription in
             // Loaded is what marks a deck loaded, judged above.
             guard subscription != .loaded else { return false }
             return loaded.contains { deck in !subscription.values.contains { (values[deck] ?? []).contains($0) } }
