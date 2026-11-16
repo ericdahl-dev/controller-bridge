@@ -18,6 +18,14 @@ enum LC6000Traffic {
     /// Needle Drop slid left to right: a 14-bit position on CC 64 (MSB) and CC 65 (LSB). Not an n / n+32 pair.
     static let needleSlide: Take = pairs(msb: 64, lsb: 65, values: [0, 4096, 8192, 12288, 16383])
 
+    /// The jog's top touched and turned: platter-touch note 40 around the 14-bit position on CC 17/49.
+    static let jogTouchTurn: Take = [(0.0, [0x90, 40, 0x7F])] + pairs(msb: 17, lsb: 49, values: [100, 140, 180]).map { ($0.time + 0.05, $0.bytes) }
+        + [(0.2, [0x80, 40, 0x00])]
+
+    /// Needle Drop touched and slid: touch note 70 around the 14-bit position on CC 64/65.
+    static let needleTouchSlide: Take = [(0.0, [0x90, 70, 0x7F])] + pairs(msb: 64, lsb: 65, values: [2000, 9000]).map { ($0.time + 0.05, $0.bytes) }
+        + [(0.2, [0x80, 70, 0x00])]
+
     /// The pitch fader moved from the bottom to the top: CC 8 (MSB) and CC 40 (LSB), 16383 down to 0, since up is 0.
     static let pitchUp: Take = pairs(msb: 8, lsb: 40, values: [16383, 12288, 8192, 4096, 0])
 

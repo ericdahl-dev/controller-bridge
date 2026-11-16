@@ -90,4 +90,20 @@ struct InferenceTests {
             ControlFacts(kind: .pitchBend, channel: 2, first: 8192, last: 16383, min: 8192, max: 16383),
         ])
     }
+
+    @Test("A step lists every control it heard, in order: the jog's touch note 40, then its position on CC 17/49")
+    func jogWithTouch() {
+        #expect(Self.controls(LC6000Traffic.jogTouchTurn, gesture: .turn) == [
+            ControlFacts(kind: .note, channel: 1, number: 40, release: .noteOff, first: 127, last: 127, min: 127, max: 127),
+            ControlFacts(kind: .cc, channel: 1, number: 17, lsb: 49, encoding: .absolute, first: 100, last: 180, min: 100, max: 180),
+        ])
+    }
+
+    @Test("Needle Drop's touch note 70 is listed with its position on CC 64/65")
+    func needleWithTouch() {
+        #expect(Self.controls(LC6000Traffic.needleTouchSlide, gesture: .move) == [
+            ControlFacts(kind: .note, channel: 1, number: 70, release: .noteOff, first: 127, last: 127, min: 127, max: 127),
+            ControlFacts(kind: .cc, channel: 1, number: 64, lsb: 65, encoding: .absolute, first: 2000, last: 9000, min: 2000, max: 9000),
+        ])
+    }
 }
