@@ -54,4 +54,18 @@ struct MappingTests {
         #expect(mapping.leds.ring == 40)
         #expect(mapping.osc.port == 9090)
     }
+
+    @Test("An override with a MIDI channel outside 1-16 is refused with a readable error, not a crash", arguments: [0, -1, 17, 300])
+    func badChannelRefused(channel: Int) {
+        let override = Data(#"{ "midi": { "channel": \#(channel) } }"#.utf8)
+        #expect(throws: MappingError.invalid(["midi.channel: \(channel) is out of range, expected 1-16"])) {
+            try Mapping.bundledDefault(overriddenBy: override)
+        }
+    }
+
+    @Test("Channels 1 and 16 are accepted", arguments: [1, 16])
+    func edgeChannelsAccepted(channel: Int) throws {
+        let override = Data(#"{ "midi": { "channel": \#(channel) } }"#.utf8)
+        #expect(try Mapping.bundledDefault(overriddenBy: override).midi.channel == channel)
+    }
 }
