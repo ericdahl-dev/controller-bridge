@@ -9,7 +9,7 @@ DeckBridge is a native macOS menu-bar app that lets you play Syndicate, the DJ a
 
 ## Why it exists
 
-Syndicate's own MIDI mapping (version 0.3.7) can't handle the LC6000's 14-bit jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10. DeckBridge fills that gap: the LC6000 talks MIDI to DeckBridge, and DeckBridge talks OSC to Syndicate.
+Syndicate's own MIDI mapping (version 0.3.7) can't handle the LC6000's 14-bit jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10 (Syndicate User Guide 0.3.7, section 13.9: https://untitledaudiosyndicate.com/user-guide/index.html#c13-9). DeckBridge fills that gap: the LC6000 talks MIDI to DeckBridge, and DeckBridge talks OSC to Syndicate.
 
 ```
 LC6000 PRIME --USB MIDI-->  DeckBridge  --OSC, port 9090-->           Syndicate
