@@ -11,6 +11,10 @@ public struct CaptureFlow: Sendable {
     public private(set) var phase: Phase = .ports
     private var session: CaptureSession?
     private var stepStart = 0.0
+    /// What VoiceOver last heard about: the step, and the detection on it.
+    private var announcedStep: Int?
+    private var announcedDetection: [String] = []
+    private var announcedDone = false
 
     public init(prompts: [CapturePrompt] = CapturePrompts.djController, appVersion: String) {
         self.prompts = prompts
@@ -76,5 +80,29 @@ public struct CaptureFlow: Sendable {
     private mutating func moved(at time: Double) {
         stepStart = time
         if session?.current == nil { phase = .done }
+    }
+
+    /// What VoiceOver should announce now, if anything: a new prompt, a change in what's detected, or the end. Each
+    /// is said once; the app calls this after every update.
+    public mutating func takeAnnouncement() -> String? {
+        switch phase {
+        case .ports: return nil
+        case .done:
+            guard !announcedDone else { return nil }
+            announcedDone = true
+            let steps = file?.steps ?? []
+            let skipped = steps.filter { $0.status == .skipped }.count
+            return "Capture finished: \(steps.count) steps, \(skipped) skipped."
+        case .steps:
+            let detection = detected.map(\.spoken)
+            if announcedStep != stepNumber, let prompt {
+                announcedStep = stepNumber
+                announcedDetection = detection
+                return "Step \(stepNumber) of \(stepCount). \(prompt.text)"
+            }
+            guard detection != announcedDetection else { return nil }
+            announcedDetection = detection
+            return detection.isEmpty ? nil : "Detected: " + detection.joined(separator: ", then ") + "."
+        }
     }
 }

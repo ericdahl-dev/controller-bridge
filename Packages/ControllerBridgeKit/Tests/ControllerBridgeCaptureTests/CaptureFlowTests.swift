@@ -74,4 +74,29 @@ struct CaptureFlowTests {
         #expect(flow.file?.steps.map(\.status) == [.confirmed, .confirmed, .skipped])
         #expect(flow.file?.device == "LC6000 PRIME")
     }
+
+    @Test("VoiceOver hears each new prompt and each change in what's detected, not every message")
+    func announcements() {
+        var flow = Self.started(at: 100)
+        #expect(flow.takeAnnouncement() == "Step 1 of 3. Don't touch anything for 5 seconds.")
+        #expect(flow.takeAnnouncement() == nil)
+        flow.next(at: 105)
+        #expect(flow.takeAnnouncement() == "Step 2 of 3. Press and release Play on deck 1.")
+
+        flow.receive([0x90, 0x01, 0x7F], at: 106)
+        #expect(flow.takeAnnouncement() == "Detected: Note 1 on channel 1.")
+        flow.receive([0x80, 0x01, 0x00], at: 106.1)
+        flow.receive([0x90, 0x01, 0x7F], at: 106.5)
+        #expect(flow.takeAnnouncement() == nil)
+        flow.receive([0x90, 0x02, 0x7F], at: 106.6)
+        #expect(flow.takeAnnouncement() == "Detected: Note 1 on channel 1, then Note 2 on channel 1.")
+
+        flow.redo(at: 107)
+        #expect(flow.takeAnnouncement() == nil)
+        flow.receive([0x90, 0x01, 0x7F], at: 107.5)
+        #expect(flow.takeAnnouncement() == "Detected: Note 1 on channel 1.")
+        flow.next(at: 108)
+        flow.skip(at: 109)
+        #expect(flow.takeAnnouncement() == "Capture finished: 3 steps, 1 skipped.")
+    }
 }
