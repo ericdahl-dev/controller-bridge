@@ -146,7 +146,8 @@ final class BridgeModel {
                 status.problem = problem
                 status.stopReason = .oscSender
                 log.log(problem)
-            } else if status.stopReason == .oscSender {
+            } else if status.stopReason == .oscSender, osc.isReady, osc.lastError == nil {
+                // Nil can also mean a newer connect overtook this one (#135): clear only once a destination is open.
                 status.problem = nil
             }
         }
