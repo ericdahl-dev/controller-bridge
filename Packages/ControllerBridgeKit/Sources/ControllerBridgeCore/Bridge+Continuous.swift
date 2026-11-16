@@ -28,13 +28,18 @@ extension Bridge {
 
     func rearmPickup() {
         pickupArmed = true
+        faderPosition = nil
     }
 
     /// Whether the fader at `position` drives the tempo. While armed it doesn't, until it comes within tolerance of
-    /// the reported value. With no report yet there is nothing to meet, so the fader passes through.
+    /// the reported value or moves across it. With no report yet there is nothing to meet, so the fader passes through.
     private func pickedUp(at position: Double) -> Bool {
         guard pickupArmed, let reported = reportedTempo else { return true }
-        guard abs(position - reported) <= 0.02 else { return false }
+        let previous = faderPosition
+        faderPosition = position
+        let near = abs(position - reported) <= 0.02
+        let crossed = previous.map { ($0 - reported) * (position - reported) < 0 } ?? false
+        guard near || crossed else { return false }
         pickupArmed = false
         return true
     }

@@ -36,4 +36,24 @@ struct PickupTests {
         Self.fader(rig, 0x70)
         #expect(rig.osc.sent == [Self.tempo(0.50009), Self.tempo(0.75011)])
     }
+
+    @Test("A fader move that jumps across the reported value picks up")
+    func picksUpOnCrossing() throws {
+        let rig = try Self.started()
+        Self.report(rig, "Loaded", .int(1))
+        Self.report(rig, "TempoSlider", .float(0.5))
+        Self.fader(rig, 0x50)
+        Self.fader(rig, 0x70)
+        #expect(rig.osc.sent == [Self.tempo(0.75011)])
+    }
+
+    @Test("Crossing is judged after invert: with pitch.invert, the fader meets a reported -0.5 on the inverted side")
+    func crossingAfterInvert() throws {
+        let rig = try Self.started(#"{ "pitch": { "invert": true } }"#)
+        Self.report(rig, "Loaded", .int(1))
+        Self.report(rig, "TempoSlider", .float(-0.5))
+        Self.fader(rig, 0x50)
+        Self.fader(rig, 0x70)
+        #expect(rig.osc.sent == [Self.tempo(-0.75011)])
+    }
 }

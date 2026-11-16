@@ -86,6 +86,8 @@ final class Bridge {
     /// Pitch pickup (#22): while armed, the fader is ignored until it meets Syndicate's reported TempoSlider.
     var pickupArmed = false
     var reportedTempo: Double?
+    /// Where the fader was on its last move while armed, to see it cross the reported value.
+    var faderPosition: Double?
     /// The direction of the PhaseBend being held (1 or -1), or 0 when none is.
     var bendDirection = 0
     var lastJogTime = 0.0
