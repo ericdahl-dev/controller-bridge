@@ -47,7 +47,7 @@ extension Mapping {
         case let (.object(pairs), .object):
             return .object(pairs.compactMap { pair in
                 let childPath = path.isEmpty ? pair.key : "\(path).\(pair.key)"
-                guard let given = schema[pair.key] ?? optionalKeys[childPath] else { return nil }
+                guard let given = schema[pair.key] ?? optionalKey(childPath) else { return nil }
                 let expected = alternative(pair.value, at: childPath) ?? given
                 guard kindProblem(pair.value, expected: expected) == nil else { return nil }
                 return (pair.key, known(pair.value, schema: expected, path: childPath))
@@ -155,7 +155,7 @@ extension Mapping {
         case let (.object(pairs), _):
             for (key, child) in pairs {
                 let childPath = path.isEmpty ? key : "\(path).\(key)"
-                guard let expected = schema[key] ?? optionalKeys[childPath] else {
+                guard let expected = schema[key] ?? optionalKey(childPath) else {
                     out.append("\(childPath): unknown key")
                     continue
                 }
@@ -207,7 +207,20 @@ extension Mapping {
     private static let optionalKeys: [String: OrderedJSON] = [
         "jog.relative_cc": .number(0, isInteger: true),
         "jog.relative_edge_cc": .number(0, isInteger: true),
+        // The pads' own MIDI channel (#224), for the deck and for each deck layer.
+        "pads.channel": .number(0, isInteger: true),
+        "midi.layers[].pad_channel": .number(0, isInteger: true),
+        // Each pad mode's own notes (#225).
+        "pads.mode_notes": .object([
+            ("hotcue", .array([.number(0, isInteger: true)])), ("roll", .array([.number(0, isInteger: true)])),
+            ("loop", .array([.number(0, isInteger: true)])), ("slicer", .array([.number(0, isInteger: true)])),
+        ]),
     ]
+
+    /// An optional key's expected kind by its path, a list element's index written as `[]`.
+    private static func optionalKey(_ path: String) -> OrderedJSON? {
+        optionalKeys[path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)]
+    }
 
     /// Ranges and choices, by key path. A list element's path ends in `[]`.
     private static let ranges: [String: ClosedRange<Double>] = {
@@ -216,6 +229,9 @@ extension Mapping {
             "deck.number": 1...4,
             "midi.layers[].channel": 1...16,
             "midi.layers[].deck": 1...4,
+            "midi.layers[].pad_channel": 1...16, "pads.channel": 1...16,
+            "pads.mode_notes.hotcue[]": 0...127, "pads.mode_notes.roll[]": 0...127,
+            "pads.mode_notes.loop[]": 0...127, "pads.mode_notes.slicer[]": 0...127,
             "midi.layer_note": 0...127,
             "notes.pads[]": 0...127,
             "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127, "jog.relative_cc": 0...127, "jog.relative_edge_cc": 0...127,

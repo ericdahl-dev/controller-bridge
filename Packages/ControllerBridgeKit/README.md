@@ -80,6 +80,16 @@ Checked on hardware (2026-11-15, see #12 and #103):
   hot cue N, and in Roll mode plays `roll_sizes[N-1]`, by Syndicate's SlipLoop names (`ThirtySecond`, `Sixteenth`,
   `Eighth`, `Quarter`, `Half`, `One`, `Two`, `Four`); a pad past the list does nothing in Roll mode. Left out,
   `roll_sizes` is the LC6000's eight, shortest first. Syndicate sends 8 cue slots, so pads 9–16 stay dark.
+- `pads.channel` and `midi.layers[].pad_channel` (#224): the MIDI channel (1–16) a deck's pads use when it isn't the
+  deck's own, such as a Pioneer DDJ-400/FLX4 profile's 8 for deck 1 and 10 for deck 2. Pads then play only on that
+  channel (the same note on the deck's channel isn't a pad), and their LEDs, and the LED sweep's color pass, go out on
+  it. Left out (the LC6000, so the bundled profile doesn't name it), pads share the deck's channel.
+- `pads.mode_notes` (#225): on a controller whose pads send a different note range in each pad mode (Pioneer's do),
+  each mode's notes, one per pad: `hotcue`, `roll`, `loop` and `slicer`, all four, each as long as `notes.pads`. The
+  note then says the mode: a roll note plays a roll, and a note from another mode switches to it first, letting a held
+  pad go. The pad LEDs light the current mode's notes; the other modes' go dark. The `mode_*` buttons still pick the
+  mode. Left out (the LC6000), `notes.pads` serves every mode and DeckBridge tracks the mode itself. The LED sweep's
+  color pass covers `notes.pads` only.
 - `leds.levels` (#194): a button LED's velocity at full, dim and off, 127, 1 and 0 on the LC6000. Another controller's
   profile can set any of them (each 0–127; one left out keeps the LC6000's). They drive the button and pitch-center
   LEDs, turning the LEDs off, and the LED sweep's button pass; pad and ring colors don't use them.
