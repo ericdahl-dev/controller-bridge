@@ -23,6 +23,8 @@ final class BridgeStatus {
     var syndicateFeedback: FeedbackState = .waiting
     /// The last time Syndicate's feedback stopped, for the menu.
     var lastDropout: String?
+    /// An LED sweep is running (#26).
+    var sweeping = false
     var feedback: Feedback = .starting
     var problem: String?
 
@@ -36,6 +38,8 @@ final class BridgeStatus {
 @MainActor
 final class BridgeModel {
     let status = BridgeStatus()
+    /// What the Diagnostics window shows (#26).
+    let diagnostics = DiagnosticsLog()
     private var listener: FeedbackListener?
     private var ticker: Ticker?
     private var midi: CoreMIDISystem?
@@ -54,6 +58,11 @@ final class BridgeModel {
 
     /// Quit: release everything held in Syndicate, then call `done`. Calls it after one second at the latest, so a
     /// stuck engine can't stop the app from quitting.
+    /// The Diagnostics window opened or closed: only while it's open does the engine build anything for it.
+    func setDiagnostics(open: Bool) { producer?.diagnostics(open: open) }
+    func startLEDSweep(delay: Double) { producer?.ledSweep(delay: delay) }
+    func cancelLEDSweep() { producer?.cancelLEDSweep() }
+
     func quit(_ done: @escaping @MainActor () -> Void) {
         guard let producer, let engine else { return done() }
         var finished = false
@@ -91,6 +100,7 @@ final class BridgeModel {
         status.deck = mapping.deck.number
         let pipe = EventPipe()
         let status = status
+        let diagnostics = diagnostics
 
         do {
             midi = try CoreMIDISystem(producer: pipe.producer) { names in
@@ -125,7 +135,9 @@ final class BridgeModel {
         observeSleep(pipe.producer)
         let midi = midi!
         engine = Task.detached(name: "Bridge engine") {
-            await BridgeHost.run(profiles: profiles, midi: midi, osc: osc, log: log, status: status, events: pipe.events)
+            await BridgeHost.run(
+                profiles: profiles, midi: midi, osc: osc, log: log, status: status, diagnostics: diagnostics, events: pipe.events
+            )
         }
     }
 }

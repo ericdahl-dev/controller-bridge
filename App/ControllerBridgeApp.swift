@@ -31,6 +31,14 @@ struct ControllerBridgeApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        Window("Diagnostics", id: "diagnostics") {
+            DiagnosticsWindow(
+                log: model.diagnostics, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
+                startSweep: model.startLEDSweep(delay:), stopSweep: model.cancelLEDSweep
+            )
+        }
+        .defaultSize(width: 720, height: 480)
+
         Settings {
             Text("Settings arrive in #19.")
                 .font(Theme.ui(13))
