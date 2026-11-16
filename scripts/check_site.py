@@ -8,6 +8,7 @@
   (POSTHOG_LOADER), which website/analytics.js adds to count visits; the privacy page discloses it
 - every page has a title and a meta description
 - every page loads the site's own analytics.js, and every mailto: link has a data-track (the click event it sends)
+- no page, index.md or llms.txt still has a TODO(user) TestFlight placeholder (the public link is live)
 - every <img> has an alt attribute (alt="" for a decorative one)
 - every <script type="application/ld+json"> block parses as JSON
 - no page title or main heading uses another company's name as the product's
@@ -35,6 +36,8 @@ PRIVACY_STATEMENTS = [
 ]
 OTHER_COMPANIES = ["Syndicate", "Denon"]
 MAX_BYTES = 2_000_000
+PLACEHOLDER = re.compile(r"TODO\(user\):\s*TestFlight", re.IGNORECASE)
+TEXT_FILES = (".html", ".md", ".txt")
 ANALYTICS = "analytics.js"  # at the site's root; every page loads it
 POSTHOG_LOADER = "https://us-assets.i.posthog.com/static/array.js"  # allowed only as a <script src>
 LINK_RELS = {"canonical", "alternate"}  # a <link> with only these rels points somewhere; any other rel loads it
@@ -202,9 +205,13 @@ def problems(root):
         lower = os.path.basename(file).lower()
         if "logo" in lower and any(name.lower() in lower for name in OTHER_COMPANIES):
             out.append(f"{file}: looks like another company's logo")
-        if file.endswith(".html"):
+        if file.endswith(TEXT_FILES):
             with open(path, encoding="utf-8") as f:
-                out += check_page(root, file, f.read())
+                text = f.read()
+            if PLACEHOLDER.search(text):
+                out.append(f"{file}: still has a TODO(user) TestFlight placeholder")
+            if file.endswith(".html"):
+                out += check_page(root, file, text)
         elif file.endswith(".css"):
             with open(path, encoding="utf-8") as f:
                 css = f.read()

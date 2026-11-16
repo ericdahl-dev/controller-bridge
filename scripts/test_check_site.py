@@ -210,6 +210,14 @@ class CheckSiteTests(unittest.TestCase):
                                                           ' <a href="mailto:a@b.example?subject=Beta">Join</a>')})
         self.assertEqual(check_site.problems(root), ['support/index.html: <a href="mailto:a@b.example?subject=Beta"> has no data-track'])
 
+    def test_a_leftover_testflight_placeholder_fails(self):
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <!-- TODO(user): TestFlight public link -->'),
+            "index.md": "# DeckBridge\n\nJoin the beta. <!-- TODO(user): TestFlight public link -->\n<!-- TODO(user): price -->\n",
+        })
+        self.assertEqual(check_site.problems(root), ["index.md: still has a TODO(user) TestFlight placeholder",
+                                                     "support/index.html: still has a TODO(user) TestFlight placeholder"])
+
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
         self.assertEqual(check_site.problems(root), ["img/Syndicate_logo.png: looks like another company's logo",
