@@ -100,4 +100,17 @@ struct CaptureFileTests {
         #expect(throws: CaptureFileError.unsupportedFormat(2)) { try CaptureFile.decode(Data(newer.utf8)) }
         #expect(CaptureFileError.unsupportedFormat(2).description == "This capture file is format 2; this version reads format 1. Update DeckBridge.")
     }
+
+    @Test("A tail message carries \"tail\": true; others leave the key out, so format 1 readers are unaffected (#229)")
+    func tailKey() throws {
+        let messages = [CaptureMessage(t: 0, bytes: [0x80, 0x01, 0x00], tail: true), CaptureMessage(t: 5, bytes: [0x90, 0x02, 0x7F])]
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(messages)) as? NSArray
+        let literal = try JSONSerialization.jsonObject(with: Data("""
+            [{ "t": 0, "port": 0, "midi": "80 01 00", "tail": true }, { "t": 5, "port": 0, "midi": "90 02 7F" }]
+            """.utf8)) as? NSArray
+        #expect(json != nil)
+        #expect(json == literal)
+        #expect(try JSONDecoder().decode([CaptureMessage].self, from: Data(#"[{"t":0,"port":0,"midi":"80 01 00","tail":true}]"#.utf8))
+            == [messages[0]])
+    }
 }
