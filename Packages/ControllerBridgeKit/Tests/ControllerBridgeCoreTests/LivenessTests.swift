@@ -79,4 +79,42 @@ struct LivenessTests {
         #expect(rig.log.lines.contains("Syndicate feedback stopped"))
         #expect(rig.coordinator.status.lastDropout == "Syndicate feedback stopped")
     }
+
+    /// A Coordinator whose mapping sets `leds.stale_idle`, started at t = 0 with Playing 1 at t = 0.5.
+    final class StaleIdleRig {
+        let midi = Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out])
+        let clock = Rig.FakeClock()
+        let coordinator: Coordinator
+
+        init(staleIdle: String) throws {
+            let override = Data(#"{ "leds": { "stale_idle": "\#(staleIdle)" } }"#.utf8)
+            coordinator = Coordinator(
+                mapping: try Mapping.bundledDefault(overriddenBy: override),
+                midi: midi, osc: Rig.FakeOSC(), clock: clock, log: Rig.FakeLog()
+            )
+            coordinator.start()
+            clock.now = 0.5
+            coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        }
+
+        func tick(at time: Double) {
+            clock.now = time
+            coordinator.tick()
+        }
+
+        var leds: [UInt8: UInt8] {
+            var out: [UInt8: UInt8] = [:]
+            for case let .noteOn(_, note, velocity) in midi.outputs[Rig.lc6000Out.id]?.sent ?? [] { out[note] = velocity }
+            return out
+        }
+    }
+
+    @Test("With stale_idle \"off\", Syndicate's button LEDs go off once stale; the bridge's own unlit LEDs stay dim")
+    func staleIdleOff() throws {
+        let rig = try StaleIdleRig(staleIdle: "off")
+        rig.tick(at: 10.5)
+        rig.tick(at: 12.5)
+        // Play (1) and Cue (2) follow Syndicate: off. Key Lock (22) and Shift (26) are the bridge's own: still dim.
+        #expect([rig.leds[1], rig.leds[2], rig.leds[22], rig.leds[26]] == [0, 0, 1, 1])
+    }
 }
