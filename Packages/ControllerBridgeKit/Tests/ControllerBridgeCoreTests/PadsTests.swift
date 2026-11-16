@@ -240,6 +240,22 @@ struct PadsTests {
         #expect(rig.leds[40] == velocity)
     }
 
+    @Test("A profile can fix the ring color: ring_follows_deck false with ring_color red (255, 0, 0) lights 0b00_11_00_00 = 48")
+    func ringColorOverride() throws {
+        let rig = try Rig(override: #"{ "leds": { "ring_follows_deck": false, "ring_color": [255, 0, 0] } }"#)
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        #expect(rig.leds[40] == 48)
+    }
+
+    @Test("An older exported file with ring_color but no ring_follows_deck merges over the bundled true: the ring still follows the deck")
+    func olderFileStillFollowsDeck() throws {
+        let rig = try Rig(override: #"{ "leds": { "ring_color": [255, 0, 0] } }"#)
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        #expect(rig.leds[40] == 21)
+    }
+
     @Test("Cues and Loaded feedback for another deck leave this controller's pads and ring alone")
     func otherDeckLeavesPadsAlone() throws {
         let rig = try Self.startedRig()
