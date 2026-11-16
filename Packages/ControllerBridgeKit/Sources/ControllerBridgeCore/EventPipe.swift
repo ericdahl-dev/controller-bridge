@@ -9,6 +9,11 @@ public enum PipeEvent: Equatable, Sendable {
     /// The Mac is about to sleep, or just woke.
     case sleep
     case wake
+    /// The Diagnostics window opened or closed (#26).
+    case diagnostics(open: Bool)
+    /// Start the LED sweep, `delay` seconds per color; or stop it part-way.
+    case ledSweep(delay: Double)
+    case cancelLEDSweep
     /// Quit: release everything and end the loop. Always the last event.
     case stop
 }
@@ -37,6 +42,9 @@ public struct EventPipe: Sendable {
         public func devicesChanged() { continuation.yield(.devicesChanged) }
         public func sleep() { continuation.yield(.sleep) }
         public func wake() { continuation.yield(.wake) }
+        public func diagnostics(open: Bool) { continuation.yield(.diagnostics(open: open)) }
+        public func ledSweep(delay: Double) { continuation.yield(.ledSweep(delay: delay)) }
+        public func cancelLEDSweep() { continuation.yield(.cancelLEDSweep) }
         /// Quit. Queues the stop behind everything already sent, then closes the pipe, so nothing after it is handled.
         public func stop() {
             continuation.yield(.stop)
