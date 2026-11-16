@@ -33,6 +33,8 @@ PRIVACY_STATEMENTS = [
     # the website: cookieless PostHog (persistence memory, cookieless_mode always), worded as showrecorder.app's
     "posthog", "no cookies", "anonymous hash that changes every day", "does not keep the address",
     "counts clicks on a few links", "to have your visits removed, email",
+    # the web capture (#190): it uploads nothing, and the analytics count only that one started and finished
+    "web capture", "nothing is uploaded", "counts only that a capture started and finished",
 ]
 OTHER_COMPANIES = ["Syndicate", "Denon"]
 MAX_BYTES = 2_000_000

@@ -20,7 +20,8 @@ def sitemap(*locs):
 
 WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no cookies. PostHog turns your IP address'
            ' into an anonymous hash that changes every day, and does not keep the address. It counts clicks on a few links.'
-           ' To have your visits removed, email us.</p>')
+           ' To have your visits removed, email us. On the capture page it counts only that a capture started and finished.</p>'
+           '<p>The web capture saves the file on your computer; nothing is uploaded.</p>')
 
 GOOD = {
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">',
@@ -195,6 +196,19 @@ class CheckSiteTests(unittest.TestCase):
             'privacy/index.html: doesn\'t say "does not keep the address"',
             'privacy/index.html: doesn\'t say "counts clicks on a few links"',
             'privacy/index.html: doesn\'t say "to have your visits removed, email"',
+            'privacy/index.html: doesn\'t say "web capture"',
+            'privacy/index.html: doesn\'t say "nothing is uploaded"',
+            'privacy/index.html: doesn\'t say "counts only that a capture started and finished"',
+        ])
+
+    def test_the_privacy_page_must_disclose_the_web_capture(self):
+        without = WEBSITE.replace(" On the capture page it counts only that a capture started and finished.", "").replace(
+            "<p>The web capture saves the file on your computer; nothing is uploaded.</p>", "")
+        root = self.site({"privacy/index.html": page(body="<p>DeckBridge collects no data.</p>" + without)})
+        self.assertEqual(check_site.problems(root), [
+            'privacy/index.html: doesn\'t say "web capture"',
+            'privacy/index.html: doesn\'t say "nothing is uploaded"',
+            'privacy/index.html: doesn\'t say "counts only that a capture started and finished"',
         ])
 
     def test_every_page_loads_analytics_js(self):
