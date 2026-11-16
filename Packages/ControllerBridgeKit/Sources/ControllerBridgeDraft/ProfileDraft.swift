@@ -20,6 +20,7 @@ public struct ProfileDraft: Sendable {
         draft.identity(capture)
         draft.buttons(capture)
         draft.noise(capture)
+        draft.pads(capture)
         return draft
     }
 
@@ -85,6 +86,29 @@ public struct ProfileDraft: Sendable {
             }
             set(key, .int(note))
         }
+    }
+
+    /// Hot cue pads 1–8, in order. Pads on a channel other than the deck's set pads.channel (#224). The capture only
+    /// records Hot Cue mode, so per-mode notes (#225) and how the mode is chosen (#198) are always TODOs.
+    private mutating func pads(_ capture: CaptureFile) {
+        let key = "mapping.notes.pads"
+        let controls = (1...8).map { control(capture, "deck1.hotcue\($0)", for: "\(key)[\($0 - 1)]") }
+        todos.removeAll { $0.key.hasPrefix("\(key)[") }
+        let missing = (1...8).filter { controls[$0 - 1]?.kind != .note }
+        if missing.isEmpty, case let pads = controls.compactMap({ $0 }) {
+            set(key, .array(pads.map { .int($0.number ?? 0) }))
+            let channels = Set(pads.map(\.channel))
+            let deck = profile.value(at: "mapping.midi.channel")
+            if channels.count > 1 {
+                todo("mapping.pads.channel", "The pads came on channels \(channels.sorted()); profiles put all pads on one.")
+            } else if let channel = channels.first, deck != .int(channel) {
+                set("mapping.pads.channel", .int(channel))
+            }
+        } else {
+            todo(key, "No note for \(missing.map { "deck1.hotcue\($0)" }.joined(separator: ", ")). Run those steps again; notes.pads needs all eight.")
+        }
+        todo("mapping.pads.mode_notes", "Only if the pads send other notes in Roll, Loop and Slicer modes (#225): press pad 1–8 in each mode and list them. The capture only records Hot Cue mode.")
+        todo("mapping.pads.mode_select", "Four mode buttons (\"buttons\") or one that cycles (\"cycle\", #198)? From the manual, or by pressing the mode buttons in MIDI Monitor.")
     }
 
     /// Notes that came in with hands off (a heartbeat) are ignored, so they never press anything.
