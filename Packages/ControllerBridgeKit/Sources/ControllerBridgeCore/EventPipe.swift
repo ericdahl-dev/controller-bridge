@@ -6,6 +6,9 @@ public enum PipeEvent: Equatable, Sendable {
     case tick
     /// MIDI devices were added or removed: the Coordinator re-reads them.
     case devicesChanged
+    /// The Mac is about to sleep, or just woke.
+    case sleep
+    case wake
 }
 
 /// One ordered stream fed by every adapter: the CoreMIDI callback, the UDP reader and the tick timer.
@@ -30,6 +33,8 @@ public struct EventPipe: Sendable {
         public func udp(_ datagram: [UInt8]) { continuation.yield(.udp(datagram)) }
         public func tick() { continuation.yield(.tick) }
         public func devicesChanged() { continuation.yield(.devicesChanged) }
+        public func sleep() { continuation.yield(.sleep) }
+        public func wake() { continuation.yield(.wake) }
         public func finish() { continuation.finish() }
     }
 }

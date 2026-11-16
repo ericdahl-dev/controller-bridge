@@ -23,6 +23,8 @@ public struct Engine {
                 }
             case .tick: coordinator.tick()
             case .devicesChanged: coordinator.devicesChanged()
+            case .sleep: coordinator.willSleep()
+            case .wake: coordinator.didWake()
             }
         }
     }

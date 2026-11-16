@@ -85,4 +85,22 @@ struct EngineTests {
 
         #expect(rig.midi.connected == [Rig.lc6000.id])
     }
+
+    @Test("Sleep from the pipe releases a held Cue; wake re-checks the devices")
+    func sleepAndWakeFromThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+
+        pipe.producer.sleep()
+        pipe.producer.wake()
+        pipe.producer.finish()
+        rig.midi.sources = []
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
+        #expect(rig.midi.connected == [])
+    }
 }
