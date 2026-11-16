@@ -16,10 +16,12 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     public var followSyndicateDeckColors = true
     /// The deck colors used while following is off (#123).
     public var customDeckColors = DeckColors.defaults
+    /// Light or dark (#127). Syndicate's own LIGHT MODE can't be read over OSC, so the DJ picks it to match.
+    public var appearance = Appearance.matchMacOS
 
     enum CodingKeys: String, CodingKey {
         case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
-        case followSyndicateDeckColors, customDeckColors
+        case followSyndicateDeckColors, customDeckColors, appearance
     }
 
     /// Settings saved before #123 have no deck colors: they load with the defaults.
@@ -33,6 +35,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         ledsEnabled = try c.decode(Bool.self, forKey: .ledsEnabled)
         followSyndicateDeckColors = try c.decodeIfPresent(Bool.self, forKey: .followSyndicateDeckColors) ?? true
         customDeckColors = try c.decodeIfPresent(DeckColors.self, forKey: .customDeckColors) ?? .defaults
+        appearance = try c.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .matchMacOS
     }
 
     public init(
@@ -76,6 +79,7 @@ extension BridgeSettings {
         out.ledsEnabled = pick(\.ledsEnabled)
         out.followSyndicateDeckColors = pick(\.followSyndicateDeckColors)
         out.customDeckColors = pick(\.customDeckColors)
+        out.appearance = pick(\.appearance)
         // Controllers: the draft's list (an add or remove is the DJ's edit), each field rebased where both had it.
         out.controllers = draft.controllers.indices.map { index in
             let edited = draft.controllers[index]
@@ -271,4 +275,9 @@ public enum SettingsField: Hashable, Sendable {
     case oscPort
     case feedbackPort
     case deckColor(deck: Int)
+}
+
+/// The app's light or dark look (#127).
+public enum Appearance: String, Codable, CaseIterable, Sendable {
+    case matchMacOS, dark, light
 }
