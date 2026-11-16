@@ -99,13 +99,9 @@ final class BridgeModel {
         }
         try new.save(to: storage)
         settings = new
-        let was = old.controllers[0], now = new.controllers[0]
-        if now.deck != was.deck {
-            producer.setDeck(now.deck, controller: 0)
-            status.deck = now.deck
-        }
-        if now.input != was.input || now.output != was.output {
-            producer.setDevices(input: now.input, output: now.output, controller: 0)
+        if new.controllers != old.controllers {
+            producer.setControllers(new.controllers)
+            status.deck = new.controllers[0].deck
         }
         if new.ledsEnabled != old.ledsEnabled { producer.setLEDs(enabled: new.ledsEnabled) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
@@ -172,10 +168,8 @@ final class BridgeModel {
             await BridgeHost.run(profiles: profiles, midi: midi, osc: osc, log: log, status: status, events: pipe.events)
         }
         // The saved controller settings, queued behind the Coordinator's start.
-        let controller = settings.controllers[0]
-        if controller.deck != mapping.deck.number { pipe.producer.setDeck(controller.deck, controller: 0) }
-        if controller.input != nil || controller.output != nil {
-            pipe.producer.setDevices(input: controller.input, output: controller.output, controller: 0)
+        if settings.controllers != BridgeSettings.defaults(from: mapping).controllers {
+            pipe.producer.setControllers(settings.controllers)
         }
         if !settings.ledsEnabled { pipe.producer.setLEDs(enabled: false) }
     }
