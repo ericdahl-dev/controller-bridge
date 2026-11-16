@@ -4,13 +4,13 @@
    cookieless_mode "always" sends no ID from the browser: PostHog derives visitor and session from a hash of IP, browser
    and a salt it rotates daily. The privacy page says so (privacy/#website), and scripts/check_site.py holds it to that.
    The key is PostHog's public project key, meant to be in page source; it can only send events.
-   It loads only on getdeckbridge.app, so the preview server (127.0.0.1) and the taste-skill gate's headless Chrome never
+   It loads only on getdeckbridge.app (and www.), so the preview server (127.0.0.1) and the taste-skill gate's headless Chrome never
    send events. Eric's own visits: opening any page with ?internal=1 marks that browser (one localStorage key, set only
    by that link) and PostHog never loads there again; ?internal=0 clears it. Ordinary visitors get nothing stored. If
    storage is blocked, the visit is simply counted.
    Tested by scripts/test_analytics.mjs. */
 (function () {
-  var HOST = "getdeckbridge.app";
+  var HOSTS = ["getdeckbridge.app", "www.getdeckbridge.app"];  // www: the host still serves it, not only a redirect
   var INTERNAL_KEY = "deckbridge_internal";
   var KEY = "phc_uzsUUTbN2k3EJVDvtTGBtrRgPmdWrRxzxbLZcsw7Vvm4";
   var OPTIONS = {
@@ -31,7 +31,7 @@
     capture_exceptions: false
   };
 
-  if (window.location.hostname !== HOST) return;
+  if (HOSTS.indexOf(window.location.hostname) < 0) return;
   var internal = false;
   try {
     var flag = new URLSearchParams(window.location.search).get("internal");

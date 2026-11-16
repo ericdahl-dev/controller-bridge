@@ -63,8 +63,12 @@ test("loads for ordinary visitors on getdeckbridge.app and stores nothing", () =
   assert.equal(run.stored, null);
 });
 
-test("never loads anywhere but getdeckbridge.app: the preview server, the gate's headless Chrome, a copy", () => {
-  for (const hostname of ["127.0.0.1", "localhost", "www.getdeckbridge.app", "getdeckbridge.app.example.com"]) {
+test("also loads on www.getdeckbridge.app, which the host still serves", () => {
+  assert.equal(loaded(load({ hostname: "www.getdeckbridge.app" })), true);
+});
+
+test("never loads anywhere but getdeckbridge.app and www: the preview server, the gate's headless Chrome, a copy", () => {
+  for (const hostname of ["127.0.0.1", "localhost", "getdeckbridge.app.example.com", "wwwgetdeckbridge.app", "dev.getdeckbridge.app"]) {
     const run = load({ hostname });
     assert.equal(run.inserted.length, 0, hostname);
     assert.equal(run.window.posthog, undefined, hostname);
