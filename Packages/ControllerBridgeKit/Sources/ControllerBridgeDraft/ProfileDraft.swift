@@ -52,6 +52,13 @@ public struct ProfileDraft: Sendable {
 
     mutating func set(_ path: String, _ value: DraftJSON) { profile.set(path, value) }
 
+    /// What the profile import check says about the draft's mapping, as a partial mapping over the defaults. Empty
+    /// means it imports as written.
+    public var problems: [String] {
+        guard let mapping = profile["mapping"] else { return [] }
+        return Mapping.problems(in: Data(mapping.text().utf8))
+    }
+
     mutating func todo(_ key: String, _ how: String) {
         if !todos.contains(where: { $0.key == key }) { todos.append(Todo(key: key, how: how)) }
     }
@@ -277,6 +284,7 @@ public struct ProfileDraft: Sendable {
 
     /// The browse knob's CC, and from its turn the relative encoder format (#193) unless the jog already set it.
     private mutating func browse(_ capture: CaptureFile) {
+        todo("mapping.browse.auto_loop_size_cc", "The capture has no step for the auto loop size encoder. Turn it in MIDI Monitor, or find it in the MIDI chart.")
         guard let control = control(capture, "deck1.browse.turn", for: "mapping.browse.select_turn_cc") else { return }
         guard control.kind == .cc, let number = control.number else {
             todo("mapping.browse.select_turn_cc", "The browse knob didn't send a CC. Check it in MIDI Monitor.")

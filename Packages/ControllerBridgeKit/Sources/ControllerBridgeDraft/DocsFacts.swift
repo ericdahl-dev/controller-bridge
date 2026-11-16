@@ -41,6 +41,11 @@ public struct DocsFacts: Sendable {
                 ? .int(number.intValue) : .double(number.doubleValue)
         case let text as String: return .string(text)
         case let list as [Any]: return .array(try list.map { try value($0, at: path) })
+        case let object as [String: Any]:
+            // Inside a list, such as midi.layers: kept whole, keys in the profile's order (channel before deck).
+            let order = ["channel", "deck"]
+            let keys = object.keys.sorted { (order.firstIndex(of: $0) ?? 99, $0) < (order.firstIndex(of: $1) ?? 99, $1) }
+            return .object(try keys.map { DraftJSON.Pair(key: $0, value: try value(object[$0]!, at: path)) })
         default: throw Invalid(description: "\(path): a value a profile can't hold.")
         }
     }
