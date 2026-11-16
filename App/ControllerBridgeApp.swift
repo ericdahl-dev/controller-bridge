@@ -50,6 +50,13 @@ struct ControllerBridgeApp: App {
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)
 
+        // The guided capture (#186): from Settings › Controller.
+        Window(CaptureWindow.title, id: CaptureWindow.id) {
+            CaptureWindowRoot(model: model)
+        }
+        .windowResizability(.contentSize)
+        .defaultLaunchBehavior(.suppressed)
+
         Settings {
             SettingsView(model: model)
                 .environment(\.deckColors, model.status.deckColors)
