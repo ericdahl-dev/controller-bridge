@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeckBridge Support: setup and FAQ</title>
+  <meta name="description" content="Set up DeckBridge with the Syndicate DJ app in four steps, fix missing LEDs, switch decks, and contact support.">
+  <link rel="icon" href="../img/favicon-64.png" type="image/png">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="../"><img src="../img/favicon-64.png" alt="" width="32" height="32">DeckBridge</a>
+      <nav class="site" aria-label="Site">
+        <a href="../">Home</a>
+        <a href="./" aria-current="page">Support</a>
+        <a href="../privacy/">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero" style="grid-template-columns: 1fr">
+      <div>
+        <h1>Support</h1>
+        <p class="lede">Four settings in Syndicate, once. DeckBridge opens the same steps on first launch, and you can reopen them from the panel's <strong>Setup guide</strong> or <strong>Settings › Setup Guide…</strong>.</p>
+      </div>
+    </section>
+
+    <h2 id="setup">Set up Syndicate</h2>
+    <div class="panel">
+      <ol class="steps">
+        <li><div><h3>Settings → OSC</h3>Turn <strong>OSC INPUT ENABLED</strong> on. The listen port is <code>9090</code>.</div></li>
+        <li><div><h3>Settings → OSC Feedback</h3>Set <strong>DEST IP</strong> to <code>127.0.0.1</code> (or this Mac's address if Syndicate runs on another Mac) and <strong>PORT</strong> to <code>9096</code>.</div></li>
+        <li><div><h3>Settings → OSC Feedback → Subscriptions</h3>Turn on these subscriptions:
+          <ul class="checklist">
+            <li>Playing</li><li>PlayPending</li><li>Loaded and TrackInfo</li><li>Position/Progress</li>
+            <li>TempoSlider/TempoSliderEnabled</li><li>Cues</li><li>BPM/Sync</li><li>Loop</li>
+          </ul></div></li>
+        <li><div><h3>Settings → MIDI</h3>Turn the LC6000 PRIME's MIDI input <strong>off</strong> in Syndicate. Otherwise Syndicate's own mapping and DeckBridge would both react to every button.</div></li>
+      </ol>
+    </div>
+    <p class="caption">When it's working, the panel shows <span class="signal">CONTROLLER ● CONNECTED</span> and <span class="signal">FEEDBACK ● LIVE</span>.</p>
+
+    <h2 id="faq">FAQ</h2>
+    <div class="panel">
+      <details>
+        <summary>The controller works, but the LEDs stay dark.</summary>
+        <p>DeckBridge lights the controller from Syndicate's OSC feedback. Check step 2 (DEST IP and PORT <code>9096</code>) and that every subscription in step 3 is on. The panel's <strong>Why no LEDs?</strong> line says which part is missing.</p>
+      </details>
+      <details>
+        <summary>How do I switch between decks 1 to 4?</summary>
+        <p>Use the LC6000's own deck layers: <strong>Shift + deck select</strong>. DeckBridge follows the layer, releases anything held on the old deck and repaints the lights. To drive one fixed deck instead, turn off <strong>Follow controller layers</strong> in Settings and pick the deck in the panel.</p>
+      </details>
+      <details>
+        <summary>Nothing happens when I press buttons.</summary>
+        <p>Quit any other DJ app that was using the LC6000 PRIME first, then power-cycle the controller: some apps switch its MIDI mode until it restarts. Then check <strong>Diagnostics › MIDI Monitor</strong>: each button press should show up there.</p>
+      </details>
+      <details>
+        <summary>Syndicate runs on another Mac.</summary>
+        <p>Set the Syndicate host in DeckBridge's Settings to that Mac's IP address, and set <strong>Listen on</strong> to <strong>All networks</strong>. macOS asks once for local-network permission; allow it, or no feedback arrives.</p>
+      </details>
+      <details>
+        <summary>Can I try it without a controller?</summary>
+        <p>Yes. Click <strong>Demo controller: Off</strong> in the panel. A scripted controller plays against a simulated session, with nothing sent to the network.</p>
+      </details>
+    </div>
+
+    <h2 id="contact">Contact</h2>
+    <p>Email <a href="mailto:deckbridge@ericdahl.dev">deckbridge@ericdahl.dev</a>. If you can, include what the panel shows and the <strong>Copy details</strong> text.</p>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <p><a href="../">Home</a> · <a href="../privacy/">Privacy</a> · <a href="mailto:deckbridge@ericdahl.dev">deckbridge@ericdahl.dev</a></p>
+      <p>DeckBridge is an independent app. Syndicate is a separate app by Untitled Audio. Denon DJ and LC6000 PRIME are trademarks of their owners.</p>
+    </div>
+  </footer>
+</body>
+</html>

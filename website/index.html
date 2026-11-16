@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeckBridge: play the LC6000 PRIME in a Mac DJ app over OSC</title>
+  <meta name="description" content="DeckBridge is a Mac menu-bar app that bridges a Denon LC6000 PRIME controller to the Syndicate DJ app over OSC, with full-resolution jog and pitch, deck layers and LED feedback.">
+  <link rel="icon" href="img/favicon-64.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="img/favicon-64.png" alt="" width="32" height="32">DeckBridge</a>
+      <nav class="site" aria-label="Site">
+        <a href="./" aria-current="page">Home</a>
+        <a href="support/">Support</a>
+        <a href="privacy/">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div>
+        <h1>Your controller, fully in the mix.</h1>
+        <p class="lede">DeckBridge is a small Mac menu-bar app that connects a Denon LC6000 PRIME to the Syndicate DJ app through Syndicate's OSC interface. The jog wheel and pitch fader work at full resolution, and the controller's LEDs follow what's playing.</p>
+        <div class="actions">
+          <!-- TestFlight link: placeholder until the public link is ready. -->
+          <a class="button primary" href="#testflight">Get it on TestFlight</a>
+          <span class="button" aria-disabled="true">Mac App Store: coming soon</span>
+        </div>
+        <p class="caption">macOS 26 or later. Free. Works alongside Syndicate; not made by or affiliated with Untitled Audio or Denon DJ.</p>
+      </div>
+      <img class="icon" src="img/icon-512.png" alt="DeckBridge app icon" width="160" height="160">
+    </section>
+
+    <h2>What it does</h2>
+    <div class="features">
+      <div class="feature"><h3>Full-resolution control</h3><p>The 14-bit jog wheel and pitch fader reach Syndicate at full resolution. Pickup keeps the tempo from jumping when the fader and the screen disagree.</p></div>
+      <div class="feature"><h3>Four decks, one controller</h3><p>The LC6000's own deck layers pick decks 1 to 4. Switching releases anything held and repaints the lights.</p></div>
+      <div class="feature"><h3>LEDs that follow the music</h3><p>Play, Cue, Sync and the pads light from Syndicate's state. Hot cues show their colors, and the jog ring shows the deck's color.</p></div>
+      <div class="feature"><h3>Safe recovery</h3><p>Unplugging, sleeping the Mac or quitting releases every held control first. Plug back in and the lights come back.</p></div>
+      <div class="feature"><h3>Diagnostics built in</h3><p>A MIDI monitor, an LED sweep and an OSC log show exactly what's coming in and going out.</p></div>
+      <div class="feature"><h3>Try it without hardware</h3><p>A demo controller plays a short script against a simulated session, so you can see it work before plugging anything in.</p></div>
+    </div>
+
+    <h2>Screenshots</h2>
+    <div class="shots">
+      <figure><img src="img/1-panel.webp" alt="The DeckBridge menu-bar panel: controller connected, feedback live, deck 1 selected" width="1440" height="900" loading="lazy"><figcaption>The menu-bar panel: connection, feedback and the deck at a glance.</figcaption></figure>
+      <figure><img src="img/2-diagnostics.webp" alt="The Diagnostics window with the MIDI monitor" width="1440" height="900" loading="lazy"><figcaption>Diagnostics: every MIDI message with its mapping, plus the OSC log.</figcaption></figure>
+      <figure><img src="img/3-setup.webp" alt="The setup guide listing the settings to turn on" width="1440" height="900" loading="lazy"><figcaption>A short setup guide, with live status as each step takes.</figcaption></figure>
+      <figure><img src="img/4-demo.webp" alt="The panel with the demo controller on" width="1440" height="900" loading="lazy"><figcaption>Demo mode: see it work without a controller.</figcaption></figure>
+      <figure><img src="img/5-settings.webp" alt="The Settings window" width="1440" height="900" loading="lazy"><figcaption>Settings: deck, devices, OSC ports, deck colors and the mapping.</figcaption></figure>
+    </div>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <p><a href="support/">Support</a> · <a href="privacy/">Privacy</a> · <a href="mailto:deckbridge@ericdahl.dev">deckbridge@ericdahl.dev</a></p>
+      <p>DeckBridge is an independent app. Syndicate is a separate app by Untitled Audio. Denon DJ and LC6000 PRIME are trademarks of their owners.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -13,6 +13,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  site:
+    name: Site check
+    # The website (#169): plain files, so a cheap Linux runner. Not a required check yet.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Site check tests
+        run: python3 -I scripts/test_check_site.py
+      - name: Site check
+        run: python3 -I scripts/check_site.py website
+
   kit:
     name: Kit tests
     # Standard GitHub-hosted runner: free for public repositories. Avoid -large/-xlarge (always billed).
