@@ -47,15 +47,13 @@ until grep -q READY "$work/helper.log" 2>/dev/null; do
   sleep 0.1
 done
 
-# Pin controller 1's input to the helper's virtual source through the app's saved settings (#86), so a real controller
-# plugged into this Mac can't take its place. The output stays automatic, as on a real unit, so the app has to pick the
-# controls port over the WD port itself. The entry follows layers by default, so it runs four layers, as on a real
-# unit. The user's settings are saved first and restored on exit.
+# Run controller 1 with automatic devices, as on a real unit, so the app itself must pick the controls ports over the
+# WD ones (#143). Pinned devices skip that choice. The entry follows layers by default, so it runs four layers. The
+# helper refuses to run while a real LC6000 is connected, which pinning used to guard against (#86). The settings are
+# written so the user's own pins don't apply; the user's settings are saved first and restored on exit.
 ready="$(grep -m1 READY "$work/helper.log")"
-input_id="$(sed -nE 's/.*input=(-?[0-9]+).*/\1/p' <<<"$ready")"
-[ -n "$input_id" ] || { echo "The helper didn't report its source id: $ready"; exit 1; }
 if defaults export "$domain" "$work/prefs-backup.plist" 2>/dev/null; then saved_prefs="yes"; else saved_prefs="none"; fi
-settings="$(sed -e "s/__INPUT_ID__/$input_id/" scripts/smoke/settings-template.json)"
+settings="$(cat scripts/smoke/settings-template.json)"
 defaults write "$domain" settings.v1 -data "$(printf '%s' "$settings" | xxd -p | tr -d '\n')"
 
 # Run the binary directly to get its log on stdout; the sandbox still applies.

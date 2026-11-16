@@ -52,6 +52,20 @@ func waitFor(_ what: String, seconds: Double, _ done: () -> Bool) {
 let controlsName = "Smoke LC6000 PRIME Controller", wdName = "Smoke LC6000 PRIME WD Controller"
 var client = MIDIClientRef()
 guard MIDIClientCreateWithBlock("LC6000 smoke" as CFString, &client, nil) == noErr else { fail("MIDI client") }
+
+// The app runs with automatic devices, as on a real unit, so a real LC6000 on this Mac would be picked too (and get the
+// smoke's LEDs). Refuse to run while one is there.
+func endpointName(_ endpoint: MIDIEndpointRef) -> String {
+    var name: Unmanaged<CFString>?
+    MIDIObjectGetStringProperty(endpoint, kMIDIPropertyDisplayName, &name)
+    return name?.takeRetainedValue() as String? ?? ""
+}
+let present = (0..<MIDIGetNumberOfSources()).map { endpointName(MIDIGetSource($0)) }
+    + (0..<MIDIGetNumberOfDestinations()).map { endpointName(MIDIGetDestination($0)) }
+if let real = present.first(where: { $0.localizedCaseInsensitiveContains("LC6000") }) {
+    say("An LC6000 is connected (\(real)). Unplug it: the smoke check runs with automatic devices."); exit(2)
+}
+
 var wdDestination = MIDIEndpointRef()
 guard MIDIDestinationCreateWithProtocol(client, wdName as CFString, ._1_0, &wdDestination, { list, _ in
     for packet in list.unsafeSequence() { box.add(wdWords: Array(packet.words())) }
