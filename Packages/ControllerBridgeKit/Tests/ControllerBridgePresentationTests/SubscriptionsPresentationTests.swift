@@ -13,8 +13,8 @@ struct SubscriptionsPresentationTests {
         #expect(status.lights.contains(StatusLight(label: "Feedback", word: "No deck data", tone: .attention, kind: .feedback)))
     }
 
-    /// What the app passes from Core's one list (#211).
-    static let required = Subscription.allCases.map(\.syndicateName)
+    /// What the app passes from Core's one list (#211): the LC6000's eight, the jog display off (#165).
+    static let required = Subscription.always.map(\.syndicateName)
 
     static func missing(_ subscriptions: Subscription...) -> [MissingSubscription] {
         subscriptions.map { MissingSubscription(name: $0.syndicateName, breaks: $0.breaks) }

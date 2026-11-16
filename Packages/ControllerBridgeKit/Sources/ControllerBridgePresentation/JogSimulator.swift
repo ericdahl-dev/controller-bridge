@@ -123,7 +123,10 @@ public struct JogSimulator: Equatable, Sendable {
         case shown(slot: Int)
         /// The upload in progress was refused, or got no answer.
         case failed
-        case marker(pitchBend: Int)
+        /// A deck's needle: its own phase in the bar (#165, the user's pick).
+        case marker(deck: Int, pitchBend: Int)
+        /// The master clock's beat (1-4): the lit ring segment on every deck.
+        case masterBeat(Int)
         case playing(Bool)
     }
 
@@ -138,6 +141,7 @@ public struct JogSimulator: Equatable, Sendable {
     private var uploads: [Int: Upload] = [:]
     private var markers: [Int: Int] = [:]
     private var plays: [Int: Bool] = [:]
+    private var master: Int?
 
     public init() {}
 
@@ -152,8 +156,8 @@ public struct JogSimulator: Equatable, Sendable {
             if let front, uploads[front]?.slot == slot { uploads[front]?.accepted = true }
         case .failed:
             if let front { uploads[front]?.accepted = false }
-        case .marker(let pitchBend):
-            if let front { markers[front] = pitchBend }
+        case .marker(let deck, let pitchBend): markers[deck] = pitchBend
+        case .masterBeat(let beat): master = beat
         case .playing(let on):
             if let front { plays[front] = on }
         }
@@ -175,10 +179,7 @@ public struct JogSimulator: Equatable, Sendable {
     /// The marker as the renderer takes it (#238): turns clockwise from 12 o'clock.
     public func markerTurns(deck: Int) -> Double { Double(marker(deck: deck)) / 16_384 }
 
-    /// The beat section to light (1-4) while the deck plays: the hand's quarter of the turn, so the two always agree
-    /// (the marker is the master clock hand while playing, #165). Paused, none.
-    public func litBeat(deck: Int) -> Int? {
-        guard playing(deck: deck) else { return nil }
-        return Int(markerTurns(deck: deck) * 4) % 4 + 1
-    }
+    /// The beat section to light (1-4): the master clock's, the same on every deck, paused or not (#165, the user's
+    /// pick). The needle is the deck's own phase, so the two together are a sync check. None before the clock runs.
+    public func litBeat(deck: Int) -> Int? { master }
 }

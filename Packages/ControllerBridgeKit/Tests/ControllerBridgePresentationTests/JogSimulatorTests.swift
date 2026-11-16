@@ -84,44 +84,34 @@ struct JogSimulatorTests {
         #expect(sim.status(deck: 1).readout(timeZone: Self.utc) == "Slot 2 · 14,812 bytes · 12:04:31 · Accepted")
     }
 
-    @Test("The marker and play light belong to the deck in front; the others keep theirs")
-    func markerFollowsFront() {
+    @Test("Each deck has its own needle (the user's pick, #165); the play light belongs to the deck in front")
+    func needlesPerDeck() {
         var sim = JogSimulator()
         sim.apply(.connected)
         sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 100, at: Self.noon))
-        sim.apply(.marker(pitchBend: 4096))
+        sim.apply(.marker(deck: 1, pitchBend: 4096))
+        sim.apply(.marker(deck: 3, pitchBend: 8192))
         sim.apply(.playing(true))
-        sim.apply(.uploadStarted(slot: 2, deck: 3, bytes: 100, at: Self.noon))
-        sim.apply(.marker(pitchBend: 8192))
         #expect(sim.marker(deck: 1) == 4096)
-        #expect(sim.playing(deck: 1))
         #expect(sim.marker(deck: 3) == 8192)
+        #expect(sim.playing(deck: 1))
         #expect(!sim.playing(deck: 3))
     }
 
-    @Test("A marker with no deck in front yet goes nowhere")
-    func markerBeforeUpload() {
-        var sim = JogSimulator()
-        sim.apply(.marker(pitchBend: 4096))
-        #expect(sim.front == nil)
-        #expect(sim.marker(deck: 1) == 0)
+    @Test("A deck with no needle yet sits at 12 o'clock")
+    func noNeedleYet() {
+        #expect(JogSimulator().marker(deck: 2) == 0)
     }
 
-    @Test("While its deck plays, the lit beat agrees with the hand: a quarter turn per beat from 12 o'clock; paused, none")
-    func litBeat() {
+    @Test("The lit beat is the master's, the same on every deck, paused or not; none before the master clock runs")
+    func masterBeat() {
         var sim = JogSimulator()
-        sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 100, at: Self.noon))
-        sim.apply(.marker(pitchBend: 4096 + 100))
-        #expect(sim.litBeat(deck: 1) == nil, "not playing")
-        sim.apply(.playing(true))
-        #expect(sim.litBeat(deck: 1) == 2)
-        sim.apply(.marker(pitchBend: 0))
-        #expect(sim.litBeat(deck: 1) == 1)
-        sim.apply(.marker(pitchBend: 16383))
-        #expect(sim.litBeat(deck: 1) == 4)
-        #expect(sim.markerTurns(deck: 1) == 16383.0 / 16384)
-        sim.apply(.playing(false))
         #expect(sim.litBeat(deck: 1) == nil)
+        sim.apply(.masterBeat(3))
+        #expect([1, 2, 3, 4].map { sim.litBeat(deck: $0) } == [3, 3, 3, 3])
+        sim.apply(.marker(deck: 1, pitchBend: 0))
+        #expect(sim.litBeat(deck: 1) == 3, "the needle doesn't pick the segment")
+        #expect(sim.markerTurns(deck: 3) == 0)
     }
 
     @Test("Diagnostics has a Jog display tab, last; before the unit shows anything it says how to turn it on")

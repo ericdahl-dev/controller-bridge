@@ -14,8 +14,8 @@ final class JogSimulatorLog {
     private(set) var sim = JogSimulator()
     /// Each deck's last uploaded content: what its preview draws.
     private(set) var contents: [Int: JogDisplayContent] = [:]
-    /// The marker arrives ~100 times a second while playing; the preview redraws it at most 30 (#221).
-    @ObservationIgnored private var markerLimiter = RedrawLimiter<Int>(interval: 1.0 / 30)
+    /// Each deck's needle redraws at most 30 times a second (#221), whatever rate it arrives at.
+    @ObservationIgnored private var needleLimiters: [Int: RedrawLimiter<Int>] = [:]
 
     func apply(_ event: JogDisplayEvent, at now: Date = .now) {
         switch event {
@@ -26,17 +26,25 @@ final class JogSimulatorLog {
             sim.apply(.uploadStarted(slot: Int(slot), deck: content.deck, bytes: bytes, at: now))
         case .shown(let slot): sim.apply(.shown(slot: Int(slot)))
         case .failed: sim.apply(.failed)
-        case .marker(let pitchBend):
-            if let value = markerLimiter.offer(pitchBend, at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(pitchBend: value)) }
+        // The unit's needle is the front deck's, which deckMarker already brings; the simulator draws every deck's.
+        case .marker: break
+        case .deckMarker(let deck, let pitchBend):
+            var limiter = needleLimiters[deck] ?? RedrawLimiter<Int>(interval: 1.0 / 30)
+            if let value = limiter.offer(pitchBend, at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(deck: deck, pitchBend: value)) }
+            needleLimiters[deck] = limiter
+        // The master clock's beat: the lit segment on every deck (#165).
+        case .masterBeat(let beat): sim.apply(.masterBeat(beat))
         case .playLight(let on): sim.apply(.playing(on))
         // Every deck's content, live (#221): the simulator draws all of them, not only the one uploaded.
         case .preview(let content): contents[content.deck] = content
         }
     }
 
-    /// The display timer: a marker held back by the limiter, once its interval has passed.
+    /// The display timer: each deck's needle held back by its limiter, once its interval has passed.
     func tick(_ now: Date) {
-        if let value = markerLimiter.tick(at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(pitchBend: value)) }
+        for deck in needleLimiters.keys.sorted() {
+            if let value = needleLimiters[deck]?.tick(at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(deck: deck, pitchBend: value)) }
+        }
     }
 }
 

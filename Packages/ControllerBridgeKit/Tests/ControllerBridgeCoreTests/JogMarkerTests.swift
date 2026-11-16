@@ -49,3 +49,39 @@ struct JogMarkerTests {
         #expect(marker.pitchBend(at: 0.5) == 4096)
     }
 }
+
+/// The deck's own needle (#165, the user's pick): its phase in the bar from the deck's BarRamp, running on at the
+/// deck's BPM between ramps (a bar of 4 beats is 240/bpm seconds), never more than a quarter turn past the last ramp.
+@Suite("Jog marker from BarRamp")
+struct JogMarkerRampTests {
+    @Test("At the ramp, its phase: 0.5 is half a turn, 8192")
+    func atRamp() {
+        var marker = JogMarker()
+        marker.ramp(0.5, bpm: 120, at: 10)
+        #expect(marker.pitchBend(at: 10) == 8192)
+    }
+
+    @Test("Between ramps it runs on at the deck's BPM: 120 BPM is a 2 s bar, so 0.25 s later is 1/8 turn more (2048)")
+    func runsOn() {
+        var marker = JogMarker()
+        marker.ramp(0.5, bpm: 120, at: 10)
+        #expect(marker.pitchBend(at: 10.25) == 8192 + 2048)
+    }
+
+    @Test("No new ramp: it waits a quarter turn past the last one; a new ramp sets it again")
+    func waits() {
+        var marker = JogMarker()
+        marker.ramp(0.875, bpm: 120, at: 10)
+        #expect(marker.pitchBend(at: 20) == 2048)          // 0.875 + 0.25 = 1.125, wrapped to 1/8 turn
+        marker.ramp(0.25, bpm: 120, at: 20)
+        #expect(marker.pitchBend(at: 20) == 4096)
+    }
+
+    @Test("The platter moves it from where it is, as before")
+    func platter() {
+        var marker = JogMarker()
+        marker.ramp(0.25, bpm: 120, at: 10)
+        marker.platter(counts: 900, countsPerRev: 3600, at: 10)
+        #expect(marker.pitchBend(at: 11) == 8192)
+    }
+}

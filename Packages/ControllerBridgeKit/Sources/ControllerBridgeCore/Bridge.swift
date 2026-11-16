@@ -126,6 +126,8 @@ final class Bridge {
     var track: (title: String, artist: String, key: String, bpm: Double, playerType: String)?
     /// Platter counts moved since the Coordinator last read them, for the jog display's marker (#165).
     var jogCountsPending = 0
+    /// The deck's live tempo from Syndicate's BPM feedback, for the jog needle's run between BarRamps (#165).
+    var bpm: Double?
     var needleMSBValue: UInt8 = 0
 
     // Syndicate's state, from feedback.
@@ -300,6 +302,7 @@ final class Bridge {
                 track = nil
             }
         case "sync": synced = value
+        case "bpm": bpm = message.arguments.first?.number.flatMap { $0 > 0 ? $0 : nil }
         case "temposliderenabled":
             if value != sliderEnabled { rearmPickup() }
             sliderEnabled = value
