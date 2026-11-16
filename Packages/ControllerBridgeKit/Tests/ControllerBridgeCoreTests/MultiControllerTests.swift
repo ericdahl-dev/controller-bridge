@@ -59,4 +59,21 @@ struct MultiControllerTests {
         #expect(rig.midi.outputs[Rig.lc6000Out.id]?.sent.count == sentA)
         #expect(rig.midi.outputs[Self.unitBOut.id]?.sent.count == sentB)
     }
+
+    @Test("Unplugging unit B releases B's holds only; unit A keeps its hold and keeps working")
+    func unplugOne() throws {
+        let rig = try Self.twoUnits()
+        Self.press(rig, 2, from: Rig.lc6000)   // Cue held on deck 1
+        Self.press(rig, 2, from: Self.unitB)   // Cue held on deck 2
+        rig.osc.sent.removeAll()
+
+        rig.midi.sources.removeAll { $0 == Self.unitB }
+        rig.midi.destinations.removeAll { $0 == Self.unitBOut }
+        rig.coordinator.devicesChanged()
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/Cue", [.int(0)])])
+        #expect(rig.coordinator.status.controllers.map(\.connected) == [true, false])
+
+        Self.press(rig, 1, from: Rig.lc6000)
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
+    }
 }
