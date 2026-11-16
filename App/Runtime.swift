@@ -19,7 +19,7 @@ enum BridgeHost {
         // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe.
         if let jogDisplay {
             coordinator.attachJogDisplay(JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log) { content in
-                JogDisplayRenderer.render(content)
+                JogDisplayRenderer.uploadImage(content)
             })
         }
         // Straight onto the saved devices, decks, layers and LEDs switch: nothing unchosen, even for a moment (#105).

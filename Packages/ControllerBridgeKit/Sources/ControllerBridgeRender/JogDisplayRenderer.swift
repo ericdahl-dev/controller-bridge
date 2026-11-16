@@ -54,6 +54,16 @@ public enum JogDisplayRenderer {
 
     // MARK: Drawing
 
+    /// The image the jog display upload sends (#165), before `JogImage.forUnit` turns it: no lit beat and no marker,
+    /// which are the unit's own.
+    public static func uploadImage(_ content: JogDisplayContent) -> [UInt8] { render(content) }
+
+    /// The image the Diagnostics simulator shows (#221): the upload's, with the lit beat and the marker the unit would
+    /// draw over it. With neither, it is the upload's exactly (a test pins it).
+    public static func simulatorImage(_ content: JogDisplayContent, litBeat: Int?, marker: Double?) -> [UInt8] {
+        render(content, litBeat: litBeat, marker: marker)
+    }
+
     /// The Geist faces the design uses, bundled with this target (#221) so the image is the same in the app and under
     /// `swift test`: unregistered, CoreText would quietly draw another font. Registered once, for this process.
     static let fontNames = ["Geist-Bold", "Geist-Medium", "GeistMono-SemiBold"]
