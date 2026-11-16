@@ -19,7 +19,7 @@ public struct HelpMessage: Equatable, Sendable {
             // The sender is built at launch only, so a fixed host takes effect after a restart (#88).
             case .oscSender:
                 self.init(
-                    text: "The bridge couldn't reach Syndicate's address. Check the Syndicate host in Settings, click Apply, then quit and reopen.",
+                    text: "The bridge couldn't reach Syndicate's address. Check the Syndicate host in Settings and click Apply; the bridge uses it right away.",
                     showsGuide: false
                 )
             case .profiles:

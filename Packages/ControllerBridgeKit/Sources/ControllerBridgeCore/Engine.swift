@@ -44,6 +44,7 @@ public struct Engine {
                 coordinator.setDevices(input: input, output: output, controller: controller)
             case .setLEDs(let enabled): coordinator.setLEDs(enabled: enabled)
             case .setDeckColors(let follow, let custom): coordinator.setDeckColors(followSyndicate: follow, custom: custom)
+            case .resync: coordinator.resync()
             case .setControllers(let entries): coordinator.setControllers(entries)
             case .setProfiles(let profiles): coordinator.setProfiles(profiles)
             default: break
@@ -83,7 +84,7 @@ public struct Engine {
                 setDiagnostics(active, open: open)
             case .ledSweep(let delay): active.startLEDSweep(delay: delay)
             case .stopLEDSweep: active.stopLEDSweep()
-            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setControllers, .setProfiles:
+            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setControllers, .setProfiles, .resync:
                 if demo == nil { apply(event) } else { waiting.append(event) }
             case .demo(let on):
                 if on, demo == nil, let makeDemo {

@@ -61,7 +61,7 @@ final class BridgeModel {
     private var producer: EventPipe.Producer?
     private var engine: Task<Void, Never>?
     private var sleepObservers: [any NSObjectProtocol] = []
-    private var osc: SwappableOSCSender?
+    private var osc: OSCDestination?
     private let storage = UserDefaultsStorage()
     /// What Settings shows and changes (#19). Saved in user defaults.
     /// The running profile's deck layers (#79): empty for a controller without them.
@@ -105,11 +105,16 @@ final class BridgeModel {
         guard var new = settings, new.controllers.indices.contains(index), new.controllers[index].deck != deck else { return }
         new.controllers[index].deck = deck
         // A refused change says why, under the picker, instead of doing nothing (#90).
-        do {
-            try apply(new)
-            status.deckProblem = nil
-        } catch {
-            if case .invalid(let list) = error { status.deckProblem = list.joined(separator: " ") }
+        Task { @MainActor in
+            do throws(SettingsError) {
+                try await apply(new)
+                status.deckProblem = nil
+            } catch {
+                switch error {
+                case .invalid(let list): status.deckProblem = list.joined(separator: " ")
+                case .fields(let list): status.deckProblem = list.map(\.message).joined(separator: " ")
+                }
+            }
         }
     }
 
@@ -128,12 +133,31 @@ final class BridgeModel {
         }
     }
 
+    /// Opens Syndicate's host in the background (#84, #109): the status shows a failure until it's fixed.
+    private func connectOSC(host: String, port: Int) {
+        guard let osc else { return }
+        let status = status, log = UnifiedLogSink()
+        Task { @MainActor in
+            if let problem = await osc.connect(host: host, port: port) {
+                status.problem = problem
+                status.stopReason = .oscSender
+                log.log(problem)
+            } else if status.stopReason == .oscSender {
+                status.problem = nil
+            }
+        }
+    }
+
     /// Release held controls before the Mac sleeps, and re-check the devices when it wakes.
     private func observeSleep(_ producer: EventPipe.Producer) {
         let center = NSWorkspace.shared.notificationCenter
         sleepObservers = [
             center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in producer.sleep() },
-            center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in producer.wake() },
+            center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                producer.wake()
+                // A `.local` host may have a new address after sleep (#84).
+                Task { @MainActor in await self?.osc?.reresolve() }
+            },
         ]
     }
 
@@ -144,8 +168,9 @@ final class BridgeModel {
     /// Saves `new` and puts it into effect, or throws the problems and changes nothing. Deck and device changes go
     /// through the pipe, so the Coordinator releases held controls first.
     /// Returns a note when the settings were saved but can't take effect until a restart.
+    /// Async: a host name is looked up off the main actor first (#84), and Settings stays usable meanwhile.
     @discardableResult
-    func apply(_ new: BridgeSettings) throws(SettingsError) -> String? {
+    func apply(_ new: BridgeSettings) async throws(SettingsError) -> String? {
         var new = new
         new.syndicateHost = new.syndicateHost.trimmingCharacters(in: .whitespaces)
         guard let old = settings, let producer, let osc else {
@@ -160,10 +185,13 @@ final class BridgeModel {
         }
         let problems = new.problems
         guard problems.isEmpty else { throw .invalid(problems) }
-        if new.syndicateHost != old.syndicateHost || new.syndicatePort != old.syndicatePort {
-            do { try osc.change(host: new.syndicateHost, port: new.syndicatePort) } catch {
-                throw .invalid(["Couldn't send OSC to \(new.syndicateHost):\(new.syndicatePort): \(error)"])
+        // A new host, or one that never opened (#109): open it first. On failure the old one stays, and the reason
+        // goes under the host field.
+        if new.syndicateHost != old.syndicateHost || new.syndicatePort != old.syndicatePort || !osc.isReady {
+            if let problem = await osc.connect(host: new.syndicateHost, port: new.syndicatePort) {
+                throw .fields([SettingsProblem(field: .host, message: problem)])
             }
+            if status.stopReason == .oscSender { status.problem = nil }
         }
         try new.save(to: storage)
         settings = new
@@ -237,15 +265,16 @@ final class BridgeModel {
             return
         }
 
-        let osc: SwappableOSCSender
-        do { osc = try SwappableOSCSender(host: settings.syndicateHost, port: settings.syndicatePort) } catch {
-            status.problem = "Couldn't open the OSC sender: \(error)"
-            status.stopReason = .oscSender
-            log.log(status.problem!)
-            return
-        }
-
+        // Syndicate's host, by address or by name (#84). Launch never waits on it: the bridge starts now, and sends
+        // begin once the host opens. Until then, or if it can't (#109), the status says so and Apply fixes it.
+        let osc = OSCDestination(
+            resolver: SystemHostResolver(), open: { ip, port in try UDPSink(ipv4: ip, port: port) }, clock: SystemClock()
+        )
+        let resyncProducer = pipe.producer
+        osc.onReady = { resyncProducer.resync() }
+        osc.onSendFailure = { [weak osc] in Task { await osc?.reresolve() } }
         self.osc = osc
+        connectOSC(host: settings.syndicateHost, port: settings.syndicatePort)
         producer = pipe.producer
         listen(settings)
 

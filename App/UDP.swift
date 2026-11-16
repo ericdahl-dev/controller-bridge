@@ -86,3 +86,59 @@ private func withSockaddr<R>(_ address: sockaddr_in, _ body: (UnsafePointer<sock
         $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { body($0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
     }
 }
+
+/// One UDP socket connected to Syndicate's IPv4 address (#84). Its send throws when the host can't be reached, so the
+/// destination can re-resolve a `.local` name; a refused send (nothing listening yet) is normal and stays quiet.
+final class UDPSink: DatagramSink {
+    private let socket: Int32
+
+    init(ipv4 host: String, port: Int) throws(UDPError) {
+        socket = Darwin.socket(AF_INET, SOCK_DGRAM, 0)
+        guard socket >= 0 else { throw .errno("socket", errno) }
+        let address: sockaddr_in
+        do { address = try ipv4(host, port) } catch { close(socket); throw error }
+        guard withSockaddr(address, { Darwin.connect(socket, $0, $1) }) == 0 else {
+            let code = errno
+            close(socket)
+            throw .errno("connect", code)
+        }
+    }
+
+    deinit { close(socket) }
+
+    func send(_ bytes: [UInt8]) throws {
+        let sent = bytes.withUnsafeBytes { Darwin.send(socket, $0.baseAddress, $0.count, 0) }
+        guard sent < 0 else { return }
+        let code = errno
+        // The host moved or left the network: worth looking its name up again.
+        if [EHOSTUNREACH, ENETUNREACH, EHOSTDOWN, ENETDOWN, EADDRNOTAVAIL].contains(code) { throw UDPError.errno("send", code) }
+    }
+}
+
+/// Resolves a host name to an IPv4 address with getaddrinfo, on a background queue: a `.local` lookup can block for
+/// seconds. IPv4 only, since `.local` names often answer IPv6 first (#84).
+struct SystemHostResolver: HostResolver {
+    private static let queue = DispatchQueue(label: "dev.ericdahl.ControllerBridge.resolve", attributes: .concurrent)
+
+    func resolve(_ host: String) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            Self.queue.async {
+                var hints = addrinfo()
+                hints.ai_family = AF_INET
+                hints.ai_socktype = SOCK_DGRAM
+                var result: UnsafeMutablePointer<addrinfo>?
+                let status = getaddrinfo(host, nil, &hints, &result)
+                defer { if let result { freeaddrinfo(result) } }
+                guard status == 0, let info = result, let raw = info.pointee.ai_addr else {
+                    return continuation.resume(throwing: UDPError.badAddress(host))
+                }
+                var address = raw.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee.sin_addr }
+                var text = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+                guard inet_ntop(AF_INET, &address, &text, socklen_t(INET_ADDRSTRLEN)) != nil else {
+                    return continuation.resume(throwing: UDPError.badAddress(host))
+                }
+                continuation.resume(returning: String(cString: text))
+            }
+        }
+    }
+}

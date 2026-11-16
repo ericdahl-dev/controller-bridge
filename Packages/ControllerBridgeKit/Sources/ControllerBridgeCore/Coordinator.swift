@@ -612,6 +612,13 @@ public final class Coordinator {
         return true
     }
 
+    /// Asks Syndicate to resend its state (#84): the OSC destination opened late, so what was sent before was dropped.
+    public func resync() {
+        // A Resend still "waiting" went out before there was anywhere to send it.
+        resendSentAt = nil
+        requestResend()
+    }
+
     /// Settings (#19): the LEDs switch, for every controller.
     /// Settings' deck colors (#123): the ring repaints, and the status carries them to the badges.
     public func setDeckColors(followSyndicate: Bool, custom: DeckColors) {

@@ -70,7 +70,7 @@ struct HelpMessageTests {
 
     @Test("Stopped: the help gives the fix for the part that failed (#88)", arguments: [
         (BridgeState.StopReason.midi, "The bridge couldn't open MIDI. Quit and reopen it. If that doesn't help, restart the Mac."),
-        (.oscSender, "The bridge couldn't reach Syndicate's address. Check the Syndicate host in Settings, click Apply, then quit and reopen."),
+        (.oscSender, "The bridge couldn't reach Syndicate's address. Check the Syndicate host in Settings and click Apply; the bridge uses it right away."),
         (.profiles, "The bridge couldn't load its controller profiles. Reinstall the app."),
     ])
     func stoppedReasons(reason: BridgeState.StopReason, text: String) {
