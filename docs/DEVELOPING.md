@@ -21,7 +21,7 @@ The **Release** workflow (`.github/workflows/release.yml`) runs for tags pushed 
 
 At the end, it always removes the key, the keychain and the profiles. When a step fails, the archive and upload logs are kept as the run's `release-logs` artifact.
 
-**What to Test** and the TestFlight groups are set by hand in App Store Connect for now. ShowRecorder automates them with `testflight_notes.py`, and that can be ported once external testers are needed.
+After the upload, the **Distribute** job sets **What to Test** from `docs/TESTFLIGHT.md` and adds the build to the Internal group. It goes to external testers and Beta App Review only when the tag's message says `[external]`, or when the workflow is run by hand with **external** on (#244). See `docs/TESTFLIGHT.md`.
 
 ### Secrets
 
