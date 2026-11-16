@@ -21,6 +21,7 @@ public struct ProfileDraft: Sendable {
         draft.buttons(capture)
         draft.noise(capture)
         draft.pads(capture)
+        draft.jog(capture)
         draft.pitch(capture)
         draft.needle(capture)
         draft.browse(capture)
@@ -117,6 +118,37 @@ public struct ProfileDraft: Sendable {
         }
         todo("mapping.pads.mode_notes", "Only if the pads send other notes in Roll, Loop and Slicer modes (#225): press pad 1–8 in each mode and list them. The capture only records Hot Cue mode.")
         todo("mapping.pads.mode_select", "Four mode buttons (\"buttons\") or one that cycles (\"cycle\", #198)? From the manual, or by pressing the mode buttons in MIDI Monitor.")
+    }
+
+    /// The jog: an absolute 14-bit pair (the LC6000) or a relative CC (#204), the edge's own CC when it has one, and the
+    /// note held while the top is touched. Counts per turn need a measured full turn, so they're always a TODO.
+    private mutating func jog(_ capture: CaptureFile) {
+        let key = "mapping.jog"
+        todo("\(key).counts_per_rev", "Mark the platter, turn it exactly one full turn in MIDI Monitor, and count: position counts for an absolute pair, ticks for a relative jog.")
+        guard let top = controls(capture, "deck1.jog.touch", for: key) else { return }
+        if let touch = top.first(where: { $0.kind == .note })?.number {
+            set("mapping.notes.platter_touch", .int(touch))
+        } else {
+            todo("mapping.notes.platter_touch", "No note came while the top was touched. If the platter has no touch sensor, jog.require_touch must be false.")
+        }
+        guard let wheel = top.first(where: { $0.kind == .cc }), let number = wheel.number else {
+            todo(key, "The jog didn't send a CC. Check it in MIDI Monitor.")
+            return
+        }
+        let edge = capture.steps.first { $0.prompt == "deck1.jog.edge" && $0.status == .confirmed }?.controls.first { $0.kind == .cc }
+        if let lsb = wheel.lsb {
+            set("\(key).msb_cc", .int(number))
+            set("\(key).lsb_cc", .int(lsb))
+            if let edge, edge.number != number {
+                todo("\(key).relative_edge_cc", "The edge sent CC \(edge.number ?? 0), apart from the top's pair. Profiles have an edge CC only for a relative jog.")
+            }
+        } else if wheel.encoding == .absolute {
+            todo(key, "The jog sent one absolute 7-bit CC (\(number)); profiles take a 14-bit pair or a relative CC.")
+        } else {
+            set("\(key).relative_cc", .int(number))
+            if let edge, let edgeNumber = edge.number, edgeNumber != number { set("\(key).relative_edge_cc", .int(edgeNumber)) }
+            encoderFormat(wheel.encoding, from: "deck1.jog.touch")
+        }
     }
 
     /// The pitch fader, moved top to bottom: a 14-bit pair or one 7-bit CC (#195), inverted when the top gave the
