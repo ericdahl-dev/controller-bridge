@@ -101,7 +101,7 @@ extension Bridge {
     }
 }
 
-private extension OSCArgument {
+extension OSCArgument {
     /// An int, or a float cut to an int as the Python bridge's int() does. A NaN, an infinity or a float too big
     /// for an Int (feedback is untrusted UDP) gives nil instead of trapping.
     var wholeNumber: Int? {

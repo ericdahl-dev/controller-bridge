@@ -157,4 +157,20 @@ struct TimingTests {
         #expect(rig.ring(at: 10.5) == 11)
         #expect(rig.ring(at: 10.61) == 0)
     }
+
+    @Test("With downbeat pulse, only beat 1 of the bar lights the ring; beats 2-4 leave it off")
+    func ringPulsesOnDownbeat() throws {
+        let rig = try PulseRig(beatPulse: "downbeat")
+        rig.clockBeat(1, at: 20.0)
+        #expect(rig.ring(at: 20.05) == 11)
+        #expect(rig.ring(at: 20.2) == 0)
+
+        rig.clockBeat(2, at: 20.5)
+        #expect(rig.ring(at: 20.55) == 0)
+        rig.clockBeat(4, at: 21.5)
+        #expect(rig.ring(at: 21.55) == 0)
+
+        rig.clockBeat(1, at: 22.0)
+        #expect(rig.ring(at: 22.05) == 11)
+    }
 }

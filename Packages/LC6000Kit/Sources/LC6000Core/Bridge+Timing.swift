@@ -17,7 +17,11 @@ extension Bridge {
 
     /// Syndicate's master clock (not this deck's own beat): beat-in-bar 1-4 on every master beat.
     func headerClock(_ arguments: [OSCArgument]) {
-        guard mapping.leds.beatPulse != .off else { return }
+        switch mapping.leds.beatPulse {
+        case .off: return
+        case .beat: break
+        case .downbeat: guard arguments.first?.wholeNumber == 1 else { return }
+        }
         lastPulseTime = clock.now
         ringLED()
     }
