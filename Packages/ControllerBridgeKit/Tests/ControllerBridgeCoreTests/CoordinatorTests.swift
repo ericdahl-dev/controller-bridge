@@ -6,9 +6,15 @@ import Testing
 /// to Syndicate, the LED messages sent to the controller, and the log.
 final class Rig {
     final class FakeOutput: MIDIOutput, @unchecked Sendable {
+        struct SendFailed: Error {}
         var sent: [MIDIEvent] = []
         var closed = false
-        func send(_ event: MIDIEvent) { sent.append(event) }
+        /// Set to make every send fail, as a pulled cable can.
+        var failing = false
+        func send(_ event: MIDIEvent) throws {
+            if failing { throw SendFailed() }
+            sent.append(event)
+        }
         func close() { closed = true }
     }
 

@@ -56,7 +56,11 @@ final class Bridge {
     }
 
     let mapping: Mapping
-    var output: (any MIDIOutput)?
+    var output: (any MIDIOutput)? {
+        didSet { outputFailed = false }
+    }
+    /// A send to `output` failed since it was opened.
+    private(set) var outputFailed = false
     private let osc: any OSCSender
     let clock: any Clock
     private let root: String
@@ -227,7 +231,13 @@ final class Bridge {
     func led(_ note: Int, _ velocity: UInt8) {
         guard ledCache[note] != velocity else { return }
         ledCache[note] = velocity
-        output?.send(.noteOn(channel: channel, note: UInt8(note), velocity: velocity))
+        guard let output else { return }
+        do {
+            try output.send(.noteOn(channel: channel, note: UInt8(note), velocity: velocity))
+        } catch {
+            // The Coordinator treats this as an unplug once the current event is handled.
+            outputFailed = true
+        }
     }
 
     // MARK: OSC out

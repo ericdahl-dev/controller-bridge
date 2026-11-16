@@ -114,4 +114,19 @@ struct RecoveryTests {
         rig.coordinator.devicesChanged()
         #expect(rig.midi.connected == [Rig.lc6000.id])
     }
+
+    @Test("A failed LED send counts as an unplug: holds released once, ports closed, shown in the status")
+    func sendErrorIsUnplug() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)   // Cue held
+        rig.osc.sent.removeAll()
+
+        rig.midi.outputs[Rig.lc6000Out.id]?.failing = true
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))   // the Play LED send fails
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
+        #expect(rig.midi.connected == [])
+        #expect(rig.coordinator.status.controllers.map(\.connected) == [false])
+        #expect(rig.log.lines.last == "Disconnected DENON LC6000 PRIME (MIDI send failed)")
+    }
 }
