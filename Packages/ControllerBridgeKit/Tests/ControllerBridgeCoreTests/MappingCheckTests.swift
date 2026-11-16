@@ -169,4 +169,20 @@ struct MappingCheckTests {
     func infiniteNumber() {
         #expect(Self.problems(#"{"pitch": {"dead_zone": 1e999}}"#) == ["The file has a number too large to use (near byte 24)."])
     }
+
+    @Test("The mixer section (#207) is checked like the rest: kinds, ranges, bits, unknown keys and CC or note clashes")
+    func mixer() {
+        #expect(Self.problems(MixerTests.section) == [])
+        #expect(Self.problems(#"{"mixer": {"volume": {"msb_cc": 200, "bits": 8}, "fader": 1}}"#) == [
+            "mixer.volume.msb_cc: 200 is out of range, expected 0-127",
+            "mixer.volume.bits: 8 isn't one of 7, 14",
+            "mixer.fader: unknown key",
+        ])
+        #expect(Self.problems(#"{"mixer": {"meter": {"cc": 2, "steps": []}}}"#) == ["mixer.meter.steps: expected at least one value"])
+        #expect(Self.problems(#"{"mixer": {"meter": {"cc": 2, "steps": [0, 300]}}}"#) == [
+            "mixer.meter.steps[1]: 300 is out of range, expected 0-127",
+        ])
+        #expect(Self.problems(#"{"mixer": {"volume": {"msb_cc": 17, "bits": 7}}}"#) == ["mixer.volume.msb_cc: CC 17 is also jog.msb_cc"])
+        #expect(Self.problems(#"{"mixer": {"cue_note": 2}}"#) == ["mixer.cue_note: note 2 is also notes.cue"])
+    }
 }
