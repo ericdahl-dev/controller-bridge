@@ -97,6 +97,17 @@ code { font-family: var(--font-mono); font-size: .92em; }
 .db-shotpanel { --p-h: 256px; }
 .db-facts { margin-top: var(--s-6); }
 #why { align-content: start; }
+/* below 1024 the why statement fills about half its screen, so the two resolutions it names stand under it as
+   numbers (7-bit MIDI: 128 positions; 14-bit: 16,384) instead of an empty ground; left out on screens under 720px
+   tall or 360px wide, where the statement nearly fills it, and on a desktop, where it holds the screen alone. */
+.db-res { display: none; }
+@media (min-width: 360px) and (max-width: 1023px) and (min-height: 720px) {
+  .db-res { display: grid; gap: var(--s-5); margin: auto 0 0; padding-top: var(--s-6); }
+  .db-res__row { border-top: 1px solid color-mix(in oklab, var(--ink) 25%, transparent); padding-top: var(--s-3); }
+  .db-res dt { font-size: var(--t-small, 14px); color: color-mix(in oklab, var(--ink) 70%, transparent); }
+  .db-res dd { margin: 0; color: color-mix(in oklab, var(--ink) 70%, transparent); }
+  .db-res b { display: block; font: var(--display-weight) var(--t-h2)/1.1 var(--font-display); letter-spacing: var(--display-tracking-xl); color: var(--ink); }
+}
 .db-appicon { width: 96px; height: 96px; border-radius: 22px; }
 .closing__links .footer__col a { overflow-wrap: anywhere; }
 @media (max-width: 639px) { .db-appicon { width: 72px; height: 72px; border-radius: 16px; } .db-faq summary { padding: var(--s-4) 0; } }
