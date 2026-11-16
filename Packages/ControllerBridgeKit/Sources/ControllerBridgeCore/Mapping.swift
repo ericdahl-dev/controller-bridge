@@ -260,24 +260,31 @@ public struct Mapping: Equatable, Sendable, Codable {
     static func checked(_ json: Data) throws -> Mapping {
         let problems = problems(in: json)
         guard problems.isEmpty else { throw MappingError.invalid(problems) }
-        return try JSONDecoder().decode(Mapping.self, from: json)
+        do {
+            return try JSONDecoder().decode(Mapping.self, from: json)
+        } catch let error as DecodingError {
+            // The check runs first, so this shouldn't happen; if it does, the DJ still gets words, not a dump (#92).
+            throw MappingError.invalid([Self.describe(error)])
+        }
+    }
+
+    private static func describe(_ error: DecodingError) -> String {
+        let context: DecodingError.Context? = switch error {
+        case .dataCorrupted(let c), .keyNotFound(_, let c), .typeMismatch(_, let c), .valueNotFound(_, let c): c
+        @unknown default: nil
+        }
+        let path = context?.codingPath.map(\.stringValue).joined(separator: ".") ?? ""
+        return (path.isEmpty ? "mapping" : path) + ": the value can't be used here"
     }
 
     /// The bundled default with a user mapping file merged over it, as the Python config merge does: objects merge
-    /// key by key, at any depth; anything else (a list, a number, a string) replaces the default whole.
+    /// key by key, at any depth; anything else (a list, a number, a string) replaces the default whole. Bad JSON or
+    /// bad values throw `MappingError` with readable problems.
     public static func bundledDefault(overriddenBy override: Data) throws -> Mapping {
-        let base = try JSONSerialization.jsonObject(with: defaultJSON())
-        let user = try JSONSerialization.jsonObject(with: override)
-        let merged = try JSONSerialization.data(withJSONObject: merge(base, user))
-        return try checked(merged)
-    }
-
-    private static func merge(_ base: Any, _ override: Any) -> Any {
-        guard var out = base as? [String: Any], let override = override as? [String: Any] else { return override }
-        for (key, value) in override {
-            out[key] = out[key].map { merge($0, value) } ?? value
-        }
-        return out
+        let user: OrderedJSON
+        do { user = try OrderedJSON(parsing: override) } catch { throw MappingError.invalid(["\(error)"]) }
+        let base = try OrderedJSON(parsing: defaultJSON())
+        return try checked(merge(base, user).data())
     }
 
     /// The default mapping: the body of the bundled LC6000 profile, the first controller this app supports.

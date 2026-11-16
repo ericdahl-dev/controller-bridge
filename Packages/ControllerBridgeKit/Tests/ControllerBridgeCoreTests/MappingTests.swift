@@ -73,4 +73,14 @@ struct MappingTests {
         let override = Data(#"{ "midi": { "channel": \#(channel) } }"#.utf8)
         #expect(try Mapping.bundledDefault(overriddenBy: override).midi.channel == channel)
     }
+
+    @Test("An override's bad values and bad JSON come back as readable MappingErrors, never a raw decoder error (#92)")
+    func overrideErrorsAreReadable() {
+        #expect(throws: MappingError.invalid(["osc.feedback_quiet_ms: 1e+300 is out of range, expected 0-60000"])) {
+            try Mapping.bundledDefault(overriddenBy: Data(#"{"osc": {"feedback_quiet_ms": 1e300}}"#.utf8))
+        }
+        #expect(throws: MappingError.invalid(["The file isn't valid JSON (near byte 1)."])) {
+            try Mapping.bundledDefault(overriddenBy: Data("{".utf8))
+        }
+    }
 }
