@@ -96,6 +96,8 @@
       255,
       0
     ],
-    "dim_unlit_buttons": true
+    "dim_unlit_buttons": true,
+    "beat_pulse": "off",
+    "pulse_ms": 100
   }
 }
