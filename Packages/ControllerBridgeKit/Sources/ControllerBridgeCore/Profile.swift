@@ -9,6 +9,9 @@ public struct ControllerProfile: Equatable, Sendable {
     public var name: String
     /// A connected device whose name contains one of these, ignoring case, gets this profile.
     public var deviceHints: [String]
+    /// A device whose name contains one of these never gets this profile, even if a hint matches: a controller's
+    /// other port that sends no controls, such as the LC6000's "…LC6000 PRIME WD" (#99).
+    public var excludeHints: [String] = []
     public var mapping: Mapping
 
     public init(id: String, name: String, deviceHints: [String], mapping: Mapping) {
@@ -32,7 +35,8 @@ public struct ControllerProfile: Equatable, Sendable {
     static func candidates(_ deviceName: String, in profiles: [ControllerProfile]) -> [(profile: ControllerProfile, hintLength: Int)] {
         let name = deviceName.lowercased()
         return profiles.compactMap { profile in
-            profile.deviceHints.filter { name.contains($0.lowercased()) }.map(\.count).max().map { (profile, $0) }
+            if profile.excludeHints.contains(where: { name.contains($0.lowercased()) }) { return nil }
+            return profile.deviceHints.filter { name.contains($0.lowercased()) }.map(\.count).max().map { (profile, $0) }
         }
     }
 
@@ -49,6 +53,7 @@ public struct ControllerProfile: Equatable, Sendable {
         id = header.id
         name = header.name
         deviceHints = header.deviceHints
+        excludeHints = header.excludeHints ?? []
         mapping = try Mapping.checked(Self.mappingJSON(of: data))
     }
 
@@ -56,10 +61,12 @@ public struct ControllerProfile: Equatable, Sendable {
         var id: String
         var name: String
         var deviceHints: [String]
+        var excludeHints: [String]?
 
         enum CodingKeys: String, CodingKey {
             case id, name
             case deviceHints = "device_hints"
+            case excludeHints = "exclude_hints"
         }
     }
 

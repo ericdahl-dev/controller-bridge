@@ -12,6 +12,8 @@ struct ProfileTests {
         let lc6000 = try #require(profiles.first)
         #expect(lc6000.name == "Denon LC6000 PRIME")
         #expect(lc6000.deviceHints == ["LC6000"])
+        // The real unit's second port, which sends no controls (#99).
+        #expect(lc6000.excludeHints == ["LC6000 PRIME WD"])
         // MappingTests pins every value of the default mapping by literal; this pins that the profile carries it.
         #expect(lc6000.mapping == (try Mapping.bundledDefault()))
         #expect(lc6000.mapping.notes.buttons["play"] == 1)
