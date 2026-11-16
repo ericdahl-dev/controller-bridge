@@ -23,4 +23,20 @@ struct SmokeSettingsTests {
         #expect(settings.feedbackPort == 9096)
         #expect(settings.problems == [])
     }
+
+    @Test("With a real LC6000 attached, the pinned template pins controller 1 to the helper's controls ports (#86)")
+    func pinnedTemplatePinsTheHelper() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../../scripts/smoke/settings-pinned-template.json")
+        let json = try String(contentsOf: url, encoding: .utf8)
+            .replacingOccurrences(of: "__INPUT_ID__", with: "-1234567")
+            .replacingOccurrences(of: "__OUTPUT_ID__", with: "7654321")
+        let settings = try JSONDecoder().decode(BridgeSettings.self, from: Data(json.utf8))
+        #expect(settings.controllers == [ControllerSettings(
+            deck: 1,
+            input: MIDIEndpoint(id: -1_234_567, name: "Smoke LC6000 PRIME Controller"),
+            output: MIDIEndpoint(id: 7_654_321, name: "Smoke LC6000 PRIME Controller")
+        )])
+        #expect(settings.problems == [])
+    }
 }

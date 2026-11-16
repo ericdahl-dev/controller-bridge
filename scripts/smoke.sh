@@ -47,13 +47,23 @@ until grep -q READY "$work/helper.log" 2>/dev/null; do
   sleep 0.1
 done
 
-# Run controller 1 with automatic devices, as on a real unit, so the app itself must pick the controls ports over the
-# WD ones (#143). Pinned devices skip that choice. The entry follows layers by default, so it runs four layers. The
-# helper refuses to run while a real LC6000 is connected, which pinning used to guard against (#86). The settings are
-# written so the user's own pins don't apply; the user's settings are saved first and restored on exit.
+# With no real LC6000 attached, run controller 1 with automatic devices, as on a real unit, so the app itself must pick
+# the controls ports over the WD ones (#143); pinned devices skip that choice. With one attached, pin controller 1 to
+# the helper's controls ports (#86), so the real unit can't take their place; the helper says the automatic case is
+# skipped. SMOKE_REQUIRE_AUTOMATIC=1 (CI) fails instead of skipping. Either way the entry follows layers by default,
+# so it runs four layers. The user's settings are saved first and restored on exit.
 ready="$(grep -m1 READY "$work/helper.log")"
 if defaults export "$domain" "$work/prefs-backup.plist" 2>/dev/null; then saved_prefs="yes"; else saved_prefs="none"; fi
-settings="$(cat scripts/smoke/settings-template.json)"
+mode="$(sed -nE 's/.*mode=([a-z]+).*/\1/p' <<<"$ready")"
+if [ "$mode" = automatic ]; then
+  settings="$(cat scripts/smoke/settings-template.json)"
+else
+  [ "${SMOKE_REQUIRE_AUTOMATIC:-0}" = 1 ] && { echo "A real LC6000 is attached, but SMOKE_REQUIRE_AUTOMATIC=1 needs the automatic case."; exit 1; }
+  input_id="$(sed -nE 's/.*input=(-?[0-9]+).*/\1/p' <<<"$ready")"
+  output_id="$(sed -nE 's/.*output=(-?[0-9]+).*/\1/p' <<<"$ready")"
+  [ -n "$input_id" ] && [ -n "$output_id" ] || { echo "The helper didn't report its endpoint ids: $ready"; exit 1; }
+  settings="$(sed -e "s/__INPUT_ID__/$input_id/" -e "s/__OUTPUT_ID__/$output_id/" scripts/smoke/settings-pinned-template.json)"
+fi
 defaults write "$domain" settings.v1 -data "$(printf '%s' "$settings" | xxd -p | tr -d '\n')"
 
 # Run the binary directly to get its log on stdout; the sandbox still applies.
