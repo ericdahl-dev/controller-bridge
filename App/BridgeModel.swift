@@ -23,6 +23,10 @@ final class BridgeStatus {
     var syndicateFeedback: FeedbackState = .waiting
     /// The last time Syndicate's feedback stopped, for the menu.
     var lastDropout: String?
+    /// When feedback last dropped, as the time to show ("21:14"), stamped as it happens (#66).
+    var lastDropoutTime: String?
+    /// The Syndicate OSC port in use, from settings (#66), for the panel's ports line.
+    var oscPort = 9090
     /// An LED sweep is running (#26).
     var sweeping = false
     /// The built-in demo controller is running (#64). Off at launch and never saved.
@@ -71,6 +75,14 @@ final class BridgeModel {
     /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.
     func setDemo(_ on: Bool) { producer?.demo(on: on) }
 
+    /// The panel's deck picker (#66): only that controller's deck changes, through the same path as Settings, so a
+    /// held control is released on the old deck first.
+    func setDeck(_ deck: Int, controller index: Int) {
+        guard var new = settings, new.controllers.indices.contains(index), new.controllers[index].deck != deck else { return }
+        new.controllers[index].deck = deck
+        try? apply(new)
+    }
+
     func quit(_ done: @escaping @MainActor () -> Void) {
         guard let producer, let engine else { return done() }
         var finished = false
@@ -116,6 +128,7 @@ final class BridgeModel {
             producer.setControllers(new.controllers)
             status.deck = new.controllers[0].deck
         }
+        status.oscPort = new.syndicatePort
         if new.ledsEnabled != old.ledsEnabled { producer.setLEDs(enabled: new.ledsEnabled) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
@@ -150,6 +163,7 @@ final class BridgeModel {
         let settings = BridgeSettings.load(from: storage, defaults: .defaults(from: mapping))
         self.settings = settings
         status.deck = settings.controllers[0].deck
+        status.oscPort = settings.syndicatePort
         let pipe = EventPipe()
         let status = status
         let diagnostics = diagnostics

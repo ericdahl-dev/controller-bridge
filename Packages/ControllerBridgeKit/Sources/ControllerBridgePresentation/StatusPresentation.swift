@@ -171,7 +171,7 @@ public struct StatusPresentation: Equatable, Sendable {
     public var quitAsks: Bool
 
     /// How many characters the panel's status bar holds without truncating (360 pt, 10 pt semibold caps).
-    public static let lineBudget = 60
+    public static let lineBudget = 56
 
     public init(_ state: BridgeState, lineBudget: Int = StatusPresentation.lineBudget) {
         let controller = Self.light(for: state.controller)
@@ -222,7 +222,7 @@ public struct StatusPresentation: Equatable, Sendable {
     static func header(for controller: BridgeState.Controller, lastEvent: String?) -> StatusHeader {
         switch controller {
         case .connected(let profile): StatusHeader(title: profile, subtitle: lastEvent)
-        case .unplugged(let profile): StatusHeader(title: profile ?? "No controller", subtitle: lastEvent)
+        case .unplugged(let profile): StatusHeader(title: profile ?? "Controller unplugged", subtitle: lastEvent)
         case .notConnected: StatusHeader(title: "No controller", subtitle: lastEvent)
         case .noProfile(let device): StatusHeader(title: device, subtitle: "No controller profile matches it")
         }

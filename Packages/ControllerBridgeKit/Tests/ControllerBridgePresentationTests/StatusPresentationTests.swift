@@ -105,7 +105,8 @@ struct StatusPresentationTests {
     func master() {
         let status = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1, master: true))
         #expect(status.master == StatusLight(label: "TEMPO", word: "MASTER", tone: .attention))
-        #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1] · MASTER")
+        // 60 characters with DECK: over the panel's budget, so DECK drops first and MASTER still ends the line (#66).
+        #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · MASTER")
         #expect(status.icon == .ok)
 
         let notMaster = StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: .live(port: 9096), deck: 1))
@@ -198,6 +199,9 @@ struct StatusPresentationTests {
         #expect(unplugged.header == StatusHeader(title: "Denon LC6000 PRIME", subtitle: "Unplugged at 21:14"))
         #expect(StatusPresentation(BridgeState(controller: .notConnected, feedback: .live(port: 9096), deck: 1)).header
             == StatusHeader(title: "No controller", subtitle: nil))
+        // Unplugged with its name no longer known: say what happened, not "No controller".
+        #expect(StatusPresentation(BridgeState(controller: .unplugged(profile: nil), feedback: .live(port: 9096), deck: 1)).header.title
+            == "Controller unplugged")
         #expect(StatusPresentation(BridgeState(controller: .noProfile(device: "DDJ-FLX4"), feedback: .live(port: 9096), deck: 1)).header
             == StatusHeader(title: "DDJ-FLX4", subtitle: "No controller profile matches it"))
     }

@@ -38,6 +38,10 @@ enum BridgeHost {
             Task { @MainActor in
                 status.bridges = coordinatorStatus.controllers
                 status.devices = coordinatorStatus.devices
+                // Stamp the time a dropout happens, for the panel's LAST DROPOUT (#66).
+                if coordinatorStatus.feedback == .stale, status.syndicateFeedback != .stale {
+                    status.lastDropoutTime = Date.now.formatted(date: .omitted, time: .shortened)
+                }
                 status.syndicateFeedback = coordinatorStatus.feedback
                 status.lastDropout = coordinatorStatus.lastDropout
                 status.sweeping = coordinatorStatus.sweeping
