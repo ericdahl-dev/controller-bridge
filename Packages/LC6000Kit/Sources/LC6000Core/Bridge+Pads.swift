@@ -67,12 +67,22 @@ extension Bridge {
         for (note, velocity) in zip(mapping.notes.pads, padColors()) { led(note, velocity) }
     }
 
+    /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad in the roll color.
+    /// Slicer: off. An empty cue is off.
     func padColors() -> [UInt8] {
-        cues.map { slot in
-            guard slot != 0 else { return Self.off }
-            let rgb = palette[slot] ?? [255, 255, 255]
-            return rgbToVelocity(rgb[0], rgb[1], rgb[2])
+        let leds = mapping.leds
+        switch padMode {
+        case .hotCue: return cues.map { $0 == 0 ? Self.off : Self.velocity(palette[$0] ?? [255, 255, 255]) }
+        case .loop: return cues.map { $0 == 0 ? Self.off : Self.velocity(leds.loopPadColor) }
+        case .roll: return Array(repeating: Self.velocity(leds.rollPadColor), count: cues.count)
+        case .slicer: return Array(repeating: Self.off, count: cues.count)
         }
+    }
+
+    /// A pad or ring velocity for an [r, g, b] color.
+    static func velocity(_ rgb: [Int]) -> UInt8 {
+        guard rgb.count == 3 else { return off }
+        return rgbToVelocity(rgb[0], rgb[1], rgb[2])
     }
 }
 

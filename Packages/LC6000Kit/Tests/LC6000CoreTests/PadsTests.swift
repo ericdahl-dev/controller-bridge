@@ -186,4 +186,27 @@ struct PadsTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .float(1e30), .float(0), .float(0)]))
         #expect(Self.padLEDs(rig)[0] == 48)
     }
+
+    @Test("Roll mode lights every pad in the roll color (255, 140, 0): 0b11_10_00 = 56")
+    func rollPadColors() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, Self.modeRoll)
+        #expect(Self.padLEDs(rig) == [56, 56, 56, 56, 56, 56, 56, 56])
+    }
+
+    @Test("Loop mode lights the pads that have a cue in the loop color (0, 255, 0): 0b00_11_00 = 12, and the rest off")
+    func loopPadColors() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(Self.cues([1, 0, 4, 0, 0, 0, 0, 8]))
+        Self.press(rig, Self.modeLoop)
+        #expect(Self.padLEDs(rig) == [12, 0, 12, 0, 0, 0, 0, 12])
+    }
+
+    @Test("Slicer mode turns every pad off")
+    func slicerPadColors() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(Self.cues([1, 2, 3, 4, 5, 6, 7, 8]))
+        Self.press(rig, Self.modeSlicer)
+        #expect(Self.padLEDs(rig) == [0, 0, 0, 0, 0, 0, 0, 0])
+    }
 }
