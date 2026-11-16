@@ -11,5 +11,7 @@ extension Bridge {
         feedbackStale = false
         reportedTempo = nil
         start()
+        // The new deck's tempo comes with the answer to the resync's Resend; until then the fader waits.
+        tempoWaitUntil = clock.now + Double(mapping.osc.feedbackAnswerMs) / 1000
     }
 }

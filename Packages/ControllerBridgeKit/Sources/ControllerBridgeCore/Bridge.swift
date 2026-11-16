@@ -86,6 +86,9 @@ final class Bridge {
     /// Pitch pickup (#22): while armed, the fader is ignored until it meets Syndicate's reported TempoSlider.
     var pickupArmed = false
     var reportedTempo: Double?
+    /// After a deck switch, the new deck's tempo isn't known yet: until this time the fader waits for Syndicate's
+    /// report instead of jumping the new deck (#62). Nil when not waiting.
+    var tempoWaitUntil: Double?
     /// Where the fader was on its last move while armed, to see it cross the reported value.
     var faderPosition: Double?
     /// TempoSlider values sent lately, with when, so a late echo of one isn't taken for an outside change.

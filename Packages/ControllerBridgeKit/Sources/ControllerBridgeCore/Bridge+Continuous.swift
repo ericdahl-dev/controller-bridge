@@ -36,6 +36,7 @@ extension Bridge {
     /// moved the on-screen slider away from the fader, so pickup re-arms.
     func tempoReported(_ value: Double) {
         reportedTempo = value
+        tempoWaitUntil = nil
         let tolerance = mapping.pitch.pickupTolerance
         let isEcho = lastTempo.map { abs($0 - value) <= tolerance } == true
             || recentTempoSends.contains { clock.now - $0.time <= Self.echoWindow && abs($0.value - value) <= tolerance }
@@ -56,9 +57,14 @@ extension Bridge {
     }
 
     /// Whether the fader at `position` drives the tempo. While armed it doesn't, until it comes within tolerance of
-    /// the reported value or moves across it. With no report yet there is nothing to meet, so the fader passes through.
+    /// the reported value or moves across it. With no report yet there is nothing to meet, so the fader passes
+    /// through, except just after a deck switch, when it waits for the new deck's report (`tempoWaitUntil`).
     private func pickedUp(at position: Double) -> Bool {
-        guard mapping.pitch.pickup, pickupArmed, let reported = reportedTempo else { return true }
+        guard mapping.pitch.pickup, pickupArmed else { return true }
+        guard let reported = reportedTempo else {
+            if let until = tempoWaitUntil, clock.now < until { return false }
+            return true
+        }
         let previous = faderPosition
         faderPosition = position
         let near = abs(position - reported) <= mapping.pitch.pickupTolerance
