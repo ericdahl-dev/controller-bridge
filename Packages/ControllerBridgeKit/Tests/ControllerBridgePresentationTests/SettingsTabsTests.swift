@@ -21,4 +21,29 @@ struct SettingsTabsTests {
         #expect(SettingsTab(field: .oscPort) == .syndicate)
         #expect(SettingsTab(field: .feedbackPort) == .syndicate)
     }
+
+    @Test("A refused Apply goes to the leftmost tab with a problem, and focuses that tab's first bad field")
+    func refusalGoesToFirstTab() {
+        let refusal = SettingsRefusal(fields: [
+            SettingsProblem(field: .feedbackPort, message: "Feedback port 0 is out of range, expected 1-65535"),
+            SettingsProblem(field: .deckColor(deck: 2), message: "Deck 2's color needs three values"),
+            SettingsProblem(field: .host, message: "The Syndicate host can't be empty"),
+        ])
+        #expect(refusal.tab == .decks)
+        #expect(refusal.focus == .deckColor(deck: 2))
+
+        let syndicate = SettingsRefusal(fields: [
+            SettingsProblem(field: .feedbackPort, message: "Feedback port 0 is out of range, expected 1-65535"),
+            SettingsProblem(field: .host, message: "The Syndicate host can't be empty"),
+        ])
+        #expect(syndicate.tab == .syndicate)
+        #expect(syndicate.focus == .feedbackPort)
+    }
+
+    @Test("A refusal with no field, such as the bridge not running, stays on the tab you're on")
+    func refusalWithoutField() {
+        let refusal = SettingsRefusal(fields: [], other: ["The bridge isn't running"])
+        #expect(refusal.tab == nil)
+        #expect(refusal.focus == nil)
+    }
 }

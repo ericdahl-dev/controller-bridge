@@ -25,3 +25,16 @@ public enum SettingsTab: Int, CaseIterable, Hashable, Sendable {
         }
     }
 }
+
+/// What a refused Apply does in the tabbed window (#171): go to the leftmost tab with a problem and focus its first
+/// bad field. A problem with no field, such as the bridge not running, leaves the tab alone.
+public struct SettingsRefusal: Equatable, Sendable {
+    public var tab: SettingsTab?
+    public var focus: SettingsField?
+
+    public init(fields: [SettingsProblem], other: [String] = []) {
+        let first = fields.min { SettingsTab(field: $0.field).rawValue < SettingsTab(field: $1.field).rawValue }
+        tab = first.map { SettingsTab(field: $0.field) }
+        focus = first?.field
+    }
+}
