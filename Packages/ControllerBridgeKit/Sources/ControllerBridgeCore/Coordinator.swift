@@ -283,6 +283,7 @@ public final class Coordinator {
         }
         bridge.ledsHeld = true
         sweep = (clock.now, LEDSweep.steps(for: bridge.mapping, delay: delay), 0)
+        status.sweeping = true
         runSweep()
     }
 
@@ -299,6 +300,7 @@ public final class Coordinator {
 
     /// Gives the LEDs back to the bridge, painted from its current state.
     private func endSweep() {
+        status.sweeping = false
         let bridge = controllers[0].bridge
         bridge.ledsHeld = false
         bridge.repaintLEDs()

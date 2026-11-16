@@ -167,9 +167,11 @@ struct DiagnosticsTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
         #expect(Self.takeSent(rig).isEmpty)
         #expect(rig.coordinator.isSweeping)
+        #expect(rig.coordinator.status.sweeping)
 
         Self.tick(rig, at: 1000)
         #expect(!rig.coordinator.isSweeping)
+        #expect(!rig.coordinator.status.sweeping)
         #expect(rig.leds[1] == 127)     // Play, from the Playing 1 that arrived mid-sweep
         #expect(rig.leds[2] == 1)       // Cue: dim, no track loaded
         #expect(rig.leds[32] == 0)      // pad 1: no cue
@@ -192,6 +194,7 @@ struct DiagnosticsTests {
         Self.tick(rig, at: 200)
         #expect(Self.takeSent(rig).isEmpty)
         #expect(!rig.coordinator.isSweeping)
+        #expect(!rig.coordinator.status.sweeping)
     }
 
     @Test("With no controller output open, the sweep says so and sends nothing")
