@@ -23,9 +23,12 @@ WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no co
            ' To have your visits removed, email us. On the capture page it counts only that a capture started and finished.</p>'
            '<p>The web capture saves the file on your computer; nothing is uploaded.</p>')
 
+CAPTURE_LD = '<script type="application/ld+json">{"text": "Record it at https://getdeckbridge.app/capture/."}</script>'
+
 GOOD = {
-    "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">',
+    "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD,
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
+                            ' <a href="capture/">record it in your browser</a>'
                             ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
     "capture/index.html": page(body='<a href="../">Home</a>'),
@@ -86,10 +89,10 @@ class CheckSiteTests(unittest.TestCase):
 
     def test_external_resources_fail_but_external_links_dont(self):
         root = self.site({
-            "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">',
+            "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">' + CAPTURE_LD,
                                body='<img src="//cdn.example.com/a.png" alt=""> <script src="http://x.example/t.js"></script>'
                                     ' <a href="https://testflight.apple.com/join/XXXX">ok</a>'
-                                    ' <a href="support/">s</a> <a href="privacy/">p</a>'),
+                                    ' <a href="support/">s</a> <a href="privacy/">p</a> <a href="capture/">c</a>'),
             "style.css": '@import url("https://fonts.example/x.css"); body { background: url(https://x.example/bg.png); }',
         })
         self.assertEqual(check_site.problems(root), [
@@ -245,6 +248,14 @@ class CheckSiteTests(unittest.TestCase):
         missing = self.site()
         self.assertEqual(check_site.problems(missing, app_prompts=app),
                          ["capture/prompts.json: missing; copy it from " + app])
+
+    def test_the_home_page_links_the_web_capture_in_the_faq_and_its_json_ld(self):
+        no_link = GOOD["index.html"].replace(' <a href="capture/">record it in your browser</a>', "")
+        no_ld = GOOD["index.html"].replace(CAPTURE_LD, "")
+        self.assertEqual(check_site.problems(self.site({"index.html": no_link})),
+                         ["index.html: doesn't link the web capture (capture/)"])
+        self.assertEqual(check_site.problems(self.site({"index.html": no_ld})),
+                         ["index.html: its JSON-LD doesn't name https://getdeckbridge.app/capture/"])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})

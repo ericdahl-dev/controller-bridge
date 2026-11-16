@@ -28,6 +28,8 @@ ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt"]
 SITE = "https://getdeckbridge.app/"
 LLMS_HEADING = "# DeckBridge"
 PRIVACY = "privacy/index.html"
+HOME = "index.html"
+CAPTURE_URL = SITE + "capture/"
 PRIVACY_STATEMENTS = [
     "collects no data",  # the app
     # the website: cookieless PostHog (persistence memory, cookieless_mode always), worded as showrecorder.app's
@@ -169,6 +171,13 @@ def check_page(root, file, text):
         except ValueError as e:
             out.append(f"{file}: JSON-LD block {n} doesn't parse: {e}")
     out += check_refs(root, file, page.refs)
+    if file == HOME:
+        # The FAQ points owners without the app to the web capture (#190), in its text and in the FAQPage JSON-LD.
+        if not any(not loaded and target(root, file, url) == os.path.normpath(os.path.join(root, "capture"))
+                   for url, loaded in page.refs if not is_external(url) and not skip(url)):
+            out.append(f"{file}: doesn't link the web capture (capture/)")
+        if not any(CAPTURE_URL in block for block in page.json_ld):
+            out.append(f"{file}: its JSON-LD doesn't name {CAPTURE_URL}")
     if file == PRIVACY:
         said = " ".join(" ".join(page.text).split()).lower()
         out += [f'{file}: doesn\'t say "{words}"' for words in PRIVACY_STATEMENTS if words not in said]
