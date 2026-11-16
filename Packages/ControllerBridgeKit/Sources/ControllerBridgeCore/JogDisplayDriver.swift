@@ -21,7 +21,24 @@ public struct JogDisplayContent: Equatable, Sendable {
     }
 }
 
+/// What the driver did, for the Diagnostics simulator (#221): the same facts as the bytes it sent.
+public enum JogDisplayEvent: Equatable, Sendable {
+    case connected
+    case disconnected
+    /// An image for `content` started into `slot`: `bytes` of SysEx on the wire.
+    case uploadStarted(slot: UInt8, content: JogDisplayContent, bytes: Int)
+    /// The unit stored it and shows `slot` now.
+    case shown(slot: UInt8)
+    /// The upload stopped: refused with the ack's status, or nil for no answer.
+    case failed(refusal: UInt8?)
+    case marker(pitchBend: Int)
+    case playLight(Bool)
+}
+
 public final class JogDisplayDriver {
+    /// Called with each thing the driver does (#221).
+    public var onEvent: ((JogDisplayEvent) -> Void)?
+
     private let port: any JogDisplayPort
     private let clock: any Clock
     private let log: any LogSink
@@ -60,6 +77,7 @@ public final class JogDisplayDriver {
         guard !connected else { return }
         connected = true
         for message in JogDisplay.hello { port.sendController(message) }
+        onEvent?(.connected)
         next()
     }
 
@@ -72,6 +90,7 @@ public final class JogDisplayDriver {
         lastPlayLight = nil
         current = nil
         port.sendController(JogDisplay.goodbye)
+        onEvent?(.disconnected)
     }
 
     /// Asks for `content` on the display. Equal content sends nothing; while an upload runs, only the newest waits.
@@ -85,6 +104,7 @@ public final class JogDisplayDriver {
         guard connected, pitchBend != lastMarker else { return }
         lastMarker = pitchBend
         port.sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)])
+        onEvent?(.marker(pitchBend: pitchBend))
     }
 
     /// The play light: note 1 on WD ch1, 127 or 0. Only a change goes out.
@@ -92,6 +112,7 @@ public final class JogDisplayDriver {
         guard connected, on != lastPlayLight else { return }
         lastPlayLight = on
         port.sendWD([0x90, 0x01, on ? 0x7F : 0x00])
+        onEvent?(.playLight(on))
     }
 
     /// A message from the WD port.
@@ -108,9 +129,11 @@ public final class JogDisplayDriver {
         case .refused(let status):
             log.log("The jog display refused the image (ack \(String(format: "%02X", status))); it keeps what it showed")
             fail()
+            onEvent?(.failed(refusal: status))
         case .committed where running.finished:
             port.sendWD(running.upload.show)
             shownSlot = running.slot
+            onEvent?(.shown(slot: running.slot))
             upload = nil
             next()
         default:
@@ -123,6 +146,7 @@ public final class JogDisplayDriver {
         if let running = upload, clock.now - running.startedAt >= Self.timeout {
             log.log("The jog display didn't answer the upload; it keeps what it showed")
             fail()
+            onEvent?(.failed(refusal: nil))
         }
         if upload == nil { next() }
     }
@@ -142,6 +166,7 @@ public final class JogDisplayDriver {
         let job = JogDisplay.Upload(image: image, slot: slot)
         upload = (job, slot, 0, false, clock.now)
         for message in job.start + job.body { port.sendWD(message) }
+        onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
         // The upload's start turns the play light off (90 01 00): the next tick puts it back.
         lastPlayLight = false
     }

@@ -136,3 +136,42 @@ struct JogDisplayDriverTests {
         #expect(rig.port.controller == [])
     }
 }
+
+/// What the driver did, as typed events, for the Diagnostics simulator (#221): the same facts as the bytes on WD.
+@Suite("Jog display events")
+struct JogDisplayEventTests {
+    @Test("An upload, its acks and commit, the show, the marker and the play light are each an event")
+    func events() {
+        let port = JogDisplayDriverTests.FakePort(), log = Rig.FakeLog()
+        let driver = JogDisplayDriver(port: port, clock: Rig.FakeClock(), log: log, size: 1, render: JogDisplayDriverTests.render)
+        var events: [JogDisplayEvent] = []
+        driver.onEvent = { events.append($0) }
+        driver.connect()
+        driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        let upload = JogDisplayDriverTests.upload(deck: 1, slot: 1)
+        let bytes = upload.body.reduce(0) { $0 + $1.count }
+        for _ in 0..<upload.expectedAcks { driver.reply(JogDisplayDriverTests.accepted) }
+        driver.reply(JogDisplayDriverTests.committed)
+        driver.marker(2048)
+        driver.playLight(true)
+        #expect(events == [
+            .connected,
+            .uploadStarted(slot: 1, content: JogDisplayContent(deck: 1, color: [255, 0, 0]), bytes: bytes),
+            .shown(slot: 1),
+            .marker(pitchBend: 2048),
+            .playLight(true),
+        ])
+    }
+
+    @Test("A refusal is an event with its status")
+    func refused() {
+        let driver = JogDisplayDriver(port: JogDisplayDriverTests.FakePort(), clock: Rig.FakeClock(), log: Rig.FakeLog(), size: 1,
+                                      render: JogDisplayDriverTests.render)
+        var events: [JogDisplayEvent] = []
+        driver.onEvent = { events.append($0) }
+        driver.connect()
+        driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        driver.reply(JogDisplayDriverTests.refused)
+        #expect(events.last == .failed(refusal: 0x06))
+    }
+}
