@@ -124,4 +124,12 @@ struct MappingCheckTests {
         #expect(Self.problems(#"{"notes": {"play": 1"#) == ["The file isn't valid JSON (near byte 20)."])
         #expect(Self.problems(#"[1, 2]"#) == ["mapping: expected an object, got a list"])
     }
+
+    // MARK: Files that once crashed the app (#92). An imported file is untrusted.
+
+    @Test("A file nested 100 000 deep is refused with one readable problem, instead of overflowing the stack")
+    func deepNesting() {
+        let deep = #"{"x": "# + String(repeating: "[", count: 100_000) + String(repeating: "]", count: 100_000) + "}"
+        #expect(Self.problems(deep) == ["The file nests deeper than 64 levels, so it isn't a mapping."])
+    }
 }
