@@ -204,13 +204,16 @@ struct StatusPresentationTests {
         )
         let status = StatusPresentation(state)
         #expect(status.blocks == [
+            // Same name twice, so numbered (#89).
             ControllerBlock(
-                header: StatusHeader(title: "Denon LC6000 PRIME", subtitle: nil),
-                light: StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live), deck: 1
+                header: StatusHeader(title: "Denon LC6000 PRIME 1", subtitle: nil),
+                light: StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live), deck: 1,
+                accessibilityLabel: "Controller 1, Denon LC6000 PRIME"
             ),
             ControllerBlock(
-                header: StatusHeader(title: "Denon LC6000 PRIME", subtitle: "Unplugged at 21:14"),
-                light: StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention), deck: 3
+                header: StatusHeader(title: "Denon LC6000 PRIME 2", subtitle: "Unplugged at 21:14"),
+                light: StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention), deck: 3,
+                accessibilityLabel: "Controller 2, Denon LC6000 PRIME"
             ),
         ])
         // With more than one controller the line shows the worst of them, counted, so an unplugged second one shows (#89).
@@ -337,5 +340,25 @@ struct StatusPresentationTests {
     func oneControllerLine() {
         let state = BridgeState(controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1)
         #expect(StatusPresentation(state).line == "CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1]")
+    }
+
+    @Test("Several controllers: each block has a VoiceOver label with its number, and repeated names get numbers on screen too (#89)")
+    func blockNames() {
+        let state = BridgeState(
+            controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1,
+            others: [
+                BridgeState.ControllerEntry(controller: .connected(profile: "Denon LC6000 PRIME"), deck: 2),
+                BridgeState.ControllerEntry(controller: .connected(profile: "Test Pad"), deck: 3),
+            ]
+        )
+        let blocks = StatusPresentation(state).blocks
+        #expect(blocks.map(\.header.title) == ["Denon LC6000 PRIME 1", "Denon LC6000 PRIME 2", "Test Pad"])
+        #expect(blocks.map(\.accessibilityLabel) == [
+            "Controller 1, Denon LC6000 PRIME", "Controller 2, Denon LC6000 PRIME", "Controller 3, Test Pad",
+        ])
+        // One controller: no number.
+        let one = StatusPresentation(BridgeState(controller: .connected(profile: "Denon LC6000 PRIME"), feedback: .live(port: 9096), deck: 1))
+        #expect(one.blocks[0].header.title == "Denon LC6000 PRIME")
+        #expect(one.blocks[0].accessibilityLabel == "Controller, Denon LC6000 PRIME")
     }
 }

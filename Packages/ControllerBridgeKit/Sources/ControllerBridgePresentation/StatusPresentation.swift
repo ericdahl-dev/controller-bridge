@@ -184,12 +184,15 @@ public struct ControllerBlock: Equatable, Sendable {
     public var deck: Int
     /// The controller picks the deck itself, through its own layers (#79): the panel shows it, not a picker.
     public var followsLayers: Bool
+    /// What VoiceOver says for the whole block, so two blocks with the same name can be told apart (#89).
+    public var accessibilityLabel: String
 
-    public init(header: StatusHeader, light: StatusLight, deck: Int, followsLayers: Bool = false) {
+    public init(header: StatusHeader, light: StatusLight, deck: Int, followsLayers: Bool = false, accessibilityLabel: String? = nil) {
         self.header = header
         self.light = light
         self.deck = deck
         self.followsLayers = followsLayers
+        self.accessibilityLabel = accessibilityLabel ?? "Controller, \(header.title)"
     }
 
     /// Said beside the deck when the controller's layers pick it.
@@ -254,6 +257,15 @@ public struct StatusPresentation: Equatable, Sendable {
                 ControllerBlock(header: Self.header(for: $0.controller, lastEvent: $0.lastEvent), light: Self.light(for: $0.controller),
                                 deck: $0.deck, followsLayers: $0.followsLayers)
             }
+        // Several controllers (#89): numbered for VoiceOver, and on screen when their names repeat.
+        if blocks.count > 1 {
+            let titles = blocks.map(\.header.title)
+            for index in blocks.indices {
+                let title = titles[index]
+                blocks[index].accessibilityLabel = "Controller \(index + 1), \(title)"
+                if titles.filter({ $0 == title }).count > 1 { blocks[index].header.title = "\(title) \(index + 1)" }
+            }
+        }
         // A stopped bridge: the header names the bridge's problem, not the controller (#88). The panel draws the
         // first block's header, so it says it there too.
         if state.stopped { blocks[0].header = StatusHeader(title: "Bridge stopped", subtitle: state.stopReason.short) }
