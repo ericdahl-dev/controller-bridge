@@ -110,3 +110,65 @@ public enum JogMarkerAngle {
         Double(pitchBend) / 16_384 * 360
     }
 }
+
+/// The simulator's view of the jog display (#221), built from the display driver's events. The App maps each
+/// `JogDisplayEvent` (ControllerBridgeCore) to one `Input`, timestamping uploads, so this target stays free of Core.
+public struct JogSimulator: Equatable, Sendable {
+    public enum Input: Equatable, Sendable {
+        case connected
+        case disconnected
+        /// An image for `deck` started into `slot`; that deck is now the one in front.
+        case uploadStarted(slot: Int, deck: Int, bytes: Int, at: Date)
+        /// The unit shows `slot`.
+        case shown(slot: Int)
+        /// The upload in progress was refused, or got no answer.
+        case failed
+        case marker(pitchBend: Int)
+        case playing(Bool)
+    }
+
+    private struct Upload: Equatable, Sendable {
+        var slot: Int, bytes: Int, at: Date
+        var accepted: Bool?
+    }
+
+    private var connected = false
+    /// The deck the unit is showing: the last one an upload started for.
+    public private(set) var front: Int?
+    private var uploads: [Int: Upload] = [:]
+    private var markers: [Int: Int] = [:]
+    private var plays: [Int: Bool] = [:]
+
+    public init() {}
+
+    public mutating func apply(_ input: Input) {
+        switch input {
+        case .connected: connected = true
+        case .disconnected: connected = false
+        case .uploadStarted(let slot, let deck, let bytes, let at):
+            front = deck
+            uploads[deck] = Upload(slot: slot, bytes: bytes, at: at, accepted: nil)
+        case .shown(let slot):
+            if let front, uploads[front]?.slot == slot { uploads[front]?.accepted = true }
+        case .failed:
+            if let front { uploads[front]?.accepted = false }
+        case .marker(let pitchBend):
+            if let front { markers[front] = pitchBend }
+        case .playing(let on):
+            if let front { plays[front] = on }
+        }
+    }
+
+    /// The readout's status for one deck. An upload still waiting for the unit's answer reads as not yet uploaded.
+    public func status(deck: Int) -> JogUploadStatus {
+        guard connected else { return .notConnected }
+        guard let upload = uploads[deck], let accepted = upload.accepted else { return .notUploaded }
+        return .uploaded(slot: upload.slot, bytes: upload.bytes, at: upload.at, accepted: accepted)
+    }
+
+    /// The deck's last marker pitch bend (0 until one arrives), for `JogMarkerAngle.degrees(pitchBend:)`.
+    public func marker(deck: Int) -> Int { markers[deck] ?? 0 }
+
+    /// Whether the deck's play light is on.
+    public func playing(deck: Int) -> Bool { plays[deck] ?? false }
+}

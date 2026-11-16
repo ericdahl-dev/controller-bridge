@@ -53,4 +53,57 @@ struct JogSimulatorTests {
         #expect(JogMarkerAngle.degrees(pitchBend: 12288) == 270)
         #expect(JogMarkerAngle.degrees(pitchBend: 16383) == 359.978_027_343_75)
     }
+
+    // The simulator's state from the display driver's events (#221), mapped by the App one to one.
+
+    static let utc = TimeZone(identifier: "UTC")!
+    static let noon = Date(timeIntervalSince1970: 1_763_294_671)  // 12:04:31 UTC
+
+    @Test("Before the unit answers, every deck reads Not connected; once connected, Nothing uploaded yet")
+    func connection() {
+        var sim = JogSimulator()
+        #expect(sim.status(deck: 1) == .notConnected)
+        sim.apply(.connected)
+        #expect(sim.status(deck: 1) == .notUploaded)
+        sim.apply(.disconnected)
+        #expect(sim.status(deck: 3) == .notConnected)
+    }
+
+    @Test("An upload the unit shows reads Accepted for its deck, which comes to the front; a refused one reads Refused")
+    func uploads() {
+        var sim = JogSimulator()
+        sim.apply(.connected)
+        sim.apply(.uploadStarted(slot: 2, deck: 1, bytes: 14_812, at: Self.noon))
+        #expect(sim.front == 1)
+        sim.apply(.shown(slot: 2))
+        #expect(sim.status(deck: 1).readout(timeZone: Self.utc) == "Slot 2 · 14,812 bytes · 12:04:31 · Accepted")
+        sim.apply(.uploadStarted(slot: 1, deck: 2, bytes: 980, at: Self.noon))
+        sim.apply(.failed)
+        #expect(sim.front == 2)
+        #expect(sim.status(deck: 2).readout(timeZone: Self.utc) == "Slot 1 · 980 bytes · 12:04:31 · Refused")
+        #expect(sim.status(deck: 1).readout(timeZone: Self.utc) == "Slot 2 · 14,812 bytes · 12:04:31 · Accepted")
+    }
+
+    @Test("The marker and play light belong to the deck in front; the others keep theirs")
+    func markerFollowsFront() {
+        var sim = JogSimulator()
+        sim.apply(.connected)
+        sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 100, at: Self.noon))
+        sim.apply(.marker(pitchBend: 4096))
+        sim.apply(.playing(true))
+        sim.apply(.uploadStarted(slot: 2, deck: 3, bytes: 100, at: Self.noon))
+        sim.apply(.marker(pitchBend: 8192))
+        #expect(sim.marker(deck: 1) == 4096)
+        #expect(sim.playing(deck: 1))
+        #expect(sim.marker(deck: 3) == 8192)
+        #expect(!sim.playing(deck: 3))
+    }
+
+    @Test("A marker with no deck in front yet goes nowhere")
+    func markerBeforeUpload() {
+        var sim = JogSimulator()
+        sim.apply(.marker(pitchBend: 4096))
+        #expect(sim.front == nil)
+        #expect(sim.marker(deck: 1) == 0)
+    }
 }
