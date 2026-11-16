@@ -68,4 +68,86 @@ struct EngineTests {
 
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]))
     }
+
+    @Test("A devices-changed event from the pipe connects a controller that appeared")
+    func devicesChangedFromThePipe() async throws {
+        let rig = try Rig()
+        rig.midi.sources = []
+        rig.midi.destinations = []
+        rig.coordinator.start()
+        rig.midi.sources = [Rig.lc6000]
+        rig.midi.destinations = [Rig.lc6000Out]
+        let pipe = EventPipe()
+
+        pipe.producer.devicesChanged()
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+    }
+
+    @Test("Sleep from the pipe releases a held Cue; wake re-checks the devices")
+    func sleepAndWakeFromThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+
+        pipe.producer.sleep()
+        pipe.producer.wake()
+        pipe.producer.finish()
+        rig.midi.sources = []
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
+        #expect(rig.midi.connected == [])
+    }
+
+    @Test("Stop from the pipe releases held controls before run() returns, and events after it are not handled")
+    func stopFromThePipe() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)   // Cue held
+        rig.osc.sent.removeAll()
+        let pipe = EventPipe()
+
+        pipe.producer.stop()
+        pipe.producer.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)    // after quit: dropped
+        // No finish(): stop alone ends the loop.
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)])])
+        #expect(rig.midi.connected == [])
+    }
+
+    @Test("The status sink gets the Coordinator status once per change, not once per event")
+    func statusSinkOnChange() async throws {
+        let rig = try Rig()
+        rig.midi.sources = []
+        rig.midi.destinations = []
+        rig.coordinator.start()
+        rig.midi.sources = [Rig.lc6000]
+        rig.midi.destinations = [Rig.lc6000Out]
+        let pipe = EventPipe()
+        let seen = Seen()
+
+        pipe.producer.tick()
+        pipe.producer.devicesChanged()
+        pipe.producer.tick()
+        pipe.producer.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { seen.append($0) }).run(pipe.events)
+
+        #expect(seen.values == [
+            CoordinatorStatus(controllers: [ControllerStatus(deck: 1, connected: false, lastEvent: nil)]),
+            CoordinatorStatus(controllers: [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME")]),
+        ])
+    }
+
+    /// Collects what a Sendable callback is given.
+    final class Seen: @unchecked Sendable {
+        var values: [CoordinatorStatus] = []
+        func append(_ status: CoordinatorStatus) { values.append(status) }
+    }
 }
