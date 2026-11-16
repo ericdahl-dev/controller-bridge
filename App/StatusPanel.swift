@@ -112,6 +112,15 @@ struct StatusPanel: View {
                 guideLink
                 HStack(spacing: Theme.Space.s) {
                     SettingsLink { Text("Settings…") }.buttonStyle(FlatButtonStyle())
+                    Button {
+                        // A menu-bar (LSUIElement) app must come forward first, or the window opens behind.
+                        NSApp.activate()
+                        openWindow(id: "diagnostics")
+                    } label: {
+                        // Three buttons share 260 pt: the longest label shrinks a little rather than wrap.
+                        Text("Diagnostics…").lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .buttonStyle(FlatButtonStyle())
                     Button("Quit") { NSApplication.shared.terminate(nil) }
                         .buttonStyle(FlatButtonStyle())
                         .keyboardShortcut("q")

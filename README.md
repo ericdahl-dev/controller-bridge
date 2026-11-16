@@ -69,6 +69,8 @@ The numbers come from Denon's *LC6000 PRIME MIDI Specification v1.0*. A few of t
 .venv/bin/lc6000-bridge led-sweep   # steps through all 64 pad colors, then lights each button note
 ```
 
+In the Mac app, the same checks are in the menu's **Diagnostics…** window: **MIDI Monitor** prints the same lines as `monitor`, **LED Sweep** runs `led-sweep`, and **OSC Log** shows what goes to and comes from Syndicate.
+
 - **Jog CCs:** the spec lists CC 55 and 54. If one turn shows up on both, keep only one in `[jog].ccs`.
 - **Pitch direction:** set `[pitch].invert = true` if the fader works the wrong way.
 - **Colors:** the bridge assumes the color velocity is 2 bits each of red, green and blue (`0b00RRGGBB`). `led-sweep` prints the value it expects for each color.

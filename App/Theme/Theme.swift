@@ -160,13 +160,16 @@ struct StatusLineView: View {
 
 /// Syndicate's flat button: a slightly lighter gray, a hairline edge and a small radius.
 struct FlatButtonStyle: ButtonStyle {
+    /// Shown raised, as the active tab in a row of them (#26).
+    var raised = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.ui(12, .bold))
             .textCase(.uppercase)
             .foregroundStyle(Theme.text)
             .frame(maxWidth: .infinity, minHeight: 26)
-            .background(configuration.isPressed ? Theme.buttonRaised : Theme.button,
+            .background(configuration.isPressed || raised ? Theme.buttonRaised : Theme.button,
                         in: RoundedRectangle(cornerRadius: Theme.corner))
             .overlay(RoundedRectangle(cornerRadius: Theme.corner).strokeBorder(Theme.hairline, lineWidth: 1))
             .contentShape(Rectangle())

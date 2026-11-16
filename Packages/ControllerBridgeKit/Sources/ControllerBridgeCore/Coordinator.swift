@@ -21,6 +21,13 @@ public final class Coordinator {
     /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
     private var resendSentAt: Double?
 
+    /// Set while the Diagnostics window is open (#26); nil otherwise, so nothing is built for it during a set.
+    /// The LED sweep in progress: when it started, its steps and the next one to send.
+    private var sweep: (start: Double, steps: [LEDSweep.Step], next: Int)?
+
+    public var diagnostics: ((DiagnosticEvent) -> Void)? {
+        didSet { (osc as? OSCTap)?.onSend = diagnostics.map { sink in { sink(.oscOut($0)) } } }
+    }
     /// Settings' LEDs switch, kept so a Bridge rebuilt for another profile honors it.
     private var ledsEnabled = true
 
@@ -45,12 +52,13 @@ public final class Coordinator {
     public init(profiles: [ControllerProfile], midi: any MIDISystem, osc: any OSCSender, clock: any Clock, log: any LogSink) {
         precondition(!profiles.isEmpty, "A Coordinator needs at least one controller profile")
         self.midiSystem = midi
-        self.osc = osc
+        // Every Bridge sends through the tap, so the OSC log sees what goes out while Diagnostics is open.
+        self.osc = OSCTap(osc)
         self.clock = clock
         self.log = log
         self.profiles = profiles
         let first = profiles[0]
-        controllers = [Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first)]
+        controllers = [Controller(bridge: Bridge(mapping: first.mapping, osc: self.osc, clock: clock), profile: first)]
         status = CoordinatorStatus(controllers: [ControllerStatus(deck: first.mapping.deck.number, connected: false)])
     }
 
@@ -194,6 +202,7 @@ public final class Coordinator {
 
     /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
     public func tick() {
+        runSweep()
         for bridge in bridges { bridge.tick() }
         checkLiveness()
         disconnectFailedOutputs()
@@ -206,12 +215,17 @@ public final class Coordinator {
 
     /// A MIDI message from a source. Only the controller connected to that source handles it.
     public func midi(_ event: MIDIEvent, source: MIDIEndpoint.ID) {
+        if let diagnostics {
+            let mapping = (controllers.first { $0.source?.id == source } ?? controllers[0]).bridge.mapping
+            diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
+        }
         for controller in controllers where controller.source?.id == source { controller.bridge.handle(event) }
         disconnectFailedOutputs()
     }
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
     public func feedback(_ message: OSCMessage) {
+        diagnostics?(.oscIn(message))
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
@@ -308,5 +322,57 @@ public final class Coordinator {
         guard resendSentAt == nil else { return }
         resendSentAt = clock.now
         controllers[0].bridge.send("Feedback/Resend", .int(1))
+    }
+
+    // MARK: LED sweep (#26)
+
+    /// Starts the LED sweep on the first controller, `delay` seconds per color (0.6, as the Python led-sweep).
+    public func startLEDSweep(delay: Double = 0.6) {
+        let bridge = controllers[0].bridge
+        guard bridge.output != nil else {
+            diagnostics?(.sweep("No controller output is open, so there is nothing to sweep."))
+            return
+        }
+        bridge.ledsHeld = true
+        sweep = (clock.now, LEDSweep.steps(for: bridge.mapping, delay: delay), 0)
+        status.sweeping = true
+        runSweep()
+    }
+
+    /// Whether an LED sweep is running.
+    public var isSweeping: Bool { sweep != nil }
+
+    /// Stops the sweep part-way. Its remaining steps are dropped, and the LEDs repaint.
+    public func stopLEDSweep() {
+        guard sweep != nil else { return }
+        sweep = nil
+        diagnostics?(.sweep("LED sweep stopped."))
+        endSweep()
+    }
+
+    /// Gives the LEDs back to the bridge, painted from its current state.
+    private func endSweep() {
+        status.sweeping = false
+        let bridge = controllers[0].bridge
+        bridge.ledsHeld = false
+        bridge.repaintLEDs()
+    }
+
+    /// Sends every sweep step that is due.
+    private func runSweep() {
+        guard var current = sweep else { return }
+        let bridge = controllers[0].bridge
+        while current.next < current.steps.count, clock.now - current.start >= current.steps[current.next].at {
+            let step = current.steps[current.next]
+            for send in step.sends { bridge.sweepLED(send.note, send.velocity) }
+            for caption in step.captions { diagnostics?(.sweep(caption)) }
+            current.next += 1
+        }
+        if current.next < current.steps.count {
+            sweep = current
+        } else {
+            sweep = nil
+            endSweep()
+        }
     }
 }

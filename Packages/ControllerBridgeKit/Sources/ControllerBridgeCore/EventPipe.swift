@@ -9,6 +9,11 @@ public enum PipeEvent: Equatable, Sendable {
     /// The Mac is about to sleep, or just woke.
     case sleep
     case wake
+    /// The Diagnostics window opened or closed (#26).
+    case diagnostics(open: Bool)
+    /// Start the LED sweep, `delay` seconds per color; or stop it part-way.
+    case ledSweep(delay: Double)
+    case stopLEDSweep
     /// Settings changes (#19), in order with the MIDI already queued.
     case setDeck(Int, controller: Int)
     case setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int)
@@ -41,6 +46,9 @@ public struct EventPipe: Sendable {
         public func devicesChanged() { continuation.yield(.devicesChanged) }
         public func sleep() { continuation.yield(.sleep) }
         public func wake() { continuation.yield(.wake) }
+        public func diagnostics(open: Bool) { continuation.yield(.diagnostics(open: open)) }
+        public func ledSweep(delay: Double) { continuation.yield(.ledSweep(delay: delay)) }
+        public func stopLEDSweep() { continuation.yield(.stopLEDSweep) }
         public func setDeck(_ deck: Int, controller: Int) { continuation.yield(.setDeck(deck, controller: controller)) }
         public func setDevices(input: MIDIEndpoint?, output: MIDIEndpoint?, controller: Int) {
             continuation.yield(.setDevices(input: input, output: output, controller: controller))
