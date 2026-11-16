@@ -9,8 +9,18 @@ extension Bridge {
     /// Slip roll sizes, pad 1 to pad 8.
     static let rollSizes = ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]
 
+    /// A mode button. Switching mode first releases any held pad, so a hot cue or roll never sticks.
     func padModeButton(_ mode: PadMode) -> (Bool) -> Void {
-        { pressed in if pressed { self.padMode = mode } }
+        { pressed in
+            guard pressed else { return }
+            self.releasePads()
+            self.padMode = mode
+        }
+    }
+
+    /// Releases every held pad, and nothing else.
+    func releasePads() {
+        for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
     }
 
     /// A pad press or release. `index` is 0-7, so hot cue `index + 1`.

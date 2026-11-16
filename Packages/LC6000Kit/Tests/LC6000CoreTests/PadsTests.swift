@@ -85,4 +85,28 @@ struct PadsTests {
         Self.press(rig, 32)
         #expect(rig.osc.sent == [])
     }
+
+    @Test("Switching pad mode while a pad is held releases it once; letting go of the pad afterwards sends nothing")
+    func modeSwitchReleasesHeldPad() throws {
+        let rig = try Self.startedRig()
+        Self.down(rig, 32)
+        rig.osc.sent.removeAll()
+
+        Self.press(rig, Self.modeRoll)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(1), .int(0)])])
+
+        rig.osc.sent.removeAll()
+        Self.up(rig, 32)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("Switching pad mode releases only the pads, not a held Cue")
+    func modeSwitchKeepsOtherHolds() throws {
+        let rig = try Self.startedRig()
+        Self.down(rig, 2)     // Cue held
+        Self.down(rig, 33)    // pad 2 held
+        rig.osc.sent.removeAll()
+        Self.press(rig, Self.modeLoop)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(2), .int(0)])])
+    }
 }
