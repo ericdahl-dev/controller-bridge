@@ -247,6 +247,7 @@ final class Bridge {
     }
 
     private func handleNote(_ note: Int, pressed: Bool) {
+        if mixerNote(note, pressed: pressed) { return }
         if padNote(note, pressed: pressed) { return }
         if note == mapping.needle.touchNote {
             needleTouched = pressed
@@ -345,6 +346,7 @@ final class Bridge {
         loopLEDs()
         padLEDs()
         led(mapping.leds.pitchCenter, pitchCenterVelocity)
+        mixerLEDs()
     }
 
     /// A button LED's full, dim and off velocities, from the profile (#194).

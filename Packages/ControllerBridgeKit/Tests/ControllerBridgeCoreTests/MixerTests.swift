@@ -162,4 +162,51 @@ struct MixerTests {
         Self.cc(off, 19, 0)
         #expect(off.osc.sent == [Self.mixer("Volume", 0)])
     }
+
+    // MARK: Cue, mute and solo (#207)
+
+    static func press(_ rig: Rig, _ note: UInt8) {
+        rig.coordinator.midi(.noteOn(channel: 0, note: note, velocity: 127), source: Rig.lc6000.id)
+        rig.coordinator.midi(.noteOff(channel: 0, note: note, velocity: 0), source: Rig.lc6000.id)
+    }
+
+    @Test("A press sends the opposite of what Syndicate last reported; its LED follows Syndicate, not the press")
+    func cueToggles() throws {
+        let rig = try Self.started()
+        Self.press(rig, 84)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Mixer/CH1/Cue", [.int(1)])])
+        #expect(rig.leds[84] != 127)
+        Self.report(rig, "Cue", 1)
+        #expect(rig.leds[84] == 127)
+        Self.press(rig, 84)
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Mixer/CH1/Cue", [.int(0)]))
+        Self.report(rig, "Cue", 0)
+        #expect(rig.leds[84] == 1)  // the profile's dim, as an unlit button
+    }
+
+    @Test("Mute and solo work the same, each on its own address and LED")
+    func muteAndSolo() throws {
+        let rig = try Self.started()
+        Self.report(rig, "Mute", 1)
+        Self.press(rig, 85)
+        Self.press(rig, 86)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Mixer/CH1/Mute", [.int(0)]), OSCMessage("/Syndicate/Mixer/CH1/Solo", [.int(1)]),
+        ])
+        #expect(rig.leds[85] == 127)
+        #expect(rig.leds[86] == 1)
+    }
+
+    @Test("Replugged, the buttons' LEDs are repainted from what Syndicate reported meanwhile")
+    func repaint() throws {
+        let rig = try Self.started()
+        rig.midi.sources = [MIDIEndpoint(id: 1000, name: "IAC Bus 1")]
+        rig.midi.destinations = []
+        rig.coordinator.devicesChanged()
+        Self.report(rig, "Solo", 1)
+        rig.midi.sources = [MIDIEndpoint(id: 1000, name: "IAC Bus 1"), Rig.lc6000]
+        rig.midi.destinations = [Rig.lc6000Out]
+        rig.coordinator.devicesChanged()
+        #expect(rig.leds[86] == 127)
+    }
 }

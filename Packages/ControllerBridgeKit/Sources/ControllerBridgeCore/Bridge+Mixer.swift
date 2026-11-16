@@ -61,6 +61,36 @@ extension Bridge {
     func mixerFeedback(_ kind: MixerValue, _ arguments: [OSCArgument]) {
         guard let value = arguments.first?.number else { return }
         if mixerControls.contains(where: { $0.value == kind }) { mixerReported(kind, value) }
+        if mixerButtons.contains(where: { $0.value == kind }) {
+            mixerState.reported[kind] = value
+            mixerLEDs()
+        }
+    }
+
+    /// The cue, mute and solo buttons, with the value each toggles.
+    var mixerButtons: [(value: MixerValue, note: Int)] {
+        guard let mixer = mapping.mixer else { return [] }
+        let all: [(MixerValue, Int?)] = [(.cue, mixer.cueNote), (.mute, mixer.muteNote), (.solo, mixer.soloNote)]
+        return all.compactMap { value, note in note.map { (value, $0) } }
+    }
+
+    /// A press of cue, mute or solo sends the opposite of what Syndicate last reported (PROVISIONAL: the input's
+    /// meaning is unconfirmed until the #207 spike; sending the new state works whether Syndicate sets or toggles).
+    /// Its LED waits for Syndicate's answer. False for any other note.
+    func mixerNote(_ note: Int, pressed: Bool) -> Bool {
+        guard let button = mixerButtons.first(where: { $0.note == note }) else { return false }
+        guard pressed else { return true }
+        let on = (mixerState.reported[button.value] ?? 0) > 0.5
+        send(address: MixerOSC.address(button.value, channel: mapping.deck.number, root: root), [.int(on ? 0 : 1)])
+        return true
+    }
+
+    /// The cue, mute and solo LEDs, from what Syndicate reported: full when on, else as an unlit button.
+    func mixerLEDs() {
+        for button in mixerButtons {
+            let on = (mixerState.reported[button.value] ?? 0) > 0.5
+            led(button.note, on ? fullLevel : (mapping.leds.dimUnlitButtons ? dimLevel : offLevel))
+        }
     }
 
     /// A value the controller didn't send (another controller, the mouse) moved Syndicate away from the control, so
