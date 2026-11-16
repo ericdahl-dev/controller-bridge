@@ -154,4 +154,21 @@ struct CoordinatorTests {
         let playOn = rig.midi.outputs[Rig.lc6000Out.id]?.sent.filter { $0 == .noteOn(channel: 0, note: 1, velocity: 127) }
         #expect(playOn?.count == 1)
     }
+
+    @Test("With the controller's input but no MIDI output, it still bridges: Play sends PlayPause, and stop releases (Python's no-output test)")
+    func bridgesWithoutOutput() throws {
+        let rig = try Rig()
+        rig.midi.destinations = []
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)   // Cue held
+        rig.coordinator.stop()
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Cue", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)]),
+        ])
+        #expect(rig.midi.outputs.isEmpty)
+    }
 }

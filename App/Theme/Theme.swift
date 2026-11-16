@@ -118,7 +118,9 @@ struct StatusLightView: View {
             Text(light.label.uppercased()).font(Theme.captionFont).foregroundStyle(Theme.caption)
             HStack(spacing: 5) {
                 Circle().fill(Color(light.tone.color)).frame(width: 7, height: 7)
+                // A word never breaks mid-word; the panel lays lights out in a grid instead.
                 Text(light.word).font(Theme.ui(12, .bold)).foregroundStyle(Color(light.tone.color))
+                    .lineLimit(1).fixedSize()
             }
         }
         .accessibilityElement(children: .combine)
