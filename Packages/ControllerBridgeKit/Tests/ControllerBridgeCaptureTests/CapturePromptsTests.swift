@@ -59,4 +59,15 @@ struct CapturePromptsTests {
         canonical.append(0x0A)
         #expect(json == canonical)
     }
+
+    @Test("The deck 2 layer steps: the select step is layer 2, and deck 2's Play repeats deck 1's on layer 2 (#217)")
+    func layerSteps() {
+        let select = Self.list.first { $0.id == "layer2.select" }
+        let play = Self.list.first { $0.id == "deck2.play" }
+        #expect(select?.layer == 2)
+        #expect(select?.layerOf == nil)
+        #expect(play?.layer == 2)
+        #expect(play?.layerOf == "deck1.play")
+        #expect(Self.list.filter { $0.layer != nil }.map(\.id) == ["layer2.select", "deck2.play"])
+    }
 }

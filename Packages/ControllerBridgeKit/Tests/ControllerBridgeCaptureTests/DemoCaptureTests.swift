@@ -44,6 +44,10 @@ struct DemoCaptureTests {
         #expect(pitch?.last == 16383)
         #expect(steps.first { $0.prompt == "deck1.play.shift" }?.shift == ShiftLayer(of: "deck1.play", channelOffset: 0, numberOffset: 0))
         #expect(Self.walked().flow.file?.noise == [[0x90, 0x34]])
+        // The standard list's layer steps (#217).
+        let layers = Self.walked().flow.file?.layers ?? []
+        #expect(layers.map(\.selectReadout) == ["Layer 2: Shift + Note 55 on ch 16 · indicator Note 51 on ch 2"])
+        #expect(layers.map(\.offsetReadout) == ["Layer 2: channel +1"])
     }
 
     @Test("The demo's layer step is the LC6000's: Shift + note 55 on ch 16, note 51 on ch 2, and deck 2 on channel +1 (#217)")
