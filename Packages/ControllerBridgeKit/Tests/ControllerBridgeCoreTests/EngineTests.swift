@@ -217,4 +217,23 @@ struct EngineTests {
         #expect(rig.midi.connected == [Rig.lc6000.id])
         #expect(rig.leds.values.allSatisfy { $0 == 0 })
     }
+
+    @Test("A controller list from the pipe reaches the Coordinator")
+    func controllersFromThePipe() async throws {
+        let rig = try Rig()
+        let unitB = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME")
+        rig.midi.sources.append(unitB)
+        rig.coordinator.start()
+        let pipe = EventPipe()
+
+        pipe.producer.setControllers([
+            ControllerSettings(deck: 1, input: nil, output: nil),
+            ControllerSettings(deck: 2, input: nil, output: nil),
+        ])
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.coordinator.status.controllers.map(\.deck) == [1, 2])
+        #expect(rig.midi.connected == [Rig.lc6000.id, unitB.id])
+    }
 }

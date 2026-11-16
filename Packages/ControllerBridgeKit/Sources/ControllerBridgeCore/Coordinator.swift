@@ -45,6 +45,10 @@ public final class Coordinator {
         /// The devices picked in Settings (#19). Nil is automatic: the first device a profile matches.
         var chosenInput: MIDIEndpoint.ID?
         var chosenOutput: MIDIEndpoint.ID?
+        /// The MIDI channel picked in Settings (#25), 1-16, or nil for the profile's.
+        var channel: Int?
+        /// The destination its LEDs go to, once open.
+        var destination: MIDIEndpoint?
     }
 
     /// One controller, whose profile is chosen by the name of the device that connects. Until one does, it runs the
@@ -107,10 +111,13 @@ public final class Coordinator {
         guard let source = controllers[index].source else { return }
         let bridge = controllers[index].bridge
         bridge.releaseAll()
-        midiSystem.disconnect(source: source)
-        bridge.output?.close()
-        bridge.output = nil
         controllers[index].source = nil
+        let destination = controllers[index].destination
+        controllers[index].destination = nil
+        // Another controller on the same device, on another channel (#25), keeps it open.
+        if !controllers.contains(where: { $0.source?.id == source.id }) { midiSystem.disconnect(source: source) }
+        if destination == nil || !controllers.contains(where: { $0.destination?.id == destination?.id }) { bridge.output?.close() }
+        bridge.output = nil
         status.controllers[index].profile = nil
         report(index, "Disconnected \(source.name)" + (reason.map { " (\($0))" } ?? ""))
     }
@@ -122,8 +129,11 @@ public final class Coordinator {
         if let chosen = controllers[index].chosenInput {
             source = sources.first { $0.id == chosen }
         } else {
-            let known = controllers[index].knownSourceID.flatMap { id in sources.first { $0.id == id } }
-            source = known ?? sources.first { ControllerProfile.matching($0.name, in: profiles) != nil }
+            // Automatic: a unit another controller already has stays with it.
+            let claimed = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].source?.id })
+            let free = sources.filter { !claimed.contains($0.id) }
+            let known = controllers[index].knownSourceID.flatMap { id in free.first { $0.id == id } }
+            source = known ?? free.first { ControllerProfile.matching($0.name, in: profiles) != nil }
         }
         guard let source else { return false }
         // A device picked in Settings runs even if no profile names it: then it keeps the current profile.
@@ -133,15 +143,11 @@ public final class Coordinator {
         }
         if profile != controllers[index].profile {
             controllers[index].profile = profile
-            var mapping = profile.mapping
-            // The deck is a setting, not part of the profile.
-            mapping.deck.number = status.controllers[index].deck
-            controllers[index].bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
-            controllers[index].bridge.setLEDsEnabled(ledsEnabled)
+            controllers[index].bridge = makeBridge(profile, for: index)
         }
         let bridge = controllers[index].bridge
         do {
-            try midiSystem.connect(source: source)
+            if !controllers.contains(where: { $0.source?.id == source.id }) { try midiSystem.connect(source: source) }
         } catch {
             log.log("Couldn't open MIDI input \(source.name): \(error)")
             return false
@@ -151,8 +157,13 @@ public final class Coordinator {
         status.controllers[index].profile = profile.name
         let destinations = midiSystem.destinations
         let chosenOutput = controllers[index].chosenOutput.flatMap { id in destinations.first { $0.id == id } }
-        if let destination = chosenOutput ?? Self.match(destinations, bridge.mapping.midi.output) {
-            do { bridge.output = try midiSystem.openOutput(destination: destination) } catch {
+        let taken = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].destination?.id })
+        let freeDestinations = controllers[index].chosenInput == nil ? destinations.filter { !taken.contains($0.id) } : destinations
+        if let destination = chosenOutput ?? Self.match(freeDestinations, bridge.mapping.midi.output) {
+            do {
+                bridge.output = try midiSystem.openOutput(destination: destination)
+                controllers[index].destination = destination
+            } catch {
                 log.log("Couldn't open MIDI output \(destination.name): \(error)")
             }
         }
@@ -308,6 +319,75 @@ public final class Coordinator {
             requestResend()
         }
         disconnectFailedOutputs()
+    }
+
+    /// Settings (#25): the controller entries, one per controller. Existing controllers take their entry's changes;
+    /// new entries connect and resync.
+    public func setControllers(_ entries: [ControllerSettings]) {
+        // At least one controller always runs, so start() and the status have someone to show.
+        guard !entries.isEmpty else { return }
+        while controllers.count > entries.count { removeLastController() }
+        for index in entries.indices {
+            if index < controllers.count {
+                update(index, to: entries[index])
+            } else {
+                addController(entries[index])
+            }
+        }
+    }
+
+    // Kept as separate small functions: Xcode 26.6's optimizer crashed (CopyPropagation) on one loop doing all three.
+
+    private func removeLastController() {
+        let last = controllers.count - 1
+        controllers[last].bridge.releaseAll()
+        disconnect(last)
+        controllers.removeLast()
+        status.controllers.removeLast()
+    }
+
+    private func addController(_ entry: ControllerSettings) {
+        let first = profiles[0]
+        let index = controllers.count
+        status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
+        var controller = Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first)
+        controller.channel = entry.channel
+        controllers.append(controller)
+        controllers[index].bridge = makeBridge(first, for: index)
+        setDevices(input: entry.input, output: entry.output, controller: index)
+    }
+
+    private func update(_ index: Int, to entry: ControllerSettings) {
+        setDeck(entry.deck, controller: index)
+        if entry.channel != controllers[index].channel {
+            controllers[index].channel = entry.channel
+            setChannel(index)
+        }
+        let devicesChanged = entry.input?.id != controllers[index].chosenInput || entry.output?.id != controllers[index].chosenOutput
+        if devicesChanged { setDevices(input: entry.input, output: entry.output, controller: index) }
+    }
+
+    /// Rebuilds the controller's Bridge on its new channel: held controls are released first, the ports stay open.
+    private func setChannel(_ index: Int) {
+        let old = controllers[index].bridge
+        old.releaseAll()
+        let bridge = makeBridge(controllers[index].profile, for: index)
+        bridge.output = old.output
+        controllers[index].bridge = bridge
+        guard controllers[index].source != nil else { return }
+        bridge.start()
+        requestResend()
+    }
+
+    /// A Bridge running `profile` with this controller's settings: its deck, channel and the LEDs switch.
+    private func makeBridge(_ profile: ControllerProfile, for index: Int) -> Bridge {
+        var mapping = profile.mapping
+        // The deck and channel are settings, not part of the profile.
+        mapping.deck.number = status.controllers[index].deck
+        if let channel = controllers[index].channel { mapping.midi.channel = channel }
+        let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
+        bridge.setLEDsEnabled(ledsEnabled)
+        return bridge
     }
 
     /// Settings (#19): the LEDs switch, for every controller.
