@@ -352,6 +352,11 @@ enum Snapshots {
             ("jog", CaptureController(flow: captureFlow(at: "deck1.jog.touch", fed: true), now: 1e6)),
             ("shift", CaptureController(flow: captureFlow(at: "deck1.play.shift", fed: true), now: 1e6)),
             ("done", CaptureController(flow: captureFlow(at: nil, fed: true), now: 1e6)),
+            ("done-note", {
+                var flow = captureFlow(at: nil, fed: true)
+                flow.note = "Firmware 1.3"
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
         ]
         for (name, controller) in shots {
             writeAppKit(CaptureView(controller: controller), to: "\(directory)/capture-\(name).png", width: 480)

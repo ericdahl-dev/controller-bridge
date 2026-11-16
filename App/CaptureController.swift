@@ -2,8 +2,10 @@
 // Not unit-tested: every rule lives in CaptureFlow (Kit), and the live path is on the manual checklist.
 import ControllerBridgeCapture
 import ControllerBridgeCore
+import AppKit
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor @Observable
 final class CaptureController {
@@ -138,6 +140,50 @@ final class CaptureController {
                 self?.tick()
             }
         }
+    }
+
+    // MARK: Done (#188): nothing leaves the Mac without one of these clicks
+
+    /// The owner's note, bound to the done page's field.
+    var note: String {
+        get { flow.note }
+        set { flow.note = newValue }
+    }
+
+    /// Shown under the buttons after Save… or Email, or when email can't be opened.
+    private(set) var exportNote: String?
+
+    static let fileType = UTType(exportedAs: "dev.ericdahl.deckbridge.capture", conformingTo: .json)
+
+    /// Saves the file through the save panel: the owner picks the place, so the sandbox allows it.
+    func save() {
+        guard let file = flow.file, let data = try? file.encoded() else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = file.suggestedFileName
+        panel.allowedContentTypes = [Self.fileType]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try data.write(to: url, options: .atomic)
+            exportNote = "Saved \(url.lastPathComponent)."
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
+    /// Opens a new message in the owner's own mail app, to DeckBridge, with the file attached. Sending it is theirs.
+    func email() {
+        guard let file = flow.file, let data = try? file.encoded() else { return }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(file.suggestedFileName)
+        guard (try? data.write(to: url, options: .atomic)) != nil,
+            let service = NSSharingService(named: .composeEmail), service.canPerform(withItems: [url])
+        else {
+            exportNote = "No mail app is set up. Save the file and attach it to an email to \(CaptureFile.emailRecipient)."
+            return
+        }
+        service.recipients = [CaptureFile.emailRecipient]
+        service.subject = file.emailSubject
+        service.perform(withItems: [file.emailBody, url])
+        exportNote = "Your mail app has the message ready. It's sent only when you send it."
     }
 
     private func tick() {

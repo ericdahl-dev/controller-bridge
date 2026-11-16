@@ -37,7 +37,7 @@ struct CaptureView: View {
             switch controller.flow.phase {
             case .ports: CapturePortsPage(controller: controller)
             case .steps: CaptureStepPage(controller: controller)
-            case .done: CaptureDonePage(file: controller.flow.file)
+            case .done: CaptureDonePage(controller: controller)
             }
         }
         .padding(Theme.Step.x6)
@@ -143,23 +143,60 @@ private struct CaptureReadout: View {
     }
 }
 
+/// The end (#188): what the file holds, an optional note, and the owner's choice to save or email it.
 private struct CaptureDonePage: View {
-    let file: CaptureFile?
+    @Bindable var controller: CaptureController
     @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
-        let steps = file?.steps ?? []
-        let skipped = steps.filter { $0.status == .skipped }.count
+        let demo = controller.flow.file?.device == DemoCapture.deviceName
         CaptureHeading(eyebrow: "Help add a controller", title: "Capture finished")
-        let demo = file?.device == DemoCapture.deviceName
-        Text("\(steps.count) steps captured, \(skipped) skipped." + (demo ? "" : " DeckBridge is sending this controller's moves to Syndicate again."))
+        Text("Send it to DeckBridge and it can become a supported controller. Nothing has been sent; it leaves this Mac only if you save or email it." + (demo ? "" : " DeckBridge is sending this controller's moves to Syndicate again."))
             .font(Theme.ui(13)).foregroundStyle(Theme.caption)
             .fixedSize(horizontal: false, vertical: true)
-        HStack {
+        CaptureContents(lines: controller.flow.file?.summary ?? [])
+        TextField("Note (optional), such as your firmware version", text: $controller.note, axis: .vertical)
+            .lineLimit(1...3)
+            .font(Theme.ui(13))
+        CaptureExportButtons(controller: controller) { dismissWindow(id: CaptureWindow.id) }
+        if let note = controller.exportNote {
+            Text(note).font(Theme.ui(12)).foregroundStyle(Theme.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The summary, as a card: "What the file holds".
+private struct CaptureContents: View {
+    let lines: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x1) {
+            Text("What the file holds").font(Theme.labelFont).foregroundStyle(Theme.caption)
+                .padding(.bottom, Theme.Step.x1)
+            ForEach(lines, id: \.self) { Text($0).font(Theme.ui(12)).foregroundStyle(Theme.text) }
+        }
+        .padding(Theme.Step.x4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct CaptureExportButtons: View {
+    let controller: CaptureController
+    let close: () -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Step.x2) {
+            Button("Save…") { controller.save() }
+                .buttonStyle(PillButtonStyle())
+            Button("Email to DeckBridge") { controller.email() }
+                .buttonStyle(PillButtonStyle())
             Spacer()
-            Button("Close") { dismissWindow(id: CaptureWindow.id) }
-                .buttonStyle(PillButtonStyle(kind: .primary))
-                .keyboardShortcut(.defaultAction)
+            Button("Close") { close() }
+                .buttonStyle(PillButtonStyle(kind: .quiet))
+                .keyboardShortcut(.cancelAction)
         }
     }
 }
