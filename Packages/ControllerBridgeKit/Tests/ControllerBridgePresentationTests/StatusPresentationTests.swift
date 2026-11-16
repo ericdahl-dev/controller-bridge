@@ -86,12 +86,13 @@ struct StatusPresentationTests {
     func feedbackStopped() {
         let status = StatusPresentation(BridgeState(
             controller: .connected(profile: "LC6000"), feedback: .stopped(port: 9096), deck: 1,
-            lastDropout: "Syndicate feedback stopped"
+            lastDropout: "21:14"
         ))
         #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● DROPPED · DECK [1]")
         #expect(status.lights.last == StatusLight(label: "FEEDBACK", word: "DROPPED", tone: .attention))
         #expect(status.icon == .attention)
-        #expect(status.lastDropout == "LAST DROPOUT: Syndicate feedback stopped")
+        // A caption and a value, not a sentence in capitals (#66): the panel shows LAST DROPOUT over 21:14.
+        #expect(status.lastDropout == CaptionedValue(caption: "Last dropout", value: "21:14"))
     }
 
     @Test("With no dropout yet, there is no dropout line")
@@ -221,5 +222,17 @@ struct StatusPresentationTests {
         #expect(status.line == "CONTROLLER ● CONNECTED · FEEDBACK ● LIVE · DECK [1] [3]")
         // An unplugged second controller still needs a look.
         #expect(status.icon == .attention)
+    }
+
+    @Test("Quit asks first only while feedback is LIVE, when quitting would stop a working set (#66)")
+    func quitAsks() {
+        func asks(_ feedback: BridgeState.Feedback) -> Bool {
+            StatusPresentation(BridgeState(controller: .connected(profile: "LC6000"), feedback: feedback, deck: 1)).quitAsks
+        }
+        #expect(asks(.live(port: 9096)))
+        #expect(!asks(.waiting(port: 9096)))
+        #expect(!asks(.stopped(port: 9096)))
+        #expect(!asks(.portInUse(port: 9096)))
+        #expect(!asks(.starting))
     }
 }

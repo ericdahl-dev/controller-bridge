@@ -29,7 +29,7 @@ public struct BridgeState: Equatable, Sendable {
     public var deck: Int
     /// The bridge couldn't start at all; the reason goes in the panel and the diagnostics (#26).
     public var stopped: Bool
-    /// The last time Syndicate's feedback stopped (#21), if it has.
+    /// When Syndicate's feedback last stopped (#21), as the time to show, such as "21:14".
     public var lastDropout: String?
 
     /// The deck is Syndicate's tempo master (#53). Not a problem, so it never changes the icon.
@@ -134,6 +134,17 @@ public struct ControllerBlock: Equatable, Sendable {
     }
 }
 
+/// A small caption over a value, such as LAST DROPOUT over 21:14. The caption is natural case; the view uppercases it.
+public struct CaptionedValue: Equatable, Sendable {
+    public var caption: String
+    public var value: String
+
+    public init(caption: String, value: String) {
+        self.caption = caption
+        self.value = value
+    }
+}
+
 /// The menu-bar icon's state dot.
 public enum IconState: Equatable, Sendable {
     case ok
@@ -154,8 +165,10 @@ public struct StatusPresentation: Equatable, Sendable {
     public var icon: IconState
     /// The orange MASTER light, apart from `lights` so it never counts toward the icon (#53).
     public var master: StatusLight?
-    /// "LAST DROPOUT: …" for the panel, once Syndicate's feedback has stopped at least once (#21).
-    public var lastDropout: String?
+    /// LAST DROPOUT and its time, once Syndicate's feedback has stopped at least once (#21, #66).
+    public var lastDropout: CaptionedValue?
+    /// Whether Quit asks before quitting (#66).
+    public var quitAsks: Bool
 
     /// How many characters the panel's status bar holds without truncating (360 pt, 10 pt semibold caps).
     public static let lineBudget = 60
@@ -189,7 +202,9 @@ public struct StatusPresentation: Equatable, Sendable {
         icon = if allLights.contains(where: { $0.tone == .error }) { .error }
             else if allLights.allSatisfy({ $0.tone == .live }) { .ok }
             else { .attention }
-        lastDropout = state.lastDropout.map { "LAST DROPOUT: " + $0 }
+        lastDropout = state.lastDropout.map { CaptionedValue(caption: "Last dropout", value: $0) }
+        // Quitting stops a working set only while feedback is live, so that's when Quit asks first (#66).
+        if case .live = state.feedback { quitAsks = true } else { quitAsks = false }
     }
 
     static let separator = " · "
