@@ -78,8 +78,8 @@ public struct CaptureFile: Codable, Equatable, Sendable {
 
     /// The capture with each step's messages, controls and Shift layer worked out again from its raw messages (#190),
     /// by the same inference the app's capture runs: what a file written without them (the web capture's) needs before
-    /// a draft profile is made from it. Noise, LED answers, the note, ports and prompts are kept as written. An app
-    /// capture comes out unchanged.
+    /// a draft profile is made from it, layers included (#217). Noise, LED answers, the note, ports and prompts are kept
+    /// as written. An app capture comes out unchanged.
     public func inferred() -> CaptureFile {
         let noise = Set(self.noise)
         var out = self
@@ -95,6 +95,7 @@ public struct CaptureFile: Codable, Equatable, Sendable {
             redone.leds = step.leds
             out.steps.append(redone)
         }
+        out.layers = CaptureLayers.infer(prompts: prompts, steps: out.steps)
         return out
     }
 

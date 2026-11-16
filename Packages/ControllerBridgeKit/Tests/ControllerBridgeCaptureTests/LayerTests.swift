@@ -119,4 +119,13 @@ struct LayerTests {
         #expect(unknown.selectReadout == nil)
         #expect(unknown.offsetReadout == nil)
     }
+
+    @Test("A file written without layers (the web capture's) gets them on read, the same as the app's (#190)")
+    func inferredFillsLayers() {
+        let app = Self.file(select: Self.lc6000Select, deck2Play: [[0x91, 1, 0x7F], [0x81, 1, 0x00]])
+        var web = app
+        web.layers = []
+        #expect(web.inferred().layers == app.layers)
+        #expect(!app.layers.isEmpty)
+    }
 }
