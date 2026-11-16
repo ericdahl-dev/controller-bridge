@@ -203,7 +203,7 @@ public enum NoteRelease: String, Codable, Sendable {
 }
 
 /// How a CC control encodes its value. The relative names match the profile's `midi.encoder_format` (#193).
-public enum Encoding: String, Codable, Sendable {
+public enum ControlEncoding: String, Codable, Sendable {
     case absolute
     case twosComplement = "twos_complement"
     case offset64 = "offset_64"
@@ -220,7 +220,7 @@ public struct ControlFacts: Codable, Equatable, Sendable {
     public var number: Int?
     /// The LSB CC of a 14-bit pair (`number` is the MSB).
     public var lsb: Int?
-    public var encoding: Encoding?
+    public var encoding: ControlEncoding?
     public var release: NoteRelease?
     /// The first and last values seen, in order, so a gesture's direction can be read ("bottom to top" ending at 0
     /// means up is 0). 14-bit for a pair or pitch bend.
@@ -230,7 +230,7 @@ public struct ControlFacts: Codable, Equatable, Sendable {
     public var max: Int
 
     public init(
-        kind: ControlKind, port: Int = 0, channel: Int, number: Int? = nil, lsb: Int? = nil, encoding: Encoding? = nil,
+        kind: ControlKind, port: Int = 0, channel: Int, number: Int? = nil, lsb: Int? = nil, encoding: ControlEncoding? = nil,
         release: NoteRelease? = nil, first: Int, last: Int, min: Int, max: Int
     ) {
         self.kind = kind

@@ -189,7 +189,7 @@ enum Inference {
     /// sends small steps both ways, often repeated. An absolute knob walks through its values without repeating.
     /// A relative-looking turn one way only can't be told apart (0x41 is offset-64 forward and sign-magnitude back),
     /// so its encoding is unknown (nil) rather than guessed.
-    private static func encoding(_ values: [Int]) -> Encoding? {
+    private static func encoding(_ values: [Int]) -> ControlEncoding? {
         let small = 1...0x1F, nearMiddleBack = 0x30...0x3F, nearMiddleForward = 0x41...0x50
         let twosBack = 0x61...0x7F, signBack = 0x41...0x5F
         func all(_ ranges: ClosedRange<Int>...) -> Bool { values.allSatisfy { v in ranges.contains { $0.contains(v) } } }
