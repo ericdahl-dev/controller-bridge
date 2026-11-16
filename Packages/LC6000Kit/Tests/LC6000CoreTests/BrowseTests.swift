@@ -147,4 +147,30 @@ struct BrowseTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loop", [.int(0)]))
         #expect([rig.leds[8], rig.leds[9], rig.leds[10]] == [1, 1, 1])
     }
+
+    static func holdingShift(_ rig: Rig, _ body: () -> Void) {
+        rig.coordinator.midi(.noteOn(channel: 0, note: 26, velocity: 127), source: Rig.lc6000.id)
+        body()
+        rig.coordinator.midi(.noteOff(channel: 0, note: 26, velocity: 0), source: Rig.lc6000.id)
+    }
+
+    @Test("Shift + Select press enters in the browser instead of loading")
+    func shiftSelectEnters() throws {
+        let rig = try Self.startedRig()
+        Self.holdingShift(rig) { Self.press(rig, 18) }
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Browser/Enter", [.int(1)])])
+    }
+
+    @Test("Shift + beat jump ◀ and ▶ skip a bar instead of a beat")
+    func shiftBeatJumpSkipsBar() throws {
+        let rig = try Self.startedRig()
+        Self.holdingShift(rig) {
+            Self.press(rig, 3)
+            Self.press(rig, 4)
+        }
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/SkipBarBack", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/SkipBarForward", [.int(1)]),
+        ])
+    }
 }

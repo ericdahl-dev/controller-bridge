@@ -20,7 +20,7 @@ extension Bridge {
     }
 
     func selectPress(_ pressed: Bool) {
-        if pressed { send("Browser/L\(mapping.deck.number)", .int(1)) }
+        if pressed { send(shift ? "Browser/Enter" : "Browser/L\(mapping.deck.number)", .int(1)) }
     }
 
     /// One browser step per tick.
@@ -52,11 +52,11 @@ extension Bridge {
     // MARK: Jumps
 
     func beatJumpBack(_ pressed: Bool) {
-        if pressed { sendDeck("SkipBeatBack", .int(1)) }
+        if pressed { sendDeck(shift ? "SkipBarBack" : "SkipBeatBack", .int(1)) }
     }
 
     func beatJumpForward(_ pressed: Bool) {
-        if pressed { sendDeck("SkipBeatForward", .int(1)) }
+        if pressed { sendDeck(shift ? "SkipBarForward" : "SkipBeatForward", .int(1)) }
     }
 
     func paramBack(_ pressed: Bool) {
