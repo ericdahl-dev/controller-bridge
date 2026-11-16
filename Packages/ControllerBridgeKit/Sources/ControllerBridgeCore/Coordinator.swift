@@ -32,6 +32,9 @@ public final class Coordinator {
     private var ledsEnabled = true
 
     /// What the menu shows. The app copies it after each call.
+    /// The profile the first controller runs: the bundled one, or an imported mapping (#24). The demo runs it (#98).
+    public var runningProfile: ControllerProfile { controllers[0].profile }
+
     public private(set) var status: CoordinatorStatus
 
     /// A Bridge and the devices it is connected to.

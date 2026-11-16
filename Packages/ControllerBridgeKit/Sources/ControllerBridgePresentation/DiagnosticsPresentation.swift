@@ -46,14 +46,22 @@ public struct DiagnosticsLines: Equatable, Sendable {
     /// Progress and Time feedback arrive many times a second while playing; hidden by default.
     public var hideProgressAndTime = true
     private var lists: [DiagnosticsTab: [Line]] = [:]
+    /// The OSC tab's Progress and Time lines, kept apart so their flood can't push the other lines out (#97).
+    private var progressAndTime: [Line] = []
     private var nextID = 0
 
     public init() {}
 
     public mutating func append(to tab: DiagnosticsTab, message: String, label: String = "", isUnmapped: Bool = false) {
         nextID += 1
+        let line = Line(id: nextID, message: message, label: label, isUnmapped: isUnmapped)
+        if tab == .osc, Self.isProgressOrTime(line.text) {
+            progressAndTime.append(line)
+            if progressAndTime.count > Self.limit { progressAndTime.removeFirst(progressAndTime.count - Self.limit) }
+            return
+        }
         var list = lists[tab, default: []]
-        list.append(Line(id: nextID, message: message, label: label, isUnmapped: isUnmapped))
+        list.append(line)
         if list.count > Self.limit { list.removeFirst(list.count - Self.limit) }
         lists[tab] = list
     }
@@ -61,13 +69,15 @@ public struct DiagnosticsLines: Equatable, Sendable {
     /// Empties one tab's list; the others stay.
     public mutating func clear(_ tab: DiagnosticsTab) {
         lists[tab] = []
+        if tab == .osc { progressAndTime = [] }
     }
 
     /// What a tab shows, oldest first.
     public func shown(_ tab: DiagnosticsTab) -> [Line] {
         let list = lists[tab, default: []]
-        guard tab == .osc, hideProgressAndTime else { return list }
-        return list.filter { !Self.isProgressOrTime($0.text) }
+        guard tab == .osc, !hideProgressAndTime else { return list }
+        // Both kept lists, back in arrival order, and still no more than the limit.
+        return Array((list + progressAndTime).sorted { $0.id < $1.id }.suffix(Self.limit))
     }
 
     /// "OSC <- /Syndicate/Deck/1/Progress 0.25" or ".../Time 61": the address's last part, before the arguments.

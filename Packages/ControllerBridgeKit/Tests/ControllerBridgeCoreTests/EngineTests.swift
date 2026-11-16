@@ -193,9 +193,10 @@ struct EngineTests {
     }
 
     /// A demo maker for the Engine, on the rig's clock, with its LED writes dropped.
-    static func demoMaker(_ rig: Rig) -> @Sendable () -> DemoSession {
+    /// The demo runs the profile the Engine hands it: the one running now (#98).
+    static func demoMaker(_ rig: Rig) -> @Sendable (ControllerProfile) -> DemoSession {
         let clock = rig.clock, log = rig.log
-        return { DemoSession(profile: try! ControllerProfile.bundled()[0], clock: clock, log: log, ledOutput: Rig.FakeOutput()) }
+        return { profile in DemoSession(profile: profile, clock: clock, log: log, ledOutput: Rig.FakeOutput()) }
     }
 
     @Test("Demo on stops the real controller (one release, ports closed); its MIDI is ignored; demo off brings it back with one Resend")
@@ -341,5 +342,24 @@ struct EngineTests {
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
 
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
+    }
+
+    @Test("The demo runs the running profile: a mapping imported before it shows in the demo (#98)")
+    func demoRunsTheImportedProfile() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        var mapping = try Mapping.bundledDefault()
+        mapping.notes.buttons["play"] = 60
+        let pipe = EventPipe()
+        let seen = Seen()
+
+        pipe.producer.setProfiles([ControllerProfile(id: "custom", name: "My LC6000", deviceHints: ["LC6000"], mapping: mapping)])
+        pipe.producer.demo(on: true)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { seen.append($0) }, makeDemo: Self.demoMaker(rig))
+            .run(pipe.events)
+
+        #expect(seen.values.last?.demo == true)
+        #expect(seen.values.last?.controllers.first?.profile == "My LC6000")
     }
 }

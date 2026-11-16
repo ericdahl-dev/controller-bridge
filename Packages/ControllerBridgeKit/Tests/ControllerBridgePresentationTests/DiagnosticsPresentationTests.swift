@@ -49,4 +49,20 @@ struct DiagnosticsPresentationTests {
         lines.hideProgressAndTime = false
         #expect(lines.shown(.osc).count == 3)
     }
+
+    @Test("Hidden Progress and Time lines can't push the rest out: after 600 of them, the Playing line is still shown (#97)")
+    func hiddenLinesDontEvict() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 1")
+        for n in 1...600 { lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Progress 0.\(n)") }
+        #expect(lines.shown(.osc).map(\.message) == ["OSC <- /Syndicate/Deck/1/Playing 1"])
+
+        // Unticking the box shows everything in arrival order, newest 500: 501 lines in, so the oldest (Playing) and the
+        // first 100 Progress lines are past the limit; Progress 0.101 through 0.600 remain.
+        lines.hideProgressAndTime = false
+        let all = lines.shown(.osc)
+        #expect(all.count == 500)
+        #expect(all.first?.message == "OSC <- /Syndicate/Deck/1/Progress 0.101")
+        #expect(all.last?.message == "OSC <- /Syndicate/Deck/1/Progress 0.600")
+    }
 }

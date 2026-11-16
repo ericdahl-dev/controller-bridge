@@ -6,7 +6,7 @@ public struct Engine {
     private let log: any LogSink
     private let onDiagnostic: (@Sendable (DiagnosticEvent) -> Void)?
     /// Makes the demo (#64) when it's turned on; nil, and the demo event does nothing.
-    private let makeDemo: (@Sendable () -> DemoSession)?
+    private let makeDemo: (@Sendable (ControllerProfile) -> DemoSession)?
     private let onStatus: (@Sendable (CoordinatorStatus) -> Void)?
 
     /// `onStatus` gets the Coordinator's status when the loop starts and again each time it changes, on the loop's
@@ -14,7 +14,7 @@ public struct Engine {
     public init(
         coordinator: Coordinator, log: any LogSink, onStatus: (@Sendable (CoordinatorStatus) -> Void)? = nil,
         onDiagnostic: (@Sendable (DiagnosticEvent) -> Void)? = nil,
-        makeDemo: (@Sendable () -> DemoSession)? = nil
+        makeDemo: (@Sendable (ControllerProfile) -> DemoSession)? = nil
     ) {
         self.makeDemo = makeDemo
         self.coordinator = coordinator
@@ -88,7 +88,8 @@ public struct Engine {
                 if on, demo == nil, let makeDemo {
                     coordinator.stop()
                     setDiagnostics(coordinator, open: false)
-                    let session = makeDemo()
+                    // The profile running now, so an imported mapping shows in the demo too (#98).
+                    let session = makeDemo(coordinator.runningProfile)
                     setDiagnostics(session.coordinator, open: diagnosticsOpen)
                     session.start()
                     demo = session
