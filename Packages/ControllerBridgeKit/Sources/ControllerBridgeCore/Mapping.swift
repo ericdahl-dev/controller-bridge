@@ -51,17 +51,36 @@ public struct Mapping: Equatable, Sendable, Codable {
         /// Left out (the LC6000), the pads are on the deck's channel.
         public var channel: Int?
 
+        /// Each pad mode's own notes, one per pad (#225), on controllers whose pads send a different note range per
+        /// mode, as Pioneer's do. Left out (the LC6000), `notes.pads` serves every mode and DeckBridge tracks the mode.
+        public struct ModeNotes: Equatable, Sendable, Codable {
+            public var hotcue: [Int]
+            public var roll: [Int]
+            public var loop: [Int]
+            public var slicer: [Int]
+
+            public init(hotcue: [Int], roll: [Int], loop: [Int], slicer: [Int]) {
+                self.hotcue = hotcue
+                self.roll = roll
+                self.loop = loop
+                self.slicer = slicer
+            }
+        }
+
+        public var modeNotes: ModeNotes?
+
         /// The LC6000's: 1/32 of a beat on pad 1 up to 4 beats on pad 8.
         public static let lc6000RollSizes = RollSize.allCases.map(\.rawValue)
 
         public init(rollSizes: [String] = Self.lc6000RollSizes) { self.rollSizes = rollSizes }
 
-        enum CodingKeys: String, CodingKey { case rollSizes = "roll_sizes", channel }
+        enum CodingKeys: String, CodingKey { case rollSizes = "roll_sizes", channel, modeNotes = "mode_notes" }
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? Self.lc6000RollSizes
             channel = try c.decodeIfPresent(Int.self, forKey: .channel)
+            modeNotes = try c.decodeIfPresent(ModeNotes.self, forKey: .modeNotes)
         }
     }
 
