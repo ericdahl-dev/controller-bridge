@@ -348,7 +348,7 @@ final class Bridge {
             refreshLEDs()
         } else {
             // A button goes to the profile's off (#194); a pad or the ring to no color.
-            let colorNotes = Set(mapping.notes.pads + [mapping.leds.ring])
+            let colorNotes = Set(mapping.notes.pads + [mapping.leds.ring] + [PadMode.hotCue, .roll, .loop, .slicer].flatMap(padNotes))
             for (note, velocity) in ledCache.sorted(by: { $0.key < $1.key }) {
                 let off = colorNotes.contains(note) ? Self.off : offLevel
                 if velocity != off { led(note, off) }

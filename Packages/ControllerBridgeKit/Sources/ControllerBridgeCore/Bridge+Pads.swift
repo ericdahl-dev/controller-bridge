@@ -67,6 +67,17 @@ extension Bridge {
         return true
     }
 
+    /// The notes the pads send and light in `mode`: that mode's list (#225), or `notes.pads` for every mode.
+    func padNotes(for mode: PadMode) -> [Int] {
+        guard let modeNotes = mapping.pads.modeNotes else { return mapping.notes.pads }
+        return switch mode {
+        case .hotCue: modeNotes.hotcue
+        case .roll: modeNotes.roll
+        case .loop: modeNotes.loop
+        case .slicer: modeNotes.slicer
+        }
+    }
+
     /// Releases every held pad, and nothing else.
     func releasePads() {
         for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
@@ -94,7 +105,14 @@ extension Bridge {
     func padLEDs() {
         let modes: [(String, PadMode)] = [("mode_hotcue", .hotCue), ("mode_roll", .roll), ("mode_loop", .loop), ("mode_slicer", .slicer)]
         for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
-        for (note, velocity) in zip(mapping.notes.pads, padColors()) { padLED(note, velocity) }
+        // With notes per mode (#225), the current mode's notes carry the colors and the other modes' go dark.
+        for (note, velocity) in zip(padNotes(for: padMode), padColors()) { padLED(note, velocity) }
+        if let modeNotes = mapping.pads.modeNotes {
+            let lit = Set(padNotes(for: padMode))
+            for note in modeNotes.hotcue + modeNotes.roll + modeNotes.loop + modeNotes.slicer where !lit.contains(note) {
+                padLED(note, Self.off)
+            }
+        }
         ringLED()
     }
 

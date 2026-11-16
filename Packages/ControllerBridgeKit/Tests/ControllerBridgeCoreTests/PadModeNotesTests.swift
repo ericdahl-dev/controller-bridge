@@ -60,4 +60,16 @@ struct PadModeNotesCoordinatorTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(1), .int(0)]),
                                  OSCMessage("/Syndicate/Deck/1/SlipLoop/Sixteenth", [.int(1)])])
     }
+
+    /// Roll's pad color (255, 140, 0) by hand: 3, 2, 0 → 0b00111000 = 56. Slot 1 red → 48.
+    @Test("The pad LEDs light the current mode's notes: Hot Cue's 32 red, then in Roll 100-107 orange and 32 dark")
+    func ledsFollowMode() throws {
+        let rig = try Self.started(Self.override)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Cues", [.int(1), .string("c1")]))
+        #expect(rig.leds[32] == 48)
+        #expect(rig.leds[100] == 0)
+        PadsTests.press(rig, PadsTests.modeRoll)
+        #expect((100...107).map { rig.leds[UInt8($0)] } == Array(repeating: 56, count: 8))
+        #expect(rig.leds[32] == 0)
+    }
 }
