@@ -83,4 +83,12 @@ public enum FeedbackListen: String, Codable, Equatable, Sendable {
     case thisMac
     /// Every interface, for Syndicate on another Mac. macOS asks for local-network permission.
     case allNetworks
+
+    /// The IPv4 address the feedback listener binds to.
+    public var address: String {
+        switch self {
+        case .thisMac: "127.0.0.1"
+        case .allNetworks: "0.0.0.0"
+        }
+    }
 }

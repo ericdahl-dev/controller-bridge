@@ -51,4 +51,10 @@ struct SettingsTests {
         store.values[BridgeSettings.storageKey] = Data("not json".utf8)
         #expect(BridgeSettings.load(from: store, defaults: Self.defaults) == Self.defaults)
     }
+
+    @Test("This Mac only listens on 127.0.0.1; All networks listens on 0.0.0.0")
+    func listenAddress() {
+        #expect(FeedbackListen.thisMac.address == "127.0.0.1")
+        #expect(FeedbackListen.allNetworks.address == "0.0.0.0")
+    }
 }
