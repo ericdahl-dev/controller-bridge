@@ -70,7 +70,14 @@ Thread.detachNewThread {
         if count > 0 { box.add(datagram: Array(buffer[0..<count])) }
     }
 }
-say("READY")
+// The unique ids of the helper's endpoints: the script pins the app to them (#86), so a real controller plugged into
+// this Mac can't take their place. The app's input is the helper's source, and its output the helper's destination.
+func uniqueID(_ endpoint: MIDIEndpointRef) -> Int32 {
+    var id: Int32 = 0
+    MIDIObjectGetIntegerProperty(endpoint, kMIDIPropertyUniqueID, &id)
+    return id
+}
+say("READY input=\(uniqueID(source)) output=\(uniqueID(destination))")
 
 // 1. The app starts: it asks Syndicate to resend its state.
 let launchTimeout = Double(CommandLine.arguments.dropFirst().first ?? "20")!

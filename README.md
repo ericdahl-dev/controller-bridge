@@ -110,7 +110,7 @@ xcodebuild -project ControllerBridge.xcodeproj -scheme ControllerBridge -configu
 scripts/smoke.sh   # a virtual LC6000 and a fake Syndicate check Play out and the Play LED back; CI requires it too
 ```
 
-Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. Quit Syndicate first, because the smoke check needs UDP 9090 and 9096.
+Build Release for the smoke check: an ad-hoc Debug build leaves out the hardened runtime. Quit Syndicate and the app itself first, because the smoke check needs UDP 9090 and 9096. A real controller can stay plugged in: the check pins the app to its own virtual device and puts your saved settings back afterwards.
 
 **CI uses an older Xcode than you may have locally.** GitHub's standard macOS runner builds with Xcode 26.x (Swift 6.2), while development has been on Xcode 27.2. The two compilers can disagree. Once, Xcode 26.6's Release optimizer crashed on code that 27.2 built fine (#65). If **App build** fails with a `swift-frontend` stack dump, find the function named in `gh run view <id> --log-failed`, then simplify or split it.
 
