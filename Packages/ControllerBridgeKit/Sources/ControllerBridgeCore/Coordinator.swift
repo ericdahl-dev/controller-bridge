@@ -224,6 +224,11 @@ public final class Coordinator {
         if status.feedback == .live, let sent = resendSentAt, now - sent >= Double(oscSettings.feedbackAnswerMs) / 1000 {
             feedbackStopped()
         }
+        // Not live: ask again every quiet period, so a Syndicate that comes back quietly is found.
+        if status.feedback != .live, let sent = resendSentAt, now - sent >= Double(oscSettings.feedbackQuietMs) / 1000 {
+            resendSentAt = nil
+            requestResend()
+        }
     }
 
     /// Syndicate didn't answer: show idle for its state until it's back.

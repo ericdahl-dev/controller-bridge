@@ -117,4 +117,26 @@ struct LivenessTests {
         // Play (1) and Cue (2) follow Syndicate: off. Key Lock (22) and Shift (26) are the bridge's own: still dim.
         #expect([rig.leds[1], rig.leds[2], rig.leds[22], rig.leds[26]] == [0, 0, 1, 1])
     }
+
+    /// Live, then stale at t = 12.5 (probe at 10.5, no answer), with everything sent so far cleared.
+    static func staleRig() throws -> Rig {
+        let rig = try liveRig()
+        tick(rig, at: 10.5)
+        tick(rig, at: 12.5)
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    @Test("While stale, the bridge asks again every 10 s, so it finds a restarted Syndicate even if nothing changes there")
+    func staleProbesEvery10s() throws {
+        let rig = try Self.staleRig()
+        Self.tick(rig, at: 20.4)
+        #expect(rig.osc.sent == [])
+        Self.tick(rig, at: 20.5)
+        Self.tick(rig, at: 25.0)
+        #expect(rig.osc.sent == [Self.resend])
+        Self.tick(rig, at: 30.5)
+        #expect(rig.osc.sent == [Self.resend, Self.resend])
+        #expect(rig.coordinator.status.feedback == .stale)
+    }
 }
