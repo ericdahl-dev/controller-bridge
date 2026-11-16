@@ -29,15 +29,19 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var layers: [Layer]
         /// The note the controller sends on a layer's channel as it becomes active (127) or inactive (0).
         public var layerNote: Int?
+        /// How the relative encoders write a turn (#193): two's complement, the LC6000's, unless the profile says.
+        public var encoderFormat: EncoderFormat
 
         enum CodingKeys: String, CodingKey {
             case input, output, channel, layers
             case ignoreNotes = "ignore_notes"
             case layerNote = "layer_note"
+            case encoderFormat = "encoder_format"
         }
 
         public init(
-            input: String, output: String, channel: Int, ignoreNotes: [Int] = [], layers: [Layer] = [], layerNote: Int? = nil
+            input: String, output: String, channel: Int, ignoreNotes: [Int] = [], layers: [Layer] = [], layerNote: Int? = nil,
+            encoderFormat: EncoderFormat = .twosComplement
         ) {
             self.input = input
             self.output = output
@@ -45,9 +49,11 @@ public struct Mapping: Equatable, Sendable, Codable {
             self.ignoreNotes = ignoreNotes
             self.layers = layers
             self.layerNote = layerNote
+            self.encoderFormat = encoderFormat
         }
 
-        /// `ignore_notes`, `layers` and `layer_note` may be left out: nothing ignored, no layers.
+        /// `ignore_notes`, `layers`, `layer_note` and `encoder_format` may be left out: nothing ignored, no layers, two's
+        /// complement.
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             input = try container.decode(String.self, forKey: .input)
@@ -56,6 +62,7 @@ public struct Mapping: Equatable, Sendable, Codable {
             ignoreNotes = try container.decodeIfPresent([Int].self, forKey: .ignoreNotes) ?? []
             layers = try container.decodeIfPresent([Layer].self, forKey: .layers) ?? []
             layerNote = try container.decodeIfPresent(Int.self, forKey: .layerNote)
+            encoderFormat = try container.decodeIfPresent(EncoderFormat.self, forKey: .encoderFormat) ?? .twosComplement
         }
     }
 

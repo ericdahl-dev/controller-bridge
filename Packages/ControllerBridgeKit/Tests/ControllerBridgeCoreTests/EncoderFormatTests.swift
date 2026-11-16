@@ -23,4 +23,21 @@ struct EncoderFormatTests {
         let format = EncoderFormat.signMagnitude
         #expect([0x00, 0x01, 0x3F, 0x41, 0x42, 0x7F, 0x40].map { format.ticks(UInt8($0)) } == [0, 1, 63, -1, -2, -63, 0])
     }
+
+    @Test("A mapping without encoder_format reads two's complement, so saved profiles load as before")
+    func missingKeyIsTheLC6000s() throws {
+        let midi = try JSONDecoder().decode(Mapping.MIDI.self, from: Data(#"{ "input": "X", "output": "X", "channel": 1 }"#.utf8))
+        #expect(midi.encoderFormat == .twosComplement)
+    }
+
+    @Test("A mapping can name another format")
+    func namedFormat() throws {
+        let json = #"{ "input": "X", "output": "X", "channel": 1, "encoder_format": "offset_64" }"#
+        #expect(try JSONDecoder().decode(Mapping.MIDI.self, from: Data(json.utf8)).encoderFormat == .offset64)
+    }
+
+    @Test("The bundled LC6000 is two's complement, as before #193")
+    func lc6000Unchanged() throws {
+        #expect(try Mapping.bundledDefault().midi.encoderFormat == .twosComplement)
+    }
 }
