@@ -36,6 +36,8 @@ struct PillButtonStyle: ButtonStyle {
     var small = false
     /// Stretch to the width it's given, as the panel's Settings… and Diagnostics… pair does.
     var fills = false
+    /// A quiet button's own color, such as the demo toggle's orange while on.
+    var color: Color?
     #if DEBUG
     /// Snapshots only: draw the focus ring without real keyboard focus.
     var showsFocusForSnapshot = false
@@ -82,7 +84,7 @@ struct PillButtonStyle: ButtonStyle {
             switch kind {
             case .primary: Color(\.onAccent)
             case .secondary: Theme.text
-            case .quiet: lifted ? Theme.text : Theme.caption
+            case .quiet: style.color ?? (lifted ? Theme.text : Theme.caption)
             }
         }
 

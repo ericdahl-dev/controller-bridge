@@ -60,16 +60,18 @@ struct DiagnosticsWindow: View {
     var body: some View {
         let presentation = status.presentation
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: Theme.Space.l) {
+            VStack(alignment: .leading, spacing: Theme.Step.x3) {
                 header(presentation)
                 tabBar
                 content
             }
-            .padding(Theme.Space.xl)
+            .padding(.horizontal, Theme.Step.x6 - 4)
+            .padding(.vertical, Theme.Step.x4)
+            Rectangle().fill(Theme.hairline).frame(height: 1)
             StatusLineView(presentation: presentation)
         }
         .frame(minWidth: 640, minHeight: 420)
-        .background(Theme.background)
+        .background(Theme.panel)
         .tint(Theme.live)
         // Only while this window is open does the bridge build anything for it.
         .onAppear { setOpen(true) }
@@ -88,45 +90,49 @@ struct DiagnosticsWindow: View {
 
     /// Which controller and deck the window is watching, with the panel's lights.
     private func header(_ presentation: StatusPresentation) -> some View {
-        HStack(alignment: .center, spacing: Theme.Space.m) {
-            DeckBadgeView(deck: status.shownDeck)
+        HStack(alignment: .center, spacing: Theme.Step.x3) {
+            DeckBadgeView(deck: status.shownDeck, size: 28)
             Text(status.controller?.profile ?? "No controller")
-                .font(Theme.ui(Theme.Size.title, .semibold))
+                .font(Theme.ui(17, .medium)).tracking(-0.6)
                 .foregroundStyle(Theme.text)
-            Spacer(minLength: Theme.Space.m)
-            ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }
+            Spacer(minLength: Theme.Step.x3)
+            HStack(alignment: .top, spacing: Theme.Step.x6) {
+                ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0, size: 13) }
+            }
         }
     }
 
-    /// The three tabs as one segmented strip on the left, and a quieter Clear log on the right for the visible tab.
+    /// The three tabs as segmented pills on the left (#171), and the log's actions on the right for the visible tab.
     private var tabBar: some View {
-        HStack(spacing: Theme.Space.s) {
-            HStack(spacing: 0) {
-                ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, item in
-                    Button(item.rawValue) { tab = item }
-                        .buttonStyle(FlatButtonStyle(selected: tab == item))
-                        .frame(width: 140)
-                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
-                }
-            }
-            .overlay(RoundedRectangle(cornerRadius: Theme.corner).strokeBorder(Theme.hairline, lineWidth: 1))
+        HStack(spacing: Theme.Step.x1) {
+            SegmentedPills(options: Tab.allCases, title: \.rawValue, selection: $tab)
+                .background { tabShortcuts }
             Spacer(minLength: 0)
             // Copy and save what the tab shows, with its filter (#162), so it can be shared.
             Button("Copy log") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(log.plainText(tab), forType: .string)
             }
-            .buttonStyle(LinkButtonStyle())
+            .buttonStyle(PillButtonStyle(kind: .quiet, small: true))
             .keyboardShortcut("c", modifiers: [.command, .shift])
             .accessibilityLabel("Copy the \(tab.rawValue)")
             Button("Save…") { save(tab) }
-                .buttonStyle(LinkButtonStyle())
+                .buttonStyle(PillButtonStyle(kind: .quiet, small: true))
                 .keyboardShortcut("s", modifiers: .command)
                 .accessibilityLabel("Save the \(tab.rawValue) to a file")
             Button("Clear log") { log.clear(tab) }
-                .buttonStyle(LinkButtonStyle())
+                .buttonStyle(PillButtonStyle(small: true))
                 .keyboardShortcut("k", modifiers: .command)
                 .accessibilityLabel("Clear the \(tab.rawValue)")
+        }
+    }
+
+    /// ⌘1, ⌘2 and ⌘3 pick the tabs (#67), from hidden buttons behind the pills.
+    private var tabShortcuts: some View {
+        ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, item in
+            Button(item.rawValue) { tab = item }
+                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                .opacity(0).accessibilityHidden(true)
         }
     }
 
@@ -158,17 +164,14 @@ struct DiagnosticsWindow: View {
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         case .sweep:
             let availability = SweepAvailability(outputOpen: status.controller?.outputOpen == true)
-            HStack(spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Step.x3) {
                 Button(sweeping ? "Stop sweep" : "Start sweep") {
                     sweeping ? stopSweep() : startSweep(sweepDelay)
                 }
-                .buttonStyle(FlatButtonStyle())
-                .frame(width: 160)
+                .buttonStyle(PillButtonStyle())
                 .disabled(!sweeping && !availability.enabled)
-                // FlatButtonStyle has no disabled look yet (#67), so show it here.
-                .opacity(!sweeping && !availability.enabled ? 0.4 : 1)
                 Stepper(value: $sweepDelay, in: 0.2...2.0, step: 0.1) {
-                    Text("Step \(sweepDelay, specifier: "%.1f") s").font(Theme.data(Theme.Size.label)).foregroundStyle(Theme.text)
+                    Text("Step \(sweepDelay, specifier: "%.1f") s").font(Theme.data(12)).foregroundStyle(Theme.text)
                 }
                 .disabled(sweeping)
                 Spacer(minLength: 0)
@@ -178,7 +181,7 @@ struct DiagnosticsWindow: View {
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         case .osc:
             Toggle(isOn: Bindable(log).hideProgressAndTime) {
-                Text("Hide Progress and Time messages").font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.text)
+                Text("Hide Progress and Time messages").font(Theme.ui(12)).foregroundStyle(Theme.text)
             }
             .toggleStyle(.checkbox)
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
@@ -188,17 +191,17 @@ struct DiagnosticsWindow: View {
     /// Lines up with the monitor's monospaced columns.
     private var columnHeader: some View {
         // Time ends at column 12, the message starts at 19 and the mapping at 70, as in the Python monitor's format.
-        Text("        TIME  CH   MESSAGE" + String(repeating: " ", count: 44) + "MAPPING")
-            .font(Theme.data(Theme.Size.label))
+        Text("        Time  Ch   Message" + String(repeating: " ", count: 44) + "Mapping")
+            .font(Theme.data(11.5))
             .foregroundStyle(Theme.caption)
             .lineLimit(1)
-            .padding(.horizontal, Theme.Space.m)
+            .padding(.horizontal, Theme.Step.x3)
             .accessibilityHidden(true)
     }
 
     /// Explanatory sentences: body text in sentence case, not captions.
     private func explain(_ text: String) -> some View {
-        Text(text).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
+        Text(text).font(Theme.ui(12)).foregroundStyle(Theme.caption)
     }
 }
 
@@ -212,7 +215,7 @@ private struct LineList: View {
         Group {
             if lines.isEmpty {
                 Text(empty)
-                    .font(Theme.ui(Theme.Size.label))
+                    .font(Theme.ui(13))
                     .foregroundStyle(Theme.caption)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if scrolls {
@@ -224,19 +227,19 @@ private struct LineList: View {
                 rows.frame(maxHeight: .infinity, alignment: .top)
             }
         }
-        .background(Theme.panel)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.corner))
+        .card()
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.medium))
     }
 
     /// Every line in one selectable text (#162), so a drag or ⌘A selects across lines and ⌘C copies them.
     private var rows: some View {
         Text(Self.attributed(lines))
-            .font(Theme.data(Theme.Size.label))
-            .lineSpacing(Theme.Space.xs)
+            .font(Theme.data(11.5))
+            .lineSpacing(7)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Theme.Space.m)
-            .padding(.vertical, Theme.Space.xs)
+            .padding(.horizontal, Theme.Step.x3)
+            .padding(.vertical, Theme.Step.x2)
             .id(Self.bottom)
     }
 

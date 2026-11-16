@@ -125,21 +125,23 @@ enum Theme {
 /// A deck number on its colored square.
 struct DeckBadgeView: View {
     let deck: Int
+    /// 34 pt in the panel's picker (#171); smaller beside a title.
+    var size: CGFloat = 34
     /// The deck colors in use (#123): Syndicate's palette, the user's, or the defaults.
     @Environment(\.deckColors) private var colors
 
     var body: some View {
         let badge = colors[deck].map { DeckBadge(fill: RGB(deckColor: $0)) } ?? DeckBadge(deck: deck)
         Text("\(deck)")
-            .font(Theme.data(15, .semibold))
+            .font(Theme.data(size * 0.44, .medium))
             .foregroundStyle(Color(badge.digit))
-            .frame(width: 26, height: 26)
-            .background(Color(badge.fill), in: RoundedRectangle(cornerRadius: Theme.corner))
+            .frame(width: size, height: size)
+            .background(Color(badge.fill), in: RoundedRectangle(cornerRadius: Theme.Radius.small))
             .accessibilityLabel("Deck \(deck)")
     }
 }
 
-/// A gray uppercase caption over a larger value.
+/// A mono label over a larger value, in natural case (#171).
 struct CaptionValue: View {
     let caption: String
     let value: String
@@ -147,24 +149,27 @@ struct CaptionValue: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             // Natural case in, uppercase on screen: VoiceOver reads words, not letters (#67).
-            Text(caption).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
+            Text(caption).font(Theme.labelFont).foregroundStyle(Theme.caption)
             Text(value).font(Theme.data(15)).foregroundStyle(Theme.text)
         }
         .accessibilityElement(children: .combine)
     }
 }
 
-/// A status light: a colored dot and a word. The word carries the meaning; the dot never stands alone.
+/// A status light: a mono label over a dot and a word, in natural case (#171). The word carries the meaning; the dot
+/// never stands alone.
 struct StatusLightView: View {
     let light: StatusLight
+    /// 15 pt in the panel; 13 where the light sits beside other things (Diagnostics, the setup guide).
+    var size: CGFloat = 15
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(light.label).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
-            HStack(spacing: 5) {
-                Circle().fill(Color(tone: light.tone)).frame(width: 7, height: 7)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(light.label).font(Theme.labelFont).foregroundStyle(Theme.caption)
+            HStack(spacing: 7) {
+                Circle().fill(Color(tone: light.tone)).frame(width: 8, height: 8)
                 // A word never breaks mid-word; the panel lays lights out in a grid instead.
-                Text(light.word).textCase(.uppercase).font(Theme.ui(12, .bold)).foregroundStyle(Color(tone: light.tone))
+                Text(light.word).font(Theme.ui(size, .medium)).foregroundStyle(Color(tone: light.tone))
                     .lineLimit(1).fixedSize()
             }
         }
@@ -173,21 +178,21 @@ struct StatusLightView: View {
     }
 }
 
-/// The bottom bar: small uppercase text, as in Syndicate's "NETWORK: MASTER | 124.00". Each light's dot and word take
+/// The bottom bar, in natural case (#171). Each light's dot and word take
 /// its state color, as in the big lights; labels stay gray. Reads the same as `StatusPresentation.line`.
 struct StatusLineView: View {
     let presentation: StatusPresentation
 
     var body: some View {
         styledLine
-            .font(Theme.ui(10, .semibold))
+            .font(Theme.ui(11, .medium))
             .foregroundStyle(Theme.caption)
             // No scaling and no cut words: StatusPresentation already dropped whole parts to fit (#66).
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Theme.background)
+            .padding(.horizontal, Theme.Step.x4)
+            .padding(.vertical, Theme.Step.x2)
+            .background(Theme.panel)
             // One sentence line for VoiceOver, with no "black circle" or "middle dot" (#67).
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(presentation.spokenLine)
@@ -201,11 +206,11 @@ struct StatusLineView: View {
         for (index, part) in presentation.lineParts.enumerated() {
             if index > 0 { line = line + separator }
             if let label = part.label {
-                line = line + Text(keep(label.uppercased()) + "\u{00A0}").foregroundStyle(Theme.caption)
-                    + Text(keep("● " + part.word.uppercased())).foregroundStyle(Color(tone: part.tone))
+                line = line + Text(keep(label) + "\u{00A0}").foregroundStyle(Theme.caption)
+                    + Text(keep("● " + part.word)).foregroundStyle(Color(tone: part.tone))
             } else {
                 // DECK reads as a caption; MASTER keeps its orange.
-                line = line + Text(keep(part.word.uppercased())).foregroundStyle(part.tone == .idle ? Theme.caption : Color(tone: part.tone))
+                line = line + Text(keep(part.word)).foregroundStyle(part.tone == .idle ? Theme.caption : Color(tone: part.tone))
             }
         }
         return line
