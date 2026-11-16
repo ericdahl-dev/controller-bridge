@@ -47,7 +47,7 @@ extension Mapping {
         case let (.object(pairs), .object):
             return .object(pairs.compactMap { pair in
                 let childPath = path.isEmpty ? pair.key : "\(path).\(pair.key)"
-                guard let given = schema[pair.key] ?? optionalKey(childPath) else { return nil }
+                guard let given = schema[pair.key] ?? optionalKey(childPath) ?? shiftedSchema(childPath, notes: schema) else { return nil }
                 let expected = alternative(pair.value, at: childPath) ?? given
                 guard kindProblem(pair.value, expected: expected) == nil else { return nil }
                 return (pair.key, known(pair.value, schema: expected, path: childPath))
@@ -155,7 +155,7 @@ extension Mapping {
         case let (.object(pairs), _):
             for (key, child) in pairs {
                 let childPath = path.isEmpty ? key : "\(path).\(key)"
-                guard let expected = schema[key] ?? optionalKey(childPath) else {
+                guard let expected = schema[key] ?? optionalKey(childPath) ?? shiftedSchema(childPath, notes: schema) else {
                     out.append("\(childPath): unknown key")
                     continue
                 }
@@ -204,6 +204,13 @@ extension Mapping {
     }
 
     /// Keys a profile may add that the LC6000's default leaves out (#204), with an example of each one's kind.
+    /// `notes.shifted` (#226): the notes' own buttons, each a note, so a misspelled button is an unknown key and each
+    /// note gets the notes' range and duplicate checks.
+    private static func shiftedSchema(_ path: String, notes: OrderedJSON) -> OrderedJSON? {
+        guard path == "notes.shifted", case .object(let pairs) = notes else { return nil }
+        return .object(pairs.filter { $0.key != "pads" && $0.key != "shifted" })
+    }
+
     private static let optionalKeys: [String: OrderedJSON] = [
         "jog.relative_cc": .number(0, isInteger: true),
         "jog.relative_edge_cc": .number(0, isInteger: true),
