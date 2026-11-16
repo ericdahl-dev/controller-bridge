@@ -93,7 +93,8 @@ private struct CaptureStepPage: View {
     var body: some View {
         let flow = controller.flow
         CaptureHeading(eyebrow: "Step \(flow.stepNumber) of \(flow.stepCount)", title: flow.prompt?.text ?? "")
-        CaptureReadout(detected: flow.detected, idleSecondsLeft: controller.idleSecondsLeft)
+        if flow.isDisconnected { CaptureDisconnected { controller.endCapture() } }
+        CaptureReadout(detected: flow.detected, shift: flow.shiftReadout, idleSecondsLeft: controller.idleSecondsLeft)
         HStack(spacing: Theme.Step.x2) {
             Button("Redo") { controller.redo() }
                 .buttonStyle(PillButtonStyle())
@@ -113,6 +114,8 @@ private struct CaptureStepPage: View {
 /// What the step has detected so far, live.
 private struct CaptureReadout: View {
     let detected: [ControlFacts]
+    /// How Shift changed the control, on a shifted step (#229).
+    let shift: String?
     let idleSecondsLeft: Int?
 
     var body: some View {
@@ -124,6 +127,7 @@ private struct CaptureReadout: View {
                 line("Waiting for the control…", color: Theme.caption)
             } else {
                 ForEach(Array(detected.enumerated()), id: \.offset) { line($0.element.summary, color: Theme.text) }
+                if let shift { line(shift, color: Theme.caption) }
             }
         }
         .padding(Theme.Step.x4)
@@ -140,7 +144,7 @@ private struct CaptureReadout: View {
     private var accessibilityText: String {
         if let idleSecondsLeft { return idleSecondsLeft > 0 ? "Listening, Next in \(idleSecondsLeft) seconds" : "Done listening" }
         if detected.isEmpty { return "Detected: nothing yet" }
-        return "Detected: " + detected.map(\.spoken).joined(separator: ", then ")
+        return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + (shift.map { ". \($0)" } ?? "")
     }
 }
 
@@ -151,7 +155,8 @@ private struct CaptureDonePage: View {
 
     var body: some View {
         let demo = controller.flow.file?.device == DemoCapture.deviceName
-        CaptureHeading(eyebrow: "Help add a controller", title: "Capture finished")
+        let partial = (controller.flow.file?.steps.count ?? 0) < controller.flow.stepCount
+        CaptureHeading(eyebrow: "Help add a controller", title: partial ? "Capture ended early" : "Capture finished")
         Text("Send it to DeckBridge and it can become a supported controller. Nothing has been sent; it leaves this Mac only if you save or email it." + (demo ? "" : " DeckBridge is sending this controller's moves to Syndicate again."))
             .font(Theme.ui(13)).foregroundStyle(Theme.caption)
             .fixedSize(horizontal: false, vertical: true)
@@ -199,5 +204,22 @@ private struct CaptureExportButtons: View {
                 .buttonStyle(PillButtonStyle(kind: .quiet))
                 .keyboardShortcut(.cancelAction)
         }
+    }
+}
+
+/// The controller went away mid-capture (#229): what to do, and a way out.
+private struct CaptureDisconnected: View {
+    let end: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Theme.Step.x3) {
+            Text("Controller disconnected. Plug it back in to continue, or end the capture.")
+                .font(Theme.ui(13)).foregroundStyle(Theme.attention)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button("End capture", action: end).buttonStyle(PillButtonStyle(small: true))
+        }
+        .padding(Theme.Step.x3)
+        .card()
     }
 }

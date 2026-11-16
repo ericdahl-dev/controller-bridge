@@ -10,17 +10,40 @@ import Foundation
 final class CaptureMIDIInput {
     private var client = MIDIClientRef()
     private var input = MIDIPortRef()
+    private let sources: [MIDIEndpoint]
 
     /// `receive` gets each message's bytes, the time (system uptime, seconds) and the port's index in `sources`.
-    /// Called on CoreMIDI's thread.
-    init?(sources: [MIDIEndpoint], receive: @escaping @Sendable ([UInt8], Double, Int) -> Void) {
-        guard MIDIClientCreateWithBlock("ControllerBridge capture" as CFString, &client, nil) == noErr,
+    /// Called on CoreMIDI's thread. `changed` is called when the system's MIDI devices may have changed (#229), on the
+    /// thread that made this input: make it on the main thread.
+    init?(
+        sources: [MIDIEndpoint], receive: @escaping @Sendable ([UInt8], Double, Int) -> Void,
+        changed: @escaping @Sendable () -> Void = {}
+    ) {
+        self.sources = sources
+        guard MIDIClientCreateWithBlock("ControllerBridge capture" as CFString, &client, Self.notifyBlock(changed)) == noErr,
             MIDIInputPortCreateWithProtocol(client, "Capture in" as CFString, ._1_0, &input, Self.receiveBlock(receive)) == noErr
         else { return nil }
+        connect()
+    }
+
+    /// Connects every source that's there, again after a replug: an endpoint keeps its unique id across one.
+    func connect() {
         for (index, source) in sources.enumerated() {
             guard let ref = Self.find(source) else { continue }
             // The port's index rides along as the refCon, plus one so index 0 isn't a null pointer.
             MIDIPortConnectSource(input, ref, UnsafeMutableRawPointer(bitPattern: index + 1))
+        }
+    }
+
+    /// Whether a source is plugged in now.
+    static func isPresent(_ source: MIDIEndpoint) -> Bool { find(source) != nil }
+
+    private nonisolated static func notifyBlock(_ changed: @escaping @Sendable () -> Void) -> MIDINotifyBlock {
+        { notification in
+            switch notification.pointee.messageID {
+            case .msgObjectAdded, .msgObjectRemoved, .msgSetupChanged: changed()
+            default: break
+            }
         }
     }
 
