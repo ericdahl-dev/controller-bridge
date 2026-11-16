@@ -1,3 +1,5 @@
+import Foundation
+
 /// The capture window's model (#186): choose the ports, walk the prompts, done. The view shows it and forwards the
 /// owner's buttons and the MIDI; every rule about what's allowed when lives here, on an injected clock.
 public struct CaptureFlow: Sendable {
@@ -44,6 +46,14 @@ public struct CaptureFlow: Sendable {
     public static let refreshInterval = 0.1
     private var lastRefresh = -Double.infinity
     private var stale = false
+
+    /// The owner's optional note, as typed. The file holds it trimmed, or no note when it's blank.
+    public var note = "" {
+        didSet {
+            let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+            session?.note = trimmed.isEmpty ? nil : trimmed
+        }
+    }
 
     /// The capture file, once the steps start.
     public var file: CaptureFile? { session?.file }

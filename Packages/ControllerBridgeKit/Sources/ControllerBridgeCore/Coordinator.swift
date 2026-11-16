@@ -125,6 +125,15 @@ public final class Coordinator {
 
     /// The LC6000's jog display, when the app found its WD port.
     private var jogDisplay: JogDisplayDriver?
+    /// Settings' "Show the deck on the jog display". Off until a hardware check passes (#165): while off, nothing goes
+    /// to the display's ports, not even the hello.
+    private var jogDisplayEnabled = false
+
+    /// Turns the jog display on (hello, then the deck in front) or off (goodbye, then nothing).
+    public func setJogDisplay(enabled: Bool) {
+        jogDisplayEnabled = enabled
+        updateJogDisplay()
+    }
     /// The marker: the master clock's hand while the deck in front plays, else where the platter left it.
     private var jogMarker = JogMarker()
     private var masterBPM: Double?
@@ -191,11 +200,13 @@ public final class Coordinator {
     private func updateJogDisplay() {
         guard let driver = jogDisplay else { return }
         let connected = controllers.indices.filter { controllers[$0].source != nil }
-        guard let first = connected.first else { return driver.disconnect() }
+        guard jogDisplayEnabled, let first = connected.first else { return driver.disconnect() }
         let front = connected.first { status.controllers[$0].activeLayer } ?? first
         let deck = status.controllers[front].deck
+        let track = controllers[front].bridge.track
         driver.connect()
-        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255]))
+        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255], title: track?.title,
+                                      artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType))
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -539,6 +550,10 @@ public final class Coordinator {
         feedbackArrived()
         for bridge in bridges { bridge.handle(message) }
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
+        // What the display shows may have changed (a load, a key or BPM change); equal content draws nothing.
+        if message.address.lowercased().hasSuffix("/trackinfo") || message.address.lowercased().hasSuffix("/loaded") {
+            updateJogDisplay()
+        }
         disconnectFailedOutputs()
     }
 
@@ -722,7 +737,13 @@ public final class Coordinator {
         var mapping = profile.mapping
         // The deck and channel are settings, not part of the profile.
         mapping.deck.number = status.controllers[index].deck
-        if let channel = controllers[index].channel { mapping.midi.channel = channel }
+        if let channel = controllers[index].channel {
+            mapping.midi.channel = channel
+            // A deck layer's pads may have their own channel (#224).
+            if let padChannel = profile.mapping.midi.layers.first(where: { $0.channel == channel })?.padChannel {
+                mapping.pads.channel = padChannel
+            }
+        }
         let bridge = makeBridge( mapping)
         bridge.setLEDsEnabled(ledsEnabled)
         bridge.layerShown = layerInFront(index, channel: mapping.midi.channel, layers: profile.mapping.midi.layers)

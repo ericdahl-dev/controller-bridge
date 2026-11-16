@@ -157,6 +157,25 @@ enum Snapshots {
         }
         write(buttonStates, to: "\(directory)/buttons.png")
         write(siteStyles, to: "\(directory)/site-styles.png")
+        // The jog display's image (#165), design B, upright, 198×198, for review before any hardware send. The deck
+        // colors are the designer's sample ones; the app uses Syndicate's.
+        let daybreak = JogDisplayContent(deck: 1, color: [255, 49, 93], title: "Daybreak", artist: "Bill Hamel, Jeremus", key: "A#m",
+                                         bpm: 128, playerType: "track")
+        let ten = JogDisplayContent(deck: 4, color: [148, 92, 255], title: "Ten (Original Club Mix)",
+                                    artist: "Mark Knight, Underworld, Sander Van Doorn", key: "A#m", bpm: 128, playerType: "track")
+        let clip = JogDisplayContent(deck: 2, color: [255, 194, 71], playerType: "osc")
+        let emptyDeck = JogDisplayContent(deck: 3, color: [32, 224, 196])
+        let cases: [(String, JogDisplayContent, Int?, Double?)] = [
+            ("deck1-track", daybreak, nil, nil), ("deck4-long-title", ten, nil, nil), ("deck2-osc-clip", clip, nil, nil),
+            ("deck3-empty", emptyDeck, nil, nil),
+            // As the simulator would show the unit: beat 2 lit and the marker at 126°.
+            ("deck4-beat2-marker-simulated", ten, 2, 126.0 / 360),
+        ]
+        for (name, content, beat, marker) in cases {
+            let rgba = JogDisplayRenderer.render(content, litBeat: beat, marker: marker)
+            let png = JogImage.png(rgba: rgba, width: JogImage.size, height: JogImage.size)
+            do { try Data(png).write(to: URL(fileURLWithPath: "\(directory)/jog-display-\(name).png")) } catch { print("Couldn't write: \(error)") }
+        }
         write(siteStyles.environment(\.forcesIncreasedContrast, true), to: "\(directory)/site-styles-increased-contrast.png")
         for (name, configure) in states {
             let status = BridgeStatus()
@@ -343,6 +362,11 @@ enum Snapshots {
             ("jog", CaptureController(flow: captureFlow(at: "deck1.jog.touch", fed: true), now: 1e6)),
             ("shift", CaptureController(flow: captureFlow(at: "deck1.play.shift", fed: true), now: 1e6)),
             ("done", CaptureController(flow: captureFlow(at: nil, fed: true), now: 1e6)),
+            ("done-note", {
+                var flow = captureFlow(at: nil, fed: true)
+                flow.note = "Firmware 1.3"
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
         ]
         for (name, controller) in shots {
             writeAppKit(CaptureView(controller: controller), to: "\(directory)/capture-\(name).png", width: 480)

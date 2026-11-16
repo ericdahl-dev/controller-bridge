@@ -1,8 +1,14 @@
 // Pads, pad modes and cue colors (#18), as in the Python bridge.
 
 /// What the pads do.
-enum PadMode {
+enum PadMode: CaseIterable {
     case hotCue, roll, loop, slicer
+
+    /// The next mode for a cycling button (#198): Hot Cue → Roll → Loop → Slicer → Hot Cue.
+    var next: PadMode {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
 }
 
 extension Bridge {
@@ -44,6 +50,49 @@ extension Bridge {
         }
     }
 
+    /// The one cycling mode button (#198), for a profile whose `pads.mode_select` is "cycle"; with the LC6000's four
+    /// buttons it does nothing. Like a mode button, it first releases any held pad.
+    func padModeCycle(_ pressed: Bool) {
+        guard pressed, mapping.pads.modeSelect == .cycle else { return }
+        releasePads()
+        padMode = padMode.next
+        refreshLEDs()
+    }
+
+    /// The pad a note plays, and on a profile with notes per mode (#225) the mode that note belongs to.
+    func pad(for note: Int) -> (index: Int, mode: PadMode?)? {
+        guard let modeNotes = mapping.pads.modeNotes else {
+            return mapping.notes.pads.firstIndex(of: note).map { ($0, nil) }
+        }
+        let lists: [(PadMode, [Int])] = [(.hotCue, modeNotes.hotcue), (.roll, modeNotes.roll), (.loop, modeNotes.loop),
+                                         (.slicer, modeNotes.slicer)]
+        for (mode, notes) in lists { if let index = notes.firstIndex(of: note) { return (index, mode) } }
+        return nil
+    }
+
+    /// A pad note in. A note from another mode's list (#225) switches to that mode first, letting held pads go, as
+    /// a mode button does.
+    func padNote(_ note: Int, pressed: Bool) -> Bool {
+        guard let (index, mode) = pad(for: note) else { return false }
+        if let mode, mode != padMode, pressed {
+            releasePads()
+            padMode = mode
+        }
+        handlePad(index, pressed: pressed)
+        return true
+    }
+
+    /// The notes the pads send and light in `mode`: that mode's list (#225), or `notes.pads` for every mode.
+    func padNotes(for mode: PadMode) -> [Int] {
+        guard let modeNotes = mapping.pads.modeNotes else { return mapping.notes.pads }
+        return switch mode {
+        case .hotCue: modeNotes.hotcue
+        case .roll: modeNotes.roll
+        case .loop: modeNotes.loop
+        case .slicer: modeNotes.slicer
+        }
+    }
+
     /// Releases every held pad, and nothing else.
     func releasePads() {
         for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
@@ -71,8 +120,29 @@ extension Bridge {
     func padLEDs() {
         let modes: [(String, PadMode)] = [("mode_hotcue", .hotCue), ("mode_roll", .roll), ("mode_loop", .loop), ("mode_slicer", .slicer)]
         for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
-        for (note, velocity) in zip(mapping.notes.pads, padColors()) { led(note, velocity) }
+        cycleButtonLED()
+        // With notes per mode (#225), the current mode's notes carry the colors and the other modes' go dark.
+        for (note, velocity) in zip(padNotes(for: padMode), padColors()) { padLED(note, velocity) }
+        if let modeNotes = mapping.pads.modeNotes {
+            let lit = Set(padNotes(for: padMode))
+            for note in modeNotes.hotcue + modeNotes.roll + modeNotes.loop + modeNotes.slicer where !lit.contains(note) {
+                padLED(note, Self.off)
+            }
+        }
         ringLED()
+    }
+
+    /// The cycling button's own LED (#198): the profile's velocity for the current mode. With none, it's left alone.
+    private func cycleButtonLED() {
+        guard mapping.pads.modeSelect == .cycle, let levels = mapping.pads.modeCycleVelocities,
+              let note = mapping.notes.buttons["mode_cycle"] else { return }
+        let velocity = switch padMode {
+        case .hotCue: levels.hotcue
+        case .roll: levels.roll
+        case .loop: levels.loop
+        case .slicer: levels.slicer
+        }
+        led(note, UInt8(clamping: velocity))
     }
 
     /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad in the roll color.

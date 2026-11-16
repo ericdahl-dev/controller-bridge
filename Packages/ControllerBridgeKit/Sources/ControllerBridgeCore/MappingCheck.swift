@@ -47,7 +47,7 @@ extension Mapping {
         case let (.object(pairs), .object):
             return .object(pairs.compactMap { pair in
                 let childPath = path.isEmpty ? pair.key : "\(path).\(pair.key)"
-                guard let expected = schema[pair.key] ?? optionalKeys[childPath],
+                guard let expected = schema[pair.key] ?? optionalKey(childPath),
                       kindProblem(pair.value, expected: expected) == nil else { return nil }
                 return (pair.key, known(pair.value, schema: expected, path: childPath))
             })
@@ -153,7 +153,7 @@ extension Mapping {
         case let (.object(pairs), _):
             for (key, child) in pairs {
                 let childPath = path.isEmpty ? key : "\(path).\(key)"
-                guard let expected = schema[key] ?? optionalKeys[childPath] else {
+                guard let expected = schema[key] ?? optionalKey(childPath) else {
                     out.append("\(childPath): unknown key")
                     continue
                 }
@@ -193,7 +193,26 @@ extension Mapping {
     private static let optionalKeys: [String: OrderedJSON] = [
         "jog.relative_cc": .number(0, isInteger: true),
         "jog.relative_edge_cc": .number(0, isInteger: true),
+        // One cycling pad-mode button (#198): its note, and its LED's velocity per mode.
+        "notes.mode_cycle": .number(0, isInteger: true),
+        "pads.mode_cycle_velocities": .object([
+            ("hotcue", .number(0, isInteger: true)), ("roll", .number(0, isInteger: true)),
+            ("loop", .number(0, isInteger: true)), ("slicer", .number(0, isInteger: true)),
+        ]),
+        // The pads' own MIDI channel (#224), for the deck and for each deck layer.
+        "pads.channel": .number(0, isInteger: true),
+        "midi.layers[].pad_channel": .number(0, isInteger: true),
+        // Each pad mode's own notes (#225).
+        "pads.mode_notes": .object([
+            ("hotcue", .array([.number(0, isInteger: true)])), ("roll", .array([.number(0, isInteger: true)])),
+            ("loop", .array([.number(0, isInteger: true)])), ("slicer", .array([.number(0, isInteger: true)])),
+        ]),
     ]
+
+    /// An optional key's expected kind by its path, a list element's index written as `[]`.
+    private static func optionalKey(_ path: String) -> OrderedJSON? {
+        optionalKeys[path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)]
+    }
 
     /// Ranges and choices, by key path. A list element's path ends in `[]`.
     private static let ranges: [String: ClosedRange<Double>] = {
@@ -202,6 +221,9 @@ extension Mapping {
             "deck.number": 1...4,
             "midi.layers[].channel": 1...16,
             "midi.layers[].deck": 1...4,
+            "midi.layers[].pad_channel": 1...16, "pads.channel": 1...16,
+            "pads.mode_notes.hotcue[]": 0...127, "pads.mode_notes.roll[]": 0...127,
+            "pads.mode_notes.loop[]": 0...127, "pads.mode_notes.slicer[]": 0...127,
             "midi.layer_note": 0...127,
             "notes.pads[]": 0...127,
             "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127, "jog.relative_cc": 0...127, "jog.relative_edge_cc": 0...127,
@@ -211,6 +233,8 @@ extension Mapping {
             "browse.select_turn_cc": 0...127, "browse.auto_loop_size_cc": 0...127,
             "leds.pitch_center": 0...127, "leds.ring": 0...127,
             "leds.levels.full": 0...127, "leds.levels.dim": 0...127, "leds.levels.off": 0...127,
+            "pads.mode_cycle_velocities.hotcue": 0...127, "pads.mode_cycle_velocities.roll": 0...127,
+            "pads.mode_cycle_velocities.loop": 0...127, "pads.mode_cycle_velocities.slicer": 0...127,
             "jog.counts_per_rev": 1...16384, "jog.beats_per_rev": 1...16, "jog.seek_seconds_per_rev": 0...60,
             // Every other number, so no imported value can be absurd (#92).
             "osc.port": 1...65535, "osc.feedback_port": 1...65535,
@@ -233,6 +257,7 @@ extension Mapping {
         "leds.beat_pulse": LEDs.BeatPulse.allRawValues,
         "leds.stale_idle": LEDs.StaleIdle.allRawValues,
         "pads.roll_sizes[]": Pads.RollSize.allRawValues,
+        "pads.mode_select": Pads.ModeSelect.allRawValues,
         "midi.encoder_format": EncoderFormat.allRawValues,
     ]
 

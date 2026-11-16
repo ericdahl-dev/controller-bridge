@@ -128,4 +128,15 @@ struct CaptureFlowTests {
         flow.tick(at: 106)
         #expect(flow.takeAnnouncement() == nil)
     }
+
+    @Test("The owner's note goes into the file trimmed; a blank one leaves the note out")
+    func note() throws {
+        var flow = Self.started(at: 100)
+        flow.note = "  Firmware 1.3, left deck only \n"
+        #expect(flow.file?.note == "Firmware 1.3, left deck only")
+        flow.note = "   "
+        #expect(flow.file?.note == nil)
+        let json = String(decoding: try #require(try flow.file?.encoded()), as: UTF8.self)
+        #expect(!json.contains("\"note\""))
+    }
 }

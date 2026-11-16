@@ -14,10 +14,23 @@ public struct JogDisplayContent: Equatable, Sendable {
     public var deck: Int
     /// The deck's color, [r, g, b].
     public var color: [Int]
+    /// From Syndicate's TrackInfo: nil until a track is loaded.
+    public var title: String?
+    public var artist: String?
+    public var key: String?
+    public var bpm: Double?
+    /// "track", "empty", or what a clip or sequencer says (#209).
+    public var playerType: String?
 
-    public init(deck: Int, color: [Int]) {
+    public init(deck: Int, color: [Int], title: String? = nil, artist: String? = nil, key: String? = nil, bpm: Double? = nil,
+                playerType: String? = nil) {
         self.deck = deck
         self.color = color
+        self.title = title
+        self.artist = artist
+        self.key = key
+        self.bpm = bpm
+        self.playerType = playerType
     }
 }
 
