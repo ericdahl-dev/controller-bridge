@@ -1,65 +1,146 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-type="software" data-radius="soft" data-ground="sand" data-buttons="pill" data-mode="dark" data-motion>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DeckBridge: play the LC6000 PRIME in a Mac DJ app over OSC</title>
-  <meta name="description" content="DeckBridge is a Mac menu-bar app that bridges a Denon LC6000 PRIME controller to the Syndicate DJ app over OSC, with full-resolution jog and pitch, deck layers and LED feedback.">
-  <link rel="icon" href="img/favicon-64.png" type="image/png">
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DeckBridge: LC6000 PRIME on Mac, with 14-bit jog over OSC</title>
+<meta name="description" content="DeckBridge, a Mac menu-bar app, connects a Denon LC6000 PRIME to Syndicate over OSC: 14-bit jog and pitch, deck layers and LED feedback. macOS 26 or later.">
+<link rel="canonical" href="https://getdeckbridge.app/">
+<link rel="alternate" type="text/markdown" href="index.md">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#171717">
+<meta name="site-kind" content="software">
+<meta name="page-type" content="software">
+<link rel="preload" href="fonts/Geist.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" href="img/favicon-64.png" type="image/png">
+<link rel="stylesheet" href="assets/system.css">
+<link rel="stylesheet" href="assets/ui/cards.css">
+<link rel="stylesheet" href="assets/motion/motion.css">
+<link rel="stylesheet" href="assets/backgrounds/backgrounds.css">
+<link rel="stylesheet" href="assets/layout/layout.css">
+<link rel="stylesheet" href="assets/icons/icon.css">
+<!-- the palette is the app's own theme (start.mjs brand: ground #171717, ink #EDEDEA, signal green #00FF48);
+     the type is the dealt pairing (geist), self-hosted in site.css instead of Google Fonts -->
+<style>
+:root {
+  --p-bg: #171717; --p-surface: #20201f; --p-ink: #ededea; --p-muted: #8c8c8a;
+  --p-accent: #00ff48; --p-accent-ink: #171717; --p-action: #00ff48; --p-action-ink: #171717;
+  --p-inv-bg: #ededea; --p-inv-surface: #dcdcd9; --p-inv-ink: #171717; --p-inv-muted: #5f5f5e;
+  --p-inv-accent: #171717; --p-inv-accent-ink: #ededea; --p-inv-action: #171717; --p-inv-action-ink: #ededea;
+  --font-display: "Geist", system-ui, sans-serif;
+  --font-text: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display-weight: 500;
+  --display-tracking: -0.035em;
+  --display-tracking-xl: -0.045em;
+}
+</style>
+<link rel="stylesheet" href="site.css">
+<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
+<script src="assets/backgrounds/backgrounds.js"></script>
 </head>
 <body>
-  <header class="site">
-    <div class="wrap">
-      <a class="brand" href="./"><img src="img/favicon-64.png" alt="" width="32" height="32">DeckBridge</a>
-      <nav class="site" aria-label="Site">
-        <a href="./" aria-current="page">Home</a>
-        <a href="support/">Support</a>
-        <a href="privacy/">Privacy</a>
-      </nav>
+<!-- type: software
+     deal: hero centred, nav nav-centre, close close-word, footer footer-dark, rhythm dark-band, buttons pill,
+     mark: the app's own icon (the client's logo replaces the dealt "initial"); lit ground sand;
+     palette: the client's own colours through start.mjs brand (the app's flat dark theme and signal green,
+     as the screenshots show it; the dealt cool-grey-cobalt was light and clashed with every screenshot);
+     type geist (Geist + Geist Mono, self-hosted); effect grain-gradient in the hero frame;
+     grounds: why bg-band, features bg-mist; moments: word-highlight (#why), liquid-type (#next) -->
+<header class="nav nav--centre">
+  <div class="wrap nav__bar">
+    <a class="skip-link" href="#top">Skip to content</a>
+    <a class="nav__logo" href="#top"><img src="img/favicon-64.png" alt="" width="28" height="28">DeckBridge</a>
+    <nav class="nav__links" aria-label="Main">
+      <div class="nav__item"><a class="nav__link" href="support/">Support</a></div>
+      <div class="nav__item"><a class="nav__link" href="privacy/">Privacy</a></div>
+    </nav>
+    <div class="nav__actions">
+      <!-- TODO(user): TestFlight public link. Until it exists, the beta is joined by email. -->
+      <a class="btn btn--primary" href="mailto:deckbridge@ericdahl.dev?subject=DeckBridge%20TestFlight%20beta">Join the TestFlight beta</a>
     </div>
-  </header>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</header>
 
-  <main class="wrap">
-    <section class="hero">
-      <div>
-        <h1>Your controller, fully in the mix.</h1>
-        <p class="lede">DeckBridge is a small Mac menu-bar app that connects a Denon LC6000 PRIME to the Syndicate DJ app through Syndicate's OSC interface. The jog wheel and pitch fader work at full resolution, and the controller's LEDs follow what's playing.</p>
-        <div class="actions">
-          <!-- TestFlight link: placeholder until the public link is ready. -->
-          <a class="button primary" href="#testflight">Get it on TestFlight</a>
-          <span class="button" aria-disabled="true">Mac App Store: coming soon</span>
+<main id="top">
+  <section class="hero hero--centred" data-enter aria-labelledby="hero-h">
+    <div class="wrap"><div class="hero-text">
+      <div class="hero__c">
+        <p class="pill"><span>Version 1.0.0 on TestFlight</span><span class="muted pill__more">Mac App Store coming soon</span></p>
+        <h1 id="hero-h">The LC6000 PRIME bridge for your Mac</h1>
+        <p class="hero__lead">A menu-bar app that plays Syndicate from a Denon LC6000 PRIME over OSC, with 14‑bit jog and pitch.</p>
+        <div class="btn-row">
+          <!-- TODO(user): TestFlight public link -->
+          <a class="btn btn--primary" href="mailto:deckbridge@ericdahl.dev?subject=DeckBridge%20TestFlight%20beta">Join the TestFlight beta<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+          <a class="btn btn--secondary" href="support/">Read the setup guide</a>
         </div>
-        <p class="caption">macOS 26 or later. Free. Works alongside Syndicate; not made by or affiliated with Untitled Audio or Denon DJ.</p>
       </div>
-      <img class="icon" src="img/icon-512.png" alt="DeckBridge app icon" width="160" height="160">
-    </section>
+      <div class="hero__window" data-fx="grain-gradient" data-fx-seed="7" role="img" aria-label="The DeckBridge panel with an LC6000 PRIME connected, feedback from Syndicate live and deck 1 selected, beside the MIDI monitor naming each control as it moves">
+        <div class="ly-piece db-win" aria-hidden="true">
+          <div class="db-win__bar"><span class="db-win__dots"><i></i><i></i><i></i></span><span><b>DeckBridge</b><span class="db-win__sub"> · Denon LC6000 PRIME</span></span><span class="db-win__sp"></span><span class="db-label">Controller</span><span class="db-live">Connected</span><span class="db-label">Feedback</span><span class="db-live">Live</span></div>
+          <div class="db-win__body">
+            <div class="db-panel">
+              <div class="db-panel__name">Denon LC6000 PRIME</div>
+              <div class="db-decks"><span class="is-on">1</span><span>2</span><span>3</span><span>4</span></div>
+              <div class="db-status"><span class="db-label">Controller</span><span class="db-label">Feedback</span><span class="db-live">Connected</span><span class="db-live">Live</span></div>
+              <div class="db-ports">OSC → 9090 · FEEDBACK ← 9096</div>
+              <div class="db-btns"><span>Settings…</span><span>Diagnostics…</span></div>
+              <div class="db-quiet"><span>Setup guide</span><span>Demo controller: Off</span><span>Quit</span></div>
+            </div>
+            <div class="db-mon">
+              <div class="db-tabs"><span class="is-on">MIDI monitor</span><span>LED sweep</span><span>OSC log</span></div>
+              <div class="db-rows" data-ly-steps="900">
+                <div class="db-row db-row--head"><span>Time</span><span>Ch</span><span>Message</span><span>Mapping</span></div>
+                <div class="db-row"><span>1234.500</span><span>ch1</span><span>note_on note=1 velocity=127</span><b>play</b></div>
+                <div class="db-row" data-step><span>1234.600</span><span>ch1</span><span>note_off note=1 velocity=0</span><b>play</b></div>
+                <div class="db-row" data-step><span>1234.700</span><span>ch1</span><span>note_on note=32 velocity=127</span><b>pad1</b></div>
+                <div class="db-row" data-step><span>1234.800</span><span>ch1</span><span>control_change control=17 value=10</span><b>jog_msb</b></div>
+                <div class="db-row" data-step><span>1234.900</span><span>ch1</span><span>control_change control=99 value=64</span><span class="db-warn">Unmapped</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+</main>
 
-    <h2>What it does</h2>
-    <div class="features">
-      <div class="feature"><h3>Full-resolution control</h3><p>The 14-bit jog wheel and pitch fader reach Syndicate at full resolution. Pickup keeps the tempo from jumping when the fader and the screen disagree.</p></div>
-      <div class="feature"><h3>Four decks, one controller</h3><p>The LC6000's own deck layers pick decks 1 to 4. Switching releases anything held and repaints the lights.</p></div>
-      <div class="feature"><h3>LEDs that follow the music</h3><p>Play, Cue, Sync and the pads light from Syndicate's state. Hot cues show their colors, and the jog ring shows the deck's color.</p></div>
-      <div class="feature"><h3>Safe recovery</h3><p>Unplugging, sleeping the Mac or quitting releases every held control first. Plug back in and the lights come back.</p></div>
-      <div class="feature"><h3>Diagnostics built in</h3><p>A MIDI monitor, an LED sweep and an OSC log show exactly what's coming in and going out.</p></div>
-      <div class="feature"><h3>Try it without hardware</h3><p>A demo controller plays a short script against a simulated session, so you can see it work before plugging anything in.</p></div>
+<footer class="footer closing footer--dark ground-inverse" id="contact" aria-labelledby="close-h">
+  <div class="wrap">
+    <div class="closing__cta close--word">
+      <div class="section-head--split">
+        <div><h2 id="close-h">Put the LC6000 in the mix</h2><p class="t-lead">Version 1.0.0 is in beta on TestFlight now. Four settings in Syndicate, once.</p></div>
+        <!-- TODO(user): TestFlight public link -->
+        <a class="btn btn--primary" href="mailto:deckbridge@ericdahl.dev?subject=DeckBridge%20TestFlight%20beta">Join the TestFlight beta<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+      </div>
+      <p class="close__word" aria-hidden="true">DeckBridge</p>
     </div>
+    <div class="closing__links">
+      <div class="grid">
+        <div class="span-4 stack-4">
+          <a class="footer__mark" href="#top"><img src="img/favicon-64.png" alt="" width="28" height="28">DeckBridge</a>
+          <p class="footer__lede">A Mac menu-bar app for the LC6000 PRIME.</p>
+        </div>
+        <div class="span-2 start-9 footer__col"><h3>Help</h3><ul><li><a href="support/">Support</a></li><li><a href="support/#setup">Setup guide</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Contact</h3><ul><li><a href="mailto:deckbridge@ericdahl.dev">deckbridge@ericdahl.dev</a></li><li><a href="privacy/">Privacy</a></li></ul></div>
+      </div>
+      <div class="footer__legal">
+        <span>DeckBridge is an independent app and is not affiliated with, endorsed by, or sponsored by Untitled Audio or Denon DJ. Syndicate, Denon DJ and LC6000 PRIME are trademarks of their respective owners.</span>
+      </div>
+    </div>
+  </div>
+</footer>
 
-    <h2>Screenshots</h2>
-    <div class="shots">
-      <figure><img src="img/1-panel.webp" alt="The DeckBridge menu-bar panel: controller connected, feedback live, deck 1 selected" width="1440" height="900" loading="lazy"><figcaption>The menu-bar panel: connection, feedback and the deck at a glance.</figcaption></figure>
-      <figure><img src="img/2-diagnostics.webp" alt="The Diagnostics window with the MIDI monitor" width="1440" height="900" loading="lazy"><figcaption>Diagnostics: every MIDI message with its mapping, plus the OSC log.</figcaption></figure>
-      <figure><img src="img/3-setup.webp" alt="The setup guide listing the settings to turn on" width="1440" height="900" loading="lazy"><figcaption>A short setup guide, with live status as each step takes.</figcaption></figure>
-      <figure><img src="img/4-demo.webp" alt="The panel with the demo controller on" width="1440" height="900" loading="lazy"><figcaption>Demo mode: see it work without a controller.</figcaption></figure>
-      <figure><img src="img/5-settings.webp" alt="The Settings window: deck colors following the DJ app's palette, with vivid ring colors and a preview of each on the controller" width="1440" height="900" loading="lazy"><figcaption>Settings: deck colors follow the DJ app's palette, vivid on the ring. MIDI, OSC and LEDs too.</figcaption></figure>
-    </div>
-  </main>
+<nav class="actionbar" aria-label="Quick actions">
+  <!-- TODO(user): TestFlight public link -->
+  <a class="btn btn--primary" href="mailto:deckbridge@ericdahl.dev?subject=DeckBridge%20TestFlight%20beta">Join the TestFlight beta</a>
+</nav>
 
-  <footer class="site">
-    <div class="wrap">
-      <p><a href="support/">Support</a> · <a href="privacy/">Privacy</a> · <a href="mailto:deckbridge@ericdahl.dev">deckbridge@ericdahl.dev</a></p>
-      <p>DeckBridge is an independent app. Syndicate is a separate app by Untitled Audio. Denon DJ and LC6000 PRIME are trademarks of their owners.</p>
-    </div>
-  </footer>
+<script type="module" src="assets/system.js"></script>
+<script type="module" src="assets/motion/motion.js"></script>
+<script type="module" src="assets/layout/layout.js"></script>
 </body>
 </html>
