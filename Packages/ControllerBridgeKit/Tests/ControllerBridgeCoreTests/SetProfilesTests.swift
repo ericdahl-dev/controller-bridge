@@ -59,4 +59,65 @@ struct SetProfilesTests {
             OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]),
         ])
     }
+
+    static func newPlay(_ note: Int = 60) throws -> [ControllerProfile] {
+        var mapping = try Mapping.bundledDefault()
+        mapping.notes.buttons["play"] = note
+        return [ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)]
+    }
+
+    @Test("Two controllers on one device keep their channels through a profile swap (#94)")
+    func channelsSurvive() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.setControllers([
+            ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out, channel: 1),
+            ControllerSettings(deck: 2, input: Rig.lc6000, output: Rig.lc6000Out, channel: 2),
+        ])
+        rig.coordinator.setProfiles(try Self.newPlay())
+        rig.osc.sent.removeAll()
+        // Channel 2 first: if both had fallen back to channel 1, one press would reach both decks in the other order.
+        rig.coordinator.midi(.noteOn(channel: 1, note: 60, velocity: 127), source: Rig.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 0, note: 60, velocity: 127), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]),
+        ])
+    }
+
+    @Test("LEDs off stays off through a profile swap: the swap sends no LED message (#94)")
+    func ledsOffSurvives() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.setLEDs(enabled: false)
+        let before = rig.midi.outputs[Rig.lc6000Out.id]?.sent.count
+        rig.coordinator.setProfiles(try Self.newPlay())
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        #expect(rig.midi.outputs[Rig.lc6000Out.id]?.sent.count == before)
+    }
+
+    @Test("A profile swap repaints the LEDs on the controller's output at once, then Syndicate's answer to the Resend lights them (#94)")
+    func swapRepaints() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        var mapping = try Mapping.bundledDefault()
+        mapping.notes.buttons["play"] = 60          // the Play LED moves to note 60
+        rig.coordinator.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)])
+        #expect(rig.leds[60] == 1)                  // painted on the output, idle until Syndicate's state comes back
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        #expect(rig.leds[60] == 127)
+    }
+
+    @Test("A controller unplugged during a swap picks the new profile up when it comes back (#94)")
+    func reconnectGetsNewProfile() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        RecoveryTests.unplug(rig)
+        rig.coordinator.setProfiles(try Self.newPlay())
+        RecoveryTests.replug(rig)
+        rig.osc.sent.removeAll()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 60, velocity: 127), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
+    }
 }
