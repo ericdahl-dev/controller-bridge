@@ -274,8 +274,17 @@ public struct StatusPresentation: Equatable, Sendable {
         // Stopped, nothing runs: no MASTER either (#88).
         master = state.master && !state.stopped ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
         // The status bar: each light, then the deck, then MASTER, cut to whole parts that fit (#66).
-        let parts = lights.map { (StatusLinePart(label: $0.label, word: $0.word, tone: $0.tone), Self.priority(of: $0, controller: controller)) }
-            + [(StatusLinePart(label: nil, word: "DECK " + blocks.map { "[\($0.deck)]" }.joined(separator: " "), tone: .idle), 4)]
+        // With several controllers, the line's controller part is the worst of them, counted, and the decks rank
+        // with it, ahead of FEEDBACK, which the lights above still show (#89).
+        let several = blocks.count > 1
+        let summary = Self.summary(of: blocks.map(\.light))
+        let parts = lights.map { light in
+            let part = several && light == controller ? summary : StatusLinePart(label: light.label, word: light.word, tone: light.tone)
+            return (part, Self.priority(of: light, controller: controller))
+        }
+            + [several
+                ? (StatusLinePart(label: nil, word: "DECKS " + blocks.map { "\($0.deck)" }.joined(separator: " "), tone: .idle), 1)
+                : (StatusLinePart(label: nil, word: "DECK [\(blocks[0].deck)]", tone: .idle), 4)]
             + (master != nil ? [(StatusLinePart(label: nil, word: "MASTER", tone: .attention), 3)] : [])
         lineParts = Self.fit(parts, budget: lineBudget)
         line = lineParts.map(\.text).joined(separator: Self.separator)
@@ -293,6 +302,14 @@ public struct StatusPresentation: Equatable, Sendable {
     }
 
     static let separator = " · "
+
+    /// Several controllers as one line part: the worst state, with how many are in it, such as "1 UNPLUGGED".
+    static func summary(of lights: [StatusLight]) -> StatusLinePart {
+        let severity: [StatusLight.Tone] = [.error, .attention, .idle, .live]
+        let worst = lights.min { severity.firstIndex(of: $0.tone)! < severity.firstIndex(of: $1.tone)! }!
+        let count = lights.filter { $0.word == worst.word }.count
+        return StatusLinePart(label: "CONTROLLERS", word: "\(count) \(worst.word)", tone: worst.tone)
+    }
 
     /// The label is always CONTROLLER, so the lights don't shift sideways; the name is in the header (#66).
     static func light(for controller: BridgeState.Controller) -> StatusLight {
