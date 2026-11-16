@@ -1,5 +1,29 @@
 /// What the bridge knows about itself, as the menu needs it. The app fills this from the Coordinator's status and the
 /// feedback listener; it has no CoreMIDI or SwiftUI types, so the wording can be tested here.
+/// Why a controller disconnected, as the panel needs it (#91). The app maps Core's DisconnectReason onto this, one to one.
+extension BridgeState {
+    public enum Disconnect: Equatable, Sendable {
+        case unplugged, sendFailed, inputFailed, deviceChanged, removed, stopped
+    }
+}
+
+extension BridgeState.Controller {
+    /// The panel's controller state from what Core reports (#91): connected; unplugged, failed or waiting according to
+    /// why it last disconnected, keeping its name; or never connected.
+    public init(connected: Bool, profile: String?, lastProfile: String?, lastDisconnect: BridgeState.Disconnect?) {
+        if connected {
+            self = .connected(profile: profile ?? lastProfile ?? "Controller")
+            return
+        }
+        switch lastDisconnect {
+        case .unplugged: self = .unplugged(profile: lastProfile)
+        case .sendFailed, .inputFailed: self = .failed(profile: lastProfile)
+        case .deviceChanged: self = .waiting(profile: lastProfile)
+        case .removed, .stopped, nil: self = .notConnected
+        }
+    }
+}
+
 public struct BridgeState: Equatable, Sendable {
     public enum Controller: Equatable, Sendable {
         case connected(profile: String)
@@ -7,8 +31,10 @@ public struct BridgeState: Equatable, Sendable {
         case unplugged(profile: String?)
         /// Never connected since launch.
         case notConnected
-        /// A MIDI device is there, but no controller profile matches it (#43).
-        case noProfile(device: String)
+        /// Connected, then sending or reading failed (#91): orange MIDI ERROR, not UNPLUGGED.
+        case failed(profile: String?)
+        /// Settings chose other devices, and they aren't there (yet) (#91): gray WAITING.
+        case waiting(profile: String?)
     }
 
     public enum Feedback: Equatable, Sendable {
@@ -227,7 +253,8 @@ public struct StatusPresentation: Equatable, Sendable {
         case .connected: StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live)
         case .unplugged: StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention)
         case .notConnected: StatusLight(label: "CONTROLLER", word: "NOT CONNECTED", tone: .idle)
-        case .noProfile: StatusLight(label: "CONTROLLER", word: "NO PROFILE", tone: .attention)
+        case .failed: StatusLight(label: "CONTROLLER", word: "MIDI ERROR", tone: .attention)
+        case .waiting: StatusLight(label: "CONTROLLER", word: "WAITING", tone: .idle)
         }
     }
 
@@ -236,7 +263,7 @@ public struct StatusPresentation: Equatable, Sendable {
         case .connected(let profile): StatusHeader(title: profile, subtitle: lastEvent)
         case .unplugged(let profile): StatusHeader(title: profile ?? "Controller unplugged", subtitle: lastEvent)
         case .notConnected: StatusHeader(title: "No controller", subtitle: lastEvent)
-        case .noProfile(let device): StatusHeader(title: device, subtitle: "No controller profile matches it")
+        case .failed(let profile), .waiting(let profile): StatusHeader(title: profile ?? "No controller", subtitle: lastEvent)
         }
     }
 
