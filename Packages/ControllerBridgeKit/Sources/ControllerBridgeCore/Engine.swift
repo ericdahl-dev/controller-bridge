@@ -22,6 +22,7 @@ public struct Engine {
                     log.log("Dropped a feedback datagram (\(datagram.count) bytes): \(error)")
                 }
             case .tick: coordinator.tick()
+            case .devicesChanged: coordinator.devicesChanged()
             }
         }
     }

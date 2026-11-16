@@ -68,4 +68,21 @@ struct EngineTests {
 
         #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]))
     }
+
+    @Test("A devices-changed event from the pipe connects a controller that appeared")
+    func devicesChangedFromThePipe() async throws {
+        let rig = try Rig()
+        rig.midi.sources = []
+        rig.midi.destinations = []
+        rig.coordinator.start()
+        rig.midi.sources = [Rig.lc6000]
+        rig.midi.destinations = [Rig.lc6000Out]
+        let pipe = EventPipe()
+
+        pipe.producer.devicesChanged()
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+    }
 }

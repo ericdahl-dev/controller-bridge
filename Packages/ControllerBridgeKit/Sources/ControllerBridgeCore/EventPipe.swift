@@ -4,6 +4,8 @@ public enum PipeEvent: Equatable, Sendable {
     /// One UDP datagram from Syndicate, still OSC-encoded.
     case udp([UInt8])
     case tick
+    /// MIDI devices were added or removed: the Coordinator re-reads them.
+    case devicesChanged
 }
 
 /// One ordered stream fed by every adapter: the CoreMIDI callback, the UDP reader and the tick timer.
@@ -27,6 +29,7 @@ public struct EventPipe: Sendable {
         public func midi(_ event: MIDIEvent, source: MIDIEndpoint.ID) { continuation.yield(.midi(event, source: source)) }
         public func udp(_ datagram: [UInt8]) { continuation.yield(.udp(datagram)) }
         public func tick() { continuation.yield(.tick) }
+        public func devicesChanged() { continuation.yield(.devicesChanged) }
         public func finish() { continuation.finish() }
     }
 }
