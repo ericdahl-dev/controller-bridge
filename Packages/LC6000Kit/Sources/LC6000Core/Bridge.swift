@@ -135,6 +135,8 @@ final class Bridge {
     func handle(_ message: OSCMessage) {
         // Syndicate matches addresses without regard to case, so feedback is read the same way.
         let address = message.address.lowercased()
+        // Cue colors are for every deck, so they come before the deck check.
+        if address == (root + "ColorPalette").lowercased() { return colorPalette(message.arguments) }
         let deckPrefix = (root + "Deck/\(mapping.deck.number)/").lowercased()
         guard address.hasPrefix(deckPrefix) else { return }
         let key = address.dropFirst(deckPrefix.count)

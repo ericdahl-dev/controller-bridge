@@ -21,6 +21,14 @@ extension Bridge {
         return slots + Array(repeating: 0, count: 8 - slots.count)
     }
 
+    /// ColorPalette feedback: a slot, then its red, green and blue (0-255).
+    func colorPalette(_ arguments: [OSCArgument]) {
+        let numbers = arguments.compactMap(\.number)
+        guard numbers.count >= 4 else { return }
+        palette[numbers[0]] = Array(numbers[1...3])
+        refreshLEDs()
+    }
+
     /// Slip roll sizes, pad 1 to pad 8.
     static let rollSizes = ["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]
 
@@ -64,6 +72,17 @@ extension Bridge {
             guard slot != 0 else { return Self.off }
             let rgb = palette[slot] ?? [255, 255, 255]
             return rgbToVelocity(rgb[0], rgb[1], rgb[2])
+        }
+    }
+}
+
+private extension OSCArgument {
+    /// An int, or a float cut to an int, as the Python bridge's int() does.
+    var number: Int? {
+        switch self {
+        case .int(let value): Int(value)
+        case .float(let value): Int(value)
+        case .string: nil
         }
     }
 }

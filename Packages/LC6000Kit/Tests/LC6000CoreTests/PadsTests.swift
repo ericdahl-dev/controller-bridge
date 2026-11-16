@@ -158,4 +158,23 @@ struct PadsTests {
         rig.coordinator.feedback(Self.cues([1, 0, 2, 0, 0, 0, 0, 0]))
         #expect(Self.padLEDs(rig) == [48, 0, 56, 0, 0, 0, 0, 0])
     }
+
+    @Test("ColorPalette feedback recolors a slot: slot 3 set to blue (0, 0, 255) lights its cue's pad 3")
+    func colorPaletteRecolors() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(Self.cues([3, 0, 0, 0, 0, 0, 0, 0]))
+        // Slot 3's default is yellow (255, 255, 0): 0b11_11_00 = 60.
+        #expect(Self.padLEDs(rig)[0] == 60)
+
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(3), .int(0), .int(0), .int(255)]))
+        #expect(Self.padLEDs(rig)[0] == 3)
+    }
+
+    @Test("A dim cue color still lights: (40, 0, 0) rounds to black, so it lights red at the lowest level, 16")
+    func dimColorStillLights() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(5), .int(40), .int(0), .int(0)]))
+        rig.coordinator.feedback(Self.cues([5, 0, 0, 0, 0, 0, 0, 0]))
+        #expect(Self.padLEDs(rig)[0] == 16)
+    }
 }
