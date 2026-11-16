@@ -171,6 +171,15 @@ struct PadsTests {
         #expect(Self.padLEDs(rig)[0] == 3)
     }
 
+    @Test("All eight slots in one ColorPalette message recolor the pads too: slot 3 blue lights pad 3 at 3")
+    func colorPaletteAllSlotsInOneMessage() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(Self.cues([3, 0, 0, 0, 0, 0, 0, 0]))
+        let slots: [Int32] = (1...8).flatMap { slot -> [Int32] in slot == 3 ? [3, 0, 0, 255] : [Int32(slot), 255, 255, 255] }
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", slots.map { .int($0) }))
+        #expect(Self.padLEDs(rig)[0] == 3)
+    }
+
     @Test("A dim cue color still lights: (40, 0, 0) rounds to black, so it lights red at the lowest level, 16")
     func dimColorStillLights() throws {
         let rig = try Self.startedRig()

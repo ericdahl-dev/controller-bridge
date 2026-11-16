@@ -21,11 +21,14 @@ extension Bridge {
         return slots + Array(repeating: 0, count: 8 - slots.count)
     }
 
-    /// ColorPalette feedback: a slot, then its red, green and blue (0-255).
+    /// ColorPalette feedback: a slot, then its red, green and blue (0-255). Syndicate may send several slots in one
+    /// message, as OSC arrays, flattened to groups of four.
     func colorPalette(_ arguments: [OSCArgument]) {
         let numbers = arguments.compactMap(\.wholeNumber)
         guard numbers.count >= 4 else { return }
-        palette[numbers[0]] = Array(numbers[1...3])
+        for start in stride(from: 0, through: numbers.count - 4, by: 4) {
+            palette[numbers[start]] = Array(numbers[(start + 1)...(start + 3)])
+        }
         refreshLEDs()
     }
 

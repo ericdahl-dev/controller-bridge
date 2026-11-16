@@ -93,6 +93,9 @@ private struct OSCReader {
             case "S": _ = try string()
             case "b": _ = try take((Int(try uint32()) + 3) & ~3)
             case "T", "F", "N", "I": break
+            // OSC 1.1 arrays carry no data of their own: Syndicate sends ColorPalette and others as "[iiii]", and the
+            // arguments inside are read in order, flattened.
+            case "[", "]": break
             // Its size is unknown, so nothing after it can be read.
             default: break tags
             }
