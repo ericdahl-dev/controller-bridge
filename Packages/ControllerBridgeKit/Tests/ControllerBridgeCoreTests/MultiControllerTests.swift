@@ -118,4 +118,31 @@ struct MultiControllerTests {
         Self.press(rig, 1, from: Self.unitB)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
     }
+
+    @Test("Either unit's browse works at any time, and each loads to its own deck")
+    func browseFromEither() throws {
+        let rig = try Self.twoUnits()
+        Self.press(rig, 18, from: Self.unitB)    // select press: load
+        Self.press(rig, 18, from: Rig.lc6000)
+        Self.press(rig, 6, from: Self.unitB)     // track next
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Browser/L2", [.int(1)]),
+            OSCMessage("/Syndicate/Browser/L1", [.int(1)]),
+            OSCMessage("/Syndicate/Browser/Down", [.int(1)]),
+        ])
+    }
+
+    @Test("Removing an entry releases its holds and closes its ports; the others keep going")
+    func removeEntry() throws {
+        let rig = try Self.twoUnits()
+        Self.press(rig, 2, from: Self.unitB)     // Cue held on deck 2
+        rig.osc.sent.removeAll()
+
+        rig.coordinator.setControllers([ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)])
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/Cue", [.int(0)])])
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+        #expect(rig.coordinator.status.controllers.map(\.deck) == [1])
+        Self.press(rig, 1, from: Self.unitB)
+        #expect(rig.osc.sent.count == 1)
+    }
 }

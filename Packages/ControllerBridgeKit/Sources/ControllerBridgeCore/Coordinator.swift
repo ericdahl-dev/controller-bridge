@@ -310,6 +310,15 @@ public final class Coordinator {
     /// Settings (#25): the controller entries, one per controller. Existing controllers take their entry's changes;
     /// new entries connect and resync.
     public func setControllers(_ entries: [ControllerSettings]) {
+        // At least one controller always runs, so start() and the status have someone to show.
+        guard !entries.isEmpty else { return }
+        while controllers.count > entries.count {
+            let last = controllers.count - 1
+            controllers[last].bridge.releaseAll()
+            disconnect(last)
+            controllers.removeLast()
+            status.controllers.removeLast()
+        }
         for (index, entry) in entries.enumerated() {
             if index == controllers.count {
                 let first = profiles[0]
