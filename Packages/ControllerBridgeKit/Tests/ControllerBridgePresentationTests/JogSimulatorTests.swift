@@ -47,10 +47,10 @@ struct JogSimulatorTests {
 
     @Test("The marker's pitch bend is a fraction of a turn: 0 is 12 o'clock, 4096 a quarter turn clockwise (provisional, #165)")
     func markerAngle() {
-        #expect(JogMarker.degrees(pitchBend: 0) == 0)
-        #expect(JogMarker.degrees(pitchBend: 4096) == 90)
-        #expect(JogMarker.degrees(pitchBend: 8192) == 180)
-        #expect(JogMarker.degrees(pitchBend: 12288) == 270)
-        #expect(JogMarker.degrees(pitchBend: 16383) == 359.978_027_343_75)
+        #expect(JogMarkerAngle.degrees(pitchBend: 0) == 0)
+        #expect(JogMarkerAngle.degrees(pitchBend: 4096) == 90)
+        #expect(JogMarkerAngle.degrees(pitchBend: 8192) == 180)
+        #expect(JogMarkerAngle.degrees(pitchBend: 12288) == 270)
+        #expect(JogMarkerAngle.degrees(pitchBend: 16383) == 359.978_027_343_75)
     }
 }

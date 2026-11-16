@@ -102,7 +102,7 @@ public struct RedrawLimiter<Value: Sendable>: Sendable {
 }
 
 /// Where the simulator draws the marker (#221), from the pitch bend the Coordinator sends to the display (#165).
-public enum JogMarker {
+public enum JogMarkerAngle {
     /// The hand's angle in degrees, clockwise from 12 o'clock: pitchBend / 16384 of a turn (0…16383). A quarter turn
     /// is one beat, from 0 on beat 1. PROVISIONAL: the #165 hardware spike confirms where the unit puts zero and which
     /// way it turns; flip it here, the one place the simulator reads it.
