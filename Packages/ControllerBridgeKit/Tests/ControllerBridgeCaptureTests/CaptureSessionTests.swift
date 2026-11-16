@@ -1,4 +1,5 @@
 import ControllerBridgeCapture
+import Foundation
 import Testing
 
 /// A capture session (#185): it walks the prompt list, credits each message to the current step, and moves on when
@@ -75,5 +76,18 @@ struct CaptureSessionTests {
             LEDAnswer(sent: [0x90, 0x01, 0x30], lit: true, color: "red"),
             LEDAnswer(sent: [0x90, 0x01, 0x00], lit: false),
         ])
+    }
+
+    @Test("Nothing in the file identifies the owner: no clock time, no fields beyond the format's, and the note only if typed")
+    func privacy() throws {
+        var session = Self.session()
+        session.receive([0x90, 0x01, 0x7F], at: 1_731_700_000.000)
+        session.receive([0x80, 0x01, 0x00], at: 1_731_700_000.120)
+        session.confirm()
+        let data = try session.file.encoded()
+        let json = String(decoding: data, as: UTF8.self)
+        #expect(!json.contains("17317"))
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(Set(object.keys) == ["format", "app_version", "device", "ports", "prompts", "noise", "steps"])
     }
 }
