@@ -60,6 +60,13 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # Settings' "All networks" feedback listener, for Syndicate on another Mac (#19).
         NSLocalNetworkUsageDescription: DeckBridge listens for OSC feedback from Syndicate running on another Mac on your network.
+        # The capture file (#188): JSON, saved through the save panel or attached to the owner's own email.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.ericdahl.deckbridge.capture
+            UTTypeDescription: DeckBridge controller capture
+            UTTypeConformsTo: [public.json]
+            UTTypeTagSpecification:
+              public.filename-extension: [deckbridge-capture]
     settings:
       base:
         # The display name is DeckBridge (#29), set in Info.plist; the bundle id is final and stays as it is.
