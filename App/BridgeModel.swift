@@ -65,7 +65,7 @@ final class BridgeModel {
     /// The Diagnostics window opened or closed: only while it's open does the engine build anything for it.
     func setDiagnostics(open: Bool) { producer?.diagnostics(open: open) }
     func startLEDSweep(delay: Double) { producer?.ledSweep(delay: delay) }
-    func cancelLEDSweep() { producer?.cancelLEDSweep() }
+    func stopLEDSweep() { producer?.stopLEDSweep() }
 
     func quit(_ done: @escaping @MainActor () -> Void) {
         guard let producer, let engine else { return done() }

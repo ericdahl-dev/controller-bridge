@@ -34,7 +34,7 @@ struct ControllerBridgeApp: App {
         Window("Diagnostics", id: "diagnostics") {
             DiagnosticsWindow(
                 log: model.diagnostics, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
-                startSweep: model.startLEDSweep(delay:), stopSweep: model.cancelLEDSweep
+                startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep
             )
         }
         .defaultSize(width: 720, height: 480)

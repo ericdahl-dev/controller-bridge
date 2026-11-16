@@ -343,7 +343,7 @@ public final class Coordinator {
     public var isSweeping: Bool { sweep != nil }
 
     /// Stops the sweep part-way. Its remaining steps are dropped, and the LEDs repaint.
-    public func cancelLEDSweep() {
+    public func stopLEDSweep() {
         guard sweep != nil else { return }
         sweep = nil
         diagnostics?(.sweep("LED sweep stopped."))

@@ -181,7 +181,7 @@ struct EngineTests {
 
         pipe.producer.diagnostics(open: true)
         pipe.producer.ledSweep(delay: 0.6)
-        pipe.producer.cancelLEDSweep()
+        pipe.producer.stopLEDSweep()
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log, onDiagnostic: { seen.append($0) }).run(pipe.events)
 

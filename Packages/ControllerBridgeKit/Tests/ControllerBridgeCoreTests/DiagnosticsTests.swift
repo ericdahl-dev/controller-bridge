@@ -186,7 +186,7 @@ struct DiagnosticsTests {
         Self.tick(rig, at: 101.3)
         _ = Self.takeSent(rig)
 
-        rig.coordinator.cancelLEDSweep()
+        rig.coordinator.stopLEDSweep()
         #expect(events.sweep.last == "LED sweep stopped.")
         #expect(rig.leds[1] == 127)
         #expect(rig.leds[32] == 0)

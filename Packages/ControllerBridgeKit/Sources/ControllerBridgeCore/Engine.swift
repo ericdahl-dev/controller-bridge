@@ -46,7 +46,7 @@ public struct Engine {
             case .diagnostics(let open):
                 if open, let sink = onDiagnostic { coordinator.diagnostics = { sink($0) } } else { coordinator.diagnostics = nil }
             case .ledSweep(let delay): coordinator.startLEDSweep(delay: delay)
-            case .cancelLEDSweep: coordinator.cancelLEDSweep()
+            case .stopLEDSweep: coordinator.stopLEDSweep()
             case .setDeck(let deck, let controller): coordinator.setDeck(deck, controller: controller)
             case .setDevices(let input, let output, let controller):
                 coordinator.setDevices(input: input, output: output, controller: controller)
