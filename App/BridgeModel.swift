@@ -65,9 +65,12 @@ final class BridgeModel {
     /// The running profile's deck layers (#79): empty for a controller without them.
     private(set) var layers: [Mapping.Layer] = []
     private(set) var settings: BridgeSettings?
-    /// The profiles that ship with the app, and the ones running (with any import applied, #24).
-    private var bundledProfiles: [ControllerProfile] = []
-    private(set) var profiles: [ControllerProfile] = []
+    /// The profiles that ship with the app, and the ones running with any import applied (#24). The decisions are
+    /// in ControllerBridgeCore's MappingLibrary (#94); this keeps the file.
+    private var library: MappingLibrary?
+    var profiles: [ControllerProfile] { library?.profiles ?? [] }
+    /// What Settings says after the last good import: that Settings owns Deck, Channel and OSC (#93).
+    var lastImportNote: String? { library?.importNote }
 
     init() {
         // Line-buffered stdout, so the smoke script sees the log even when it stops the app.
@@ -201,12 +204,12 @@ final class BridgeModel {
             return
         }
         // A saved import (#24) applies at launch; one that no longer passes the check is set aside, and says why.
-        let (profiles, importProblems) = MappingStore.profiles(bundled: bundled)
-        bundledProfiles = bundled
-        self.profiles = profiles
-        status.mappingInUse = MappingStore.hasImport && importProblems.isEmpty ? "Imported: \(profiles[0].name)" : "Bundled default"
-        if !importProblems.isEmpty {
-            log.log("The saved mapping import was ignored: " + importProblems.joined(separator: "; "))
+        let library = MappingLibrary(bundled: bundled, saved: MappingStore.saved)
+        self.library = library
+        let profiles = library.profiles
+        status.mappingInUse = library.inUse
+        if !library.launchProblems.isEmpty {
+            log.log("The saved mapping import was ignored: " + library.launchProblems.joined(separator: "; "))
         }
         let mapping = profiles[0].mapping
         layers = mapping.midi.layers
@@ -264,27 +267,16 @@ final class BridgeModel {
     func importMapping(from url: URL) -> [String] {
         let data: Data
         do { data = try Data(contentsOf: url) } catch { return ["Couldn't read \(url.lastPathComponent): \(error.localizedDescription)"] }
-        guard let active = profiles.first else { return ["The bridge didn't start, so there is no mapping to change."] }
-        let imported: ControllerProfile
-        do {
-            imported = try ControllerProfile.importing(data, bundled: bundledProfiles, active: active.id)
-        } catch MappingError.invalid(let problems) {
-            return problems
-        } catch {
-            return ["\(error)"]
-        }
+        guard var next = library else { return ["The bridge didn't start, so there is no mapping to change."] }
+        let problems = next.importFile(data, named: url.lastPathComponent)
+        guard problems.isEmpty else { return problems }
+        // Saved before it runs, so what runs is what comes back at the next launch.
         do { try MappingStore.save(data) } catch { return ["Couldn't save the mapping: \(error.localizedDescription)"] }
-        profiles = MappingStore.replacing(imported, in: bundledProfiles)
-        status.mappingInUse = "Imported: \(imported.name)"
-        producer?.setProfiles(profiles)
-        lastImportNote = ControllerProfile.importNote(
-            file: url.lastPathComponent, settingsOwned: ControllerProfile.settingsOwnedKeys(in: data)
-        )
+        library = next
+        status.mappingInUse = next.inUse
+        producer?.setProfiles(next.profiles)
         return []
     }
-
-    /// What Settings says after the last good import: that Settings owns Deck, Channel and OSC (#93).
-    private(set) var lastImportNote: String?
 
     /// Writes the running profile, whole, so it can be edited and imported again.
     func exportMapping(to url: URL) throws {
@@ -292,12 +284,16 @@ final class BridgeModel {
         try active.exported().write(to: url, options: .atomic)
     }
 
-    /// Back to the bundled profiles; the saved import is deleted.
-    func resetMapping() {
-        MappingStore.remove()
-        profiles = bundledProfiles
-        status.mappingInUse = "Bundled default"
-        producer?.setProfiles(bundledProfiles)
+    /// Back to the bundled profiles; the saved import is deleted. Returns a problem if it couldn't be, and then
+    /// nothing changes, so the import doesn't quietly come back at the next launch.
+    func resetMapping() -> String? {
+        guard var next = library else { return nil }
+        do { try MappingStore.remove() } catch { return "Couldn't remove the imported mapping: \(error.localizedDescription)" }
+        next.reset()
+        library = next
+        status.mappingInUse = next.inUse
+        producer?.setProfiles(next.profiles)
+        return nil
     }
 }
 

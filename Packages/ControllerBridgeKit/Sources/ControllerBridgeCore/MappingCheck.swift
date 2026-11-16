@@ -11,8 +11,9 @@ extension Mapping {
         }
     }
 
-    static func problems(in document: OrderedJSON) -> [String] {
-        guard let schema = try? OrderedJSON(parsing: defaultJSON()) else { return ["The default mapping can't be read."] }
+    /// `schema` is the body of the profile being changed (#94); by default the bundled LC6000's.
+    static func problems(in document: OrderedJSON, schema given: OrderedJSON? = nil) -> [String] {
+        guard let schema = given ?? (try? OrderedJSON(parsing: defaultJSON())) else { return ["The default mapping can't be read."] }
         if let problem = kindProblem(document, expected: schema) { return ["mapping: \(problem)"] }
         var out: [String] = []
         walk(document, schema: schema, path: "", into: &out)

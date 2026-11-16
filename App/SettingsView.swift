@@ -102,7 +102,11 @@ struct SettingsView: View {
                 HStack(spacing: Theme.Space.s) {
                     Button("Import…") { importMapping() }.buttonStyle(FlatButtonStyle())
                     Button("Export…") { exportMapping() }.buttonStyle(FlatButtonStyle())
-                    Button("Reset") { model.resetMapping(); mappingProblems = []; mappingNote = "Back to the bundled mapping." }
+                    Button("Reset") {
+                        let problem = model.resetMapping()
+                        mappingProblems = problem.map { [$0] } ?? []
+                        mappingNote = problem == nil ? "Back to the bundled mapping." : nil
+                    }
                         .buttonStyle(FlatButtonStyle())
                         .help("Go back to the bundled mapping")
                 }
