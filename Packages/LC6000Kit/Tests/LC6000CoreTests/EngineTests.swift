@@ -51,4 +51,21 @@ struct EngineTests {
         #expect(rig.log.lines.filter { $0.hasPrefix("Dropped a feedback datagram") }.count == 1)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])])
     }
+
+    @Test("A tick from the pipe reaches the Coordinator: the jog nudge is released after the wheel stops")
+    func tickFromThePipeReachesTheCoordinator() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 55, value: 0x7E), source: Rig.lc6000.id)
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(-1)]))
+        rig.clock.now = 0.2
+        let pipe = EventPipe()
+
+        pipe.producer.tick()
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+
+        #expect(rig.osc.sent.last == OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]))
+    }
 }

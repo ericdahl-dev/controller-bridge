@@ -21,9 +21,7 @@ public struct Engine {
                 } catch {
                     log.log("Dropped a feedback datagram (\(datagram.count) bytes): \(error)")
                 }
-            case .tick:
-                // TODO: call coordinator.tick() once it lands with the jog release (#17, agent1 owns it).
-                break
+            case .tick: coordinator.tick()
             }
         }
     }
