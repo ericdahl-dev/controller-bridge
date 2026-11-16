@@ -196,6 +196,11 @@ extension Mapping {
         // The pads' own MIDI channel (#224), for the deck and for each deck layer.
         "pads.channel": .number(0, isInteger: true),
         "midi.layers[].pad_channel": .number(0, isInteger: true),
+        // Each pad mode's own notes (#225).
+        "pads.mode_notes": .object([
+            ("hotcue", .array([.number(0, isInteger: true)])), ("roll", .array([.number(0, isInteger: true)])),
+            ("loop", .array([.number(0, isInteger: true)])), ("slicer", .array([.number(0, isInteger: true)])),
+        ]),
     ]
 
     /// An optional key's expected kind by its path, a list element's index written as `[]`.

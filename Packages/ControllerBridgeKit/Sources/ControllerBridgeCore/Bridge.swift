@@ -210,13 +210,13 @@ final class Bridge {
         if padChannel != channel {
             switch event {
             case .noteOn(padChannel, let note, let velocity):
-                if let pad = mapping.notes.pads.firstIndex(of: Int(note)) { handlePad(pad, pressed: velocity > 0) }
+                _ = padNote(Int(note), pressed: velocity > 0)
                 return
             case .noteOff(padChannel, let note, _):
-                if let pad = mapping.notes.pads.firstIndex(of: Int(note)) { handlePad(pad, pressed: false) }
+                _ = padNote(Int(note), pressed: false)
                 return
             case .noteOn(channel, let note, _), .noteOff(channel, let note, _):
-                if mapping.notes.pads.contains(Int(note)) { return }
+                if pad(for: Int(note)) != nil { return }
             default:
                 break
             }
@@ -234,7 +234,7 @@ final class Bridge {
     }
 
     private func handleNote(_ note: Int, pressed: Bool) {
-        if let pad = mapping.notes.pads.firstIndex(of: note) { return handlePad(pad, pressed: pressed) }
+        if padNote(note, pressed: pressed) { return }
         if note == mapping.needle.touchNote {
             needleTouched = pressed
             return

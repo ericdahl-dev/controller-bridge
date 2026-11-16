@@ -44,6 +44,29 @@ extension Bridge {
         }
     }
 
+    /// The pad a note plays, and on a profile with notes per mode (#225) the mode that note belongs to.
+    func pad(for note: Int) -> (index: Int, mode: PadMode?)? {
+        guard let modeNotes = mapping.pads.modeNotes else {
+            return mapping.notes.pads.firstIndex(of: note).map { ($0, nil) }
+        }
+        let lists: [(PadMode, [Int])] = [(.hotCue, modeNotes.hotcue), (.roll, modeNotes.roll), (.loop, modeNotes.loop),
+                                         (.slicer, modeNotes.slicer)]
+        for (mode, notes) in lists { if let index = notes.firstIndex(of: note) { return (index, mode) } }
+        return nil
+    }
+
+    /// A pad note in. A note from another mode's list (#225) switches to that mode first, letting held pads go, as
+    /// a mode button does.
+    func padNote(_ note: Int, pressed: Bool) -> Bool {
+        guard let (index, mode) = pad(for: note) else { return false }
+        if let mode, mode != padMode, pressed {
+            releasePads()
+            padMode = mode
+        }
+        handlePad(index, pressed: pressed)
+        return true
+    }
+
     /// Releases every held pad, and nothing else.
     func releasePads() {
         for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
