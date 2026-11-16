@@ -17,10 +17,26 @@ extension Bridge {
             invert: mapping.pitch.invert, deadZone: mapping.pitch.deadZone
         )
         let rounded = (t * 100_000).rounded() / 100_000
+        guard pickedUp(at: rounded) else { return }
         guard rounded != lastTempo else { return }
         lastTempo = rounded
         sendDeck("TempoSlider", .float(Float(rounded)))
         refreshLEDs()
+    }
+
+    // MARK: Pickup
+
+    func rearmPickup() {
+        pickupArmed = true
+    }
+
+    /// Whether the fader at `position` drives the tempo. While armed it doesn't, until it comes within tolerance of
+    /// the reported value. With no report yet there is nothing to meet, so the fader passes through.
+    private func pickedUp(at position: Double) -> Bool {
+        guard pickupArmed, let reported = reportedTempo else { return true }
+        guard abs(position - reported) <= 0.02 else { return false }
+        pickupArmed = false
+        return true
     }
 
     // MARK: Needle Drop

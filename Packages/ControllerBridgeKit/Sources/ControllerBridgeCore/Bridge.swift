@@ -83,6 +83,9 @@ final class Bridge {
     var pitchLSBValue: UInt8 = 0
     /// The last TempoSlider value sent, so a repeat isn't resent.
     var lastTempo: Double?
+    /// Pitch pickup (#22): while armed, the fader is ignored until it meets Syndicate's reported TempoSlider.
+    var pickupArmed = false
+    var reportedTempo: Double?
     /// The direction of the PhaseBend being held (1 or -1), or 0 when none is.
     var bendDirection = 0
     var lastJogTime = 0.0
@@ -134,6 +137,7 @@ final class Bridge {
 
     func start() {
         send("Feedback/Resend", .int(1))
+        rearmPickup()
         ledCache.removeAll()
         refreshLEDs()
     }
@@ -186,8 +190,12 @@ final class Bridge {
             playing = value
             if !playing, bendDirection != 0 { endBend() }
         case "playpending": playPending = value
+        case "temposlider":
+            reportedTempo = message.arguments.first?.number
+            return
         case "loaded":
             loaded = value
+            if loaded { rearmPickup() }
             if !loaded {
                 // The track is gone: forget its cues, where it was and how long it was.
                 cues = [Int](repeating: 0, count: 8)
