@@ -1,5 +1,5 @@
 #!/bin/sh
-# Checks what App Store Connect refuses a Mac build for, before any upload: version and build numbers, the export
+# Checks what App Store Connect refuses a Mac build for, before any upload: the bundle id and display name, version and build numbers, the export
 # compliance and category keys, no Dock icon, the privacy manifest, the app icon, and the sandbox entitlements.
 # Ported from ShowRecorder's preflight, Mac only.
 #   scripts/preflight.sh path/to/ControllerBridge.xcarchive   (or path/to/ControllerBridge.app)
@@ -21,6 +21,15 @@ echo "== Checking $app"
 plist="$app/Contents/Info.plist"
 resources="$app/Contents/Resources"
 read_key() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist" 2>/dev/null || true; }
+
+# The App Store Connect record is for this bundle id; the release workflow passes the same one as BUNDLE_ID.
+expected_id="${BUNDLE_ID:-dev.ericdahl.ControllerBridge}"
+bundle_id=$(read_key CFBundleIdentifier)
+[ "$bundle_id" = "$expected_id" ] && ok "bundle id $bundle_id" || bad "CFBundleIdentifier is '$bundle_id', not $expected_id"
+
+# The name people see (DeckBridge, #29); the product and the .app stay ControllerBridge.
+display_name=$(read_key CFBundleDisplayName)
+case "$display_name" in ''|*'$('*) bad "CFBundleDisplayName is '$display_name'" ;; *) ok "display name $display_name" ;; esac
 
 version=$(read_key CFBundleShortVersionString)
 build=$(read_key CFBundleVersion)

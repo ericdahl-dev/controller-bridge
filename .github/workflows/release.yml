@@ -30,13 +30,29 @@ jobs:
       BUNDLE_ID: dev.ericdahl.ControllerBridge
       PROFILE_NAME: ControllerBridge CI Mac App Store
       PROFILE_TYPE: MAC_APP_STORE
-      HAS_SECRETS: ${{ secrets.ASC_KEY_P8 != '' && secrets.DIST_CERT_P12_BASE64 != '' && secrets.MAC_INSTALLER_CERT_P12_BASE64 != '' }}
     steps:
+      # All eight, by name only (never a value), so a missing one stops here instead of failing later in signing.
       - name: Check the secrets
-        if: env.HAS_SECRETS != 'true'
+        env:
+          HAS_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID != '' }}
+          HAS_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID != '' }}
+          HAS_ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 != '' }}
+          HAS_DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM != '' }}
+          HAS_DIST_CERT_P12_BASE64: ${{ secrets.DIST_CERT_P12_BASE64 != '' }}
+          HAS_DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD != '' }}
+          HAS_MAC_INSTALLER_CERT_P12_BASE64: ${{ secrets.MAC_INSTALLER_CERT_P12_BASE64 != '' }}
+          HAS_MAC_INSTALLER_CERT_PASSWORD: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD != '' }}
         run: |
-          echo "::error::Missing release secrets: ASC_KEY_P8, DIST_CERT_P12_BASE64 and MAC_INSTALLER_CERT_P12_BASE64 (and their passwords) must be set (see docs/DEVELOPING.md)."
-          exit 1
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 DEVELOPMENT_TEAM DIST_CERT_P12_BASE64 DIST_CERT_PASSWORD \
+            MAC_INSTALLER_CERT_P12_BASE64 MAC_INSTALLER_CERT_PASSWORD; do
+            flag="HAS_$name"
+            [ "${!flag}" = true ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing release secrets:$missing. Add them, or give this repository access to the org secrets (see docs/DEVELOPING.md)."
+            exit 1
+          fi
 
       - uses: actions/checkout@v4
         with:

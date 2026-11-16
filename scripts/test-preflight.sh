@@ -23,6 +23,7 @@ make_app() {
     -c "Add :ITSAppUsesNonExemptEncryption bool false" \
     -c "Add :LSApplicationCategoryType string public.app-category.music" \
     -c "Add :LSUIElement bool true" \
+    -c "Add :CFBundleDisplayName string DeckBridge" \
     -c "Add :CFBundleIconName string AppIcon" "$plist" >/dev/null
   cp App/PrivacyInfo.xcprivacy "$app/Contents/Resources/PrivacyInfo.xcprivacy"
   echo icon > "$app/Contents/Resources/Assets.car"
@@ -63,7 +64,11 @@ app=$(make_app build); /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 12.1-dir
 sign "$app" "$work/build.entitlements"
 expect_fail "a build number that isn't numbers fails" "$app" "CFBundleVersion"
 
-for key in ITSAppUsesNonExemptEncryption LSApplicationCategoryType LSUIElement; do
+app=$(make_app bundleid); /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier dev.ericdahl.DeckBridge' "$app/Contents/Info.plist"
+sign "$app" "$work/bundleid.entitlements"
+expect_fail "a bundle id App Store Connect doesn't know fails" "$app" "CFBundleIdentifier"
+
+for key in ITSAppUsesNonExemptEncryption LSApplicationCategoryType LSUIElement CFBundleDisplayName; do
   app=$(make_app "$key"); /usr/libexec/PlistBuddy -c "Delete :$key" "$app/Contents/Info.plist"
   sign "$app" "$work/$key.entitlements"
   expect_fail "a missing $key fails" "$app" "$key"
