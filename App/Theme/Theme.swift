@@ -162,7 +162,7 @@ struct StatusLightView: View {
             HStack(spacing: 5) {
                 Circle().fill(Color(tone: light.tone)).frame(width: 7, height: 7)
                 // A word never breaks mid-word; the panel lays lights out in a grid instead.
-                Text(light.word).font(Theme.ui(12, .bold)).foregroundStyle(Color(tone: light.tone))
+                Text(light.word).textCase(.uppercase).font(Theme.ui(12, .bold)).foregroundStyle(Color(tone: light.tone))
                     .lineLimit(1).fixedSize()
             }
         }
@@ -200,10 +200,10 @@ struct StatusLineView: View {
             if index > 0 { line = line + separator }
             if let label = part.label {
                 line = line + Text(keep(label.uppercased()) + "\u{00A0}").foregroundStyle(Theme.caption)
-                    + Text(keep("● " + part.word)).foregroundStyle(Color(tone: part.tone))
+                    + Text(keep("● " + part.word.uppercased())).foregroundStyle(Color(tone: part.tone))
             } else {
                 // DECK reads as a caption; MASTER keeps its orange.
-                line = line + Text(keep(part.word)).foregroundStyle(part.tone == .idle ? Theme.caption : Color(tone: part.tone))
+                line = line + Text(keep(part.word.uppercased())).foregroundStyle(part.tone == .idle ? Theme.caption : Color(tone: part.tone))
             }
         }
         return line

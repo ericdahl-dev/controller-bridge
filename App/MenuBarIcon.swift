@@ -21,8 +21,4 @@ enum MenuBarIcon {
         image.isTemplate = true
         return image
     }
-
-    static func accessibilityLabel(_ presentation: StatusPresentation) -> String {
-        presentation.lights.map { "\($0.label) \($0.word)" }.joined(separator: ", ")
-    }
 }

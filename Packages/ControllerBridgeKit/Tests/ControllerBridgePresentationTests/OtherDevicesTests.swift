@@ -17,7 +17,7 @@ struct OtherDevicesTests {
     @Test("With no controller connected, the first unmatched device is the orange NO PROFILE row; the rest stay gray")
     func firstIsHighlightedWithoutAController() {
         let devices = OtherDevices(unmatched: ["DDJ-FLX4", "IAC Bus 1"], controllerConnected: false)
-        #expect(devices.highlighted == StatusLight(label: "DDJ-FLX4", word: "NO PROFILE", tone: .attention))
+        #expect(devices.highlighted == StatusLight(label: "DDJ-FLX4", word: "No profile", tone: .attention))
         #expect(devices.summary == "Other MIDI devices (1)")
         #expect(devices.rows == ["IAC Bus 1 · no profile"])
     }

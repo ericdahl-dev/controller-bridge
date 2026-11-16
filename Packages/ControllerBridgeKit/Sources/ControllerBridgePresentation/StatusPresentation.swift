@@ -140,19 +140,40 @@ public struct StatusLight: Equatable, Sendable {
         case error
     }
 
+    /// Which light this is, so views and the spoken text never match on display words (#171).
+    public enum Kind: Equatable, Sendable {
+        case controller, feedback, bridge, demo, tempo
+        /// A MIDI device, named as the system names it.
+        case device
+
+        init?(ownLabel label: String) {
+            switch label {
+            case "Controller": self = .controller
+            case "Feedback": self = .feedback
+            case "Bridge": self = .bridge
+            case "Demo": self = .demo
+            case "Tempo": self = .tempo
+            default: return nil
+            }
+        }
+    }
+
     public var label: String
     public var word: String
     public var tone: Tone
+    public var kind: Kind
 
-    public init(label: String, word: String, tone: Tone) {
+    /// Without a kind, the bridge's own labels name theirs, and anything else is a device.
+    public init(label: String, word: String, tone: Tone, kind: Kind? = nil) {
         self.label = label
         self.word = word
         self.tone = tone
+        self.kind = kind ?? Kind(ownLabel: label) ?? .device
     }
 
     /// A MIDI source that no controller profile matches (#43): listed, not bridged.
     public init(unmatchedDevice name: String) {
-        self.init(label: name, word: "NO PROFILE", tone: .attention)
+        self.init(label: name, word: "No profile", tone: .attention)
     }
 }
 
@@ -277,20 +298,20 @@ public struct StatusPresentation: Equatable, Sendable {
         header = blocks[0].header
         showsDemoToggle = !state.stopped
         let feedback: StatusLight = switch state.feedback {
-        case .starting: StatusLight(label: "FEEDBACK", word: "STARTING", tone: .idle)
-        case .live: StatusLight(label: "FEEDBACK", word: "LIVE", tone: .live)
-        case .noDeckData: StatusLight(label: "FEEDBACK", word: "NO DECK DATA", tone: .attention)
-        case .waiting: StatusLight(label: "FEEDBACK", word: "WAITING", tone: .idle)
-        case .stopped: StatusLight(label: "FEEDBACK", word: "DROPPED", tone: .attention)
-        case .portInUse(let port): StatusLight(label: "FEEDBACK", word: "PORT \(port) IN USE", tone: .error)
-        case .failed: StatusLight(label: "FEEDBACK", word: "FAILED", tone: .error)
+        case .starting: StatusLight(label: "Feedback", word: "Starting", tone: .idle)
+        case .live: StatusLight(label: "Feedback", word: "Live", tone: .live)
+        case .noDeckData: StatusLight(label: "Feedback", word: "No deck data", tone: .attention)
+        case .waiting: StatusLight(label: "Feedback", word: "Waiting", tone: .idle)
+        case .stopped: StatusLight(label: "Feedback", word: "Dropped", tone: .attention)
+        case .portInUse(let port): StatusLight(label: "Feedback", word: "Port \(port) in use", tone: .error)
+        case .failed: StatusLight(label: "Feedback", word: "Failed", tone: .error)
         }
         // A bridge that couldn't start has nothing starting or connecting: the BRIDGE light alone tells the truth (#66).
-        lights = state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)]
+        lights = state.stopped ? [StatusLight(label: "Bridge", word: "Stopped", tone: .error)]
             // Orange and first, and it keeps the icon on attention: DEMO must never be mistaken for real hardware.
-            : (state.demo ? [StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention)] : []) + [controller, feedback]
+            : (state.demo ? [StatusLight(label: "Demo", word: "Controller", tone: .attention)] : []) + [controller, feedback]
         // Stopped, nothing runs: no MASTER either (#88).
-        master = state.master && !state.stopped ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
+        master = state.master && !state.stopped ? StatusLight(label: "Tempo", word: "Master", tone: .attention) : nil
         // The status bar: each light, then the deck, then MASTER, cut to whole parts that fit (#66).
         // With several controllers, the line's controller part is the worst of them, counted, and the decks rank
         // with it, ahead of FEEDBACK, which the lights above still show (#89).
@@ -301,9 +322,9 @@ public struct StatusPresentation: Equatable, Sendable {
             return (part, Self.priority(of: light, controller: controller))
         }
             + [several
-                ? (StatusLinePart(label: nil, word: "DECKS " + blocks.map { "\($0.deck)" }.joined(separator: " "), tone: .idle), 1)
-                : (StatusLinePart(label: nil, word: "DECK [\(blocks[0].deck)]", tone: .idle), 4)]
-            + (master != nil ? [(StatusLinePart(label: nil, word: "MASTER", tone: .attention), 3)] : [])
+                ? (StatusLinePart(label: nil, word: "Decks " + blocks.map { "\($0.deck)" }.joined(separator: " "), tone: .idle), 1)
+                : (StatusLinePart(label: nil, word: "Deck [\(blocks[0].deck)]", tone: .idle), 4)]
+            + (master != nil ? [(StatusLinePart(label: nil, word: "Master", tone: .attention), 3)] : [])
         lineParts = Self.fit(parts, budget: lineBudget)
         line = lineParts.map(\.text).joined(separator: Self.separator)
         // Every controller counts: an unplugged second one needs a look too.
@@ -329,17 +350,23 @@ public struct StatusPresentation: Equatable, Sendable {
         let severity: [StatusLight.Tone] = [.error, .attention, .idle, .live]
         let worst = lights.min { severity.firstIndex(of: $0.tone)! < severity.firstIndex(of: $1.tone)! }!
         let count = lights.filter { $0.word == worst.word }.count
-        return StatusLinePart(label: "CONTROLLERS", word: "\(count) \(worst.word)", tone: worst.tone)
+        return StatusLinePart(label: "Controllers", word: "\(count) \(Self.midSentence(worst.word))", tone: worst.tone)
+    }
+
+    /// A word after a count, as in "2 connected": its first letter lowercased, unless it starts an acronym ("1 MIDI error").
+    static func midSentence(_ word: String) -> String {
+        let first = word.prefix { $0 != " " }
+        return first.count > 1 && first == first.uppercased() ? word : word.prefix(1).lowercased() + word.dropFirst()
     }
 
     /// The label is always CONTROLLER, so the lights don't shift sideways; the name is in the header (#66).
     static func light(for controller: BridgeState.Controller) -> StatusLight {
         switch controller {
-        case .connected: StatusLight(label: "CONTROLLER", word: "CONNECTED", tone: .live)
-        case .unplugged: StatusLight(label: "CONTROLLER", word: "UNPLUGGED", tone: .attention)
-        case .notConnected: StatusLight(label: "CONTROLLER", word: "NOT CONNECTED", tone: .idle)
-        case .failed: StatusLight(label: "CONTROLLER", word: "MIDI ERROR", tone: .attention)
-        case .waiting: StatusLight(label: "CONTROLLER", word: "WAITING", tone: .idle)
+        case .connected: StatusLight(label: "Controller", word: "Connected", tone: .live)
+        case .unplugged: StatusLight(label: "Controller", word: "Unplugged", tone: .attention)
+        case .notConnected: StatusLight(label: "Controller", word: "Not connected", tone: .idle)
+        case .failed: StatusLight(label: "Controller", word: "MIDI error", tone: .attention)
+        case .waiting: StatusLight(label: "Controller", word: "Waiting", tone: .idle)
         }
     }
 
@@ -354,7 +381,7 @@ public struct StatusPresentation: Equatable, Sendable {
 
     /// Lower keeps longer: DEMO and error lights, then the controller, feedback, MASTER, and DECK last.
     private static func priority(of light: StatusLight, controller: StatusLight) -> Int {
-        if light.tone == .error || light.label == "DEMO" { return 0 }
+        if light.tone == .error || light.kind == .demo { return 0 }
         return light == controller ? 1 : 2
     }
 

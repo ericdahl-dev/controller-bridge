@@ -3,6 +3,8 @@ public struct ThemePalette: Equatable, Sendable {
     // Surfaces, darkest first in the dark theme.
     public var background: RGB
     public var panel: RGB
+    /// A grouped card on the window, as the site's cards (#171).
+    public var surface: RGB
     public var button: RGB
     public var buttonRaised: RGB
     public var hairline: RGB
@@ -35,6 +37,7 @@ public enum Palette {
     public static let dark = ThemePalette(
         background: RGB(hex: 0x171717),   // --ground
         panel: RGB(hex: 0x1B1B1B),        // --window
+        surface: RGB(hex: 0x20201F),      // the site's --p-surface (#171)
         button: RGB(hex: 0x1E1E1E),       // --key
         buttonRaised: RGB(hex: 0x2A2A2A), // --hl
         hairline: RGB(hex: 0x2E2E2E),     // --rule
@@ -54,6 +57,7 @@ public enum Palette {
     public static let light = ThemePalette(
         background: RGB(hex: 0xE6E6E4),   // --ground
         panel: RGB(hex: 0xDCDCDA),        // --window
+        surface: RGB(hex: 0xE6E6E4),      // the ground's tone, lighter than the window (#171)
         button: RGB(hex: 0xD6D6D4),       // --key
         buttonRaised: RGB(hex: 0xCFCFCD), // --hl
         hairline: RGB(hex: 0xC7C7C5),     // --rule

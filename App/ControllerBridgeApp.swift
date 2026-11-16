@@ -65,7 +65,7 @@ struct MenuBarLabel: View {
     var body: some View {
         let presentation = status.presentation
         Image(nsImage: MenuBarIcon.image(presentation.icon))
-            .accessibilityLabel(MenuBarIcon.accessibilityLabel(presentation))
+            .accessibilityLabel(presentation.iconAccessibilityLabel)
             .task { SetupGuideWindow.openIfNew(openWindow) }
     }
 }

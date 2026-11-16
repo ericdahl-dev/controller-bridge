@@ -67,7 +67,7 @@ struct SetupGuideView: View {
     }
 
     private var feedbackLive: Bool {
-        presentation.lights.contains { $0.label == "FEEDBACK" && $0.word == "LIVE" }
+        presentation.lights.contains { $0.kind == .feedback && $0.tone == .live }
     }
 }
 
