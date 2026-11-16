@@ -98,4 +98,24 @@ struct MultiControllerTests {
         #expect(Self.leds(rig, Rig.lc6000Out, channel: 1)[1] == 127)
         #expect(Self.leds(rig, Rig.lc6000Out, channel: 0)[1] == 1)
     }
+
+    @Test("Automatic with two entries: each takes its own unit; with one unit, the second waits for another")
+    func automaticDoesNotDoubleClaim() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.setControllers([
+            ControllerSettings(deck: 1, input: nil, output: nil),
+            ControllerSettings(deck: 2, input: nil, output: nil),
+        ])
+        #expect(rig.midi.connected == [Rig.lc6000.id])
+        #expect(rig.coordinator.status.controllers.map(\.connected) == [true, false])
+
+        rig.midi.sources.append(Self.unitB)
+        rig.midi.destinations.append(Self.unitBOut)
+        rig.coordinator.devicesChanged()
+        #expect(rig.midi.connected == [Rig.lc6000.id, Self.unitB.id])
+        rig.osc.sent.removeAll()
+        Self.press(rig, 1, from: Self.unitB)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
+    }
 }

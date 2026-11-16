@@ -121,8 +121,11 @@ public final class Coordinator {
         if let chosen = controllers[index].chosenInput {
             source = sources.first { $0.id == chosen }
         } else {
-            let known = controllers[index].knownSourceID.flatMap { id in sources.first { $0.id == id } }
-            source = known ?? sources.first { ControllerProfile.matching($0.name, in: profiles) != nil }
+            // Automatic: a unit another controller already has stays with it.
+            let claimed = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].source?.id })
+            let free = sources.filter { !claimed.contains($0.id) }
+            let known = controllers[index].knownSourceID.flatMap { id in free.first { $0.id == id } }
+            source = known ?? free.first { ControllerProfile.matching($0.name, in: profiles) != nil }
         }
         guard let source else { return false }
         // A device picked in Settings runs even if no profile names it: then it keeps the current profile.
@@ -146,7 +149,9 @@ public final class Coordinator {
         status.controllers[index].profile = profile.name
         let destinations = midiSystem.destinations
         let chosenOutput = controllers[index].chosenOutput.flatMap { id in destinations.first { $0.id == id } }
-        if let destination = chosenOutput ?? Self.match(destinations, bridge.mapping.midi.output) {
+        let taken = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].destination?.id })
+        let freeDestinations = controllers[index].chosenInput == nil ? destinations.filter { !taken.contains($0.id) } : destinations
+        if let destination = chosenOutput ?? Self.match(freeDestinations, bridge.mapping.midi.output) {
             do {
                 bridge.output = try midiSystem.openOutput(destination: destination)
                 controllers[index].destination = destination
