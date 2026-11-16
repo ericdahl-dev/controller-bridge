@@ -222,4 +222,21 @@ struct DiagnosticsTests {
         let notes = (midi.outputs[Rig.lc6000Out.id]?.sent ?? []).compactMap { if case let .noteOn(_, note, _) = $0 { note } else { nil } }
         #expect(notes == [50, 51, 52, 53, 54, 55, 56, 57, 60])
     }
+
+    @Test("A monitor line splits into its message and mapping label, which join back to the same text; UNMAPPED is flagged")
+    func monitorLineParts() {
+        let unmapped = DiagnosticEvent.midiIn(.noteOn(channel: 0, note: 99, velocity: 127), label: "UNMAPPED", at: 1.5)
+        let parts = unmapped.lineParts
+        #expect(parts.message + parts.label == unmapped.text)
+        #expect(parts.label == "UNMAPPED")
+        #expect(parts.isUnmapped)
+
+        let play = DiagnosticEvent.midiIn(.noteOn(channel: 0, note: 1, velocity: 127), label: "play", at: 2)
+        #expect(play.lineParts.label == "play")
+        #expect(!play.lineParts.isUnmapped)
+
+        let osc = DiagnosticEvent.oscOut(OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)]))
+        #expect(osc.lineParts.message == osc.text)
+        #expect(osc.lineParts.label == "")
+    }
 }

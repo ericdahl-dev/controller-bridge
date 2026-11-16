@@ -28,6 +28,25 @@ public enum DiagnosticEvent: Equatable, Sendable {
     }
 }
 
+extension DiagnosticEvent {
+    /// The line in two parts, so the window can color the mapping label: `message + label == text`.
+    public struct LineParts: Equatable, Sendable {
+        public var message: String
+        /// The mapping name or "UNMAPPED" for a monitor line; empty for every other line.
+        public var label: String
+        public var isUnmapped: Bool { label == DiagnosticEvent.unmapped }
+    }
+
+    /// The monitor's label for a message the mapping doesn't name.
+    public static let unmapped = "UNMAPPED"
+
+    public var lineParts: LineParts {
+        let line = text
+        guard case .midiIn(_, let label, _) = self, line.hasSuffix(label) else { return LineParts(message: line, label: "") }
+        return LineParts(message: String(line.dropLast(label.count)), label: label)
+    }
+}
+
 extension MIDIEvent {
     var channel: UInt8 {
         switch self {
@@ -53,7 +72,7 @@ extension Mapping {
         case .noteOn(_, let note, _), .noteOff(_, let note, _):
             let note = Int(note)
             if let pad = notes.pads.firstIndex(of: note) { return "pad\(pad + 1)" }
-            return notes.buttons.first { $0.value == note }?.key ?? "UNMAPPED"
+            return notes.buttons.first { $0.value == note }?.key ?? DiagnosticEvent.unmapped
         case .controlChange(_, let controller, _):
             let cc = Int(controller)
             if jog.ccs.contains(cc) { return "jog" }
@@ -61,7 +80,7 @@ extension Mapping {
                 (pitch.msbCC, "pitch_msb"), (pitch.lsbCC, "pitch_lsb"), (needle.cc, "needle"),
                 (browse.selectTurnCC, "select_turn"), (browse.autoLoopSizeCC, "auto_loop_size"),
             ]
-            return named.first { $0.0 == cc }?.1 ?? "UNMAPPED"
+            return named.first { $0.0 == cc }?.1 ?? DiagnosticEvent.unmapped
         }
     }
 }
