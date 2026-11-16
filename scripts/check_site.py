@@ -87,6 +87,12 @@ class Page(HTMLParser):
 
 
 CSS_REFS = re.compile(r"""url\(\s*['"]?([^'")\s]+)['"]?\s*\)|@import\s+['"]([^'"]+)['"]""")
+CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+
+def css_refs(css):
+    """The url() and @import references a stylesheet makes, leaving out what sits in its comments."""
+    return [a or b for a, b in CSS_REFS.findall(CSS_COMMENT.sub("", css))]
 
 
 def resolves(root, file, url):
@@ -176,7 +182,7 @@ def problems(root):
         elif file.endswith(".css"):
             with open(path, encoding="utf-8") as f:
                 css = f.read()
-            out += check_refs(root, file, [(a or b, True) for a, b in CSS_REFS.findall(css)])
+            out += check_refs(root, file, [(url, True) for url in css_refs(css)])
     if "llms.txt" in files:
         with open(os.path.join(root, "llms.txt"), encoding="utf-8") as f:
             if f.readline().rstrip() != LLMS_HEADING:

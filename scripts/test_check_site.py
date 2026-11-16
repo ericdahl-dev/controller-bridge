@@ -65,6 +65,10 @@ class CheckSiteTests(unittest.TestCase):
         root = self.site({"style.css": '@font-face { src: url("fonts/Missing.ttf"); }'})
         self.assertEqual(check_site.problems(root), ["style.css: link to fonts/Missing.ttf doesn't resolve"])
 
+    def test_a_css_url_in_a_comment_is_not_a_reference(self):
+        root = self.site({"style.css": '/* set --photo to url(...) or url(https://x.example/a.png) */ body { color: #fff; }'})
+        self.assertEqual(check_site.problems(root), [])
+
     def test_external_resources_fail_but_external_links_dont(self):
         root = self.site({
             "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">',
