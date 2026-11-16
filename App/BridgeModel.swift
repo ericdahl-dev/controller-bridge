@@ -61,6 +61,8 @@ final class BridgeModel {
     let status = BridgeStatus()
     /// What the Diagnostics window shows (#26).
     let diagnostics = DiagnosticsLog()
+    /// What Diagnostics › Jog display shows (#221).
+    let jogSimulator = JogSimulatorLog()
     private var listener: FeedbackListener?
     private var ticker: Ticker?
     private var midi: CoreMIDISystem?
@@ -265,6 +267,7 @@ final class BridgeModel {
         let pipe = EventPipe()
         let status = status
         let diagnostics = diagnostics
+        let jogSimulator = jogSimulator
 
         do {
             midi = try CoreMIDISystem(producer: pipe.producer) { names in
@@ -303,7 +306,7 @@ final class BridgeModel {
         engine = Task.detached(name: "Bridge engine") {
             await BridgeHost.run(
                 profiles: profiles, midi: midi, osc: osc, log: log, status: status, diagnostics: diagnostics,
-                controllers: running, ledsEnabled: settings.ledsEnabled, jogDisplay: jogDisplay, events: pipe.events
+                jogSimulator: jogSimulator, controllers: running, ledsEnabled: settings.ledsEnabled, jogDisplay: jogDisplay, events: pipe.events
             )
         }
         // The saved deck colors (#123), queued behind the Coordinator's start.
