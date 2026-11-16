@@ -6,8 +6,9 @@ import Testing
 /// The first-run guide's steps, in Syndicate's own setting names (#27). Generic: the controller is named by its profile.
 @Suite("Setup guide")
 struct SetupGuideTests {
-    /// Core's one list (#211), as the app passes it.
-    static let subscriptions = Subscription.allCases.map(\.syndicateName)
+    /// Core's one list (#211), as the app passes it: the LC6000's eight, with the jog display off (BarRamp joins only
+    /// while it's on, #165).
+    static let subscriptions = Subscription.always.map(\.syndicateName)
 
     @Test("Four steps in Syndicate's words: OSC input, feedback destination, subscriptions, and the controller's MIDI input off")
     func steps() {
