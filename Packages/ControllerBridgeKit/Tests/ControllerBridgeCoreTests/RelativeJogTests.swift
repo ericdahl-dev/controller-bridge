@@ -162,3 +162,47 @@ struct RelativeJogCoordinatorTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)])])
     }
 }
+
+/// The import check and the profile decoder (#204), in plain words.
+@Suite("Relative jog in the import check")
+struct RelativeJogImportTests {
+    static func importing(_ json: String) throws -> ControllerProfile {
+        try ControllerProfile.importing(Data(json.utf8), bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+    }
+
+    @Test("relative_cc is a CC, 0-127")
+    func range() {
+        #expect(throws: MappingError.invalid(["mapping.jog.relative_cc: 200 is out of range, expected 0-127"])) {
+            try Self.importing(#"{"mapping": {"jog": {"relative_cc": 200}}}"#)
+        }
+    }
+
+    @Test("relative_cc can't be a CC another control already uses")
+    func duplicate() {
+        #expect(throws: MappingError.invalid(["mapping.jog.relative_cc: CC 6 is also browse.select_turn_cc"])) {
+            try Self.importing(#"{"mapping": {"jog": {"relative_cc": 6}}}"#)
+        }
+    }
+
+    @Test("A jog with neither a 14-bit pair nor relative_cc says what it needs; half a pair names the missing one")
+    func needsAPairOrRelative() {
+        let decode = { (json: String) in try JSONDecoder().decode(Mapping.Jog.self, from: Data(json.utf8)) }
+        let rest = #""counts_per_rev": 720, "bend_release_ms": 80, "seek_seconds_per_rev": 2, "beats_per_rev": 4, "require_touch": false"#
+        #expect(throws: Mapping.JogError.needsPairOrRelative) { try decode("{ \(rest) }") }
+        #expect(throws: Mapping.JogError.missing("lsb_cc")) { try decode(#"{ "msb_cc": 17, "# + rest + "}") }
+        #expect(Mapping.JogError.needsPairOrRelative.description == "jog: needs msb_cc and lsb_cc, or relative_cc")
+        #expect(Mapping.JogError.missing("lsb_cc").description == "jog: lsb_cc is missing (or set relative_cc for a relative jog)")
+    }
+
+    @Test("A whole profile body whose jog has half a pair fails the check with those words, not a decoding dump")
+    func wholeBodyHalfPair() throws {
+        var body = try #require(try JSONSerialization.jsonObject(with: Mapping.defaultMappingJSON()) as? [String: Any])
+        var jog = try #require(body["jog"] as? [String: Any])
+        jog["msb_cc"] = nil
+        body["jog"] = jog
+        let json = try JSONSerialization.data(withJSONObject: body)
+        #expect(throws: MappingError.invalid(["jog: msb_cc is missing (or set relative_cc for a relative jog)"])) {
+            try Mapping.checked(json)
+        }
+    }
+}

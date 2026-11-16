@@ -42,12 +42,14 @@ extension Mapping {
 
     /// The document without unknown keys or values of the wrong kind, already reported, so they can't also show
     /// up as duplicates.
-    private static func known(_ value: OrderedJSON, schema: OrderedJSON) -> OrderedJSON {
+    private static func known(_ value: OrderedJSON, schema: OrderedJSON, path: String = "") -> OrderedJSON {
         switch (value, schema) {
         case let (.object(pairs), .object):
             return .object(pairs.compactMap { pair in
-                guard let expected = schema[pair.key], kindProblem(pair.value, expected: expected) == nil else { return nil }
-                return (pair.key, known(pair.value, schema: expected))
+                let childPath = path.isEmpty ? pair.key : "\(path).\(pair.key)"
+                guard let expected = schema[pair.key] ?? optionalKeys[childPath],
+                      kindProblem(pair.value, expected: expected) == nil else { return nil }
+                return (pair.key, known(pair.value, schema: expected, path: childPath))
             })
         case let (.array(items), .array(schemaItems)):
             guard let element = schemaItems.first else { return value }
@@ -81,7 +83,7 @@ extension Mapping {
             if pattern.hasPrefix("notes.") || pattern == "needle.touch_note" {
                 notes.append((path, n))
             } else if ["jog.msb_cc", "jog.lsb_cc", "pitch.msb_cc", "pitch.lsb_cc", "needle.msb_cc", "needle.lsb_cc", "browse.select_turn_cc",
-                       "browse.auto_loop_size_cc"].contains(pattern) {
+                       "browse.auto_loop_size_cc", "jog.relative_cc", "jog.relative_edge_cc"].contains(pattern) {
                 ccs.append((path, n))
             }
         }
@@ -202,7 +204,7 @@ extension Mapping {
             "midi.layers[].deck": 1...4,
             "midi.layer_note": 0...127,
             "notes.pads[]": 0...127,
-            "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127,
+            "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127, "jog.relative_cc": 0...127, "jog.relative_edge_cc": 0...127,
             "pitch.msb_cc": 0...127, "pitch.lsb_cc": 0...127,
             "needle.msb_cc": 0...127, "needle.lsb_cc": 0...127, "needle.touch_note": 0...127,
             "midi.ignore_notes[]": 0...127,

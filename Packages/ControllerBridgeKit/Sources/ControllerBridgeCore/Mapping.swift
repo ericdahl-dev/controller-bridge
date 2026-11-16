@@ -163,6 +163,27 @@ public struct Mapping: Equatable, Sendable, Codable {
             case requireTouch = "require_touch"
         }
 
+        /// A jog needs its 14-bit pair or a relative CC; either is enough (#204).
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            msbCC = try c.decodeIfPresent(Int.self, forKey: .msbCC)
+            lsbCC = try c.decodeIfPresent(Int.self, forKey: .lsbCC)
+            relativeCC = try c.decodeIfPresent(Int.self, forKey: .relativeCC)
+            relativeEdgeCC = try c.decodeIfPresent(Int.self, forKey: .relativeEdgeCC)
+            countsPerRev = try c.decode(Int.self, forKey: .countsPerRev)
+            bendReleaseMs = try c.decode(Int.self, forKey: .bendReleaseMs)
+            seekSecondsPerRev = try c.decode(Double.self, forKey: .seekSecondsPerRev)
+            beatsPerRev = try c.decode(Double.self, forKey: .beatsPerRev)
+            requireTouch = try c.decode(Bool.self, forKey: .requireTouch)
+            guard relativeCC == nil else { return }
+            switch (msbCC, lsbCC) {
+            case (nil, nil): throw JogError.needsPairOrRelative
+            case (nil, _): throw JogError.missing("msb_cc")
+            case (_, nil): throw JogError.missing("lsb_cc")
+            default: break
+            }
+        }
+
         public init(
             msbCC: Int?, lsbCC: Int?, countsPerRev: Int, bendReleaseMs: Int, seekSecondsPerRev: Double, beatsPerRev: Double,
             requireTouch: Bool, relativeCC: Int? = nil, relativeEdgeCC: Int? = nil
@@ -176,6 +197,19 @@ public struct Mapping: Equatable, Sendable, Codable {
             self.seekSecondsPerRev = seekSecondsPerRev
             self.beatsPerRev = beatsPerRev
             self.requireTouch = requireTouch
+        }
+    }
+
+    /// A jog that can't tell how the platter reports movement (#204), in plain words.
+    public enum JogError: Error, Equatable, CustomStringConvertible {
+        case needsPairOrRelative
+        case missing(String)
+
+        public var description: String {
+            switch self {
+            case .needsPairOrRelative: "jog: needs msb_cc and lsb_cc, or relative_cc"
+            case .missing(let key): "jog: \(key) is missing (or set relative_cc for a relative jog)"
+            }
         }
     }
 
@@ -371,6 +405,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         guard problems.isEmpty else { throw MappingError.invalid(problems) }
         do {
             return try JSONDecoder().decode(Mapping.self, from: json)
+        } catch let error as JogError {
+            throw MappingError.invalid([error.description])
         } catch let error as DecodingError {
             // The check runs first, so this shouldn't happen; if it does, the DJ still gets words, not a dump (#92).
             throw MappingError.invalid([Self.describe(error)])
