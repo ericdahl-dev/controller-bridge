@@ -1,4 +1,5 @@
 import ControllerBridgePresentation
+import Foundation
 import Testing
 
 /// The jog display simulator's words (#221), apart from the SwiftUI and the renderer.
@@ -13,5 +14,17 @@ struct JogSimulatorTests {
         #expect(JogDeckSummary(deck: 2, title: nil, key: nil, bpm: nil, beat: nil).spoken == "Deck 2, no track loaded")
         #expect(JogDeckSummary(deck: 4, title: "", key: "C", bpm: 0, beat: 1).spoken == "Deck 4, no track loaded",
                 "an empty title is an empty deck, as Syndicate sends it")
+    }
+
+    @Test("Each preview's readout: the slot, the size, when it was uploaded and the unit's answer; or why there's none")
+    func readout() {
+        let utc = TimeZone(identifier: "UTC")!
+        let noon = Date(timeIntervalSince1970: 1_763_294_671)  // 2025-11-16 12:04:31 UTC
+        #expect(JogUploadStatus.uploaded(slot: 2, bytes: 14_812, at: noon, accepted: true).readout(timeZone: utc)
+            == "Slot 2 · 14,812 bytes · 12:04:31 · Accepted")
+        #expect(JogUploadStatus.uploaded(slot: 1, bytes: 980, at: noon, accepted: false).readout(timeZone: utc)
+            == "Slot 1 · 980 bytes · 12:04:31 · Refused")
+        #expect(JogUploadStatus.notUploaded.readout(timeZone: utc) == "Nothing uploaded yet")
+        #expect(JogUploadStatus.notConnected.readout(timeZone: utc) == "No LC6000 connected: preview only")
     }
 }
