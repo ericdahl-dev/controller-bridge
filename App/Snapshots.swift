@@ -2,6 +2,7 @@
 // Renders the panel in a few states to PNGs, for PR screenshots: `ControllerBridge --render-snapshots <name>`.
 // The app is sandboxed, so the PNGs go to <container tmp>/<name>; the path is printed. Compiled out of Release.
 import AppKit
+import ControllerBridgeCapture
 import ControllerBridgeCore
 import ControllerBridgePresentation
 import SwiftUI
@@ -190,6 +191,7 @@ enum Snapshots {
         let stopped = BridgeModel(preview: nil)
         stopped.status.problem = "Couldn't start CoreMIDI"
         writeAppKit(SettingsView(model: stopped), to: "\(directory)/settings-stopped.png")
+        captureSnapshots(directory)
         // The Diagnostics window (#26), with lines as the Kit formats them.
         let log = DiagnosticsLog()
         let monitor: [MIDIEvent] = [
@@ -283,13 +285,13 @@ enum Snapshots {
     }
 
     /// Renders through a hosting view's display cache, which draws AppKit-backed controls (pickers, text fields).
-    private static func writeAppKit(_ view: some View, to path: String) {
+    private static func writeAppKit(_ view: some View, to path: String, width: CGFloat = 440) {
         let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme))
         host.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         // Lay out tall first, so the fitting height is the whole form, then shrink to it.
-        host.frame = NSRect(x: 0, y: 0, width: 440, height: 2000)
+        host.frame = NSRect(x: 0, y: 0, width: width, height: 2000)
         host.layoutSubtreeIfNeeded()
-        host.frame = NSRect(origin: .zero, size: NSSize(width: 440, height: host.fittingSize.height))
+        host.frame = NSRect(origin: .zero, size: NSSize(width: width, height: host.fittingSize.height))
         host.layoutSubtreeIfNeeded()
         guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { print("Couldn't render \(path)"); return }
         host.cacheDisplay(in: host.bounds, to: rep)
@@ -306,6 +308,46 @@ enum Snapshots {
             print("Couldn't render \(path)"); return
         }
         do { try png.write(to: URL(fileURLWithPath: path)); print("Wrote \(path)") } catch { print("Couldn't write \(path): \(error)") }
+    }
+
+    // MARK: The capture window (#186), its states on the demo controller's traffic
+
+    private static func captureSnapshots(_ directory: String) {
+        let lc6000 = MIDIEndpoint(id: 1001, name: "LC6000 PRIME")
+        let choices = [
+            CaptureController.Choice(name: lc6000.name, endpoint: lc6000),
+            CaptureController.Choice(name: "LC6000 PRIME WD", endpoint: MIDIEndpoint(id: 1002, name: "LC6000 PRIME WD")),
+            CaptureController.Choice(name: DemoCapture.deviceName, endpoint: nil),
+        ]
+        let shots: [(String, CaptureController)] = [
+            ("ports", CaptureController(flow: CaptureFlow(appVersion: "1.2.0"), now: 0, choices: choices, picked: choices[0])),
+            ("idle", CaptureController(flow: captureFlow(at: "idle", fed: false), now: 2.2)),
+            ("waiting", CaptureController(flow: captureFlow(at: "deck1.play", fed: false), now: 1e6)),
+            ("jog", CaptureController(flow: captureFlow(at: "deck1.jog.touch", fed: true), now: 1e6)),
+            ("shift", CaptureController(flow: captureFlow(at: "deck1.play.shift", fed: true), now: 1e6)),
+            ("done", CaptureController(flow: captureFlow(at: nil, fed: true), now: 1e6)),
+        ]
+        for (name, controller) in shots {
+            writeAppKit(CaptureView(controller: controller), to: "\(directory)/capture-\(name).png", width: 480)
+        }
+    }
+
+    /// The standard list on demo traffic, a step every 10 s from 0, stopped at the prompt `id` (fed its take or not),
+    /// or walked to the end when `id` is nil.
+    private static func captureFlow(at id: String?, fed: Bool) -> CaptureFlow {
+        var flow = CaptureFlow(appVersion: "1.2.0")
+        flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: 0)
+        var now = 0.0
+        while let prompt = flow.prompt {
+            let stop = prompt.id == id
+            if !stop || fed {
+                for message in DemoCapture.take(for: prompt) { flow.receive(message.bytes, at: now + 1 + message.time) }
+            }
+            if stop { break }
+            now += 10
+            flow.next(at: now)
+        }
+        return flow
     }
 }
 
