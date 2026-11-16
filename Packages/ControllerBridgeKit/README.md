@@ -27,6 +27,11 @@ up macOS's local-network prompt.
 Two keys are new, with no Python counterpart: `leds.beat_pulse` (`"off"`, `"beat"` or `"downbeat"`, default `"off"`)
 pulses the platter ring on Syndicate's master clock, and `leds.pulse_ms` (default 100) is how long each pulse stays lit.
 
+Feedback liveness (#21) adds three more: `osc.feedback_quiet_ms` (default 10000) is how long the bridge waits with no
+feedback before asking Syndicate to resend, `osc.feedback_answer_ms` (default 2000) is how long that request may go
+unanswered before feedback counts as stopped, and `leds.stale_idle` (`"dim"` or `"off"`, default `"dim"`) is what
+Syndicate's LEDs show then.
+
 JSON has no comments, so the PROVISIONAL notes from the TOML file live here. Check these on hardware before relying on
 them:
 
