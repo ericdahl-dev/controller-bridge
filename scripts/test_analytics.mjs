@@ -9,7 +9,13 @@ const SOURCE = readFileSync(new URL("../website/analytics.js", import.meta.url),
 
 // Runs analytics.js on a fake page. Returns the window (posthog's queue is window.posthog._i), the scripts the
 // loader inserted, and the click listener it added.
-function load({ hostname = "getdeckbridge.app", search = "", pathname = "/" } = {}) {
+function load({ hostname = "getdeckbridge.app", search = "", pathname = "/", stored = null } = {}) {
+  const store = new Map(stored === null ? [] : [["deckbridge_internal", stored]]);
+  const localStorage = {
+    getItem: (k) => store.get(k) ?? null,
+    setItem: (k, v) => void store.set(k, String(v)),
+    removeItem: (k) => void store.delete(k),
+  };
   const inserted = [];
   let listener = null;
   const document = {
@@ -17,12 +23,14 @@ function load({ hostname = "getdeckbridge.app", search = "", pathname = "/" } = 
     getElementsByTagName: () => [{ parentNode: { insertBefore: (el) => inserted.push(el) } }],
     addEventListener: (_type, handler) => { listener = handler; },
   };
-  const window = { location: { hostname, search, pathname }, document, URLSearchParams };
+  const window = { location: { hostname, search, pathname }, document, localStorage, URLSearchParams };
   window.window = window;
   vm.createContext(window);
   vm.runInContext(SOURCE, window);
-  return { window, inserted, listener };
+  return { window, inserted, listener, stored: store.get("deckbridge_internal") ?? null };
 }
+
+const loaded = (run) => run.inserted.length === 1 && run.window.posthog !== undefined;
 
 test("starts PostHog with the public project key and ShowRecorder's cookieless options", () => {
   const { window, inserted } = load();
@@ -47,4 +55,42 @@ test("starts PostHog with the public project key and ShowRecorder's cookieless o
     capture_performance: false,
     capture_exceptions: false,
   });
+});
+
+test("loads for ordinary visitors on getdeckbridge.app and stores nothing", () => {
+  const run = load();
+  assert.equal(loaded(run), true);
+  assert.equal(run.stored, null);
+});
+
+test("never loads anywhere but getdeckbridge.app: the preview server, the gate's headless Chrome, a copy", () => {
+  for (const hostname of ["127.0.0.1", "localhost", "www.getdeckbridge.app", "getdeckbridge.app.example.com"]) {
+    const run = load({ hostname });
+    assert.equal(run.inserted.length, 0, hostname);
+    assert.equal(run.window.posthog, undefined, hostname);
+  }
+});
+
+test("?internal=1 marks the owner's browser and PostHog never loads there again", () => {
+  assert.deepEqual([loaded(load({ search: "?internal=1" })), load({ search: "?internal=1" }).stored], [false, "1"]);
+  assert.equal(loaded(load({ stored: "1" })), false);
+});
+
+test("?internal=0 clears the mark", () => {
+  const run = load({ search: "?internal=0", stored: "1" });
+  assert.equal(loaded(run), true);
+  assert.equal(run.stored, null);
+});
+
+test("blocked storage still counts the visit", () => {
+  // a page whose localStorage throws, as in a private window with site data blocked
+  const inserted = [];
+  const document = { createElement: () => ({}), getElementsByTagName: () => [{ parentNode: { insertBefore: (el) => inserted.push(el) } }], addEventListener() {} };
+  const window = { location: { hostname: "getdeckbridge.app", search: "?internal=1", pathname: "/" }, document, URLSearchParams };
+  Object.defineProperty(window, "localStorage", { get() { throw new Error("SecurityError"); } });
+  window.window = window;
+  vm.createContext(window);
+  vm.runInContext(SOURCE, window);
+  assert.equal(inserted.length, 1);
+  assert.notEqual(window.posthog, undefined);
 });
