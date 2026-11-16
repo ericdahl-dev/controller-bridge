@@ -58,11 +58,39 @@ extension BridgeSettings {
         storage.set(data, forKey: Self.storageKey)
     }
 
+    /// Allowed, but worth a second look before playing.
+    public var warnings: [String] {
+        pairs.filter { $0.settings.deck == $1.settings.deck }.map { first, second in
+            "Controllers \(first.number) and \(second.number) both drive Deck \(first.settings.deck)"
+        }
+    }
+
+    /// Every pair of controller entries, numbered from 1 as Settings shows them.
+    private var pairs: [(ControllerEntry, ControllerEntry)] {
+        let entries = zip(1..., controllers).map { ControllerEntry(number: $0, settings: $1) }
+        return entries.indices.flatMap { i in entries.indices.filter { $0 > i }.map { (entries[i], entries[$0]) } }
+    }
+
+    private struct ControllerEntry {
+        var number: Int
+        var settings: ControllerSettings
+    }
+
     /// What's wrong, in Syndicate's words, so the DJ can fix it.
     public var problems: [String] {
         var out: [String] = []
         for controller in controllers where !(1...4).contains(controller.deck) {
             out.append("Deck \(controller.deck) is out of range, expected 1-4")
+        }
+        for (number, controller) in zip(1..., controllers) {
+            if let channel = controller.channel, !(1...16).contains(channel) {
+                out.append("Controller \(number): channel \(channel) is out of range, expected 1-16")
+            }
+        }
+        for (first, second) in pairs where first.settings.input != nil && first.settings.input?.id == second.settings.input?.id
+            && first.settings.channel == second.settings.channel {
+            let channel = first.settings.channel.map { "channel \($0)" } ?? "the same channel"
+            out.append("Controllers \(first.number) and \(second.number) both use \(first.settings.input!.name) on \(channel)")
         }
         if syndicateHost.trimmingCharacters(in: .whitespaces).isEmpty {
             out.append("The Syndicate host can't be empty")
@@ -95,11 +123,14 @@ public struct ControllerSettings: Codable, Equatable, Sendable {
     /// The chosen MIDI input and output. Nil is automatic: the first device a controller profile matches.
     public var input: MIDIEndpoint?
     public var output: MIDIEndpoint?
+    /// The MIDI channel, 1-16, to tell two controllers on one device apart (#25). Nil is the profile's channel.
+    public var channel: Int?
 
-    public init(deck: Int, input: MIDIEndpoint?, output: MIDIEndpoint?) {
+    public init(deck: Int, input: MIDIEndpoint?, output: MIDIEndpoint?, channel: Int? = nil) {
         self.deck = deck
         self.input = input
         self.output = output
+        self.channel = channel
     }
 }
 
