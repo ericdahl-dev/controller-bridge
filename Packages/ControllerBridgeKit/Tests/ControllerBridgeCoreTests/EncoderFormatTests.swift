@@ -41,3 +41,51 @@ struct EncoderFormatTests {
         #expect(try Mapping.bundledDefault().midi.encoderFormat == .twosComplement)
     }
 }
+
+/// The Coordinator seam (#193): a test-only profile whose knobs send offset 64, and the LC6000 as before. CC 6 is the
+/// select turn and CC 3 the auto loop size knob, from the bundled mapping.
+@Suite("Encoder format at the Coordinator")
+struct EncoderFormatCoordinatorTests {
+    static func rig(_ override: String?) throws -> (Coordinator, Rig.FakeOSC) {
+        let mapping = try override.map { try Mapping.bundledDefault(overriddenBy: Data($0.utf8)) } ?? Mapping.bundledDefault()
+        let osc = Rig.FakeOSC()
+        let coordinator = Coordinator(
+            mapping: mapping,
+            midi: Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out]),
+            osc: osc, clock: Rig.FakeClock(), log: Rig.FakeLog()
+        )
+        coordinator.start()
+        osc.sent.removeAll()
+        return (coordinator, osc)
+    }
+
+    static func turn(_ coordinator: Coordinator, cc: UInt8, _ value: UInt8) {
+        coordinator.midi(.controlChange(channel: 0, controller: cc, value: value), source: Rig.lc6000.id)
+    }
+
+    @Test("Offset 64: 0x42 browses down two, 0x3E up two, and 0x3F on the loop knob halves the loop")
+    func offset64() throws {
+        let (coordinator, osc) = try Self.rig(#"{ "midi": { "encoder_format": "offset_64" } }"#)
+        Self.turn(coordinator, cc: 6, 0x42)
+        Self.turn(coordinator, cc: 6, 0x3E)
+        Self.turn(coordinator, cc: 3, 0x3F)
+        #expect(osc.sent == [
+            OSCMessage("/Syndicate/Browser/Down", [.int(1)]), OSCMessage("/Syndicate/Browser/Down", [.int(1)]),
+            OSCMessage("/Syndicate/Browser/Up", [.int(1)]), OSCMessage("/Syndicate/Browser/Up", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/LoopIn", [.int(1)]),
+        ])
+    }
+
+    @Test("The LC6000 is unchanged: 0x02 browses down two, 0x7F up one, and 0x01 on the loop knob doubles the loop")
+    func lc6000() throws {
+        let (coordinator, osc) = try Self.rig(nil)
+        Self.turn(coordinator, cc: 6, 0x02)
+        Self.turn(coordinator, cc: 6, 0x7F)
+        Self.turn(coordinator, cc: 3, 0x01)
+        #expect(osc.sent == [
+            OSCMessage("/Syndicate/Browser/Down", [.int(1)]), OSCMessage("/Syndicate/Browser/Down", [.int(1)]),
+            OSCMessage("/Syndicate/Browser/Up", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/LoopOut", [.int(1)]),
+        ])
+    }
+}

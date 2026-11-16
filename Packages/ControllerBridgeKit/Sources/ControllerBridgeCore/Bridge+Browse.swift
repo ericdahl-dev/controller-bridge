@@ -25,7 +25,7 @@ extension Bridge {
 
     /// One browser step per tick.
     func selectTurn(_ value: UInt8) {
-        let ticks = relativeTicks(value)
+        let ticks = mapping.midi.encoderFormat.ticks(value)
         for _ in 0..<abs(ticks) { send(ticks > 0 ? "Browser/Down" : "Browser/Up", .int(1)) }
     }
 
@@ -45,7 +45,7 @@ extension Bridge {
 
     /// While looping, Syndicate's LoopOut doubles the loop and LoopIn halves it. One step per turn, however fast.
     func autoLoopSize(_ value: UInt8) {
-        let ticks = relativeTicks(value)
+        let ticks = mapping.midi.encoderFormat.ticks(value)
         if ticks != 0 { sendDeck(ticks > 0 ? "LoopOut" : "LoopIn", .int(1)) }
     }
 
