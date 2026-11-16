@@ -1,0 +1,193 @@
+import LC6000Core
+import Testing
+
+/// Expected OSC comes from the Python bridge and its tests: triggers fire only on a press, holds send 1 then 0.
+@Suite("Transport buttons")
+struct TransportTests {
+    static func started() throws -> Rig {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    static func press(_ rig: Rig, _ note: UInt8) {
+        rig.coordinator.midi(.noteOn(channel: 0, note: note, velocity: 127), source: Rig.lc6000.id)
+    }
+
+    static func release(_ rig: Rig, _ note: UInt8) {
+        rig.coordinator.midi(.noteOff(channel: 0, note: note, velocity: 0), source: Rig.lc6000.id)
+    }
+
+    @Test("Cue is a hold: press sends Cue 1, release sends Cue 0")
+    func cueHold() throws {
+        let rig = try Self.started()
+        Self.press(rig, 2)
+        Self.release(rig, 2)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/Cue", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)]),
+        ])
+    }
+
+    @Test("Censor is a reverse hold: press sends Reverse 1, release sends Reverse 0")
+    func censorHold() throws {
+        let rig = try Self.started()
+        Self.press(rig, 7)
+        Self.release(rig, 7)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(0)]),
+        ])
+    }
+
+    @Test("Sync and Master are triggers: TempoSync 1 and TempoMaster 1 on press, nothing on release")
+    func syncAndMaster() throws {
+        let rig = try Self.started()
+        Self.press(rig, 20)
+        Self.release(rig, 20)
+        Self.press(rig, 21)
+        Self.release(rig, 21)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/TempoSync", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/TempoMaster", [.int(1)]),
+        ])
+    }
+
+    @Test("Pitch − / + send PitchDown and PitchUp; with Shift held, both send PitchReset")
+    func pitchButtons() throws {
+        let rig = try Self.started()
+        Self.press(rig, 24)
+        Self.release(rig, 24)
+        Self.press(rig, 25)
+        Self.release(rig, 25)
+        Self.press(rig, 26)   // Shift down
+        Self.press(rig, 24)
+        Self.press(rig, 25)
+        Self.release(rig, 26) // Shift up
+        Self.press(rig, 25)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/PitchDown", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PitchReset", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PitchReset", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
+        ])
+    }
+
+    @Test("Key Lock toggles on each press: PitchPreserve 1, then 0, and its LED follows")
+    func keyLockToggles() throws {
+        let rig = try Self.started()
+        #expect(rig.leds[22] == 1)
+        Self.press(rig, 22)
+        Self.release(rig, 22)
+        #expect(rig.leds[22] == 127)
+        Self.press(rig, 22)
+        #expect(rig.leds[22] == 1)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/PitchPreserve", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PitchPreserve", [.int(0)]),
+        ])
+    }
+
+    @Test("Slip toggles on each press: CueSlip 1, then 0, and its LED follows")
+    func slipToggles() throws {
+        let rig = try Self.started()
+        #expect(rig.leds[23] == 1)
+        Self.press(rig, 23)
+        Self.release(rig, 23)
+        #expect(rig.leds[23] == 127)
+        Self.press(rig, 23)
+        #expect(rig.leds[23] == 1)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/CueSlip", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/CueSlip", [.int(0)]),
+        ])
+    }
+
+    @Test("The Shift LED is full while Shift is held and dim otherwise")
+    func shiftLED() throws {
+        let rig = try Self.started()
+        #expect(rig.leds[26] == 1)
+        Self.press(rig, 26)
+        #expect(rig.leds[26] == 127)
+        Self.release(rig, 26)
+        #expect(rig.leds[26] == 1)
+        #expect(rig.osc.sent == [])
+    }
+
+    static func feedback(_ rig: Rig, _ path: String, _ value: Int32) {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/" + path, [.int(value)]))
+    }
+
+    @Test("The Cue LED is lit while a track is loaded and not playing")
+    func cueLED() throws {
+        let rig = try Self.started()
+        #expect(rig.leds[2] == 1)
+        Self.feedback(rig, "Loaded", 1)
+        #expect(rig.leds[2] == 127)
+        Self.feedback(rig, "Playing", 1)
+        #expect(rig.leds[2] == 1)
+        Self.feedback(rig, "Playing", 0)
+        #expect(rig.leds[2] == 127)
+        Self.feedback(rig, "Loaded", 0)
+        #expect(rig.leds[2] == 1)
+    }
+
+    @Test("The Sync LED follows Sync; Master is lit only while synced with the tempo slider enabled")
+    func syncAndMasterLEDs() throws {
+        let rig = try Self.started()
+        #expect(rig.leds[20] == 1)
+        #expect(rig.leds[21] == 1)
+        Self.feedback(rig, "Sync", 1)
+        #expect(rig.leds[20] == 127)
+        #expect(rig.leds[21] == 127)
+        Self.feedback(rig, "TempoSliderEnabled", 0)
+        #expect(rig.leds[20] == 127)
+        #expect(rig.leds[21] == 1)
+        Self.feedback(rig, "TempoSliderEnabled", 1)
+        Self.feedback(rig, "Sync", 0)
+        #expect(rig.leds[20] == 1)
+        #expect(rig.leds[21] == 1)
+    }
+
+    @Test("Stop releases every held control exactly once, and a second stop sends nothing")
+    func stopReleasesHolds() throws {
+        let rig = try Self.started()
+        Self.press(rig, 2)   // Cue, held
+        Self.press(rig, 7)   // Censor, held
+        Self.press(rig, 1)   // Play, a trigger: nothing to release
+        rig.osc.sent.removeAll()
+
+        rig.coordinator.stop()
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/Cue", [.int(0)]),
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(0)]),
+        ])
+
+        rig.coordinator.stop()
+        Self.release(rig, 2)
+        Self.release(rig, 7)
+        #expect(rig.osc.sent.count == 2)
+    }
+
+    @Test("A released hold is not released again by stop")
+    func releasedHoldIsForgotten() throws {
+        let rig = try Self.started()
+        Self.press(rig, 2)
+        Self.release(rig, 2)
+        rig.osc.sent.removeAll()
+        rig.coordinator.stop()
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("Release-all clears Shift: its LED goes dim, and Pitch + afterwards sends PitchUp, not PitchReset")
+    func releaseAllClearsShift() throws {
+        let rig = try Self.started()
+        Self.press(rig, 26)
+        rig.coordinator.stop()
+        #expect(rig.leds[26] == 1)
+        Self.press(rig, 25)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)])])
+    }
+}
