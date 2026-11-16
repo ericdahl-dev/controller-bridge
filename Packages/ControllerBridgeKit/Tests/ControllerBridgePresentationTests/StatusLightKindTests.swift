@@ -19,6 +19,12 @@ struct StatusLightKindTests {
     func device() {
         #expect(StatusLight(unmatchedDevice: "DDJ-FLX4").kind == .device)
     }
+
+    @Test("A device named like one of the bridge's own lights is still a device: the kind never comes from the words")
+    func deviceNamedController() {
+        #expect(StatusLight(unmatchedDevice: "Controller").kind == .device)
+        #expect(StatusLight(unmatchedDevice: "Controller").spoken == "Controller: no profile")
+    }
 }
 
 @Suite("Status words in natural case")
