@@ -88,3 +88,51 @@ struct PadModeNotesLC6000Tests {
         #expect(rig.leds[100] == nil)
     }
 }
+
+/// The import check and decoder (#225), in plain words.
+@Suite("Pad mode notes in the import check")
+struct PadModeNotesImportTests {
+    static let eight = "[100, 101, 102, 103, 104, 105, 106, 107]"
+
+    static func importing(_ modeNotes: String) throws {
+        _ = try ControllerProfile.importing(Data(#"{"mapping": {"pads": {"mode_notes": \#(modeNotes)}}}"#.utf8),
+                                            bundled: try ControllerProfile.bundled(), active: "denon-lc6000-prime")
+    }
+
+    static func four(roll: String = eight) -> String {
+        #"{"hotcue": [32, 33, 34, 35, 36, 37, 38, 39], "roll": \#(roll), "loop": [108, 109, 110, 111, 112, 113, 114, 115], "slicer": [116, 117, 118, 119, 120, 121, 122, 123]}"#
+    }
+
+    @Test("An unknown mode is named")
+    func unknownMode() {
+        #expect(throws: MappingError.invalid(["mapping.pads.mode_notes.beatjump: unknown key"])) {
+            try Self.importing(#"{"beatjump": [40]}"#)
+        }
+    }
+
+    @Test("Each note is 0-127")
+    func noteRange() {
+        #expect(throws: MappingError.invalid(["mapping.pads.mode_notes.roll[0]: 200 is out of range, expected 0-127"])) {
+            try Self.importing(Self.four(roll: "[200, 101, 102, 103, 104, 105, 106, 107]"))
+        }
+    }
+
+    @Test("Each mode has one note per pad")
+    func countMatches() {
+        #expect(throws: MappingError.invalid(["pads.mode_notes.roll: 7 notes, but there are 8 pads (notes.pads)"])) {
+            try Self.importing(Self.four(roll: "[100, 101, 102, 103, 104, 105, 106]"))
+        }
+    }
+
+    @Test("Every mode is listed")
+    func missingMode() {
+        #expect(throws: MappingError.invalid(["pads.mode_notes: slicer is missing (list all four modes)"])) {
+            try Self.importing(#"{"hotcue": [32, 33, 34, 35, 36, 37, 38, 39], "roll": \#(Self.eight), "loop": [108, 109, 110, 111, 112, 113, 114, 115]}"#)
+        }
+    }
+
+    @Test("A good import with all four modes works")
+    func good() throws {
+        try Self.importing(Self.four())
+    }
+}

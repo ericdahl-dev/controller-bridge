@@ -35,6 +35,10 @@ public struct Mapping: Equatable, Sendable, Codable {
         notes = try c.decode(Notes.self, forKey: .notes)
         leds = try c.decode(LEDs.self, forKey: .leds)
         pads = try c.decodeIfPresent(Pads.self, forKey: .pads) ?? Pads()
+        // Notes per pad mode (#225): one note per pad in every mode.
+        for (name, notes) in pads.modeNotes?.named ?? [] where notes.count != self.notes.pads.count {
+            throw ShapeError("pads.mode_notes.\(name): \(notes.count) notes, but there are \(self.notes.pads.count) pads (notes.pads)")
+        }
     }
 
     /// The pads' Roll mode (#196): pad N plays `rollSizes[N - 1]`, by Syndicate's SlipLoop names. A pad past the list
@@ -65,6 +69,25 @@ public struct Mapping: Equatable, Sendable, Codable {
                 self.loop = loop
                 self.slicer = slicer
             }
+            enum CodingKeys: String, CodingKey, CaseIterable { case hotcue, roll, loop, slicer }
+
+            /// All four modes are listed; one left out is named.
+            public init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                func list(_ key: CodingKeys) throws -> [Int] {
+                    guard let notes = try c.decodeIfPresent([Int].self, forKey: key) else {
+                        throw ShapeError("pads.mode_notes: \(key.rawValue) is missing (list all four modes)")
+                    }
+                    return notes
+                }
+                hotcue = try list(.hotcue)
+                roll = try list(.roll)
+                loop = try list(.loop)
+                slicer = try list(.slicer)
+            }
+
+            /// Each mode's list with its name, in mode order.
+            var named: [(String, [Int])] { [("hotcue", hotcue), ("roll", roll), ("loop", loop), ("slicer", slicer)] }
         }
 
         public var modeNotes: ModeNotes?

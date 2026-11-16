@@ -216,6 +216,8 @@ extension Mapping {
             "midi.layers[].channel": 1...16,
             "midi.layers[].deck": 1...4,
             "midi.layers[].pad_channel": 1...16, "pads.channel": 1...16,
+            "pads.mode_notes.hotcue[]": 0...127, "pads.mode_notes.roll[]": 0...127,
+            "pads.mode_notes.loop[]": 0...127, "pads.mode_notes.slicer[]": 0...127,
             "midi.layer_note": 0...127,
             "notes.pads[]": 0...127,
             "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127, "jog.relative_cc": 0...127, "jog.relative_edge_cc": 0...127,
