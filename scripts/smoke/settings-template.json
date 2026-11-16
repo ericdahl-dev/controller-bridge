@@ -2,8 +2,7 @@
   "controllers": [
     {
       "deck": 1,
-      "input": { "id": __INPUT_ID__, "name": "LC6000 Smoke" },
-      "output": { "id": __OUTPUT_ID__, "name": "LC6000 Smoke" }
+      "input": { "id": __INPUT_ID__, "name": "Smoke LC6000 PRIME Controller" }
     }
   ],
   "syndicateHost": "127.0.0.1",
