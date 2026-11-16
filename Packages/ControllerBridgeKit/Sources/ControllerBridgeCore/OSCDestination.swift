@@ -109,7 +109,7 @@ public final class OSCDestination: OSCSender {
     }
 
     /// The resolver's answer, or nil if it fails or takes longer than the timeout. The lookup isn't awaited past the
-    /// timeout: a hung one is left behind, since a resolver may not stop when cancelled.
+    /// timeout: a hung one is left behind, since a resolver may not stop when canceled.
     private func lookUp(_ host: String) async -> String? {
         let resolver = self.resolver, timeout = lookupTimeout
         return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
