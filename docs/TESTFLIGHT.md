@@ -15,8 +15,8 @@ app's windows. Please try:
   the Syndicate tab, point at the Host field and say what's wrong.
 - A tall tab: add a second controller on the Controller tab. The tab should scroll, with Apply and Revert staying at
   the bottom.
-- Light and dark mode: switch Settings › General › Appearance between Match macOS, Light and Dark. Every window should
-  follow, and the text should stay easy to read.
+- Light and dark mode: in Settings › General, set Appearance to Light, then Dark, then Match macOS, clicking Apply
+  each time. Every window should follow, and the text should stay easy to read.
 - Your set as usual: transport, hot cues, jog, the pitch fader, and the LEDs on all four deck layers.
 
 Tell us about anything that looks wrong, reads badly, or behaves differently from 1.0.
