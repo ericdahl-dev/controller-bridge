@@ -125,10 +125,10 @@ public struct StatusPresentation: Equatable, Sendable {
         case .portInUse(let port): StatusLight(label: "FEEDBACK", word: "PORT \(port) IN USE", tone: .error)
         case .failed: StatusLight(label: "FEEDBACK", word: "FAILED", tone: .error)
         }
-        lights = (state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)] : [])
+        // A bridge that couldn't start has nothing starting or connecting: the BRIDGE light alone tells the truth (#66).
+        lights = state.stopped ? [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)]
             // Orange and first, and it keeps the icon on attention: DEMO must never be mistaken for real hardware.
-            + (state.demo ? [StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention)] : [])
-            + [controller, feedback]
+            : (state.demo ? [StatusLight(label: "DEMO", word: "CONTROLLER", tone: .attention)] : []) + [controller, feedback]
         master = state.master ? StatusLight(label: "TEMPO", word: "MASTER", tone: .attention) : nil
         // The status bar: each light, then the deck, then MASTER, cut to whole parts that fit (#66).
         let parts = lights.map { (StatusLinePart(label: $0.label, word: $0.word, tone: $0.tone), Self.priority(of: $0, controller: controller)) }

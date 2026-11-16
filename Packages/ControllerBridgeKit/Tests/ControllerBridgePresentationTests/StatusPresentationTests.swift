@@ -62,9 +62,8 @@ struct StatusPresentationTests {
 
     @Test("If the bridge couldn't start (no mapping, CoreMIDI or OSC sender), a red STOPPED light leads and the icon shows an error")
     func stoppedByAStartupProblem() {
-        // The full wording, with room for it all; the panel's budget is tested in lineFitsBudget.
-        let status = StatusPresentation(BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true), lineBudget: 100)
-        #expect(status.line == "BRIDGE ● STOPPED · CONTROLLER ● NOT CONNECTED · FEEDBACK ● STARTING · DECK [1]")
+        let status = StatusPresentation(BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true))
+        #expect(status.line == "BRIDGE ● STOPPED · DECK [1]")   // only the BRIDGE light (#66)
         #expect(status.lights.first == StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error))
         #expect(status.icon == .error)
     }
@@ -162,5 +161,15 @@ struct StatusPresentationTests {
             StatusLinePart(label: "FEEDBACK", word: "LIVE", tone: .live),
             StatusLinePart(label: nil, word: "MASTER", tone: .attention),
         ])
+    }
+
+    // #66: the panel design pass.
+
+    @Test("A stopped bridge shows only BRIDGE ● STOPPED: nothing is starting or connecting, so those lights would mislead")
+    func stoppedShowsOnlyBridge() {
+        let status = StatusPresentation(BridgeState(controller: .notConnected, feedback: .starting, deck: 1, stopped: true))
+        #expect(status.lights == [StatusLight(label: "BRIDGE", word: "STOPPED", tone: .error)])
+        #expect(status.line == "BRIDGE ● STOPPED · DECK [1]")
+        #expect(status.icon == .error)
     }
 }
