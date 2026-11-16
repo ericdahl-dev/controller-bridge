@@ -110,12 +110,20 @@ enum DemoScript {
         }
         // The jog, the platter position counting up 8 at a time as a slow forward turn does (#103): a nudge while
         // playing. The first position is only the starting point.
-        if case .absolute(let msb, let lsb) = mapping.jog.mode {
+        switch mapping.jog.mode {
+        case .absolute(let msb, let lsb):
             let (jogMSB, jogLSB) = (UInt8(clamping: msb), UInt8(clamping: lsb))
             for (index, position) in stride(from: 100, through: 140, by: 8).enumerated() {
                 let at = 3.0 + Double(index) * 0.05
                 steps.append(Step(at: at, event: .controlChange(channel: channel, controller: jogMSB, value: UInt8(position >> 7))))
                 steps.append(Step(at: at, event: .controlChange(channel: channel, controller: jogLSB, value: UInt8(position & 0x7F))))
+            }
+        case .relative(let cc, _):
+            // The same nudge as relative ticks (#204): 8 forward, four times, in the profile's encoder format.
+            let forward = mapping.midi.encoderFormat.value(forTicks: 8)
+            for index in 1...4 {
+                steps.append(Step(at: 3.0 + Double(index) * 0.05,
+                                  event: .controlChange(channel: channel, controller: UInt8(clamping: cc), value: forward)))
             }
         }
         steps += [

@@ -206,3 +206,32 @@ struct RelativeJogImportTests {
         }
     }
 }
+
+/// The demo on a relative-jog profile (#204): App Review sees the same nudge on any controller.
+@Suite("Relative jog in the demo")
+struct RelativeJogDemoTests {
+    @Test("On an offset-64 relative profile, the demo's jog still nudges: PhaseBend 1, then 0, by 3.5 s")
+    func demoNudges() throws {
+        var profile = try ControllerProfile.bundled()[0]
+        profile.mapping.midi.encoderFormat = .offset64
+        profile.mapping.jog.relativeCC = 33
+        let clock = Rig.FakeClock()
+        let session = DemoSession(profile: profile, clock: clock, log: Rig.FakeLog(), ledOutput: Rig.FakeOutput())
+        session.start()
+        while clock.now + 0.01 <= 3.5 + 1e-9 {
+            clock.now += 0.01
+            session.tick()
+        }
+        let bends = session.sentToSyndicate.filter { $0.address == "/Syndicate/Deck/1/PhaseBend" }
+        #expect(bends == [
+            OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)]),
+        ])
+    }
+
+    @Test("A tick count encodes back to each format's value: +8 is 0x08, 0x48, 0x08; -1 is 0x7F, 0x3F, 0x41")
+    func encode() {
+        #expect([EncoderFormat.twosComplement, .offset64, .signMagnitude].map { $0.value(forTicks: 8) } == [0x08, 0x48, 0x08])
+        #expect([EncoderFormat.twosComplement, .offset64, .signMagnitude].map { $0.value(forTicks: -1) } == [0x7F, 0x3F, 0x41])
+    }
+}
