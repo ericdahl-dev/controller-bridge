@@ -9,6 +9,10 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     let model: BridgeModel
+    #if DEBUG
+    /// Snapshots only: one pane, without the TabView, whose toolbar a hosting view can't draw (#171).
+    var snapshotTab: SettingsTab?
+    #endif
 
     @Environment(\.openWindow) private var openWindow
     @State private var draft: BridgeSettings?
@@ -28,63 +32,130 @@ struct SettingsView: View {
     @State private var loginProblem: String?
     @State private var mappingProblems: [String] = []
     @State private var mappingNote: String?
+    /// The tab on show (#171). The draft lives here, above the tabs, so switching tabs never loses an edit.
+    @State private var tab: SettingsTab = .controller
+    @FocusState private var focused: SettingsField?
+
+    #if DEBUG
+    /// Snapshots only: a refused Apply's field problems, shown without pressing Apply.
+    init(model: BridgeModel, snapshotTab: SettingsTab? = nil, problems: [SettingsProblem] = []) {
+        self.model = model
+        self.snapshotTab = snapshotTab
+        _fieldProblems = State(initialValue: problems)
+    }
+    #endif
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.l) {
-            if let binding = Binding($draft) {
-                form(binding)
-            } else {
-                emptyState
+        content
+            .foregroundStyle(Theme.text)
+            // Brings this window, not whichever window was open before, to the front (#62).
+            .background(FrontWindow())
+            .onAppear(perform: load)
+            .onChange(of: draft) { _, _ in saved = false }
+            // A deck picked in the panel while Settings is open: keep it, and keep the DJ's own edits (#90).
+            .onChange(of: model.settings) { _, new in
+                guard let new, let draft, let base, new != base else { return }
+                self.draft = BridgeSettings.rebased(draft: draft, base: base, onto: new)
+                self.base = new
             }
-        }
-        .padding(Theme.Space.xl)
-        .frame(width: 440, alignment: .leading)
-        .background(Theme.background)
-        .foregroundStyle(Theme.text)
-        // Brings this window, not whichever window was open before, to the front (#62).
-        .background(FrontWindow())
-        .onAppear(perform: load)
-        .onChange(of: draft) { _, _ in saved = false }
-        // A deck picked in the panel while Settings is open: keep it, and keep the DJ's own edits (#90).
-        .onChange(of: model.settings) { _, new in
-            guard let new, let draft, let base, new != base else { return }
-            self.draft = BridgeSettings.rebased(draft: draft, base: base, onto: new)
-            self.base = new
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let binding = Binding($draft) {
+            #if DEBUG
+            if let snapshotTab { page(snapshotTab, binding) } else { tabs(binding) }
+            #else
+            tabs(binding)
+            #endif
+        } else {
+            emptyState.padding(Theme.Step.x4).frame(width: 440, alignment: .leading).background(Theme.panel)
         }
     }
 
-    // MARK: Form
+    // MARK: Tabs (#171)
+
+    /// The macOS Settings convention: a toolbar of tabs, one short pane each. The TabView is the window's root, so
+    /// macOS draws the toolbar; each pane carries the same footer, so one Apply covers every tab.
+    private func tabs(_ settings: Binding<BridgeSettings>) -> some View {
+        TabView(selection: $tab) {
+            ForEach(SettingsTab.allCases, id: \.self) { tab in
+                page(tab, settings)
+                    .tabItem { Label(tab.title, systemImage: Self.symbol(tab)) }
+                    .tag(tab)
+            }
+        }
+    }
+
+    private func page(_ tab: SettingsTab, _ settings: Binding<BridgeSettings>) -> some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: Theme.Step.x4) { pane(tab, settings) }
+                .padding(Theme.Step.x4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            footer(settings)
+        }
+        .frame(width: 440)
+        .background(Theme.panel)
+        // ⌘1–4 pick the tabs; a Settings TabView doesn't add them itself.
+        .background { shortcuts }
+    }
 
     @ViewBuilder
-    private func form(_ settings: Binding<BridgeSettings>) -> some View {
-        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Theme.Space.m, verticalSpacing: Theme.Space.s) {
-            ForEach(settings.controllers.indices, id: \.self) { index in
-                controllerRows(settings, index)
-            }
-            row("") {
-                HStack(spacing: Theme.Space.m) {
-                    if settings.wrappedValue.controllers.count < 4 {
-                        Button("Add controller") {
-                            settings.wrappedValue.controllers.append(Self.newEntry(after: settings.wrappedValue.controllers))
-                        }
-                        .buttonStyle(LinkButtonStyle())
-                    }
-                    Toggle("Controller LEDs", isOn: settings.ledsEnabled).font(Theme.ui(Theme.Size.label)).tint(Self.on)
+    private func pane(_ tab: SettingsTab, _ settings: Binding<BridgeSettings>) -> some View {
+        switch tab {
+        case .controller: controllerPane(settings)
+        case .decks: decksSection(settings)
+        case .syndicate: syndicatePane(settings)
+        case .general: generalPane(settings)
+        }
+    }
+
+    private var shortcuts: some View {
+        ForEach(SettingsTab.allCases, id: \.self) { tab in
+            Button(tab.title) { self.tab = tab }
+                .keyboardShortcut(KeyEquivalent(tab.shortcut), modifiers: .command)
+                .opacity(0).accessibilityHidden(true)
+        }
+    }
+
+    private static func symbol(_ tab: SettingsTab) -> String {
+        switch tab {
+        case .controller: "slider.horizontal.3"
+        case .decks: "square.grid.2x2"
+        case .syndicate: "dot.radiowaves.left.and.right"
+        case .general: "gearshape"
+        }
+    }
+
+    // MARK: Panes
+
+    @ViewBuilder
+    private func controllerPane(_ settings: Binding<BridgeSettings>) -> some View {
+        ForEach(settings.controllers.indices, id: \.self) { index in
+            controllerRows(settings, index)
+        }
+        section(nil) {
+            switchRow("Controller LEDs", isOn: settings.ledsEnabled)
+            ForEach(settings.wrappedValue.warnings, id: \.self) { note($0, color: Theme.attention) }
+            if settings.wrappedValue.controllers.count < 4 {
+                Button("Add controller") {
+                    settings.wrappedValue.controllers.append(Self.newEntry(after: settings.wrappedValue.controllers))
                 }
-                ForEach(settings.wrappedValue.warnings, id: \.self) { note($0, color: Theme.attention) }
+                .buttonStyle(PillButtonStyle(kind: .quiet))
             }
+        }
+        mappingSection
+    }
 
-            heading("Syndicate OSC input")
+    @ViewBuilder
+    private func syndicatePane(_ settings: Binding<BridgeSettings>) -> some View {
+        section("Syndicate OSC input") {
             row("Host") { field(text: settings.syndicateHost, width: 160, field: .host) }
-            row("Port") {
-                field(value: settings.syndicatePort, field: .oscPort)
-                hint("Syndicate's OSC listen port")
-            }
-
-            heading("OSC feedback")
-            row("Port") {
+            row("Port", hint: "Syndicate's OSC listen port") { field(value: settings.syndicatePort, field: .oscPort) }
+        }
+        section("OSC feedback") {
+            row("Port", hint: "Syndicate's DEST IP is 127.0.0.1, PORT this number") {
                 field(value: settings.feedbackPort, field: .feedbackPort)
-                hint("Syndicate's DEST IP is 127.0.0.1, PORT this number")
             }
             row("Listen on") {
                 Picker("Listen on", selection: settings.feedbackListen) {
@@ -92,36 +163,16 @@ struct SettingsView: View {
                     Text("All networks").tag(FeedbackListen.allNetworks)
                 }
                 .labelsHidden().fixedSize()
-                if settings.wrappedValue.feedbackListen == .allNetworks {
-                    hint("For Syndicate on another Mac. macOS asks once for local-network permission; allow it, or no feedback arrives.")
-                }
             }
-            // What to set on Syndicate's side is in the guide, reachable from here as well as the panel (#66 item 6).
-            row("") {
-                Button("Setup Guide…") { SetupGuideWindow.open(openWindow) }.buttonStyle(LinkButtonStyle())
+            if settings.wrappedValue.feedbackListen == .allNetworks {
+                hint("For Syndicate on another Mac. macOS asks once for local-network permission; allow it, or no feedback arrives.")
             }
+        }
+    }
 
-            decksSection(settings)
-
-            heading("Mapping")
-            row("In use") {
-                note(model.status.mappingInUse)
-                HStack(spacing: Theme.Space.s) {
-                    Button("Import…") { importMapping() }.buttonStyle(FlatButtonStyle())
-                    Button("Export…") { exportMapping() }.buttonStyle(FlatButtonStyle())
-                    Button("Reset") {
-                        let problem = model.resetMapping()
-                        mappingProblems = problem.map { [$0] } ?? []
-                        mappingNote = problem == nil ? "Back to the bundled mapping." : nil
-                    }
-                        .buttonStyle(FlatButtonStyle())
-                        .help("Go back to the bundled mapping")
-                }
-                if let mappingNote { note(mappingNote) }
-                ForEach(mappingProblems, id: \.self) { note($0, color: Theme.error) }
-            }
-
-            heading("Login")
+    @ViewBuilder
+    private func generalPane(_ settings: Binding<BridgeSettings>) -> some View {
+        section("Login") {
             row("Appearance") {
                 // Syndicate's LIGHT MODE can't be read over OSC, so pick it here to match (#127).
                 Picker("Appearance", selection: settings.appearance) {
@@ -131,110 +182,144 @@ struct SettingsView: View {
                 }
                 .labelsHidden().fixedSize()
             }
-            row("Start") {
-                Toggle("Start at login", isOn: $startAtLogin)
-                    .font(Theme.ui(Theme.Size.label))
-                    .tint(Self.on)
-                    .onChange(of: startAtLogin) { _, enabled in setLogin(enabled) }
-                if let loginProblem { note(loginProblem, color: Theme.error) }
-            }
+            switchRow("Start at login", isOn: $startAtLogin)
+                .onChange(of: startAtLogin) { _, enabled in setLogin(enabled) }
+            if let loginProblem { note(loginProblem, color: Theme.error) }
         }
+        // What to set on Syndicate's side is in the guide, reachable from here as well as the panel (#66 item 6).
+        Button("Setup Guide…") { SetupGuideWindow.open(openWindow) }.buttonStyle(PillButtonStyle(kind: .quiet))
+    }
 
-        ForEach(otherProblems, id: \.self) { note($0, color: Theme.error) }
-
-        let dirty = settings.wrappedValue != model.settings
-        HStack(spacing: Theme.Space.m) {
-            Button("Revert") { load() }.buttonStyle(FlatButtonStyle()).disabled(!dirty).opacity(dirty ? 1 : 0.4).frame(width: 110)
-            Text(saved && !dirty ? (savedNote ?? "Saved.") : "Changes apply when you press Apply.")
-                .font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
-            if let checkingHost {
-                Text("Checking \(checkingHost)…").font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
+    private var mappingSection: some View {
+        section("Mapping") {
+            row("In use") { note(model.status.mappingInUse) }
+            HStack(spacing: Theme.Step.x2) {
+                Button("Import…") { importMapping() }.buttonStyle(PillButtonStyle(small: true))
+                Button("Export…") { exportMapping() }.buttonStyle(PillButtonStyle(small: true))
+                Button("Reset") {
+                    let problem = model.resetMapping()
+                    mappingProblems = problem.map { [$0] } ?? []
+                    mappingNote = problem == nil ? "Back to the bundled mapping." : nil
+                }
+                .buttonStyle(PillButtonStyle(small: true))
+                .help("Go back to the bundled mapping")
             }
-            Button("Apply") { apply(settings.wrappedValue) }
-                .buttonStyle(FlatButtonStyle())
-                .keyboardShortcut(.defaultAction)
-                .disabled(!dirty || checkingHost != nil)
-                .opacity(dirty ? 1 : 0.4)
-                .frame(width: 110)
+            if let mappingNote { note(mappingNote) }
+            ForEach(mappingProblems, id: \.self) { note($0, color: Theme.error) }
         }
     }
 
+    // MARK: Footer
+
+    /// Revert and Apply, shared by every tab (#171). A refusal lists its problems here, each after its tab's name.
+    private func footer(_ settings: Binding<BridgeSettings>) -> some View {
+        let dirty = settings.wrappedValue != model.settings
+        let refusal = SettingsRefusal(fields: fieldProblems, other: otherProblems)
+        return VStack(alignment: .leading, spacing: Theme.Step.x2) {
+            ForEach(refusal.footer, id: \.self) { note($0, color: Theme.error) }
+            HStack(spacing: Theme.Step.x2) {
+                Text(checkingHost.map { "Checking \($0)…" } ?? (saved && !dirty ? (savedNote ?? "Saved.") : "Changes apply when you press Apply."))
+                    .font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Revert") { load() }.buttonStyle(PillButtonStyle()).disabled(!dirty)
+                Button { apply(settings.wrappedValue) } label: {
+                    HStack(spacing: Theme.Step.x1) { Text("Apply"); Text("›").accessibilityHidden(true) }
+                }
+                .buttonStyle(PillButtonStyle(kind: .primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(!dirty || checkingHost != nil)
+            }
+        }
+        .padding(.horizontal, Theme.Step.x4)
+        .padding(.vertical, Theme.Step.x3)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+    }
+
     /// One controller entry: its deck (applied at once, like the panel's picker), devices and channel (#25, #68).
-    @ViewBuilder
     private func controllerRows(_ settings: Binding<BridgeSettings>, _ index: Int) -> some View {
         // Bounds-checked: right after a removal, SwiftUI can still read the removed row once.
         let controller = Binding<ControllerSettings>(
             get: { settings.wrappedValue.controllers.indices.contains(index) ? settings.wrappedValue.controllers[index] : Self.newEntry(after: []) },
             set: { if settings.wrappedValue.controllers.indices.contains(index) { settings.wrappedValue.controllers[index] = $0 } }
         )
-        heading(settings.wrappedValue.controllers.count > 1 ? "Controller \(index + 1)" : "Controller")
         let following = !model.layers.isEmpty && controller.wrappedValue.followLayers != false
-        if !model.layers.isEmpty {
-            row("Layers") {
-                Toggle("Follow controller layers", isOn: Binding(
-                    get: { following },
-                    set: { controller.wrappedValue.followLayers = $0 }
-                ))
-                .font(Theme.ui(Theme.Size.label)).tint(Self.on)
+        return section(settings.wrappedValue.controllers.count > 1 ? "Controller \(index + 1)" : "Controller") {
+            if !model.layers.isEmpty {
                 // The LC6000's own Shift + deck select steps channel 1-4, so it picks deck 1-4 itself (#79).
-                if following { hint("Shift + deck select on the controller picks Deck 1-4") }
+                switchRow("Follow controller layers", hint: following ? "Shift + deck select on the controller picks Deck 1-4" : nil,
+                          isOn: Binding(get: { following }, set: { controller.wrappedValue.followLayers = $0 }))
+            }
+            if !following { deckRow(controller.wrappedValue.deck, index) }
+            row("MIDI input") { devicePicker(selection: controller.input, devices: sources) }
+            fieldError(.device(controller: index))
+            row("MIDI output") { devicePicker(selection: controller.output, devices: destinations) }
+            // Deck and channel come from the controller's layers while it follows them (#79).
+            if !following { channelRow(controller, index) }
+            if settings.wrappedValue.controllers.count > 1 {
+                Button("Remove controller \(index + 1)") { settings.wrappedValue.controllers.remove(at: index) }
+                    .buttonStyle(PillButtonStyle(kind: .quiet))
             }
         }
-        if !following {
+    }
+
+    private func deckRow(_ deck: Int, _ index: Int) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x1) {
             row("Deck") {
-                DeckPicker(deck: controller.wrappedValue.deck, state: model.status.presentation.deckPicker,
-                           problem: model.status.deckProblem) { deck in
+                DeckPicker(deck: deck, state: model.status.presentation.deckPicker, problem: model.status.deckProblem, size: 28) { deck in
                     // The deck applies at once, as in the panel. A saved change reaches the draft through the rebase on
                     // model.settings; a refused one leaves the draft alone and shows why (#90).
                     model.setDeck(deck, controller: index)
                 }
-                fieldError(.deck(controller: index))
             }
+            fieldError(.deck(controller: index))
         }
-        row("MIDI input") {
-            devicePicker(selection: controller.input, devices: sources)
-            fieldError(.device(controller: index))
-        }
-        row("MIDI output") { devicePicker(selection: controller.output, devices: destinations) }
-        // Deck and channel come from the controller's layers while it follows them (#79).
-        if !following {
+    }
+
+    private func channelRow(_ controller: Binding<ControllerSettings>, _ index: Int) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x1) {
             row("Channel") {
                 Picker("Channel", selection: controller.channel) {
                     Text("From the profile").tag(Int?.none)
                     ForEach(1...16, id: \.self) { Text("\($0)").tag(Int?.some($0)) }
                 }
                 .labelsHidden().fixedSize()
-                fieldError(.channel(controller: index))
             }
-        }
-        if settings.wrappedValue.controllers.count > 1 {
-            row("") {
-                Button("Remove controller \(index + 1)") { settings.wrappedValue.controllers.remove(at: index) }
-                    .buttonStyle(LinkButtonStyle())
-            }
+            fieldError(.channel(controller: index))
         }
     }
 
     // MARK: Pieces
 
-    /// A section caption across both columns, in natural case; it shows uppercased.
-    private func heading(_ title: String) -> some View {
-        GridRow {
-            Text(title).textCase(.uppercase).font(Theme.captionFont).foregroundStyle(Theme.caption)
-                .padding(.top, Theme.Space.m)
-                .gridCellColumns(2)
+    /// A grouped card under a mono label, as in System Settings and the site (#171).
+    private func section(_ title: String?, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Step.x2) {
+            if let title {
+                Text(title).font(Theme.labelFont).foregroundStyle(Theme.caption).accessibilityAddTraits(.isHeader)
+            }
+            VStack(alignment: .leading, spacing: Theme.Step.x3) { content() }
+                .padding(Theme.Step.x3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .card()
         }
     }
 
-    /// A right-aligned caption label and its controls.
-    private func row(_ label: String, @ViewBuilder content: () -> some View) -> some View {
-        GridRow {
-            Text(label).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
-                .gridColumnAlignment(.trailing)
-            VStack(alignment: .leading, spacing: Theme.Space.xs) { content() }
+    /// The label on the left with its hint under it, the control on the right.
+    private func row(_ label: String, hint text: String? = nil, @ViewBuilder control: () -> some View) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Step.x3) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(Theme.ui(Theme.Size.emphasis))
+                if let text { hint(text) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            control()
+        }
+    }
+
+    /// A row that is one switch: the switch's own words are the row's label (#171). On reads as live green (#68).
+    private func switchRow(_ title: String, hint text: String? = nil, isOn: Binding<Bool>) -> some View {
+        row(title, hint: text) {
+            Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.switch).tint(Self.on)
         }
     }
 
@@ -248,21 +333,23 @@ struct SettingsView: View {
             }
         }
         .labelsHidden()
-        .frame(width: 240, alignment: .leading)
+        .frame(maxWidth: 220, alignment: .trailing)
     }
 
     private func field(text: Binding<String>, width: CGFloat, field: SettingsField) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+        VStack(alignment: .trailing, spacing: Theme.Step.x1) {
             TextField("", text: text).labelsHidden().font(Theme.data(Theme.Size.emphasis)).frame(width: width)
+                .focused($focused, equals: field)
                 .overlay(errorBorder(field))
             fieldError(field)
         }
     }
 
     private func field(value: Binding<Int>, field: SettingsField) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+        VStack(alignment: .trailing, spacing: Theme.Step.x1) {
             TextField("", value: value, format: .number.grouping(.never)).labelsHidden()
                 .font(Theme.data(Theme.Size.emphasis)).frame(width: 80)
+                .focused($focused, equals: field)
                 .overlay(errorBorder(field))
             fieldError(field)
         }
@@ -272,57 +359,54 @@ struct SettingsView: View {
     @ViewBuilder
     private func errorBorder(_ field: SettingsField) -> some View {
         if fieldProblems.contains(where: { $0.field == field }) {
-            RoundedRectangle(cornerRadius: Theme.corner).strokeBorder(Theme.error, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.Radius.small).strokeBorder(Theme.error, lineWidth: 1)
         }
     }
 
     // MARK: Decks (#123)
 
     /// The deck colors: Syndicate's (cue palette slots 1, 3, 5 and 7) or the DJ's own, each with the LC6000's version.
-    @ViewBuilder
     private func decksSection(_ settings: Binding<BridgeSettings>) -> some View {
-        heading("Decks")
-        row("Colors") {
-            Toggle("Use Syndicate's deck colors", isOn: settings.followSyndicateDeckColors)
-                .font(Theme.ui(Theme.Size.label)).tint(Self.on)
-            hint(settings.wrappedValue.followSyndicateDeckColors
-                 ? "Cue palette slots 1, 3, 5 and 7 in Syndicate's CUE COLORS, as they change"
-                 : "Your own colors, for the app's badges and the LC6000's ring")
-        }
-        row("Ring colors") {
+        section("Decks") {
+            switchRow("Use Syndicate's deck colors",
+                      hint: settings.wrappedValue.followSyndicateDeckColors
+                          ? "Cue palette slots 1, 3, 5 and 7 in Syndicate's CUE COLORS, as they change"
+                          : "Your own colors, for the app's badges and the LC6000's ring",
+                      isOn: settings.followSyndicateDeckColors)
             // Vivid keeps a color's hue on the LC6000's 64 colors; Exact rounds each channel (#151).
-            Picker("Ring colors", selection: settings.ringColors) {
-                Text("Vivid").tag(RingColors.vivid)
-                Text("Exact").tag(RingColors.exact)
+            row("Ring colors", hint: settings.wrappedValue.ringColors == .vivid
+                ? "Strong colors on the ring and a held pad, keeping each hue"
+                : "Each channel rounded, as the pads' cue colors are; softer colors look paler") {
+                SegmentedPills(options: [RingColors.vivid, .exact], title: { $0 == .vivid ? "Vivid" : "Exact" },
+                               selection: settings.ringColors)
+                    .accessibilityElement(children: .contain).accessibilityLabel("Ring colors")
             }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
-            hint(settings.wrappedValue.ringColors == .vivid
-                 ? "Strong colors on the ring and a held pad, keeping each hue"
-                 : "Each channel rounded, as the pads' cue colors are; softer colors look paler")
+            ForEach(1...4, id: \.self) { deck in deckColorRow(settings, deck) }
+            if !settings.wrappedValue.followSyndicateDeckColors {
+                Button("Reset to default") { settings.wrappedValue.customDeckColors = .defaults }
+                    .buttonStyle(PillButtonStyle(kind: .quiet))
+            }
         }
-        ForEach(1...4, id: \.self) { deck in
-            row("Deck \(deck)") {
-                HStack(spacing: Theme.Space.m) {
-                    DeckBadgeView(deck: deck)
-                    if !settings.wrappedValue.followSyndicateDeckColors {
-                        ColorPicker("Deck \(deck) color", selection: Self.color(settings, deck: deck), supportsOpacity: false)
-                            .labelsHidden()
-                    }
-                    // What the LC6000's ring will show: rgb222, so a subtle color may come out plainer.
-                    let shown = settings.wrappedValue.followSyndicateDeckColors ? deckColors[deck] : settings.wrappedValue.customDeckColors[deck]
-                    RoundedRectangle(cornerRadius: Theme.corner)
-                        .fill(Color(RGB(deckColor: DeckColors.ledPreview(shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors))))
-                        .frame(width: 26, height: 26)
-                        .accessibilityLabel("Deck \(deck) on the LC6000")
-                    hint("On the LC6000")
+    }
+
+    private func deckColorRow(_ settings: Binding<BridgeSettings>, _ deck: Int) -> some View {
+        // What the LC6000's ring will show: rgb222, so a subtle color may come out plainer.
+        let shown = settings.wrappedValue.followSyndicateDeckColors ? deckColors[deck] : settings.wrappedValue.customDeckColors[deck]
+        return VStack(alignment: .leading, spacing: Theme.Step.x1) {
+            HStack(spacing: Theme.Step.x3) {
+                DeckBadgeView(deck: deck, size: 24)
+                if !settings.wrappedValue.followSyndicateDeckColors {
+                    ColorPicker("Deck \(deck) color", selection: Self.color(settings, deck: deck), supportsOpacity: false)
+                        .labelsHidden()
                 }
-                fieldError(.deckColor(deck: deck))
+                Spacer(minLength: 0)
+                hint("On the LC6000")
+                RoundedRectangle(cornerRadius: Theme.Radius.small)
+                    .fill(Color(RGB(deckColor: DeckColors.ledPreview(shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors))))
+                    .frame(width: 26, height: 26)
+                    .accessibilityLabel("Deck \(deck) on the LC6000")
             }
-        }
-        if !settings.wrappedValue.followSyndicateDeckColors {
-            row("") {
-                Button("Reset to default") { settings.wrappedValue.customDeckColors = .defaults }.buttonStyle(LinkButtonStyle())
-            }
+            fieldError(.deckColor(deck: deck))
         }
     }
 
@@ -363,8 +447,7 @@ struct SettingsView: View {
                 NSApp.activate()
                 openWindow(id: "diagnostics")
             }
-            .buttonStyle(FlatButtonStyle())
-            .frame(width: 160)
+            .buttonStyle(PillButtonStyle())
         }
     }
 
@@ -412,7 +495,12 @@ struct SettingsView: View {
         base = model.settings
         sources = model.sources
         destinations = model.destinations
+        #if DEBUG
+        // A snapshot keeps the problems it was given.
+        if snapshotTab == nil { fieldProblems = [] }
+        #else
         fieldProblems = []
+        #endif
         otherProblems = []
         saved = false
         startAtLogin = LoginItem.isEnabled
@@ -424,8 +512,7 @@ struct SettingsView: View {
         // Field problems are checked here, so they show under their fields; apply checks them all again.
         let problems = settings.fieldProblems
         guard problems.isEmpty else {
-            fieldProblems = problems
-            otherProblems = []
+            refuse(fields: problems, other: [])
             return
         }
         // A host name is looked up off the main actor (#84): the window stays usable and says it's checking.
@@ -442,12 +529,24 @@ struct SettingsView: View {
                 saved = true
             } catch {
                 switch error {
-                case .invalid(let list): otherProblems = list
-                case .fields(let list): fieldProblems = list
+                case .invalid(let list): refuse(fields: [], other: list)
+                case .fields(let list): refuse(fields: list, other: [])
                 }
                 saved = false
             }
         }
+    }
+
+    /// A refused Apply (#171): show the problems, go to the leftmost tab with one, tell VoiceOver, and focus the field.
+    private func refuse(fields: [SettingsProblem], other: [String]) {
+        fieldProblems = fields
+        otherProblems = other
+        let refusal = SettingsRefusal(fields: fields, other: other)
+        if let target = refusal.tab { tab = target }
+        AccessibilityNotification.Announcement(refusal.announcement).post()
+        // The field is on screen only once the tab has switched, so focus it on the next turn. Only the host and the
+        // two ports are text fields; for a picker the footer and the announcement say where to look.
+        Task { @MainActor in focused = refusal.focus }
     }
 
     private func setLogin(_ enabled: Bool) {

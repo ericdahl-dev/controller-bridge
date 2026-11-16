@@ -165,12 +165,22 @@ enum Snapshots {
             }
             write(icons(status.presentation.icon), to: "\(directory)/icon-\(name).png")
         }
-        // Settings (#68), through an NSHostingView: ImageRenderer can't draw its AppKit controls.
+        // Settings (#68), through an NSHostingView: ImageRenderer can't draw its AppKit controls. One PNG per tab (#171):
+        // a hosting view can't draw the Settings window's toolbar, so each pane renders on its own with its footer.
         let defaults = BridgeSettings.defaults(from: try! ControllerProfile.bundled()[0].mapping)
-        writeAppKit(SettingsView(model: BridgeModel(preview: defaults)), to: "\(directory)/settings.png")
+        for tab in SettingsTab.allCases {
+            let name = tab.title.lowercased()
+            writeAppKit(SettingsView(model: BridgeModel(preview: defaults), snapshotTab: tab), to: "\(directory)/settings-\(name).png")
+        }
         var two = defaults
         two.controllers.append(ControllerSettings(deck: 3, input: nil, output: nil))
-        writeAppKit(SettingsView(model: BridgeModel(preview: two)), to: "\(directory)/settings-two-controllers.png")
+        writeAppKit(SettingsView(model: BridgeModel(preview: two), snapshotTab: .controller),
+                    to: "\(directory)/settings-controller-two-controllers.png")
+        // A refused Apply: the field errors on the Syndicate tab, and the footer naming each problem's tab.
+        var bad = defaults
+        bad.syndicateHost = ""
+        writeAppKit(SettingsView(model: BridgeModel(preview: bad), snapshotTab: .syndicate, problems: bad.fieldProblems),
+                    to: "\(directory)/settings-syndicate-refused.png")
         let stopped = BridgeModel(preview: nil)
         stopped.status.problem = "Couldn't start CoreMIDI"
         writeAppKit(SettingsView(model: stopped), to: "\(directory)/settings-stopped.png")
