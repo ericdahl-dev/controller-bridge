@@ -72,6 +72,8 @@ final class Bridge {
     let channel: UInt8
     /// Button names by note, from the mapping.
     private let buttonNames: [Int: String]
+    /// Shift done in hardware (#226): each shifted note's button.
+    private let shiftedNames: [Int: String]
     /// CC names by number: "jog", "pitch_msb", "pitch_lsb", "needle", "select_turn" and "auto_loop_size".
     private let ccNames: [Int: String]
 
@@ -166,6 +168,7 @@ final class Bridge {
         channel = UInt8(clamping: mapping.midi.channel - 1)
         padChannel = UInt8(clamping: (mapping.pads.channel ?? mapping.midi.channel) - 1)
         buttonNames = Dictionary(mapping.notes.buttons.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
+        shiftedNames = Dictionary(mapping.notes.shifted.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         var ccNames: [Int: String] = [:]
         switch mapping.jog.mode {
         case .absolute(let msb, let lsb):
@@ -240,6 +243,17 @@ final class Bridge {
         if padNote(note, pressed: pressed) { return }
         if note == mapping.needle.touchNote {
             needleTouched = pressed
+            return
+        }
+        // A shifted note (#226) is its button with Shift held, for that press or release only; Shift then goes back to
+        // what it was (a handler may clear it, and the app's own Shift may be held).
+        if let name = shiftedNames[note], let handler = Self.buttonHandlers[name] {
+            let wasShifted = shift
+            shift = true
+            handler(self)(pressed)
+            shift = wasShifted
+            // A handler that repainted while Shift was set lit the Shift LED; paint it back (cached, so cheap).
+            refreshLEDs()
             return
         }
         guard let name = buttonNames[note], let handler = Self.buttonHandlers[name] else { return }
@@ -329,6 +343,8 @@ final class Bridge {
         var idle = mapping.leds.dimUnlitButtons ? dimLevel : offLevel
         if feedbackStale, Self.syndicateButtons.contains(name), mapping.leds.staleIdle == .off { idle = offLevel }
         led(note, on ? fullLevel : idle)
+        // Its shifted note's LED (#226), when the profile mirrors it.
+        if mapping.leds.mirrorShifted, let shifted = mapping.notes.shifted[name] { led(shifted, on ? fullLevel : idle) }
     }
 
     /// An LED write for the LED sweep (#26): straight to the controller, past the cache.

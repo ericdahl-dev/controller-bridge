@@ -247,13 +247,36 @@ class ReviewTests(unittest.TestCase):
 class RunTests(unittest.TestCase):
     """The whole run, as the release workflow calls it."""
 
-    def run_distribute(self, api):
+    def run_distribute(self, api, external=True):
         doc = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False)
         doc.write(DOC); doc.close()
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = td.run(api.http, BUNDLE, "1.0.1", "42.1", doc.name, sleep=Recorder().sleep)
+            code = td.run(api.http, BUNDLE, "1.0.1", "42.1", doc.name, sleep=Recorder().sleep, external=external)
         return code, out.getvalue() + err.getvalue()
+
+    def test_internal_only_by_default_never_touches_the_external_group_or_review(self):
+        # #244: a plain tag is for internal testers. Not the Syndicate group, not Beta App Review, not even a read.
+        api = FakeASC()
+        doc = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False)
+        doc.write(DOC); doc.close()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = td.run(api.http, BUNDLE, "1.0.1", "42.1", doc.name, sleep=Recorder().sleep)
+        self.assertEqual(code, 0)
+        self.assertEqual([(m, p) for m, p, _, _ in api.calls if m != "GET"],
+                         [("POST", "/betaBuildLocalizations"), ("POST", "/betaGroups/g-int/relationships/builds")])
+        self.assertFalse([c for c in api.calls if "g-ext" in c[1] or "betaAppReview" in c[1]
+                          or (c[3] or {}).get("filter[name]") == td.EXTERNAL_GROUP])
+        self.assertNotIn("g-ext", api.in_group)
+        self.assertIn("Internal only", out.getvalue())
+
+    def test_the_environment_switch_reads_external_only_when_set(self):
+        self.assertFalse(td.external_from(""))
+        self.assertFalse(td.external_from("0"))
+        self.assertFalse(td.external_from("false"))
+        self.assertTrue(td.external_from("1"))
+        self.assertTrue(td.external_from("true"))
 
     def test_distributes_in_order_what_to_test_internal_external_review(self):
         api = FakeASC()
@@ -287,7 +310,7 @@ class RunTests(unittest.TestCase):
         doc.write(DOC); doc.close()
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            code = td.run(td.dry_run(api.http), BUNDLE, "1.0.1", "42.1", doc.name, sleep=Recorder().sleep)
+            code = td.run(td.dry_run(api.http), BUNDLE, "1.0.1", "42.1", doc.name, sleep=Recorder().sleep, external=True)
         self.assertEqual(code, 0)
         self.assertEqual([c for c in api.calls if c[0] != "GET"], [])
         self.assertIn("dry run: would POST /betaAppReviewSubmissions", out.getvalue())

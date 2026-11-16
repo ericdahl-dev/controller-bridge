@@ -91,7 +91,7 @@ private struct JogDeckPreview: View {
                 Image(decorative: image, scale: 1)
                     .interpolation(.high)
                     .resizable()
-                    .frame(width: 208, height: 208)
+                    .frame(width: 180, height: 180)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
             }

@@ -4,9 +4,11 @@ name: Release
 # ShowRecorder ships. Signs with one fixed Apple Distribution certificate and the Mac Installer Distribution
 # certificate (the upload is a signed installer package), so no run creates a certificate. The secrets are org
 # secrets shared with ShowRecorder; see docs/DEVELOPING.md, "Releasing to TestFlight".
-# After the upload, the distribute job hands the build to testers (#180): What to Test from docs/TESTFLIGHT.md, the
-# "Internal" and "Syndicate" groups, and Beta App Review. Run the workflow by hand (workflow_dispatch) with a version and
-# build number to distribute a build that's already uploaded, without building it again.
+# After the upload, the distribute job hands the build to testers (#180): What to Test from docs/TESTFLIGHT.md and the
+# "Internal" group. Only a tag whose annotation says [external], or a run by hand with external on, also adds it to the
+# "Syndicate" group and submits it for Beta App Review (#244). A plain tag is internal only. Run the workflow by hand
+# (workflow_dispatch) with a version and build number to distribute a build that's already uploaded, without building
+# it again.
 # Pull requests and forks never run this: it only fires on a tag pushed to this repository, or by hand.
 on:
   push:
@@ -21,6 +23,10 @@ on:
         required: true
       dry_run:
         description: Read everything and change nothing (prints what it would do)
+        type: boolean
+        default: false
+      external:
+        description: Also send it to the external group and Beta App Review (off means Internal only)
         type: boolean
         default: false
 
@@ -41,6 +47,7 @@ jobs:
     outputs:
       version: ${{ steps.tag.outputs.version }}
       build: ${{ steps.tag.outputs.build }}
+      external: ${{ steps.tag.outputs.external }}
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -90,6 +97,12 @@ jobs:
           echo "BUILD_NUMBER=${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           echo "build=${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+          # External testers only when the annotated tag's message says [external] (#244). Fetch the tag itself so
+          # its annotation is here, not a lightweight copy.
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          external="$(scripts/tag-external.sh "${GITHUB_REF_NAME}")"
+          echo "external=${external}" >> "$GITHUB_OUTPUT"
+          echo "External testers: ${external}"
 
       - name: Show toolchain
         run: |
@@ -235,12 +248,14 @@ jobs:
       VERSION: ${{ inputs.version || needs.testflight.outputs.version }}
       BUILD_NUMBER: ${{ inputs.build || needs.testflight.outputs.build }}
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      # Internal only unless asked (#244): [external] in the tag message, or external on when run by hand.
+      EXTERNAL: ${{ (inputs.external || needs.testflight.outputs.external == 'true') && '1' || '' }}
     steps:
       - name: Check the version and build number
         run: |
           echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::Version '$VERSION' isn't like 1.0.1"; exit 1; }
           echo "$BUILD_NUMBER" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "::error::Build '$BUILD_NUMBER' isn't like 2.1"; exit 1; }
-          echo "Distributing ${VERSION} (${BUILD_NUMBER})"
+          echo "Distributing ${VERSION} (${BUILD_NUMBER}), $([ "$EXTERNAL" = 1 ] && echo 'Internal and external' || echo 'Internal only')"
 
       - uses: actions/checkout@v4
 

@@ -16,21 +16,25 @@ enum BridgeHost {
         events: AsyncStream<PipeEvent>
     ) async {
         let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
-        // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe.
-        if let jogDisplay {
-            let driver = JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log) { content in
-                JogDisplayRenderer.uploadImage(content)
-            }
-            // The Diagnostics simulator (#221) hears what the driver does: uploads, the unit's answers, the marker.
-            driver.onEvent = jogSink(jogSimulator)
-            coordinator.attachJogDisplay(driver)
+        // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe. Always attached:
+        // with no WD port, or with the switch off, it only previews, for the Diagnostics simulator (#221).
+        let jogEvents = jogSink(jogSimulator)
+        let driver = JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log) { content in
+            JogDisplayRenderer.uploadImage(content)
         }
+        driver.onEvent = jogEvents
+        coordinator.attachJogDisplay(driver)
         // Straight onto the saved devices, decks, layers and LEDs switch: nothing unchosen, even for a moment (#105).
         coordinator.start(controllers: controllers, ledsEnabled: ledsEnabled)
         // The demo controller (#64) runs the profile running now (an imported mapping too, #98) against an in-process
         // controller and an in-memory Syndicate.
         let makeDemo: @Sendable (ControllerProfile) -> DemoSession = { profile in
-            DemoSession(profile: profile, clock: SystemClock(), log: log, ledOutput: DroppedMIDIOutput())
+            let session = DemoSession(profile: profile, clock: SystemClock(), log: log, ledOutput: DroppedMIDIOutput())
+            // The demo's deck shows in the jog display preview too (#221); it has no unit, so it only previews.
+            let preview = JogDisplayDriver(port: nil, clock: SystemClock(), log: log) { content in JogDisplayRenderer.uploadImage(content) }
+            preview.onEvent = jogEvents
+            session.coordinator.attachJogDisplay(preview)
+            return session
         }
         await Engine(
             coordinator: coordinator, log: log, onStatus: statusSink(status), onDiagnostic: diagnosticsSink(diagnostics),

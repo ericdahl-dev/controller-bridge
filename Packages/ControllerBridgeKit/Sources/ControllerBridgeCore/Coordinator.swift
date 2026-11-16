@@ -178,12 +178,34 @@ public final class Coordinator {
         return connected.first { status.controllers[$0].activeLayer } ?? connected.first
     }
 
+    /// The deck the preview follows with no controller connected (#221): the user's pick, 1-4; nil follows the first
+    /// loaded deck.
+    private var jogPreviewDeck: Int?
+
+    /// Picks the deck the jog display preview follows while no controller is connected; nil, the first loaded deck.
+    public func setJogPreviewDeck(_ deck: Int?) {
+        jogPreviewDeck = deck
+        updateJogDisplay()
+    }
+
+    /// With no controller connected, the controller entry whose deck the preview shows from Syndicate's feedback: the
+    /// picked deck's, else the first loaded one's, else the first.
+    private var previewIndex: Int? {
+        if let pick = jogPreviewDeck, let index = controllers.indices.first(where: { status.controllers[$0].deck == pick }) {
+            return index
+        }
+        return controllers.indices.first { controllers[$0].bridge.loaded } ?? controllers.indices.first
+    }
+
+    /// The deck the jog display (or its preview) shows.
+    private var jogIndex: Int? { frontIndex ?? previewIndex }
+
     /// The master clock feeds the hand while the deck in front plays (#165).
     private func jogClock(_ message: OSCMessage) {
         let address = message.address.lowercased()
         if address.hasSuffix("/header/bpm"), let bpm = message.arguments.first?.number, bpm > 0 { masterBPM = bpm }
         guard address.hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber,
-              let front = frontIndex, controllers[front].bridge.playing else { return }
+              let front = jogIndex, controllers[front].bridge.playing else { return }
         jogMarker.beat(beat, bpm: masterBPM ?? 120, at: clock.now)
     }
 
@@ -202,7 +224,8 @@ public final class Coordinator {
     /// The marker and the play light, from the tick: the hand while playing or after a platter move, at most 30 a
     /// second; the light 127 while playing, blinking every half-second while loaded and paused.
     private func jogMarkerTick() {
-        guard let driver = jogDisplay, driver.isConnected, let front = frontIndex else { return }
+        // Connected or only previewing (#221): the driver sends only while connected.
+        guard let driver = jogDisplay, let front = jogIndex else { return }
         let bridge = controllers[front].bridge
         let due = lastMarkerSent.map { clock.now - $0 >= 1 / Self.markerRate - 1e-9 } ?? true
         if due, bridge.playing || markerMoved {
@@ -229,13 +252,25 @@ public final class Coordinator {
     private func updateJogDisplay() {
         guard let driver = jogDisplay else { return }
         let connected = controllers.indices.filter { controllers[$0].source != nil }
-        guard jogDisplayEnabled, let first = connected.first else { return driver.disconnect() }
+        // With no controller connected, nothing reaches a unit, but the preview follows a deck from Syndicate (#221).
+        guard let first = connected.first else {
+            driver.disconnect()
+            guard let index = previewIndex else { return }
+            return driver.show(jogContent(index))
+        }
         let front = connected.first { status.controllers[$0].activeLayer } ?? first
-        let deck = status.controllers[front].deck
-        let track = controllers[front].bridge.track
-        driver.connect()
-        driver.show(JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255], title: track?.title,
-                                      artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType))
+        // Off in Settings, nothing reaches the unit (a goodbye only if it had said hello), but the driver keeps
+        // previewing for the Diagnostics simulator (#221).
+        if jogDisplayEnabled { driver.connect() } else { driver.disconnect() }
+        driver.show(jogContent(front))
+    }
+
+    /// What the display shows for a controller entry: its deck, color and track.
+    private func jogContent(_ index: Int) -> JogDisplayContent {
+        let deck = status.controllers[index].deck
+        let track = controllers[index].bridge.track
+        return JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255], title: track?.title,
+                                 artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType)
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
