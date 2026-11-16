@@ -15,6 +15,51 @@ public struct Mapping: Equatable, Sendable, Codable {
     public var browse: Browse
     public var notes: Notes
     public var leds: LEDs
+    /// What the pads play beyond their notes (#196): the roll each pad plays in Roll mode.
+    public var pads: Pads
+
+    enum CodingKeys: String, CodingKey {
+        case midi, osc, deck, jog, pitch, needle, browse, notes, leds, pads
+    }
+
+    /// `pads` may be left out: the LC6000's roll sizes.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        midi = try c.decode(MIDI.self, forKey: .midi)
+        osc = try c.decode(OSC.self, forKey: .osc)
+        deck = try c.decode(Deck.self, forKey: .deck)
+        jog = try c.decode(Jog.self, forKey: .jog)
+        pitch = try c.decode(Pitch.self, forKey: .pitch)
+        needle = try c.decode(Needle.self, forKey: .needle)
+        browse = try c.decode(Browse.self, forKey: .browse)
+        notes = try c.decode(Notes.self, forKey: .notes)
+        leds = try c.decode(LEDs.self, forKey: .leds)
+        pads = try c.decodeIfPresent(Pads.self, forKey: .pads) ?? Pads()
+    }
+
+    /// The pads' Roll mode (#196): pad N plays `rollSizes[N - 1]`, by Syndicate's SlipLoop names. A pad past the list
+    /// does nothing in Roll mode.
+    public struct Pads: Equatable, Sendable, Codable {
+        /// Syndicate's slip loop sizes, shortest first.
+        public enum RollSize: String, CaseIterable, Equatable, Sendable, Codable {
+            case thirtySecond = "ThirtySecond", sixteenth = "Sixteenth", eighth = "Eighth", quarter = "Quarter"
+            case half = "Half", one = "One", two = "Two", four = "Four"
+        }
+
+        public var rollSizes: [String]
+
+        /// The LC6000's: 1/32 of a beat on pad 1 up to 4 beats on pad 8.
+        public static let lc6000RollSizes = RollSize.allCases.map(\.rawValue)
+
+        public init(rollSizes: [String] = Self.lc6000RollSizes) { self.rollSizes = rollSizes }
+
+        enum CodingKeys: String, CodingKey { case rollSizes = "roll_sizes" }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? Self.lc6000RollSizes
+        }
+    }
 
     public struct MIDI: Equatable, Sendable, Codable {
         public var input: String
