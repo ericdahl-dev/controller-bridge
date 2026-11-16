@@ -29,7 +29,8 @@ extension BridgeStatus {
         case .listening(let port), .portInUse(let port): port
         case .starting, .failed: 9096
         }
-        return SetupGuide(controller: controller?.profile, oscPort: oscPort, feedbackPort: port)
+        return SetupGuide(controller: controller?.profile, oscPort: oscPort, feedbackPort: port,
+                          subscriptions: requiredSubscriptions.map(\.syndicateName))
     }
 
     var bridgeState: BridgeState {
@@ -56,7 +57,8 @@ extension BridgeStatus {
             controller: first?.controller ?? .notConnected, feedback: feedback, deck: first?.deck ?? deck,
             stopped: problem != nil, lastDropout: lastDropoutTime, master: self.controller?.master == true, demo: demo,
             lastEvent: first?.lastEvent, others: Array(entries.dropFirst()), stopReason: stopReason,
-            followsLayers: first?.followsLayers ?? false, missingSubscriptions: missingSubscriptions.map(\.rawValue)
+            followsLayers: first?.followsLayers ?? false, missingSubscriptions: missingSubscriptions.map { MissingSubscription(name: $0.syndicateName, breaks: $0.breaks) },
+            requiredSubscriptions: requiredSubscriptions.map(\.syndicateName)
         )
     }
 

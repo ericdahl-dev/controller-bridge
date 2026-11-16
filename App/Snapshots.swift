@@ -52,6 +52,13 @@ enum Snapshots {
                 $0.syndicateFeedback = .live
                 $0.missingSubscriptions = [.cues]
             }),
+            // The user's own Syndicate had TempoSlider off (#211): named, with what it breaks.
+            ("feedback-tempo-slider-missing", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.missingSubscriptions = [.tempoSlider, .cues]
+            }),
             // Syndicate stopped answering (#21): DROPPED, and the last dropout under the lights.
             ("feedback-dropped", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
@@ -221,13 +228,23 @@ enum Snapshots {
                 log: log, status: connected, sweeping: tab == .sweep, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
                 hiddenNotes: [52], tab: tab, scrolls: false
             )
-            write(window.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name).png")
+            // Through AppKit: the filter field and the pickers (#218) are AppKit controls.
+            writeAppKit(window.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name).png", width: 720)
             let blank = DiagnosticsWindow(
                 log: empty, status: BridgeStatus(), sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
                 tab: tab, scrolls: false
             )
-            write(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png")
+            writeAppKit(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png", width: 720)
         }
+        // The OSC log filtered to deck 1, received only, and paused (#218).
+        log.deck = 1
+        log.direction = .received
+        log.togglePause()
+        let filtered = DiagnosticsWindow(
+            log: log, status: connected, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            tab: .osc, scrolls: false
+        )
+        writeAppKit(filtered.frame(width: 720, height: 460), to: "\(directory)/diagnostics-osc-log-filtered.png", width: 720)
     }
 
     /// The shared button styles (#67): normal, selected (bar + heavier text) and keyboard focus (ring).
@@ -284,7 +301,7 @@ enum Snapshots {
         }
     }
 
-    /// Renders through a hosting view's display cache, which draws AppKit-backed controls (pickers, text fields).
+    /// Through AppKit, so AppKit-backed controls (a text field, a menu picker) draw, which ImageRenderer can't.
     private static func writeAppKit(_ view: some View, to path: String, width: CGFloat = 440) {
         let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme))
         host.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)

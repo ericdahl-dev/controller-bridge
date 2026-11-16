@@ -133,10 +133,11 @@ struct MappingCheckTests {
         #expect(Self.problems(deep) == ["The file nests deeper than 64 levels, so it isn't a mapping."])
     }
 
-    @Test("There are exactly 8 pads: 9, or none, is refused")
+    @Test("A controller has 1 to 16 pads (#196): 17, or none, is refused; 4 and 16 are fine")
     func padCount() {
-        #expect(Self.problems(#"{"notes": {"pads": [32, 33, 34, 35, 36, 37, 38, 39, 41]}}"#) == ["notes.pads: expected 8 pads, got 9"])
-        #expect(Self.problems(#"{"notes": {"pads": []}}"#) == ["notes.pads: expected 8 pads, got 0"])
+        #expect(Self.problems(#"{"notes": {"pads": [\#((100...116).map(String.init).joined(separator: ", "))]}}"#) == ["notes.pads: expected 1-16 pads, got 17"])
+        #expect(Self.problems(#"{"notes": {"pads": []}}"#) == ["notes.pads: expected 1-16 pads, got 0"])
+        #expect(Self.problems(#"{"notes": {"pads": [32, 33, 34, 35]}}"#) == [])
     }
 
     @Test("The jog's turn scaling must be usable: at least 1 count and 1 beat a turn, so nothing divides by zero")
