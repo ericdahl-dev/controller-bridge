@@ -199,7 +199,23 @@ public struct Mapping: Equatable, Sendable, Codable {
 
     /// The mapping that ships with the app.
     public static func bundledDefault() throws -> Mapping {
-        try JSONDecoder().decode(Mapping.self, from: defaultJSON())
+        try decodeChecked(defaultJSON())
+    }
+
+    private static func decodeChecked(_ json: Data) throws -> Mapping {
+        let mapping = try JSONDecoder().decode(Mapping.self, from: json)
+        let problems = mapping.problems
+        guard problems.isEmpty else { throw MappingError.invalid(problems) }
+        return mapping
+    }
+
+    /// Readable problems with values the bridge can't run with. The full mapping check (#24) grows this list.
+    var problems: [String] {
+        var out: [String] = []
+        if !(1...16).contains(midi.channel) {
+            out.append("midi.channel: \(midi.channel) is out of range, expected 1-16")
+        }
+        return out
     }
 
     /// The bundled default with a user mapping file merged over it, as the Python config merge does: objects merge
@@ -208,7 +224,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         let base = try JSONSerialization.jsonObject(with: defaultJSON())
         let user = try JSONSerialization.jsonObject(with: override)
         let merged = try JSONSerialization.data(withJSONObject: merge(base, user))
-        return try JSONDecoder().decode(Mapping.self, from: merged)
+        return try decodeChecked(merged)
     }
 
     private static func merge(_ base: Any, _ override: Any) -> Any {
@@ -225,4 +241,9 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
         return try Data(contentsOf: url)
     }
+}
+
+/// A mapping the bridge can't run with. Each problem names the key and what was expected.
+public enum MappingError: Error, Equatable {
+    case invalid([String])
 }

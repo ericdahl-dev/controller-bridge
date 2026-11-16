@@ -130,4 +130,15 @@ struct CoordinatorTests {
         rig.coordinator.midi(.noteOn(channel: 1, note: 1, velocity: 127), source: Rig.lc6000.id)
         #expect(rig.osc.sent == [])
     }
+
+    @Test("An unchanged LED isn't sent twice: repeated Playing 1 lights the Play LED once")
+    func unchangedLEDNotResent() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        let playOn = rig.midi.outputs[Rig.lc6000Out.id]?.sent.filter { $0 == .noteOn(channel: 0, note: 1, velocity: 127) }
+        #expect(playOn?.count == 1)
+    }
 }

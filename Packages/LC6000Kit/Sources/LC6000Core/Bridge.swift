@@ -75,7 +75,8 @@ final class Bridge {
         self.mapping = mapping
         self.osc = osc
         root = "/" + mapping.osc.root.trimmingSlashes() + "/"
-        channel = UInt8(mapping.midi.channel - 1)
+        // A loaded mapping's channel is checked to be 1-16; clamping keeps a hand-built one from trapping.
+        channel = UInt8(clamping: mapping.midi.channel - 1)
         buttonNames = Dictionary(mapping.notes.buttons.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         var ccNames: [Int: String] = [:]
         for cc in mapping.jog.ccs { ccNames[cc] = "jog" }

@@ -2,7 +2,8 @@ import Foundation
 import LC6000Core
 import Testing
 
-/// Expected values are typed from lc6000_bridge/default_mapping.toml, the Python default mapping.
+/// Expected values are typed from lc6000_bridge/default_mapping.toml, the Python default mapping, except
+/// `osc.feedback_host`: the app listens on loopback by default (#32), where Python listened on 0.0.0.0.
 @Suite("Mapping")
 struct MappingTests {
     @Test("The bundled default mapping carries the Python default values")
@@ -10,7 +11,7 @@ struct MappingTests {
         let mapping = try Mapping.bundledDefault()
 
         #expect(mapping.midi == .init(input: "LC6000", output: "LC6000", channel: 1))
-        #expect(mapping.osc == .init(host: "127.0.0.1", port: 9090, root: "/Syndicate/", feedbackHost: "0.0.0.0", feedbackPort: 9096))
+        #expect(mapping.osc == .init(host: "127.0.0.1", port: 9090, root: "/Syndicate/", feedbackHost: "127.0.0.1", feedbackPort: 9096))
         #expect(mapping.deck.number == 1)
         #expect(mapping.jog == .init(ccs: [55], bendReleaseMs: 80, seekSecondsPerTick: 0.02, seekFallbackTicksPerBeat: 32, requireTouch: false))
         #expect(mapping.pitch == .init(msbCC: 8, lsbCC: 40, invert: false, deadZone: 0.005))
@@ -52,5 +53,19 @@ struct MappingTests {
         #expect(mapping.leds.ringColor == [255, 0, 0])
         #expect(mapping.leds.ring == 40)
         #expect(mapping.osc.port == 9090)
+    }
+
+    @Test("An override with a MIDI channel outside 1-16 is refused with a readable error, not a crash", arguments: [0, -1, 17, 300])
+    func badChannelRefused(channel: Int) {
+        let override = Data(#"{ "midi": { "channel": \#(channel) } }"#.utf8)
+        #expect(throws: MappingError.invalid(["midi.channel: \(channel) is out of range, expected 1-16"])) {
+            try Mapping.bundledDefault(overriddenBy: override)
+        }
+    }
+
+    @Test("Channels 1 and 16 are accepted", arguments: [1, 16])
+    func edgeChannelsAccepted(channel: Int) throws {
+        let override = Data(#"{ "midi": { "channel": \#(channel) } }"#.utf8)
+        #expect(try Mapping.bundledDefault(overriddenBy: override).midi.channel == channel)
     }
 }
