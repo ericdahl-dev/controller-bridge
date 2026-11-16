@@ -93,7 +93,7 @@ public final class Coordinator {
         refreshDevices()
         for index in controllers.indices {
             if let source = controllers[index].source {
-                if !midiSystem.sources.contains(where: { $0.id == source.id }) { disconnect(index) }
+                if !midiSystem.sources.contains(where: { $0.id == source.id }) { disconnect(index, reason: .unplugged) }
             } else if connect(index) {
                 controllers[index].bridge.start()
                 requestResend()
@@ -105,12 +105,12 @@ public final class Coordinator {
     /// Reading from a source failed, such as a reconnect that couldn't attach. Counts as that controller's unplug.
     public func inputFailed(source: MIDIEndpoint.ID) {
         for index in controllers.indices where controllers[index].source?.id == source {
-            disconnect(index, reason: "MIDI input failed")
+            disconnect(index, reason: .inputFailed)
         }
     }
 
     /// Releases everything the controller held, exactly once, and closes its ports.
-    private func disconnect(_ index: Int, reason: String? = nil) {
+    private func disconnect(_ index: Int, reason: DisconnectReason) {
         guard let source = controllers[index].source else { return }
         let bridge = controllers[index].bridge
         bridge.releaseAll()
@@ -122,7 +122,13 @@ public final class Coordinator {
         if destination == nil || !controllers.contains(where: { $0.destination?.id == destination?.id }) { bridge.output?.close() }
         bridge.output = nil
         status.controllers[index].profile = nil
-        report(index, "Disconnected \(source.name)" + (reason.map { " (\($0))" } ?? ""))
+        status.controllers[index].lastDisconnect = reason
+        let detail: String? = switch reason {
+        case .sendFailed: "MIDI send failed"
+        case .inputFailed: "MIDI input failed"
+        case .unplugged, .deviceChanged, .removed, .stopped: nil
+        }
+        report(index, "Disconnected \(source.name)" + (detail.map { " (\($0))" } ?? ""))
     }
 
     /// Opens the controller's ports if a matching device is present. Returns whether its input is connected.
@@ -158,6 +164,7 @@ public final class Coordinator {
         controllers[index].source = source
         controllers[index].knownSourceID = source.id
         status.controllers[index].profile = profile.name
+        status.controllers[index].lastProfile = profile.name
         let destinations = midiSystem.destinations
         let chosenOutput = controllers[index].chosenOutput.flatMap { id in destinations.first { $0.id == id } }
         let taken = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].destination?.id })
@@ -203,7 +210,7 @@ public final class Coordinator {
     public func stop() {
         for index in controllers.indices {
             controllers[index].bridge.releaseAll()
-            disconnect(index)
+            disconnect(index, reason: .stopped)
         }
     }
 
@@ -255,7 +262,7 @@ public final class Coordinator {
     /// A failed MIDI send means the controller is gone, even before CoreMIDI says so.
     private func disconnectFailedOutputs() {
         for index in controllers.indices where controllers[index].bridge.outputFailed {
-            disconnect(index, reason: "MIDI send failed")
+            disconnect(index, reason: .sendFailed)
         }
     }
 
@@ -322,7 +329,7 @@ public final class Coordinator {
         controllers[index].chosenInput = input?.id
         controllers[index].chosenOutput = output?.id
         controllers[index].knownSourceID = input?.id
-        disconnect(index)
+        disconnect(index, reason: .deviceChanged)
         if connect(index) {
             controllers[index].bridge.start()
             requestResend()
@@ -350,7 +357,7 @@ public final class Coordinator {
     private func removeLastController() {
         let last = controllers.count - 1
         controllers[last].bridge.releaseAll()
-        disconnect(last)
+        disconnect(last, reason: .removed)
         controllers.removeLast()
         status.controllers.removeLast()
     }

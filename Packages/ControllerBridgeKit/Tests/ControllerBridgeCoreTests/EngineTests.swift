@@ -145,7 +145,10 @@ struct EngineTests {
         #expect(seen.values == [
             CoordinatorStatus(controllers: [ControllerStatus(deck: 1, connected: false, lastEvent: nil)]),
             CoordinatorStatus(
-                controllers: [ControllerStatus(deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true)],
+                controllers: [ControllerStatus(
+                    deck: 1, connected: true, lastEvent: "Connected DENON LC6000 PRIME", profile: "Custom mapping", outputOpen: true,
+                    lastProfile: "Custom mapping"
+                )],
                 devices: [DeviceStatus(name: "DENON LC6000 PRIME", profile: "Custom mapping", note: nil)]
             ),
         ])
