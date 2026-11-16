@@ -6,7 +6,8 @@
 /// when it ends, to calling noise what came in every one of three or more confirmed steps.
 ///
 /// Tails aren't credited either (#186): a release whose press came before the step, and, for half a second after
-/// the step starts, anything from the controls of the take before it (a jog still spinning).
+/// the step starts, anything from the controls of the take before it (a jog still spinning). They stay in the step's
+/// messages, marked as tails (#229), and count for nothing.
 public struct CaptureSession: Sendable {
     public let appVersion: String
     public let device: String
@@ -15,7 +16,7 @@ public struct CaptureSession: Sendable {
     /// The owner's optional note, the only free text in the file.
     public var note: String?
 
-    private typealias Take = [(time: Double, port: Int, bytes: [UInt8])]
+    private typealias Take = [(time: Double, port: Int, bytes: [UInt8], tail: Bool)]
 
     private var index = 0
     private var finished: [(prompt: CapturePrompt, status: StepStatus, take: Take, leds: [LEDAnswer])] = []
@@ -48,7 +49,15 @@ public struct CaptureSession: Sendable {
     /// Whether anything but clock and noise has arrived in the current take.
     public var hasTake: Bool {
         let noise = Set(idleNoise)
-        return take.contains { !Inference.isRealtime($0.bytes) && !(Inference.noiseKey($0.bytes).map(noise.contains) ?? false) }
+        return take.contains {
+            !$0.tail && !Inference.isRealtime($0.bytes) && !(Inference.noiseKey($0.bytes).map(noise.contains) ?? false)
+        }
+    }
+
+    /// For a step repeated with Shift held, how its control differs from the step it repeats, so far (#229).
+    public var currentShift: ShiftLayer? {
+        guard let current, current.shiftedOf != nil else { return nil }
+        return step(current, .confirmed, take, noise: Set(idleNoise), before: file.steps).shift
     }
 
     /// What the current take has detected so far, for showing live.
@@ -61,16 +70,16 @@ public struct CaptureSession: Sendable {
     /// once the list is done.
     public mutating func receive(_ bytes: [UInt8], at time: Double, port: Int = 0) {
         guard current != nil else { return }
+        var tail = false
         if let key = Inference.noiseKey(bytes), !Inference.isRealtime(bytes) {
             let portKey = [UInt8(truncatingIfNeeded: port)] + key
-            if key[0] & 0xF0 == 0x90 {
-                let release = bytes[0] & 0xF0 == 0x80 || bytes[2] == 0
-                if release, !pressed.contains(portKey) { return }
-                if !release { pressed.insert(portKey) }
-            }
-            if let stepStart, time - stepStart < Self.tailWindow, tailKeys.contains(portKey) { return }
+            let note = key[0] & 0xF0 == 0x90
+            let release = note && (bytes[0] & 0xF0 == 0x80 || bytes[2] == 0)
+            if release, !pressed.contains(portKey) { tail = true }
+            if let stepStart, time - stepStart < Self.tailWindow, tailKeys.contains(portKey) { tail = true }
+            if note, !release, !tail { pressed.insert(portKey) }
         }
-        take.append((time, port, bytes))
+        take.append((time, port, bytes, tail))
     }
 
     /// The owner's answer to one LED probe message during the current step. The probe itself (what's safe to send)
@@ -128,7 +137,9 @@ public struct CaptureSession: Sendable {
 
     /// Noise keys heard during confirmed idle steps, in the order first heard.
     private var idleNoise: [[UInt8]] {
-        unique(finished.filter { $0.status == .confirmed && $0.prompt.gesture == .idle }.flatMap { $0.take.compactMap { Inference.noiseKey($0.bytes) } })
+        unique(finished.filter { $0.status == .confirmed && $0.prompt.gesture == .idle }.flatMap {
+            $0.take.filter { !$0.tail }.compactMap { Inference.noiseKey($0.bytes) }
+        })
     }
 
     /// Real-time messages (clock, active sensing) heard anywhere: never credited to a step.
@@ -141,7 +152,8 @@ public struct CaptureSession: Sendable {
     /// repeated with Shift held doesn't count: it repeats its control on purpose.
     private var repeatedNoise: [[UInt8]] {
         guard !finished.contains(where: { $0.status == .confirmed && $0.prompt.gesture == .idle }) else { return [] }
-        let takes = finished.filter { $0.status == .confirmed && $0.prompt.gesture != .idle && $0.prompt.shiftedOf == nil }.map(\.take)
+        let takes = finished.filter { $0.status == .confirmed && $0.prompt.gesture != .idle && $0.prompt.shiftedOf == nil }
+            .map { $0.take.filter { !$0.tail } }
         guard takes.count >= 3 else { return [] }
         let keys = takes.map { Set($0.compactMap { Inference.noiseKey($0.bytes) }) }
         let everywhere = keys.dropFirst().reduce(keys[0]) { $0.intersection($1) }
@@ -157,7 +169,7 @@ public struct CaptureSession: Sendable {
     private func step(_ prompt: CapturePrompt, _ status: StepStatus, _ take: Take, noise: Set<[UInt8]>, before: [CaptureStep]) -> CaptureStep {
         let heard = take.filter { !Inference.isRealtime($0.bytes) }
         let kept = prompt.gesture == .idle ? heard : heard.filter { Inference.noiseKey($0.bytes).map { !noise.contains($0) } ?? true }
-        let bytes = kept.map { (port: $0.port, bytes: $0.bytes) }
+        let bytes = kept.filter { !$0.tail }.map { (port: $0.port, bytes: $0.bytes) }
         var controls = prompt.gesture == .idle ? [] : Inference.controls(in: bytes, gesture: prompt.gesture)
         var shift: ShiftLayer?
         if let base = prompt.shiftedOf {
@@ -171,7 +183,7 @@ public struct CaptureSession: Sendable {
 
     private func messages(_ take: Take) -> [CaptureMessage] {
         guard let start = take.first?.time else { return [] }
-        return take.map { CaptureMessage(t: Int((($0.time - start) * 1000).rounded()), port: $0.port, bytes: $0.bytes) }
+        return take.map { CaptureMessage(t: Int((($0.time - start) * 1000).rounded()), port: $0.port, bytes: $0.bytes, tail: $0.tail) }
     }
 
     /// How a shifted control differs from the same control in the confirmed unshifted step.

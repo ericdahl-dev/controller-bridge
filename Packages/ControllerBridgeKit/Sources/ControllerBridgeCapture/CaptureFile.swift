@@ -166,20 +166,25 @@ public struct CaptureMessage: Codable, Equatable, Sendable {
     /// The input port it came on, as an index into the file's `ports.input`.
     public var port: Int
     public var bytes: [UInt8]
+    /// A tail of the previous step (#229): a late release, or the previous control just after Next. Kept for the
+    /// record, credited to nothing. Written only when true, so format 1 readers are unaffected.
+    public var tail: Bool
 
-    public init(t: Int, port: Int = 0, bytes: [UInt8]) {
+    public init(t: Int, port: Int = 0, bytes: [UInt8], tail: Bool = false) {
         self.t = t
         self.port = port
         self.bytes = bytes
+        self.tail = tail
     }
 
-    enum CodingKeys: String, CodingKey { case t, port, midi }
+    enum CodingKeys: String, CodingKey { case t, port, midi, tail }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         t = try c.decode(Int.self, forKey: .t)
         port = try c.decode(Int.self, forKey: .port)
         bytes = try Hex.bytes(c.decode(String.self, forKey: .midi))
+        tail = try c.decodeIfPresent(Bool.self, forKey: .tail) ?? false
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -187,6 +192,7 @@ public struct CaptureMessage: Codable, Equatable, Sendable {
         try c.encode(t, forKey: .t)
         try c.encode(port, forKey: .port)
         try c.encode(Hex.string(bytes), forKey: .midi)
+        if tail { try c.encode(true, forKey: .tail) }
     }
 }
 

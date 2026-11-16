@@ -139,4 +139,55 @@ struct CaptureFlowTests {
         let json = String(decoding: try #require(try flow.file?.encoded()), as: UTF8.self)
         #expect(!json.contains("\"note\""))
     }
+
+    // MARK: Unplug mid-capture (#229)
+
+    @Test("Unplugged mid-step: the buttons are off, MIDI is ignored, and VoiceOver hears what to do")
+    func disconnected() {
+        var flow = Self.started(at: 100)
+        flow.next(at: 105)
+        _ = flow.takeAnnouncement()
+        flow.receive([0x90, 0x01, 0x7F], at: 106)
+        _ = flow.takeAnnouncement()
+        flow.disconnected(at: 107)
+        #expect(flow.isDisconnected)
+        #expect(!flow.canNext(at: 107))
+        #expect(!flow.canRedo)
+        #expect(!flow.canSkip)
+        #expect(flow.takeAnnouncement() == "Controller disconnected. Plug it back in to continue, or end the capture.")
+        flow.receive([0x90, 0x02, 0x7F], at: 108)
+        flow.skip(at: 108)
+        #expect(flow.prompt?.id == "deck1.play")
+    }
+
+    @Test("Plugged back in: the same step starts again, its partial take thrown away")
+    func reconnected() {
+        var flow = Self.started(at: 100)
+        flow.next(at: 105)
+        flow.receive([0x90, 0x01, 0x7F], at: 106)
+        flow.disconnected(at: 107)
+        _ = flow.takeAnnouncement()
+        flow.reconnected(at: 110)
+        #expect(!flow.isDisconnected)
+        #expect(flow.prompt?.id == "deck1.play")
+        #expect(flow.detected.isEmpty)
+        #expect(flow.takeAnnouncement() == "Controller reconnected. Step 2 of 3. Press and release Play on deck 1.")
+        flow.receive([0x90, 0x01, 0x7F], at: 111)
+        #expect(flow.canNext(at: 111))
+    }
+
+    @Test("Ending the capture early keeps the steps so far, leaves the rest out, and the summary says it's partial")
+    func endEarly() throws {
+        var flow = Self.started(at: 100)
+        flow.next(at: 105)
+        flow.receive([0x90, 0x01, 0x7F], at: 106)
+        flow.disconnected(at: 107)
+        _ = flow.takeAnnouncement()
+        flow.endCapture(at: 108)
+        #expect(flow.phase == .done)
+        let file = try #require(flow.file)
+        #expect(file.steps.map(\.prompt) == ["idle"])
+        #expect(file.summary.contains("Ended early: 1 of 3 steps"))
+        #expect(flow.takeAnnouncement() == "Capture ended early: 1 of 3 steps.")
+    }
 }

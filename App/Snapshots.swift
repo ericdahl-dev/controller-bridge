@@ -396,6 +396,17 @@ enum Snapshots {
             ("waiting", CaptureController(flow: captureFlow(at: "deck1.play", fed: false), now: 1e6)),
             ("jog", CaptureController(flow: captureFlow(at: "deck1.jog.touch", fed: true), now: 1e6)),
             ("shift", CaptureController(flow: captureFlow(at: "deck1.play.shift", fed: true), now: 1e6)),
+            // Unplugged mid-step (#229): the banner, with End capture.
+            ("disconnected", {
+                var flow = captureFlow(at: "deck1.jog.touch", fed: true)
+                flow.disconnected(at: 1e6)
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
+            ("ended-early", {
+                var flow = captureFlow(at: "deck1.jog.touch", fed: true)
+                flow.endCapture(at: 1e6)
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
             ("done", CaptureController(flow: captureFlow(at: nil, fed: true), now: 1e6)),
             ("done-note", {
                 var flow = captureFlow(at: nil, fed: true)
