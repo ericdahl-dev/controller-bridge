@@ -109,4 +109,16 @@ struct PadsTests {
         Self.press(rig, Self.modeLoop)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(2), .int(0)])])
     }
+
+    @Test("Held pads are in the held-control list: stop releases a held roll once")
+    func stopReleasesHeldPad() throws {
+        let rig = try Self.startedRig()
+        Self.press(rig, Self.modeRoll)
+        Self.down(rig, 33)
+        rig.osc.sent.removeAll()
+
+        rig.coordinator.stop()
+        Self.up(rig, 33)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/SlipLoop/Sixteenth", [.int(0)])])
+    }
 }
