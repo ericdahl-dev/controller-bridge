@@ -72,4 +72,37 @@ struct DiagnosticsPresentationTests {
         #expect(DiagnosticsTab.hiddenNotesHint([52, 53]) == "Notes 52 and 53, which the controller sends on its own, are hidden.")
         #expect(DiagnosticsTab.hiddenNotesHint([]) == nil)
     }
+
+    // #162: the visible tab, as plain text to copy or save.
+
+    @Test("A tab's plain text is its shown lines, oldest first, each ending in a newline; UNMAPPED keeps its words only")
+    func plainText() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .monitor, message: "12:00:01.000  1  Note On  1 127  ", label: "play")
+        lines.append(to: .monitor, message: "12:00:02.000  1  Note On 99 127  ", label: "UNMAPPED", isUnmapped: true)
+        lines.append(to: .osc, message: "OSC -> /Syndicate/Deck/1/PlayPause 1")
+        #expect(lines.plainText(.monitor) == "12:00:01.000  1  Note On  1 127  play\n12:00:02.000  1  Note On 99 127  UNMAPPED\n")
+        #expect(lines.plainText(.sweep) == "")
+    }
+
+    @Test("The OSC tab's plain text follows the Progress and Time filter, both ways")
+    func plainTextFollowsFilter() {
+        var lines = DiagnosticsLines()
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Playing 1")
+        lines.append(to: .osc, message: "OSC <- /Syndicate/Deck/1/Progress 0.25")
+        lines.append(to: .osc, message: "OSC -> /Syndicate/Deck/1/PlayPause 1")
+        #expect(lines.plainText(.osc) == "OSC <- /Syndicate/Deck/1/Playing 1\nOSC -> /Syndicate/Deck/1/PlayPause 1\n")
+        lines.hideProgressAndTime = false
+        #expect(lines.plainText(.osc)
+            == "OSC <- /Syndicate/Deck/1/Playing 1\nOSC <- /Syndicate/Deck/1/Progress 0.25\nOSC -> /Syndicate/Deck/1/PlayPause 1\n")
+    }
+
+    @Test("Save… suggests the app's name and the tab's, as a .txt file", arguments: [
+        (DiagnosticsTab.monitor, "DeckBridge MIDI Monitor.txt"),
+        (.sweep, "DeckBridge LED Sweep.txt"),
+        (.osc, "DeckBridge OSC Log.txt"),
+    ])
+    func exportFileName(tab: DiagnosticsTab, name: String) {
+        #expect(tab.exportFileName(appName: "DeckBridge") == name)
+    }
 }
