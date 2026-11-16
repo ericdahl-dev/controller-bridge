@@ -94,3 +94,39 @@ test("blocked storage still counts the visit", () => {
   assert.equal(inserted.length, 1);
   assert.notEqual(window.posthog, undefined);
 });
+
+// Clicks an element on a loaded page and returns what posthog.capture received.
+function click(attrs, { pathname = "/", withPosthog = true } = {}) {
+  const run = load({ pathname });
+  const captured = [];
+  run.window.posthog = withPosthog ? { capture: (name, props) => captured.push([name, { ...props }]) } : undefined;
+  const el = attrs && { getAttribute: (k) => attrs[k] ?? null };
+  run.listener({ target: { closest: () => el } });
+  return captured;
+}
+
+test("a tagged link sends its event with the page it was on", () => {
+  assert.deepEqual(click({ "data-track": "join_beta_clicked" }, { pathname: "/support/" }),
+    [["join_beta_clicked", { path: "/support/" }]]);
+  assert.deepEqual(click({ "data-track": "contact_email_clicked" }, { pathname: "/privacy/" }),
+    [["contact_email_clicked", { path: "/privacy/" }]]);
+  assert.deepEqual(click({ "data-track": "setup_guide_clicked" }), [["setup_guide_clicked", { path: "/" }]]);
+  assert.deepEqual(click({ "data-track": "app_store_clicked" }), [["app_store_clicked", { path: "/" }]]);
+});
+
+test("adds the destination when the link names one", () => {
+  assert.deepEqual(click({ "data-track": "join_beta_clicked", "data-track-destination": "email" }),
+    [["join_beta_clicked", { path: "/", destination: "email" }]]);
+});
+
+test("ignores untagged links, other event names, clicks off a link, and a page without PostHog", () => {
+  assert.deepEqual(click({ href: "support/" }), []);
+  assert.deepEqual(click({ "data-track": "anything_else" }), []);
+  assert.deepEqual(click(null), []);
+  assert.deepEqual(click({ "data-track": "join_beta_clicked" }, { withPosthog: false }), []);
+});
+
+test("adds no click listener where PostHog doesn't load", () => {
+  assert.equal(load({ hostname: "127.0.0.1" }).listener, null);
+  assert.equal(load({ stored: "1" }).listener, null);
+});

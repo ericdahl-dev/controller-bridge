@@ -44,4 +44,18 @@
   // PostHog's standard loader snippet: it queues calls until https://us-assets.i.posthog.com/static/array.js loads.
   !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]);t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com"),p.src+="/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString()+" (stub)"},n="capture identify alias on off once set_config people.set people.set_once unset increment append union track_links track_forms track_pageview register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags addEarlyAccessFeatureCallback updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys getNextSurveyStep".split(" "),o=0;o<n.length;o++)g(u,n[o]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
   window.posthog.init(KEY, OPTIONS);
+
+  // Named click events (autocapture stays off). A link with data-track="<event>" sends posthog.capture(event, { path }),
+  // plus { destination } when it has data-track-destination. Only these events; check_site makes every mailto link carry one.
+  var EVENTS = ["join_beta_clicked", "contact_email_clicked", "setup_guide_clicked", "app_store_clicked"];
+  document.addEventListener("click", function (e) {
+    var el = e.target && e.target.closest ? e.target.closest("a[data-track]") : null;
+    if (!el || !window.posthog) return;
+    var name = el.getAttribute("data-track");
+    if (EVENTS.indexOf(name) < 0) return;
+    var props = { path: window.location.pathname };
+    var destination = el.getAttribute("data-track-destination");
+    if (destination) props.destination = destination;
+    try { window.posthog.capture(name, props); } catch (err) {}
+  }, true);
 })();
