@@ -3,6 +3,18 @@
 The release workflow puts everything after the rule below into each build's "What to Test" (en-US), so keep it current
 for the version being tagged (#180). App Store Connect allows 4,000 characters.
 
+**Who gets the build (#244).** A tag goes to the **Internal** group only:
+
+    git tag -a v1.0.3 -m "Jog display check"
+
+To also send it to the external **Syndicate** group and submit it for Beta App Review, put `[external]` in the
+annotated tag's message:
+
+    git tag -a v1.0.3 -m "Release 1.0.3 [external]"
+
+To send out a build that's already uploaded, run the Release workflow by hand with its version and build number and
+**external** ticked. A lightweight tag, or a message without the marker, is always internal only.
+
 ---
 
 DeckBridge 1.0.1 has a new look that matches getdeckbridge.app. The controller works as in 1.0; this build is about the

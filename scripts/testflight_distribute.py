@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Distributes an uploaded TestFlight build, for the release workflow (#180).
 
-Waits for the build to finish processing, sets its What to Test from docs/TESTFLIGHT.md, adds it to the beta groups
-by name, and submits it for Beta App Review. Every step is safe to run again. Uses the App Store Connect API with the
+Waits for the build to finish processing, sets its What to Test from docs/TESTFLIGHT.md and adds it to the Internal
+group. Only with EXTERNAL=1 (#244) does it also add it to the external group and submit it for Beta App Review. Every step is safe to run again. Uses the App Store Connect API with the
 key the upload uses (Python standard library plus `openssl`, as ci_profile.py does). Never prints the key or a token.
 Tested by scripts/test_testflight_distribute.py, through an injected HTTP layer: http(method, path, body, query)
 returns (status, json).
@@ -185,8 +185,14 @@ def dry_run(http):
     return wrapped
 
 
-def run(http, bundle_id, version, build_number, doc_path, sleep):
-    """The whole distribution. Internal testers get the build even when the external half can't go on (missing Test
+def external_from(value):
+    """EXTERNAL from the environment: on only for "1" or "true" (#244). Anything else, or unset, is internal only."""
+    return value in ("1", "true")
+
+
+def run(http, bundle_id, version, build_number, doc_path, sleep, external=False):
+    """The whole distribution. Internal only unless `external` (#244): then the build also goes to the external group
+    and Beta App Review. Internal testers get the build even when the external half can't go on (missing Test
     Information): that half is reported as failed and the run exits non-zero. Returns the exit code."""
     try:
         app = find_app(http, bundle_id)
@@ -197,6 +203,10 @@ def run(http, bundle_id, version, build_number, doc_path, sleep):
     except DistributeError as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
+    if not external:
+        print(f"Internal only: not added to {EXTERNAL_GROUP} and not submitted for Beta App Review. "
+              "Tag with [external] in the message, or run the workflow with external, to send it out.")
+        return 0
     try:
         check_test_information(http, app)
         add_to_group(http, app, build, EXTERNAL_GROUP)
@@ -230,11 +240,13 @@ def api_http(method, path, body=None, query=None):
 
 def main():
     """Environment: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH, BUNDLE_ID, VERSION, BUILD_NUMBER, WHAT_TO_TEST
-    (default docs/TESTFLIGHT.md), and DRY_RUN=1 to read everything and change nothing."""
+    (default docs/TESTFLIGHT.md), EXTERNAL=1 to also send it to the external group and Beta App Review (#244; internal
+    only otherwise), and DRY_RUN=1 to read everything and change nothing."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     doc = os.environ.get("WHAT_TO_TEST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "TESTFLIGHT.md"))
     http = dry_run(api_http) if os.environ.get("DRY_RUN") in ("1", "true") else api_http
-    return run(http, os.environ["BUNDLE_ID"], os.environ["VERSION"], os.environ["BUILD_NUMBER"], doc, time.sleep)
+    return run(http, os.environ["BUNDLE_ID"], os.environ["VERSION"], os.environ["BUILD_NUMBER"], doc, time.sleep,
+               external=external_from(os.environ.get("EXTERNAL", "")))
 
 
 if __name__ == "__main__":
