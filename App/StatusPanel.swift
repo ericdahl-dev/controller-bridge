@@ -18,7 +18,21 @@ extension BridgeStatus {
     }
 
     /// The status in Syndicate's words.
-    var presentation: StatusPresentation {
+    var presentation: StatusPresentation { StatusPresentation(bridgeState) }
+
+    /// Why the LEDs are dark, if they might be (#27).
+    var help: HelpMessage? { HelpMessage(bridgeState) }
+
+    /// The setup guide, naming the connected controller's profile when there is one.
+    var setupGuide: SetupGuide {
+        let port = switch feedback {
+        case .listening(let port), .portInUse(let port): port
+        case .starting, .failed: 9096
+        }
+        return SetupGuide(controller: controller?.profile, oscPort: 9090, feedbackPort: port)
+    }
+
+    var bridgeState: BridgeState {
         let controller: BridgeState.Controller =
             if let bridge = self.controller, bridge.connected { .connected(profile: bridge.profile ?? "Controller") } else { .notConnected }
         let feedback: BridgeState.Feedback = switch self.feedback {
@@ -33,10 +47,10 @@ extension BridgeStatus {
         case .portInUse(let port): .portInUse(port: port)
         case .failed: .failed
         }
-        return StatusPresentation(BridgeState(
+        return BridgeState(
             controller: controller, feedback: feedback, deck: shownDeck, stopped: problem != nil, lastDropout: lastDropout,
             master: self.controller?.master == true
-        ))
+        )
     }
 }
 
@@ -47,20 +61,21 @@ enum AppInfo {
 
 struct StatusPanel: View {
     let status: BridgeStatus
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let presentation = status.presentation
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
+                HStack(spacing: Theme.Space.m) {
                     DeckBadgeView(deck: status.shownDeck)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(AppInfo.displayName).font(Theme.ui(14, .bold)).foregroundStyle(Theme.text)
-                        Text(subtitle).font(Theme.ui(11)).foregroundStyle(Theme.caption).lineLimit(1)
+                        Text(AppInfo.displayName).font(Theme.ui(Theme.Size.title, .bold)).foregroundStyle(Theme.text)
+                        Text(subtitle).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption).lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
-                HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .top, spacing: Theme.Space.xl) {
                     ForEach(presentation.lights, id: \.label) { StatusLightView(light: $0) }
                     if let master = presentation.master { StatusLightView(light: master) }
                     Spacer(minLength: 0)
@@ -73,27 +88,36 @@ struct StatusPanel: View {
                 if let summary = others.summary {
                     OtherDevicesList(summary: summary, rows: others.rows)
                 }
-                HStack(spacing: 16) {
+                HStack(spacing: Theme.Space.xl) {
                     CaptionValue(caption: "Deck", value: "\(status.shownDeck)")
                     CaptionValue(caption: "OSC", value: "9090")
                     CaptionValue(caption: "Feedback", value: feedbackPort)
                     Spacer(minLength: 0)
                 }
                 if let dropout = presentation.lastDropout {
-                    Text(dropout).font(Theme.ui(11)).foregroundStyle(Theme.caption).lineLimit(1)
+                    Text(dropout).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption).lineLimit(1)
                 }
                 if let problem = status.problem {
-                    Text(problem).font(Theme.ui(11)).foregroundStyle(Theme.error)
+                    Text(problem).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                HStack(spacing: 6) {
+                if let help = status.help {
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                        Text("WHY NO LEDS?").font(Theme.captionFont).foregroundStyle(Theme.caption)
+                        Text(help.text).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                // Always there, so the guide can be reopened; the help above says when it's the fix.
+                guideLink
+                HStack(spacing: Theme.Space.s) {
                     SettingsLink { Text("Settings…") }.buttonStyle(FlatButtonStyle())
                     Button("Quit") { NSApplication.shared.terminate(nil) }
                         .buttonStyle(FlatButtonStyle())
                         .keyboardShortcut("q")
                 }
             }
-            .padding(12)
+            .padding(Theme.Space.l)
             .background(Theme.panel)
             Rectangle().fill(Theme.hairline).frame(height: 1)
             StatusLineView(presentation: presentation, deck: status.shownDeck)
@@ -101,6 +125,15 @@ struct StatusPanel: View {
         .frame(width: 360)
         .background(Theme.background)
         .environment(\.colorScheme, .dark)
+    }
+
+    /// Reopens the first-run guide (#27).
+    private var guideLink: some View {
+        Button("Setup guide…") { SetupGuideWindow.open(openWindow) }
+            .buttonStyle(.plain)
+            .font(Theme.ui(Theme.Size.body, .semibold))
+            .foregroundStyle(Theme.text)
+            .underline()
     }
 
     /// The connected controller's profile, else its last disconnect or reconnect, else none.

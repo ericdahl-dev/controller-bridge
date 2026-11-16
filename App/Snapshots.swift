@@ -43,6 +43,11 @@ enum Snapshots {
                 $0.feedback = .portInUse(port: 9096)
             }),
             ("starting-deck4", { $0.deck = 4 }),
+            ("waiting", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .waiting
+            }),
             ("stopped", { $0.problem = "Couldn't start CoreMIDI: status(\"MIDIClientCreateWithBlock\", -10844)" }),
         ]
         do { try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true) } catch {
@@ -52,6 +57,7 @@ enum Snapshots {
             let status = BridgeStatus()
             configure(status)
             write(StatusPanel(status: status), to: "\(directory)/panel-\(name).png")
+            if name == "connected" { write(SetupGuideView(guide: status.setupGuide), to: "\(directory)/setup-guide.png") }
             write(icons(status.presentation.icon), to: "\(directory)/icon-\(name).png")
         }
     }
