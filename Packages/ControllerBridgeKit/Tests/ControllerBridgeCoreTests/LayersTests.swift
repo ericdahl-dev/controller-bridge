@@ -149,4 +149,17 @@ struct LayersTests {
         Self.fader(rig, channel: 2, 0x40)              // back across 0.0: picked up
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/TempoSlider", [.float(0)])])
     }
+
+    @Test("With the device on automatic, all four layers share the one unit; a second following entry waits for another unit")
+    func automaticLayersShareTheUnit() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        let automatic = ControllerSettings(deck: 1, input: nil, output: nil)
+        rig.coordinator.setControllers(ControllerSettings.expanded([automatic], layers: Self.lc6000Layers))
+        #expect(rig.coordinator.status.controllers.map(\.connected) == [true, true, true, true])
+
+        // Two following entries would put two decks on each channel: the second one's layers wait for a second unit.
+        rig.coordinator.setControllers(ControllerSettings.expanded([automatic, automatic], layers: Self.lc6000Layers))
+        #expect(rig.coordinator.status.controllers.map(\.connected) == [true, true, true, true, false, false, false, false])
+    }
 }

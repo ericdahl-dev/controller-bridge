@@ -50,6 +50,9 @@ public final class Coordinator {
         var chosenOutput: MIDIEndpoint.ID?
         /// The MIDI channel picked in Settings (#25), 1-16, or nil for the profile's.
         var channel: Int?
+        /// One of the deck layers of a controller that follows its own layers (#79): it shares the unit with the
+        /// other layers, on its own channel.
+        var followsLayers = false
         /// The destination its LEDs go to, once open.
         var destination: MIDIEndpoint?
     }
@@ -125,6 +128,17 @@ public final class Coordinator {
         report(index, "Disconnected \(source.name)" + (reason.map { " (\($0))" } ?? ""))
     }
 
+    /// Whether two controllers are layers of one unit: both follow layers, on different channels. Two following
+    /// entries on one channel would put two decks on one layer, so they don't share.
+    private func sharesLayers(_ a: Int, with b: Int) -> Bool {
+        guard controllers[a].followsLayers, controllers[b].followsLayers else { return false }
+        let channelA = controllers[a].bridge.mapping.midi.channel, channelB = controllers[b].bridge.mapping.midi.channel
+        guard channelA != channelB, let source = controllers[b].source else { return channelA != channelB }
+        // Another layer already on this unit with my channel means this unit's layer is taken.
+        return !controllers.indices.contains { $0 != a && controllers[$0].source?.id == source.id
+            && controllers[$0].followsLayers && controllers[$0].bridge.mapping.midi.channel == channelA }
+    }
+
     /// Opens the controller's ports if a matching device is present. Returns whether its input is connected.
     private func connect(_ index: Int) -> Bool {
         let sources = midiSystem.sources
@@ -132,8 +146,10 @@ public final class Coordinator {
         if let chosen = controllers[index].chosenInput {
             source = sources.first { $0.id == chosen }
         } else {
-            // Automatic: a unit another controller already has stays with it.
-            let claimed = Set(controllers.indices.filter { $0 != index }.compactMap { controllers[$0].source?.id })
+            // Automatic: a unit another controller already has stays with it, except that a controller following its
+            // own layers shares its unit with its other layers, each on its own channel (#79).
+            let claimed = Set(controllers.indices.filter { $0 != index && !sharesLayers(index, with: $0) }
+                .compactMap { controllers[$0].source?.id })
             let free = sources.filter { !claimed.contains($0.id) }
             let known = controllers[index].knownSourceID.flatMap { id in free.first { $0.id == id } }
             source = known ?? free.first { ControllerProfile.matching($0.name, in: profiles) != nil }
@@ -372,12 +388,14 @@ public final class Coordinator {
         status.controllers.append(ControllerStatus(deck: entry.deck, connected: false))
         var controller = Controller(bridge: Bridge(mapping: first.mapping, osc: osc, clock: clock), profile: first)
         controller.channel = entry.channel
+        controller.followsLayers = entry.followLayers == true
         controllers.append(controller)
         controllers[index].bridge = makeBridge(first, for: index)
         setDevices(input: entry.input, output: entry.output, controller: index)
     }
 
     private func update(_ index: Int, to entry: ControllerSettings) {
+        controllers[index].followsLayers = entry.followLayers == true
         setDeck(entry.deck, controller: index)
         if entry.channel != controllers[index].channel {
             controllers[index].channel = entry.channel
