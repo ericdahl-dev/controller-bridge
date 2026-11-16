@@ -244,4 +244,14 @@ struct PadsTests {
         #expect(Self.padLEDs(rig) == [0, 0, 0, 0, 0, 0, 0, 0])
         #expect(rig.leds[40] == 0)
     }
+
+    @Test("Loaded 0 forgets the cues: the hot cue pads go dark")
+    func unloadClearsCues() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(Self.cues([1, 2, 1, 2, 1, 2, 1, 2]))
+        #expect(Self.padLEDs(rig) == [48, 56, 48, 56, 48, 56, 48, 56])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
+        #expect(Self.padLEDs(rig) == [0, 0, 0, 0, 0, 0, 0, 0])
+    }
 }

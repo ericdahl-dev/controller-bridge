@@ -176,7 +176,8 @@ final class Bridge {
         case "loaded":
             loaded = value
             if !loaded {
-                // The track is gone: forget where it was and how long it was.
+                // The track is gone: forget its cues, where it was and how long it was.
+                cues = [Int](repeating: 0, count: 8)
                 progress = nil
                 duration = nil
             }
