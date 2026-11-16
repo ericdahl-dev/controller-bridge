@@ -453,4 +453,19 @@ struct LayersTests {
         #expect(midi.outputs[Self.wdOut.id]?.sent ?? [] == [])
         #expect((midi.outputs[renamedOut.id]?.sent ?? []).contains(.noteOn(channel: 0, note: 1, velocity: 127)))
     }
+
+    @Test("Connecting says where the LEDs go, or that no output was found, so a dark unit can be diagnosed from the log")
+    func connectLogsTheLEDOutput() throws {
+        let midi = Rig.FakeMIDISystem(sources: [Self.wdIn, Self.controlsIn], destinations: [Self.wdOut, Self.controlsOut])
+        let log = Rig.FakeLog()
+        let coordinator = Coordinator(profiles: try ControllerProfile.bundled(), midi: midi, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: log)
+        coordinator.start(controllers: [ControllerSettings(deck: 1, input: nil, output: nil, followLayers: false)], ledsEnabled: true)
+        #expect(log.lines.contains("LEDs go to Denon DJ LC6000 PRIME LC6000 PRIME Controller"))
+
+        let none = Rig.FakeMIDISystem(sources: [Self.controlsIn], destinations: [Self.wdOut])
+        let noneLog = Rig.FakeLog()
+        let alone = Coordinator(profiles: try ControllerProfile.bundled(), midi: none, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: noneLog)
+        alone.start(controllers: [ControllerSettings(deck: 1, input: nil, output: nil, followLayers: false)], ledsEnabled: true)
+        #expect(noneLog.lines.contains("No LED output found for Denon DJ LC6000 PRIME LC6000 PRIME Controller, so its LEDs stay dark"))
+    }
 }

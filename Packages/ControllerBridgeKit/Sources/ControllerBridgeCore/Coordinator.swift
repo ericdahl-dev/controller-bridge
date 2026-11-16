@@ -240,10 +240,17 @@ public final class Coordinator {
         if let destination = chosenOutput ?? sameName ?? Self.match(allowed, bridge.mapping.midi.output) {
             do {
                 bridge.output = try midiSystem.openOutput(destination: destination)
+                // Layers sharing a unit open the same port: say it once.
+                if controllers[index].destination?.id != destination.id,
+                   !controllers.contains(where: { $0.destination?.id == destination.id }) {
+                    log.log("LEDs go to \(destination.name)")
+                }
                 controllers[index].destination = destination
             } catch {
                 log.log("Couldn't open MIDI output \(destination.name): \(error)")
             }
+        } else {
+            log.log("No LED output found for \(source.name), so its LEDs stay dark")
         }
         report(index, "Connected \(source.name)")
         return true
