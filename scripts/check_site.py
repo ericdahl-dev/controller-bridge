@@ -7,7 +7,7 @@
 - nothing is loaded from another site (fonts, images, styles, scripts are all local); links out are fine,
   and so are <link rel="canonical"> and <link rel="alternate">. The one exception is the PostHog loader script
   (POSTHOG_LOADER), which website/analytics.js adds to count visits; the privacy page discloses it
-- every page has a title and a meta description
+- every page has a title and a meta description; the home page links the LC6000 page (for/lc6000/, #268)
 - every page loads the site's own analytics.js, and every mailto: link has a data-track (the click event it sends)
 - no page, index.md or llms.txt still has a TODO(user) TestFlight placeholder (the public link is live)
 - every <img> has an alt attribute (alt="" for a decorative one)
@@ -24,7 +24,8 @@ import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
-PAGES = ["index.html", "support/index.html", "privacy/index.html", "capture/index.html"]
+PAGES = ["index.html", "support/index.html", "privacy/index.html", "capture/index.html",
+         "for/lc6000/index.html"]  # /for/<controller>/: one page per supported controller (#268)
 ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt"]
 SITE = "https://getdeckbridge.app/"
 LLMS_HEADING = "# DeckBridge"
@@ -174,9 +175,13 @@ def check_page(root, file, text):
     out += check_refs(root, file, page.refs)
     if file == HOME:
         # The FAQ points owners without the app to the web capture (#190), in its text and in the FAQPage JSON-LD.
-        if not any(not loaded and target(root, file, url) == os.path.normpath(os.path.join(root, "capture"))
-                   for url, loaded in page.refs if not is_external(url) and not skip(url)):
+        def links(folder):
+            return any(not loaded and target(root, file, url) == os.path.normpath(os.path.join(root, folder))
+                       for url, loaded in page.refs if not is_external(url) and not skip(url))
+        if not links("capture"):
             out.append(f"{file}: doesn't link the web capture (capture/)")
+        if not links("for/lc6000"):
+            out.append(f"{file}: doesn't link the LC6000 page (for/lc6000/)")
         if not any(CAPTURE_URL in block for block in page.json_ld):
             out.append(f"{file}: its JSON-LD doesn't name {CAPTURE_URL}")
     if file == PRIVACY:
