@@ -23,6 +23,9 @@ untrusted UDP, and the app's network server entitlement would otherwise expose i
 on another Mac, Settings (#19) switches the feedback listen address from "this Mac only" to "all networks", which brings
 up macOS's local-network prompt.
 
+Two keys are new, with no Python counterpart: `leds.beat_pulse` (`"off"`, `"beat"` or `"downbeat"`, default `"off"`)
+pulses the platter ring on Syndicate's master clock, and `leds.pulse_ms` (default 100) is how long each pulse stays lit.
+
 JSON has no comments, so the PROVISIONAL notes from the TOML file live here. Check these on hardware before relying on
 them:
 

@@ -26,6 +26,11 @@ struct HeldControls {
         controls[key] = control
     }
 
+    /// Whether the control is held now.
+    func contains(_ key: HoldKey) -> Bool {
+        controls[key] != nil
+    }
+
     /// Forgets the control and returns what to send to release it, or nil if it isn't held.
     mutating func take(_ key: HoldKey) -> HeldControl? {
         guard let control = controls.removeValue(forKey: key) else { return nil }

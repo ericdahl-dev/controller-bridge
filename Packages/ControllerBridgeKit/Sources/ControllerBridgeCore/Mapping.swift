@@ -177,6 +177,14 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var rollPadColor: [Int]
         public var loopPadColor: [Int]
         public var dimUnlitButtons: Bool
+        /// Pulse the platter ring on Syndicate's master clock: never, on every beat, or on the downbeat only.
+        public var beatPulse: BeatPulse
+        /// How long the ring stays lit after each pulsed beat.
+        public var pulseMs: Int
+
+        public enum BeatPulse: String, Equatable, Sendable, Codable {
+            case off, beat, downbeat
+        }
 
         enum CodingKeys: String, CodingKey {
             case pitchCenter = "pitch_center"
@@ -185,15 +193,22 @@ public struct Mapping: Equatable, Sendable, Codable {
             case rollPadColor = "roll_pad_color"
             case loopPadColor = "loop_pad_color"
             case dimUnlitButtons = "dim_unlit_buttons"
+            case beatPulse = "beat_pulse"
+            case pulseMs = "pulse_ms"
         }
 
-        public init(pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool) {
+        public init(
+            pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
+            beatPulse: BeatPulse, pulseMs: Int
+        ) {
             self.pitchCenter = pitchCenter
             self.ring = ring
             self.ringColor = ringColor
             self.rollPadColor = rollPadColor
             self.loopPadColor = loopPadColor
             self.dimUnlitButtons = dimUnlitButtons
+            self.beatPulse = beatPulse
+            self.pulseMs = pulseMs
         }
     }
 

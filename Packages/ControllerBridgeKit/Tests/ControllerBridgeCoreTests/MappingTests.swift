@@ -3,7 +3,8 @@ import ControllerBridgeCore
 import Testing
 
 /// Expected values are typed from lc6000_bridge/default_mapping.toml, the Python default mapping, except
-/// `osc.feedback_host`: the app listens on loopback by default (#32), where Python listened on 0.0.0.0.
+/// `osc.feedback_host`: the app listens on loopback by default (#32), where Python listened on 0.0.0.0, and
+/// `leds.beat_pulse` / `leds.pulse_ms`, which Python never had (#23).
 @Suite("Mapping")
 struct MappingTests {
     @Test("The bundled default mapping carries the Python default values")
@@ -27,7 +28,7 @@ struct MappingTests {
         #expect(mapping.notes.pads == [32, 33, 34, 35, 36, 37, 38, 39])
         #expect(mapping.leds == .init(
             pitchCenter: 42, ring: 40, ringColor: [0, 128, 255], rollPadColor: [255, 140, 0],
-            loopPadColor: [0, 255, 0], dimUnlitButtons: true
+            loopPadColor: [0, 255, 0], dimUnlitButtons: true, beatPulse: .off, pulseMs: 100
         ))
     }
 

@@ -92,6 +92,12 @@ final class Bridge {
 
     // Syndicate's state, from feedback.
     var playing = false
+    /// A quantized start is waiting for the beat.
+    var playPending = false
+    /// When the last pulsed beat of Syndicate's master clock arrived, if any.
+    var lastPulseTime: Double?
+    /// When any master clock beat last arrived, pulsed or not.
+    var lastClockTime: Double?
     var loaded = false
     var synced = false
     var sliderEnabled = true
@@ -165,6 +171,8 @@ final class Bridge {
         let address = message.address.lowercased()
         // Cue colors are for every deck, so they come before the deck check.
         if address == (root + "ColorPalette").lowercased() { return colorPalette(message.arguments) }
+        // The master clock is one for all decks too.
+        if address == (root + "Header/Clock").lowercased() { return headerClock(message.arguments) }
         let deckPrefix = (root + "Deck/\(mapping.deck.number)/").lowercased()
         guard address.hasPrefix(deckPrefix) else { return }
         let key = address.dropFirst(deckPrefix.count)
@@ -173,6 +181,7 @@ final class Bridge {
         case "playing":
             playing = value
             if !playing, bendDirection != 0 { endBend() }
+        case "playpending": playPending = value
         case "loaded":
             loaded = value
             if !loaded {
@@ -202,7 +211,7 @@ final class Bridge {
     // MARK: LEDs
 
     func refreshLEDs() {
-        buttonLED("play", on: playing)
+        playLED()
         refreshTransportLEDs()
         loopLEDs()
         padLEDs()

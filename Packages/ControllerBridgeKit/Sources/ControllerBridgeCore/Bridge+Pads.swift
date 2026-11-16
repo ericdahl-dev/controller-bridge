@@ -49,6 +49,7 @@ extension Bridge {
 
     /// A pad press or release. `index` is 0-7, so hot cue `index + 1`.
     func handlePad(_ index: Int, pressed: Bool) {
+        defer { refreshLEDs() }
         guard pressed else { return releaseHold(.pad(index)) }
         let cue = Int32(index + 1)
         switch padMode {
@@ -65,7 +66,7 @@ extension Bridge {
         let modes: [(String, PadMode)] = [("mode_hotcue", .hotCue), ("mode_roll", .roll), ("mode_loop", .loop), ("mode_slicer", .slicer)]
         for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
         for (note, velocity) in zip(mapping.notes.pads, padColors()) { led(note, velocity) }
-        led(mapping.leds.ring, loaded ? Self.velocity(mapping.leds.ringColor) : Self.off)
+        ringLED()
     }
 
     /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad in the roll color.
@@ -73,11 +74,23 @@ extension Bridge {
     func padColors() -> [UInt8] {
         let leds = mapping.leds
         switch padMode {
-        case .hotCue: return cues.map { $0 == 0 ? Self.off : Self.velocity(palette[$0] ?? [255, 255, 255]) }
+        case .hotCue:
+            return cues.enumerated().map { index, slot in
+                guard slot != 0 else { return Self.off }
+                let color = palette[slot] ?? [255, 255, 255]
+                // A held hot cue shows the brightest version of its color, so you can see which one is sounding.
+                return Self.velocity(held.contains(.pad(index)) ? Self.brightest(color) : color)
+            }
         case .loop: return cues.map { $0 == 0 ? Self.off : Self.velocity(leds.loopPadColor) }
         case .roll: return Array(repeating: Self.velocity(leds.rollPadColor), count: cues.count)
         case .slicer: return Array(repeating: Self.off, count: cues.count)
         }
+    }
+
+    /// The color scaled up so its strongest channel is 255.
+    static func brightest(_ rgb: [Int]) -> [Int] {
+        guard let top = rgb.max(), top > 0 else { return rgb }
+        return rgb.map { $0 * 255 / top }
     }
 
     /// A pad or ring velocity for an [r, g, b] color.
@@ -88,7 +101,7 @@ extension Bridge {
     }
 }
 
-private extension OSCArgument {
+extension OSCArgument {
     /// An int, or a float cut to an int as the Python bridge's int() does. A NaN, an infinity or a float too big
     /// for an Int (feedback is untrusted UDP) gives nil instead of trapping.
     var wholeNumber: Int? {
