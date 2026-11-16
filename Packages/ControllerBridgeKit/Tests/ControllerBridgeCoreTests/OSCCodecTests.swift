@@ -118,6 +118,32 @@ struct OSCCodecTests {
         #expect(try OSCPacket(decoding: packet).messages == [OSCMessage("/a", [.int(7)])])
     }
 
+    // Syndicate sends some feedback as OSC 1.1 arrays: the guide's "[i slot, i R, i G, i B]". Brackets carry no data;
+    // the arguments inside are read in order, flattened (live bug: ColorPalette arrived with no arguments).
+
+    @Test("An OSC array is flattened: ColorPalette ',[iiii]' 1, 255, 0, 0 decodes to four ints")
+    func decodesArray() throws {
+        let packet = Self.bytes("""
+            2f53796e 64696361 74652f43 6f6c6f72 50616c65 74746500
+            2c5b6969 69695d00
+            00000001 000000ff 00000000 00000000
+            """)
+        #expect(try OSCPacket(decoding: packet).messages == [
+            OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(0), .int(0)]),
+        ])
+    }
+
+    @Test("Arrays of mixed arguments, one after another, flatten in order: ',[is][is]' 3, \"Drop\", 0, \"\"")
+    func decodesArraysInSequence() throws {
+        let packet = Self.bytes("""
+            2f610000
+            2c5b6973 5d5b6973 5d000000
+            00000003 44726f70 00000000
+            00000000 00000000
+            """)
+        #expect(try OSCPacket(decoding: packet).messages == [OSCMessage("/a", [.int(3), .string("Drop"), .int(0), .string("")])])
+    }
+
     @Test("An unknown tag ends the arguments: the ones before it are kept")
     func stopsAtUnknownTag() throws {
         let packet = Self.bytes("""

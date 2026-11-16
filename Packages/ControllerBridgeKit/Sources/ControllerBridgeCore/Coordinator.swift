@@ -380,10 +380,17 @@ public final class Coordinator {
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
     public func feedback(_ message: OSCMessage) {
         // Syndicate's deck colors are cue palette slots 1, 3, 5 and 7 (#123).
-        if message.address.lowercased().hasSuffix("/colorpalette"),
-           let updated = syndicateDeckColors.updated(byPalette: noteBlackSlot(message.arguments.compactMap(\.wholeNumber))) {
-            syndicateDeckColors = updated
-            applyDeckColors()
+        // Several slots may come in one message (OSC arrays, flattened): one group of four per slot.
+        if message.address.lowercased().hasSuffix("/colorpalette") {
+            let numbers = message.arguments.compactMap(\.wholeNumber)
+            var colors = syndicateDeckColors
+            for start in stride(from: 0, to: numbers.count - 3, by: 4) {
+                if let updated = colors.updated(byPalette: noteBlackSlot(Array(numbers[start..<(start + 4)]))) { colors = updated }
+            }
+            if colors != syndicateDeckColors {
+                syndicateDeckColors = colors
+                applyDeckColors()
+            }
         }
         diagnostics?(.oscIn(message))
         feedbackArrived()

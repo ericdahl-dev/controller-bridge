@@ -104,4 +104,27 @@ struct DeckColorTests {
     func ledPreview(rgb: [Int], shown: [Int]) {
         #expect(DeckColors.ledPreview(rgb) == shown)
     }
+
+    @Test("ColorPalette as Syndicate really sends it, an OSC array on the wire, moves deck 1's ring: slot 1 red = 48")
+    func paletteFromWireArray() throws {
+        let rig = try Self.onDeck(1)
+        let packet = OSCCodecTests.bytes("""
+            2f53796e 64696361 74652f43 6f6c6f72 50616c65 74746500
+            2c5b6969 69695d00
+            00000001 000000ff 00000000 00000000
+            """)
+        for message in try OSCPacket(decoding: packet).messages { rig.coordinator.feedback(message) }
+        #expect(rig.leds[40] == 48)
+        #expect(rig.coordinator.status.deckColors[1] == [255, 0, 0])
+    }
+
+    @Test("All eight slots in one ColorPalette message (flattened arrays): slot 3 red still moves deck 2's ring, 48")
+    func paletteAllSlotsInOneMessage() throws {
+        let rig = try Self.onDeck(2)
+        let slots: [[Int32]] = [[1, 0, 0, 255], [2, 0, 255, 0], [3, 255, 0, 0], [4, 0, 0, 255],
+                                [5, 0, 255, 255], [6, 0, 0, 255], [7, 128, 0, 255], [8, 255, 0, 255]]
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", slots.flatMap { $0 }.map { .int($0) }))
+        #expect(rig.leds[40] == 48)
+        #expect(rig.coordinator.status.deckColors[4] == [128, 0, 255])
+    }
 }
