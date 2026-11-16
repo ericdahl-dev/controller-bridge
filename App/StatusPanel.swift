@@ -54,10 +54,24 @@ extension BridgeStatus {
         )
     }
 
-    /// Connected; or unplugged, if it was connected earlier this session (it has a last event); or never connected.
+    /// The panel's controller state, by the tested mapping in Presentation (#91).
     static func controllerState(_ bridge: ControllerStatus) -> BridgeState.Controller {
-        if bridge.connected { return .connected(profile: bridge.profile ?? "Controller") }
-        return bridge.lastEvent != nil ? .unplugged(profile: bridge.profile) : .notConnected
+        BridgeState.Controller(
+            connected: bridge.connected, profile: bridge.profile, lastProfile: bridge.lastProfile,
+            lastDisconnect: bridge.lastDisconnect.map(Self.disconnect)
+        )
+    }
+
+    /// Core's reason, one to one.
+    static func disconnect(_ reason: DisconnectReason) -> BridgeState.Disconnect {
+        switch reason {
+        case .unplugged: .unplugged
+        case .sendFailed: .sendFailed
+        case .inputFailed: .inputFailed
+        case .deviceChanged: .deviceChanged
+        case .removed: .removed
+        case .stopped: .stopped
+        }
     }
 }
 

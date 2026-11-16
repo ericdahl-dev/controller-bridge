@@ -60,7 +60,19 @@ enum Snapshots {
             }),
             // Connected earlier, then pulled mid-set: orange UNPLUGGED (#66).
             ("unplugged", {
-                $0.bridges = [ControllerStatus(deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME")]
+                $0.bridges = [ControllerStatus(
+                    deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME",
+                    lastProfile: "Denon LC6000 PRIME", lastDisconnect: .unplugged
+                )]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
+            // A failed send or read (#91): MIDI ERROR, with what to check first.
+            ("midi-error", {
+                $0.bridges = [ControllerStatus(
+                    deck: 1, connected: false, lastEvent: "Disconnected DENON LC6000 PRIME (MIDI send failed)",
+                    lastProfile: "Denon LC6000 PRIME", lastDisconnect: .sendFailed
+                )]
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
