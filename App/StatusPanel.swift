@@ -45,12 +45,17 @@ extension BridgeStatus {
         case .portInUse(let port): .portInUse(port: port)
         case .failed: .failed
         }
-        let entries = bridges.map { BridgeState.ControllerEntry(controller: Self.controllerState($0), deck: $0.deck, lastEvent: $0.lastEvent) }
+        // One unit following its layers shows as one controller, on its active layer's deck (#79).
+        let folded = CoordinatorStatus(controllers: bridges).collapsingLayers().controllers
+        let entries = folded.map {
+            BridgeState.ControllerEntry(controller: Self.controllerState($0), deck: $0.deck, lastEvent: $0.lastEvent,
+                                        followsLayers: $0.followsLayers)
+        }
         let first = entries.first
         return BridgeState(
             controller: first?.controller ?? .notConnected, feedback: feedback, deck: first?.deck ?? deck,
             stopped: problem != nil, lastDropout: lastDropoutTime, master: self.controller?.master == true, demo: demo,
-            lastEvent: first?.lastEvent, others: Array(entries.dropFirst())
+            lastEvent: first?.lastEvent, others: Array(entries.dropFirst()), followsLayers: first?.followsLayers ?? false
         )
     }
 
@@ -219,7 +224,16 @@ struct ControllerBlockView: View {
                 Spacer(minLength: 0)
                 if showsLight { StatusLightView(light: block.light) }
             }
-            if picker != .hidden { DeckPicker(deck: block.deck, state: picker, problem: deckProblem, setDeck: setDeck) }
+            if let note = block.deckNote {
+                // The controller's own layers pick the deck (#79): show it, with no picker to fight it.
+                HStack(spacing: Theme.Space.s) {
+                    DeckBadgeView(deck: block.deck)
+                    Text(note).font(Theme.ui(Theme.Size.body)).foregroundStyle(Theme.caption)
+                }
+                .accessibilityElement(children: .combine)
+            } else if picker != .hidden {
+                DeckPicker(deck: block.deck, state: picker, problem: deckProblem, setDeck: setDeck)
+            }
         }
     }
 }

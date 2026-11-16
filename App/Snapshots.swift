@@ -14,6 +14,14 @@ enum Snapshots {
             print("\(font): \(NSFont(name: font, size: 12) == nil ? "MISSING" : "ok")")
         }
         let states: [(String, (BridgeStatus) -> Void)] = [
+            ("layers", {
+                // The LC6000 following its own layers (#79), switched to layer 2.
+                $0.bridges = (1...4).map {
+                    ControllerStatus(deck: $0, connected: true, profile: "Denon LC6000 PRIME", activeLayer: $0 == 2, followsLayers: true)
+                }
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+            }),
             ("connected", {
                 $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
                 $0.feedback = .listening(port: 9096)

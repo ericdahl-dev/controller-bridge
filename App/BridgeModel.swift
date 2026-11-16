@@ -59,6 +59,8 @@ final class BridgeModel {
     private var osc: SwappableOSCSender?
     private let storage = UserDefaultsStorage()
     /// What Settings shows and changes (#19). Saved in user defaults.
+    /// The running profile's deck layers (#79): empty for a controller without them.
+    private(set) var layers: [Mapping.Layer] = []
     private(set) var settings: BridgeSettings?
     /// The profiles that ship with the app, and the ones running (with any import applied, #24).
     private var bundledProfiles: [ControllerProfile] = []
@@ -150,7 +152,8 @@ final class BridgeModel {
         try new.save(to: storage)
         settings = new
         if new.controllers != old.controllers {
-            producer.setControllers(new.controllers)
+            // A controller following its own layers runs as one entry per layer (#79).
+            producer.setControllers(ControllerSettings.expanded(new.controllers, layers: layers))
             status.deck = new.controllers[0].deck
         }
         status.oscPort = new.syndicatePort
@@ -193,6 +196,7 @@ final class BridgeModel {
             log.log("The saved mapping import was ignored: " + importProblems.joined(separator: "; "))
         }
         let mapping = profiles[0].mapping
+        layers = mapping.midi.layers
         let settings = BridgeSettings.load(from: storage, defaults: .defaults(from: mapping))
         self.settings = settings
         status.deck = settings.controllers[0].deck
@@ -231,9 +235,10 @@ final class BridgeModel {
             )
         }
         // The saved controller settings, queued behind the Coordinator's start.
-        if settings.controllers != BridgeSettings.defaults(from: mapping).controllers {
-            pipe.producer.setControllers(settings.controllers)
-        }
+        // The entries the Coordinator runs. The LC6000 follows its layers by default (#79), so even the default
+        // settings expand to four entries and are sent.
+        let running = ControllerSettings.expanded(settings.controllers, layers: layers)
+        if running != BridgeSettings.defaults(from: mapping).controllers { pipe.producer.setControllers(running) }
         if !settings.ledsEnabled { pipe.producer.setLEDs(enabled: false) }
     }
 
