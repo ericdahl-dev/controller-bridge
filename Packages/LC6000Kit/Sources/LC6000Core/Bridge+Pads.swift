@@ -77,11 +77,12 @@ extension Bridge {
 }
 
 private extension OSCArgument {
-    /// An int, or a float cut to an int, as the Python bridge's int() does.
+    /// An int, or a float cut to an int as the Python bridge's int() does. A NaN, an infinity or a float too big
+    /// for an Int (feedback is untrusted UDP) gives nil instead of trapping.
     var number: Int? {
         switch self {
         case .int(let value): Int(value)
-        case .float(let value): Int(value)
+        case .float(let value): Int(exactly: value.rounded(.towardZero))
         case .string: nil
         }
     }

@@ -177,4 +177,13 @@ struct PadsTests {
         rig.coordinator.feedback(Self.cues([5, 0, 0, 0, 0, 0, 0, 0]))
         #expect(Self.padLEDs(rig)[0] == 16)
     }
+
+    @Test("A ColorPalette with a NaN or huge float is ignored instead of crashing (feedback is untrusted UDP)")
+    func colorPaletteIgnoresBadFloats() throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.feedback(Self.cues([1, 0, 0, 0, 0, 0, 0, 0]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .float(.nan), .float(0), .float(0)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .float(1e30), .float(0), .float(0)]))
+        #expect(Self.padLEDs(rig)[0] == 48)
+    }
 }
