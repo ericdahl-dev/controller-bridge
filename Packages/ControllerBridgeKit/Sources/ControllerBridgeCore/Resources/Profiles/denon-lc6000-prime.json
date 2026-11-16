@@ -4,6 +4,9 @@
   "device_hints": [
     "LC6000"
   ],
+  "exclude_hints": [
+    "LC6000 PRIME WD"
+  ],
   "mapping": {
     "midi": {
       "input": "LC6000",

@@ -115,4 +115,52 @@ struct ProfileMatchingTests {
             #expect(rig.coordinator.status.controllers.map(\.profile) == [expected])
         }
     }
+
+    // A real LC6000 PRIME is two MIDI ports (#99). In lc6000-cos's capture, every message came from "…Controller";
+    // "…WD" sent nothing.
+    static let wd = MIDIEndpoint(id: 1010, name: "Denon DJ LC6000 PRIME WD")
+    static let controls = MIDIEndpoint(id: 1011, name: "Denon DJ LC6000 PRIME LC6000 PRIME Controller")
+
+    final class TwoPortRig {
+        let midi: Rig.FakeMIDISystem
+        let log = Rig.FakeLog()
+        let coordinator: Coordinator
+
+        init(sources: [MIDIEndpoint]) throws {
+            midi = Rig.FakeMIDISystem(
+                sources: sources,
+                destinations: sources.map { MIDIEndpoint(id: $0.id + 1000, name: $0.name) }
+            )
+            coordinator = Coordinator(profiles: try ControllerProfile.bundled(), midi: midi, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: log)
+            coordinator.start()
+        }
+    }
+
+    @Test("A real LC6000's two ports: the bridge connects the Controller port, not the silent WD port, in either order", arguments: [
+        [wd, controls], [controls, wd],
+    ])
+    func connectsControlsPort(sources: [MIDIEndpoint]) throws {
+        let rig = try TwoPortRig(sources: sources)
+        #expect(rig.midi.connected == [Self.controls.id])
+        // The LEDs go to the destination with the connected source's name, not the WD destination.
+        #expect(rig.midi.outputs[Self.controls.id + 1000] != nil)
+        #expect(rig.midi.outputs[Self.wd.id + 1000] == nil)
+    }
+
+    @Test("The WD port is listed as a device no profile matches, and isn't bridged")
+    func wdNotBridged() throws {
+        let rig = try TwoPortRig(sources: [Self.wd, Self.controls])
+        #expect(rig.coordinator.status.devices.first { $0.name == Self.wd.name }?.profile == nil)
+        #expect(rig.coordinator.status.devices.first { $0.name == Self.controls.name }?.profile == "Denon LC6000 PRIME")
+    }
+
+    @Test("Two automatic controllers with one LC6000: the second waits for another unit and doesn't take WD")
+    func secondControllerSkipsWD() throws {
+        let rig = try TwoPortRig(sources: [Self.wd, Self.controls])
+        rig.coordinator.setControllers([
+            ControllerSettings(deck: 1, input: nil, output: nil),
+            ControllerSettings(deck: 2, input: nil, output: nil),
+        ])
+        #expect(rig.midi.connected == [Self.controls.id])
+    }
 }
