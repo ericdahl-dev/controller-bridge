@@ -5,6 +5,11 @@ public enum DiagnosticsTab: String, CaseIterable, Sendable {
     case osc = "OSC Log"
 
     /// The line shown in an empty list, so "nothing yet" never looks like "broken".
+    /// What Save… suggests (#162), such as "DeckBridge OSC Log.txt". The app passes its display name.
+    public func exportFileName(appName: String) -> String {
+        "\(appName) \(rawValue).txt"
+    }
+
     public func emptyText(controllerConnected: Bool) -> String {
         switch self {
         case .monitor: controllerConnected ? "Press any button on the controller." : "No controller connected."
@@ -89,6 +94,12 @@ public struct DiagnosticsLines: Equatable, Sendable {
         guard tab == .osc, !hideProgressAndTime else { return list }
         // Both kept lists, back in arrival order, and still no more than the limit.
         return Array((list + progressAndTime).sorted { $0.id < $1.id }.suffix(Self.limit))
+    }
+
+    /// What a tab shows, as plain text to copy or save (#162): one line each, ending in a newline. UNMAPPED keeps its
+    /// words; the dot is only how the window draws it.
+    public func plainText(_ tab: DiagnosticsTab) -> String {
+        shown(tab).map { $0.text + "\n" }.joined()
     }
 
     /// "OSC <- /Syndicate/Deck/1/Progress 0.25" or ".../Time 61": the address's last part, before the arguments.

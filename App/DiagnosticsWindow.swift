@@ -5,15 +5,16 @@ import ControllerBridgeCore
 import ControllerBridgePresentation
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// What the Diagnostics window shows. Main-actor; the engine's sink hops here once per event, only while it is open.
 @MainActor @Observable
 final class DiagnosticsLog {
     private(set) var lines = DiagnosticsLines()
 
-    var hideProgressAndTime: Bool {
-        get { lines.hideProgressAndTime }
-        set { lines.hideProgressAndTime = newValue }
+    /// Kept apart from `lines`, so the checkbox doesn't redraw the window on every new line (#162).
+    var hideProgressAndTime = true {
+        didSet { lines.hideProgressAndTime = hideProgressAndTime }
     }
 
     func append(_ event: DiagnosticEvent) {
@@ -27,6 +28,9 @@ final class DiagnosticsLog {
     }
 
     func shown(_ tab: DiagnosticsTab) -> [DiagnosticsLines.Line] { lines.shown(tab) }
+
+    /// The tab's lines as plain text, to copy or save (#162).
+    func plainText(_ tab: DiagnosticsTab) -> String { lines.plainText(tab) }
 
     /// Clears the tab you're on; the other lists stay.
     func clear(_ tab: DiagnosticsTab) { lines.clear(tab) }
@@ -49,6 +53,9 @@ struct DiagnosticsWindow: View {
     /// Off only for snapshots: ImageRenderer draws no ScrollView content.
     var scrolls = true
     @State private var sweepDelay = 0.6
+    /// The visible tab's lines, refreshed at most 10 times a second (#162): during playback OSC lines arrive far
+    /// faster, and redrawing the whole selectable list for each would stutter. Nil until the first refresh.
+    @State private var visible: [DiagnosticsLines.Line]?
 
     var body: some View {
         let presentation = status.presentation
@@ -67,6 +74,14 @@ struct DiagnosticsWindow: View {
         // Only while this window is open does the bridge build anything for it.
         .onAppear { setOpen(true) }
         .onDisappear { setOpen(false) }
+        .task(id: tab) {
+            visible = nil
+            while !Task.isCancelled {
+                let lines = log.shown(tab)
+                if lines != visible { visible = lines }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
     }
 
     // MARK: Header and tabs
@@ -96,6 +111,18 @@ struct DiagnosticsWindow: View {
             }
             .overlay(RoundedRectangle(cornerRadius: Theme.corner).strokeBorder(Theme.hairline, lineWidth: 1))
             Spacer(minLength: 0)
+            // Copy and save what the tab shows, with its filter (#162), so it can be shared.
+            Button("Copy log") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(log.plainText(tab), forType: .string)
+            }
+            .buttonStyle(LinkButtonStyle())
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .accessibilityLabel("Copy the \(tab.rawValue)")
+            Button("Save…") { save(tab) }
+                .buttonStyle(LinkButtonStyle())
+                .keyboardShortcut("s", modifiers: .command)
+                .accessibilityLabel("Save the \(tab.rawValue) to a file")
             Button("Clear log") { log.clear(tab) }
                 .buttonStyle(LinkButtonStyle())
                 .keyboardShortcut("k", modifiers: .command)
@@ -105,8 +132,23 @@ struct DiagnosticsWindow: View {
 
     // MARK: Tabs
 
+    /// Saves the tab's plain text through the save panel (#162); the user picks the place, so the sandbox allows it.
+    private func save(_ tab: Tab) {
+        let text = log.plainText(tab)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = tab.exportFileName(appName: AppInfo.displayName)
+        panel.allowedContentTypes = [.plainText]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
     @ViewBuilder private var content: some View {
-        let lines = log.shown(tab)
+        // Snapshots draw once, with no task running, so they read the log directly.
+        let lines = scrolls ? (visible ?? log.shown(tab)) : log.shown(tab)
         let connected = status.controller?.connected == true
         switch tab {
         case .monitor:
@@ -175,40 +217,43 @@ private struct LineList: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if scrolls {
                 ScrollViewReader { proxy in
-                    ScrollView { rows(lazy: true) }
-                        .onChange(of: lines.last?.id) { _, last in
-                            if let last { proxy.scrollTo(last, anchor: .bottom) }
-                        }
+                    ScrollView { rows }
+                        .onChange(of: lines.last?.id) { _, _ in proxy.scrollTo(Self.bottom, anchor: .bottom) }
                 }
             } else {
-                rows(lazy: false).frame(maxHeight: .infinity, alignment: .top)
+                rows.frame(maxHeight: .infinity, alignment: .top)
             }
         }
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: Theme.corner))
     }
 
-    @ViewBuilder private func rows(lazy: Bool) -> some View {
-        let content = ForEach(lines) { line in
-            row(line)
-                .font(Theme.data(Theme.Size.label))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, Theme.Space.xs)
-                .overlay(alignment: .bottom) { Theme.hairline.frame(height: 1) }
-                .id(line.id)
-        }
-        if lazy {
-            LazyVStack(alignment: .leading, spacing: 0) { content }.padding(.horizontal, Theme.Space.m)
-        } else {
-            VStack(alignment: .leading, spacing: 0) { content }.padding(.horizontal, Theme.Space.m)
-        }
+    /// Every line in one selectable text (#162), so a drag or ⌘A selects across lines and ⌘C copies them.
+    private var rows: some View {
+        Text(Self.attributed(lines))
+            .font(Theme.data(Theme.Size.label))
+            .lineSpacing(Theme.Space.xs)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.xs)
+            .id(Self.bottom)
     }
 
-    /// The line's words are exactly the Python line. UNMAPPED also gets a dot and the attention color, never color alone.
-    private func row(_ line: DiagnosticsLines.Line) -> Text {
-        let message = Text(line.message).foregroundStyle(Theme.text)
-        guard line.isUnmapped else { return message + Text(line.label).foregroundStyle(Theme.text) }
-        return message + Text("● ").foregroundStyle(Theme.attention) + Text(line.label).foregroundStyle(Theme.attention)
+    static let bottom = "bottom"
+
+    /// The lines, one per line, in the text color; UNMAPPED adds a dot and the attention color, never color alone.
+    static func attributed(_ lines: [DiagnosticsLines.Line]) -> AttributedString {
+        var out = AttributedString()
+        for (index, line) in lines.enumerated() {
+            var message = AttributedString(line.message)
+            message.foregroundColor = Theme.text
+            out += message
+            var label = AttributedString((line.isUnmapped ? "● " : "") + line.label)
+            label.foregroundColor = line.isUnmapped ? Theme.attention : Theme.text
+            out += label
+            if index < lines.count - 1 { out += AttributedString("\n") }
+        }
+        return out
     }
 }
