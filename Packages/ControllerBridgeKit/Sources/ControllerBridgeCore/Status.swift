@@ -103,11 +103,15 @@ public struct DeviceStatus: Equatable, Sendable {
     public var profile: String?
     /// A plain message for the menu, such as why the device isn't bridged.
     public var note: String?
+    /// For another port of a known controller (one its profile's `exclude_hints` names, such as the LC6000's WD
+    /// port), that profile's name. Such a port isn't an unsupported controller (#200).
+    public var partOf: String?
 
-    public init(name: String, profile: String?, note: String?) {
+    public init(name: String, profile: String?, note: String?, partOf: String? = nil) {
         self.name = name
         self.profile = profile
         self.note = note
+        self.partOf = partOf
     }
 }
 

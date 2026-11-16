@@ -369,6 +369,12 @@ public final class Coordinator {
                 }
                 return DeviceStatus(name: source.name, profile: profile.name, note: nil)
             }
+            let lowered = source.name.lowercased()
+            if let owner = profiles.first(where: { $0.excludeHints.contains { lowered.contains($0.lowercased()) } }) {
+                return DeviceStatus(
+                    name: source.name, profile: nil, note: "\(source.name) is another port of the \(owner.name).", partOf: owner.name
+                )
+            }
             let note = "No controller profile matches \(source.name), so it isn't bridged."
             if loggedUnmatched.insert(source.id).inserted { log.log(note) }
             return DeviceStatus(name: source.name, profile: nil, note: note)

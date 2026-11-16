@@ -38,6 +38,23 @@ struct ProfileMatchingTests {
         #expect(rig.coordinator.status.controllers.map(\.profile) == ["Denon LC6000 PRIME"])
     }
 
+    @Test("A profile's own other port, like the LC6000's WD port, is listed as part of that controller, not as unsupported (#200)")
+    func ownOtherPort() throws {
+        let wd = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME WD")
+        let rig = ProfileRig(profiles: try ControllerProfile.bundled(), sources: [Self.lc6000, wd])
+        rig.coordinator.start()
+
+        #expect(rig.midi.connected == [Self.lc6000.id])
+        #expect(rig.coordinator.status.devices == [
+            DeviceStatus(name: "DENON LC6000 PRIME", profile: "Denon LC6000 PRIME", note: nil),
+            DeviceStatus(
+                name: "DENON LC6000 PRIME WD", profile: nil, note: "DENON LC6000 PRIME WD is another port of the Denon LC6000 PRIME.",
+                partOf: "Denon LC6000 PRIME"
+            ),
+        ])
+        #expect(!rig.log.lines.contains { $0.hasPrefix("No controller profile matches") })
+    }
+
     static let other = MIDIEndpoint(id: 1002, name: "Some Other Controller")
 
     @Test("With no matching device nothing is bridged: the device is listed with a plain message, and logged")
