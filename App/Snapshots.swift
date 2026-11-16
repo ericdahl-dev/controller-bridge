@@ -50,7 +50,7 @@ enum Snapshots {
                 $0.feedback = .portInUse(port: 9096)
             }),
             ("starting-deck4", { $0.deck = 4 }),
-            ("long-line", {
+            ("many-lights", {
                 $0.bridges = [ControllerStatus(deck: 2, connected: true, profile: "Denon LC6000 PRIME", master: true)]
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
