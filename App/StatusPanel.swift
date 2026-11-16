@@ -136,7 +136,7 @@ struct StatusPanel: View {
             .padding(Theme.Space.l)
             .background(Theme.panel)
             Rectangle().fill(Theme.hairline).frame(height: 1)
-            StatusLineView(presentation: presentation, deck: status.shownDeck)
+            StatusLineView(presentation: presentation)
         }
         .frame(width: 360)
         .background(Theme.background)
