@@ -57,8 +57,24 @@ extension Bridge {
         holdButton(.cue, "Cue", pressed: pressed)
     }
 
+    /// Censor reverses while held. Shift + Censor latches Reverse instead: each press toggles it (#114). A latched
+    /// Reverse isn't a hold, but release-all still turns it off.
     func censor(_ pressed: Bool) {
+        if pressed, shift {
+            if let address = latchedReverse {
+                send(address: address, [.int(0)])
+                latchedReverse = nil
+            } else {
+                let address = deckAddress("Reverse")
+                send(address: address, [.int(1)])
+                latchedReverse = address
+            }
+            return
+        }
+        guard pressed || held.contains(.censor) else { return }
         holdButton(.censor, "Reverse", pressed: pressed)
+        // The hold's release turned Reverse off in Syndicate, latched or not.
+        if !pressed { latchedReverse = nil }
     }
 
     // MARK: Holds
@@ -83,6 +99,10 @@ extension Bridge {
     /// mapping import all come through here.
     func releaseAll() {
         for control in held.takeAll() { send(address: control.address, control.release) }
+        if let address = latchedReverse {
+            send(address: address, [.int(0)])
+            latchedReverse = nil
+        }
         bendDirection = 0
         platterTouched = false
         needleTouched = false

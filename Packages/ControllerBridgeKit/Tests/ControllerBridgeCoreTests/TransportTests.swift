@@ -144,6 +144,52 @@ struct TransportTests {
         #expect(rig.osc.sent == [])
     }
 
+    @Test("Shift + Censor latches Reverse: each press toggles it, and letting go sends nothing")
+    func shiftCensorLatchesReverse() throws {
+        let rig = try Self.started()
+        Self.press(rig, 26)
+        Self.press(rig, 7)
+        Self.release(rig, 7)
+        Self.press(rig, 7)
+        Self.release(rig, 7)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(0)]),
+        ])
+    }
+
+    @Test("A latched Reverse is turned off once by stop; with it off, stop sends nothing")
+    func latchedReverseReleasedByStop() throws {
+        let rig = try Self.started()
+        Self.press(rig, 26)
+        Self.press(rig, 7)
+        Self.release(rig, 7)
+        Self.release(rig, 26)
+        rig.osc.sent.removeAll()
+        rig.coordinator.stop()
+        rig.coordinator.stop()
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Reverse", [.int(0)])])
+    }
+
+    @Test("A plain Censor press-and-release while Reverse is latched ends it: the next Shift + Censor turns it on again")
+    func censorHoldEndsLatch() throws {
+        let rig = try Self.started()
+        Self.press(rig, 26)
+        Self.press(rig, 7)    // latched on
+        Self.release(rig, 7)
+        Self.release(rig, 26)
+        Self.press(rig, 7)    // a hold: 1, then 0 leaves Reverse off
+        Self.release(rig, 7)
+        Self.press(rig, 26)
+        Self.press(rig, 7)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(0)]),
+            OSCMessage("/Syndicate/Deck/1/Reverse", [.int(1)]),
+        ])
+    }
+
     @Test("Key Lock toggles on each press: PitchPreserve 1, then 0, and its LED follows")
     func keyLockToggles() throws {
         let rig = try Self.started()
