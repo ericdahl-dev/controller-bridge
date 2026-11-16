@@ -69,3 +69,46 @@ struct JogDisplayPreviewCoordinatorTests {
         #expect(!events.contains(.connected))
     }
 }
+
+/// No controller connected (#221): the preview follows live Syndicate feedback for one deck, the user's pick (1-4),
+/// else the first loaded deck.
+@Suite("Jog display preview with no controller")
+struct JogDisplayPreviewNoControllerTests {
+    static let absent = MIDIEndpoint(id: 9999, name: "Not here")
+
+    static func rig() throws -> (Rig, () -> [JogDisplayEvent]) {
+        let rig = try Rig()
+        let driver = JogDisplayDriver(port: nil, clock: rig.clock, log: rig.log, size: 1) { content in [UInt8(content.deck), 0, 0, 255] }
+        var events: [JogDisplayEvent] = []
+        driver.onEvent = { events.append($0) }
+        rig.coordinator.attachJogDisplay(driver)
+        rig.coordinator.start(controllers: (1...4).map { ControllerSettings(deck: $0, input: absent, output: nil, followLayers: false) })
+        return (rig, { defer { events.removeAll() }; return events })
+    }
+
+    static func decks(_ events: [JogDisplayEvent]) -> [Int] {
+        events.compactMap { if case .uploadStarted(_, let content, _) = $0 { return content.deck }; return nil }
+    }
+
+    @Test("With nothing connected, the first loaded deck shows: deck 3 once it has a track")
+    func firstLoaded() throws {
+        let (rig, take) = try Self.rig()
+        _ = take()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)]))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3))
+        let events = take()
+        #expect(Self.decks(events).last == 3)
+        #expect(events.contains { if case .uploadStarted(_, let content, _) = $0 { return content.title == "Daybreak" }; return false })
+    }
+
+    @Test("The user's pick wins: deck 2, even with deck 3 loaded; nil goes back to the first loaded")
+    func pick() throws {
+        let (rig, take) = try Self.rig()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)]))
+        _ = take()
+        rig.coordinator.setJogPreviewDeck(2)
+        #expect(Self.decks(take()) == [2])
+        rig.coordinator.setJogPreviewDeck(nil)
+        #expect(Self.decks(take()) == [3])
+    }
+}

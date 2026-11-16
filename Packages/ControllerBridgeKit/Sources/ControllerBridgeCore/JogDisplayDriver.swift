@@ -75,6 +75,8 @@ public final class JogDisplayDriver {
     private var wanted: JogDisplayContent?
     /// The slot shown; the next upload goes into the other one.
     private var shownSlot: UInt8 = 2
+    /// The last content drawn and its image (#221): what the preview drew goes to the unit when it connects, unredrawn.
+    private var drawn: (content: JogDisplayContent, image: [UInt8])?
     private var upload: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)?
 
     public init(port: (any JogDisplayPort)?, clock: any Clock, log: any LogSink, size: Int = JogImage.size,
@@ -181,7 +183,13 @@ public final class JogDisplayDriver {
         wanted = nil
         current = content
         let slot: UInt8 = shownSlot == 1 ? 2 : 1
-        let image = JogImage.forUnit(rgba: render(content), width: size, height: size)
+        let image: [UInt8]
+        if let drawn, drawn.content == content {
+            image = drawn.image
+        } else {
+            image = JogImage.forUnit(rgba: render(content), width: size, height: size)
+            drawn = (content, image)
+        }
         let job = JogDisplay.Upload(image: image, slot: slot)
         // A preview (#221): no unit, so nothing is sent and nothing waits for an answer; it's shown at once.
         guard connected, let port else {
