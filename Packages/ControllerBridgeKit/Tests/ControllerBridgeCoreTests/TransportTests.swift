@@ -185,7 +185,7 @@ struct TransportTests {
     func releaseAllClearsShift() throws {
         let rig = try Self.started()
         Self.press(rig, 26)
-        rig.coordinator.stop()
+        rig.coordinator.willSleep()   // release-all, ports left open
         #expect(rig.leds[26] == 1)
         Self.press(rig, 25)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)])])
