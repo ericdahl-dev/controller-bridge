@@ -43,6 +43,7 @@ public struct Engine {
             case .setDevices(let input, let output, let controller):
                 coordinator.setDevices(input: input, output: output, controller: controller)
             case .setLEDs(let enabled): coordinator.setLEDs(enabled: enabled)
+            case .setControllers(let entries): coordinator.setControllers(entries)
             default: break
             }
         }
@@ -80,7 +81,7 @@ public struct Engine {
                 setDiagnostics(active, open: open)
             case .ledSweep(let delay): active.startLEDSweep(delay: delay)
             case .stopLEDSweep: active.stopLEDSweep()
-            case .setDeck, .setDevices, .setLEDs:
+            case .setDeck, .setDevices, .setLEDs, .setControllers:
                 if demo == nil { apply(event) } else { waiting.append(event) }
             case .demo(let on):
                 if on, demo == nil, let makeDemo {

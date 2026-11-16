@@ -84,4 +84,33 @@ struct SettingsTests {
             try bad.save(to: MemoryStore())
         }
     }
+
+    static let lc6000 = MIDIEndpoint(id: 1001, name: "DENON LC6000 PRIME")
+
+    @Test("Two controllers on the same device and channel are refused; a channel outside 1-16 is too")
+    func sameDeviceAndChannelRefused() {
+        var bad = Self.defaults
+        bad.controllers = [
+            ControllerSettings(deck: 1, input: Self.lc6000, output: nil, channel: 1),
+            ControllerSettings(deck: 2, input: Self.lc6000, output: nil, channel: 1),
+            ControllerSettings(deck: 3, input: nil, output: nil, channel: 17),
+        ]
+        #expect(throws: SettingsError.invalid([
+            "Controller 3: channel 17 is out of range, expected 1-16",
+            "Controllers 1 and 2 both use DENON LC6000 PRIME on channel 1",
+        ])) { try bad.save(to: MemoryStore()) }
+    }
+
+    @Test("Two controllers on one deck is allowed, with a warning that doesn't stop the save")
+    func sameDeckWarns() throws {
+        let store = MemoryStore()
+        var settings = Self.defaults
+        settings.controllers = [
+            ControllerSettings(deck: 1, input: Self.lc6000, output: nil, channel: 1),
+            ControllerSettings(deck: 1, input: Self.lc6000, output: nil, channel: 2),
+        ]
+        #expect(settings.warnings == ["Controllers 1 and 2 both drive Deck 1"])
+        try settings.save(to: store)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults) == settings)
+    }
 }
