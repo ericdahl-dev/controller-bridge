@@ -1,3 +1,4 @@
+import Foundation
 import LC6000Core
 import Testing
 
@@ -208,5 +209,18 @@ struct PadsTests {
         rig.coordinator.feedback(Self.cues([1, 2, 3, 4, 5, 6, 7, 8]))
         Self.press(rig, Self.modeSlicer)
         #expect(Self.padLEDs(rig) == [0, 0, 0, 0, 0, 0, 0, 0])
+    }
+
+    @Test("A user mapping with a color that isn't three numbers turns those pads off instead of crashing")
+    func shortColorIsOff() throws {
+        let mapping = try Mapping.bundledDefault(overriddenBy: Data(#"{ "leds": { "roll_pad_color": [255] } }"#.utf8))
+        let midi = Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out])
+        let coordinator = Coordinator(mapping: mapping, midi: midi, osc: Rig.FakeOSC(), clock: Rig.FakeClock(), log: Rig.FakeLog())
+        coordinator.start()
+        coordinator.midi(.noteOn(channel: 0, note: Self.modeRoll, velocity: 127), source: Rig.lc6000.id)
+        var leds: [UInt8: UInt8] = [:]
+        for case let .noteOn(_, note, velocity) in midi.outputs[Rig.lc6000Out.id]?.sent ?? [] { leds[note] = velocity }
+        #expect((UInt8(32)...39).map { leds[$0] } == [0, 0, 0, 0, 0, 0, 0, 0])
+        #expect(leds[Self.modeRoll] == 127)
     }
 }

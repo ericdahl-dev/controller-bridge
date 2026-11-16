@@ -81,6 +81,7 @@ extension Bridge {
 
     /// A pad or ring velocity for an [r, g, b] color.
     static func velocity(_ rgb: [Int]) -> UInt8 {
+        // A user mapping can hold any list here until the mapping check (#24) refuses it.
         guard rgb.count == 3 else { return off }
         return rgbToVelocity(rgb[0], rgb[1], rgb[2])
     }
