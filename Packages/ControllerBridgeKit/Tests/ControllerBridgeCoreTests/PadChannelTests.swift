@@ -86,3 +86,41 @@ struct PadChannelCoordinatorTests {
         #expect(sent.contains(.noteOn(channel: 0, note: UInt8(ring), velocity: 0)))
     }
 }
+
+/// Deck layers with their own pad channels (#224), as a DDJ-400/FLX4 profile would set them: deck 1's pads on 8,
+/// deck 2's on 10. On the LC6000 rig's four-layer setup, with layers 3 and 4 keeping their deck's channel.
+@Suite("Pad channel per layer")
+struct PadChannelLayersTests {
+    static let layers = [
+        Mapping.Layer(channel: 1, deck: 1, padChannel: 8), Mapping.Layer(channel: 2, deck: 2, padChannel: 10),
+        Mapping.Layer(channel: 3, deck: 3), Mapping.Layer(channel: 4, deck: 4),
+    ]
+    static let override = #"""
+        { "midi": { "layers": [ { "channel": 1, "deck": 1, "pad_channel": 8 }, { "channel": 2, "deck": 2, "pad_channel": 10 },
+                                { "channel": 3, "deck": 3 }, { "channel": 4, "deck": 4 } ] } }
+        """#
+
+    static func layered() throws -> Rig {
+        let rig = try Rig(override: override)
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: layers
+        ))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    @Test("With layer 2 in front, pad 1 on channel 10 holds deck 2's hot cue 1, and deck 2's cue lights on channel 10")
+    func layerTwo() throws {
+        let rig = try Self.layered()
+        LayersTests.note(rig, channel: 1, 51, 0); LayersTests.note(rig, channel: 2, 51, 127)
+        LayersTests.note(rig, channel: 2, 1, 127)       // Play on ch2: layer 2 in front
+        rig.osc.sent.removeAll()
+        PadChannelCoordinatorTests.press(rig, 32, channel: 10)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/HotCue", [.int(1), .int(1)]),
+                                 OSCMessage("/Syndicate/Deck/2/HotCue", [.int(1), .int(0)])])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Cues", [.int(1), .string("c1")]))
+        #expect(PadChannelCoordinatorTests.led(rig, 32, channel: 10) == 48)
+    }
+}
