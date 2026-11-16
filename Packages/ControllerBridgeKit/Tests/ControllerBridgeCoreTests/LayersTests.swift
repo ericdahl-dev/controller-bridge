@@ -184,4 +184,15 @@ struct LayersTests {
         rig.coordinator.start()
         #expect(rig.coordinator.status.collapsingLayers() == rig.coordinator.status)
     }
+
+    @Test("Settings entry N maps to the Coordinator's first entry for it, past any expanded layers before it")
+    func settingsIndexToCoordinatorIndex() {
+        let following = ControllerSettings(deck: 1, input: nil, output: nil)
+        let fixed = ControllerSettings(deck: 3, input: nil, output: nil, followLayers: false)
+        let entries = [following, fixed, fixed]
+        #expect(ControllerSettings.expandedIndex(of: 0, in: entries, layers: Self.lc6000Layers) == 0)
+        #expect(ControllerSettings.expandedIndex(of: 1, in: entries, layers: Self.lc6000Layers) == 4)
+        #expect(ControllerSettings.expandedIndex(of: 2, in: entries, layers: Self.lc6000Layers) == 5)
+        #expect(ControllerSettings.expandedIndex(of: 1, in: entries, layers: []) == 1)
+    }
 }

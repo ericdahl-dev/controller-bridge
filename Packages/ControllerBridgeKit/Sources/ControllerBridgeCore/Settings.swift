@@ -194,6 +194,12 @@ public struct ControllerSettings: Codable, Equatable, Sendable {
         self.followLayers = followLayers
     }
 
+    /// Where Settings' entry `index` starts among the Coordinator's entries, past the layers that entries before it
+    /// expanded into (#79). A deck or device change for that entry goes to this index.
+    public static func expandedIndex(of index: Int, in entries: [ControllerSettings], layers: [Mapping.Layer]) -> Int {
+        expanded(Array(entries.prefix(index)), layers: layers).count
+    }
+
     /// The entries the Coordinator runs: a following entry becomes one per layer, on the same devices (#79).
     public static func expanded(_ entries: [ControllerSettings], layers: [Mapping.Layer]) -> [ControllerSettings] {
         entries.flatMap { entry -> [ControllerSettings] in
