@@ -228,6 +228,8 @@ struct DiagnosticsTests {
         let unmapped = DiagnosticEvent.midiIn(.noteOn(channel: 0, note: 99, velocity: 127), label: "UNMAPPED", at: 1.5)
         let parts = unmapped.lineParts
         #expect(parts.message + parts.label == unmapped.text)
+        // Worked from the Python bridge's print (removed in #30): f"{t:12.3f}  ch{ch:<2} {str(msg):<50} {label}".
+        #expect(unmapped.text == "       1.500  ch1  note_on channel=0 note=99 velocity=127 time=0      UNMAPPED")
         #expect(parts.label == "UNMAPPED")
         #expect(parts.isUnmapped)
 
