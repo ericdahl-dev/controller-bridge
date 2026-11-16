@@ -218,16 +218,26 @@ struct PadsTests {
         }
     }
 
-    @Test("The platter ring (note 40) lights in the ring color (0, 128, 255) while a track is loaded: 0b00_10_11 = 11")
+    @Test("The platter ring (note 40) lights in deck 1's badge color (#6C7277) while a track is loaded: 0b00_01_01_01 = 21")
     func ringFollowsLoaded() throws {
         let rig = try Self.startedRig()
         #expect(rig.leds[40] == 0)
 
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
-        #expect(rig.leds[40] == 11)
+        #expect(rig.leds[40] == 21)
 
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         #expect(rig.leds[40] == 0)
+    }
+
+    // #122: the ring shows the deck's badge color, worked by hand through rgb222 (round(c / 255 * 3) per channel):
+    // deck 2 #ECCF65 → 3,2,1 = 57; deck 3 #C5754E → 2,1,1 = 37; deck 4 #62929E → 1,2,2 = 26.
+    @Test("On decks 2, 3 and 4 the ring lights in that deck's badge color", arguments: [(2, UInt8(57)), (3, 37), (4, 26)])
+    func ringInDeckColor(deck: Int, velocity: UInt8) throws {
+        let rig = try Self.startedRig()
+        rig.coordinator.setDeck(deck, controller: 0)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/Loaded", [.int(1)]))
+        #expect(rig.leds[40] == velocity)
     }
 
     @Test("Cues and Loaded feedback for another deck leave this controller's pads and ring alone")
