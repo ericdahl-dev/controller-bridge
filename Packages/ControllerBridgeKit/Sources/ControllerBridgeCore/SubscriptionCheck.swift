@@ -48,8 +48,8 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
     /// Its checkboxes as one name: "TempoSlider and TempoSliderEnabled".
     public var syndicateName: String { checkboxes.joined(separator: " and ") }
 
-    /// The subscriptions a profile needs, the only ones asked for and judged (#211). Every profile needs these eight
-    /// today; mixer and player-type ones (#207, #210) join when a profile uses them.
+    /// The subscriptions a profile needs, the only ones asked for and judged (#211): the eight every profile needs, then
+    /// the mixer ones its mixer controls use (#207). Player-type ones (#210) will join the same way.
     public static func required(for mapping: Mapping) -> [Subscription] {
         guard let mixer = mapping.mixer else { return always }
         let uses: [(Subscription, Bool)] = [

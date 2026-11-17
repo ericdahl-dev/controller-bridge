@@ -343,13 +343,13 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
     }
 
-    /// A jog that can't tell how the platter reports movement (#204), in plain words.
     /// A profile body whose shape the decoder can't use (#195), in the words the DJ sees.
     public struct ShapeError: Error, Equatable, CustomStringConvertible {
         public let description: String
         public init(_ description: String) { self.description = description }
     }
 
+    /// A jog that can't tell how the platter reports movement (#204), in plain words.
     public enum JogError: Error, Equatable, CustomStringConvertible {
         case needsPairOrRelative
         case missing(String)
