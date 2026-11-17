@@ -230,6 +230,8 @@ public struct ProfileDraft: Sendable {
         let absent = ["needle", "jog", "pitch", "browse"].filter { profile.value(at: "mapping.\($0)") == nil }
         for (key, value) in defaults.facts where profile.value(at: key) == nil {
             if key.hasPrefix("mapping.notes."), key != "mapping.notes.pads" { continue }
+            // Optional and controller-specific: the LC6000's layer note would read as a layer switch elsewhere (#280).
+            if key == "mapping.midi.layer_note" { continue }
             if absent.contains(where: { key.hasPrefix("mapping.\($0).") }) { continue }
             if relativeJog, ["mapping.jog.msb_cc", "mapping.jog.lsb_cc"].contains(key) { continue }
             if sevenBitPitch, key == "mapping.pitch.lsb_cc" { continue }

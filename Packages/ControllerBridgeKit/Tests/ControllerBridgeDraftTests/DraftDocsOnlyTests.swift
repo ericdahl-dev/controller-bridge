@@ -35,4 +35,12 @@ struct DraftDocsOnlyTests {
         let draft = ProfileDraft.make(device: "DDJ-400", docs: DocsFacts())
         #expect(draft.file.value(at: "mapping.midi.ignore_notes") == .array([]))
     }
+
+    @Test("Layers without a layer note keep none: the LC6000's note 51 would read as a layer switch on another controller")
+    func noBorrowedLayerNote() throws {
+        let draft = ProfileDraft.make(device: "DDJ-400", docs: try Self.docs(
+            #"{ "mapping": { "midi": { "channel": 1, "layers": [{ "channel": 1, "deck": 1 }, { "channel": 2, "deck": 2 }] } } }"#))
+        #expect(draft.file.value(at: "mapping.midi.layer_note") == nil)
+        #expect(draft.problems == [])
+    }
 }
