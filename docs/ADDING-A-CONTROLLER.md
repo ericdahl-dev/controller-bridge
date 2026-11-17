@@ -74,10 +74,10 @@ Work through `<id>.report.md`:
 
 1. **Import check.** Fix every problem listed. The draft has to pass the same check a bundled profile does, and load as
    a profile file: the report includes the decoder's own rules, such as a jog with no pair and no `relative_cc`.
-2. **Placeholders.** A profile file needs every section, so each key the capture and the docs didn't give is filled
-   with the LC6000's value and listed under "Placeholders from the LC6000". Replace each one with the controller's
-   real value. A placeholder can collide with a real control (the LC6000's needle on CC 64, for example); until
-   #341 lets a profile leave out a section the controller doesn't have, that collision is in the import check.
+2. **Placeholders.** A profile file needs its other sections, so each key the capture and the docs didn't give is
+   filled with the LC6000's value and listed under "Placeholders from the LC6000". Replace each one with the
+   controller's real value. A control the capture found nothing for (the needle strip, jog, pitch fader or browse
+   knob) is left out instead (#341), as for a controller without one; add it if the controller has one.
 3. **Disagreements.** For each one, decide whether the capture or the docs is right, and note why in the PR.
 4. **TODOs.** Resolve each one: with the owner and MIDI Monitor, from the chart, or by leaving the key out because the
    controller has no such control. A TODO you can't resolve goes in the PR as a known gap.

@@ -61,6 +61,8 @@ Checked on hardware (2026-11-15, see #12 and #103):
   - The platter also sends a 14-bit two's-complement speed on CC 55 (MSB) and CC 54 (LSB): forward 0/2…0/8, back
     127/120…127/127 (−8…−1). It isn't used yet: the position change is enough.
 - `needle`: the Needle Drop strip is 14-bit on CC 64 (MSB) and CC 65 (LSB), with touch on note 70.
+- `jog`, `pitch`, `needle` and `browse` may each be left out (#341) by a controller that hasn't got that control, such
+  as the DDJ-400, which has no needle strip. Nothing then listens for it, and the demo skips it.
 - `midi.ignore_notes`: the unit sends note 52 about every 0.3 s while idle, a heartbeat. It's dropped, and the
   Diagnostics monitor says so.
 - `pitch`: 14-bit on CC 8/40, with the fader's top at 0, so `invert` stays false.
