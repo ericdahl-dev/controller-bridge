@@ -71,7 +71,7 @@ extension Bridge {
         if pressed, shift {
             shiftCueDown = true
             if playing { return holdButton(.cue, "Cue", pressed: true) }
-            return returnToMainCue()
+            return applyCues(cueMemory.shiftCue(duration: duration))
         }
         if !pressed, shiftCueDown {
             shiftCueDown = false
@@ -80,37 +80,9 @@ extension Bridge {
         cueDown = pressed
         if pressed {
             // Syndicate's cue point is where it's paused, or, while playing, where it stops.
-            if playing { mainCueSettlesUntil = clock.now + Self.mainCueSettle } else if let lastPosition { mainCue = lastPosition }
+            cueMemory.cuePressed(playing: playing, now: clock.now)
         }
         holdButton(.cue, "Cue", pressed: pressed)
-    }
-
-    /// How long after CUE-while-playing the deck's stop says where the cue point is.
-    static let mainCueSettle = 0.5
-    /// Closer than this to the cue point is on it.
-    static let onCuePoint = 0.02
-
-    /// Shift + CUE on a paused deck: a WaveformSeek to the cue point, with quantize None so it lands there at once.
-    /// Unknown, or already there: nothing, since Syndicate's Cue would make this spot the cue point.
-    private func returnToMainCue() {
-        guard let mainCue, let lastPosition, let duration, duration > 0, abs(lastPosition - mainCue) > Self.onCuePoint else { return }
-        overrideQuantize(.returnToCue)
-        sendDeck("WaveformSeek", .float(Float(mainCue / duration)))
-        restoreQuantize(.returnToCue)
-    }
-
-    /// Where the deck is, from Syndicate's Position: after CUE while playing, the paused spot is the cue point.
-    func positionReported(_ seconds: Double) {
-        lastPosition = seconds
-        guard !playing, let until = mainCueSettlesUntil else { return }
-        mainCueSettlesUntil = nil
-        if clock.now <= until { mainCue = seconds }
-    }
-
-    /// The deck stopped: right after CUE while playing, it stopped on the cue point.
-    func mainCueStopped() {
-        guard let until = mainCueSettlesUntil, clock.now <= until, let lastPosition else { return }
-        mainCue = lastPosition
     }
 
     /// Censor reverses while held. Shift + Censor latches Reverse instead: each press toggles it (#114). A latched

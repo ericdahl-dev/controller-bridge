@@ -34,7 +34,7 @@ extension Bridge {
         DeckFacts(
             deck: mapping.deck.number, playing: playing, loaded: loaded, bpm: bpm,
             track: track.map { DeckFacts.Track(title: $0.title, artist: $0.artist, key: $0.key, bpm: $0.bpm, playerType: $0.playerType) },
-            duration: duration, position: lastPosition, barRamp: barRamp
+            duration: duration, position: cueMemory.position, barRamp: barRamp
         )
     }
 }

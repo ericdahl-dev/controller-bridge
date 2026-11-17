@@ -10,7 +10,7 @@ extension Bridge {
     /// The one deck-lifecycle path (#383): a cue jump still waiting for its launch is dropped, and every quantize hold
     /// goes back to Use Global, once, whatever took it. Every exit calls this; nothing else releases holds wholesale.
     func end(_ exit: DeckExit) {
-        endCueJump()
+        applyCues(cueMemory.endJump())
         restoreAllQuantize()
     }
 }

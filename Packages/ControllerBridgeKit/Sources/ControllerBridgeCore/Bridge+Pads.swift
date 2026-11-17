@@ -124,64 +124,26 @@ extension Bridge {
         }
     }
 
-    /// Syndicate's first Position after a launch is this far past the cue (the live check on #358: 0.06 s, every run).
-    static let launchReportLead = 0.06
-    /// How long a Shift + pad tap waits for its launch before the pause is dropped and quantize put back.
-    static let cuePauseTimeout = 4.0
-
-    /// Goes to cue `cue` on the stopped deck, at once whatever quantize is (#363): the deck's quantize is set to None
-    /// for the jump, then back to Use Global (Syndicate doesn't report a deck's own setting; the user's pick). Learned,
-    /// a WaveformSeek there, which is silent and, unquantized, lands exactly. Otherwise it taps the cue, and
-    /// `cueLaunched` pauses it once Syndicate reports it playing, learning where it is.
+    /// Shift + hot cue pad on a stopped deck (#358, #363): the cue module decides; the Bridge sends.
     func goToCuePaused(_ cue: Int) {
-        // A second press before the launch: the user wants it to play from the cue, so the pause is dropped.
-        if pendingCuePause != nil { return endCueJump() }
-        overrideQuantize(.cueJump)
-        if let time = cueTimes[cue], let duration, duration > 0 {
-            sendDeck("WaveformSeek", .float(Float(time / duration)))
-            return restoreQuantize(.cueJump)
-        }
-        sendDeck("Cue\(cue)", .int(1))
-        pendingCuePause = (cue, clock.now)
+        applyCues(cueMemory.shiftPad(cue, duration: duration, now: clock.now))
     }
 
-    /// Syndicate reports the deck playing: if it's the cue tapped by `goToCuePaused`, pause it there and put quantize
-    /// back. A launch long after the press isn't the pad's.
-    func cueLaunched() {
-        guard let pending = pendingCuePause else { return }
-        guard clock.now - pending.armedAt <= Self.cuePauseTimeout else { return endCueJump() }
-        pendingCuePause = nil
-        learningCue = pending.cue
-        sendDeck("Playing", .int(0))
-        restoreQuantize(.cueJump)
-    }
-
-    /// Drops a Shift + pad tap still waiting for its launch, and puts the deck's quantize back to Use Global. Every way
-    /// out calls it: the timeout, a second press, Play, a new track, releasing everything (unplug, quit).
-    func endCueJump() {
-        guard pendingCuePause != nil else { return }
-        pendingCuePause = nil
-        restoreQuantize(.cueJump)
-    }
-
-    /// The tick: a tap whose launch never came puts quantize back after the timeout.
-    func cueJumpTick() {
-        if let pending = pendingCuePause, clock.now - pending.armedAt > Self.cuePauseTimeout { endCueJump() }
-    }
-
-    /// The first Position after a Shift + pad launch: where cue `cue` sits.
-    func learnCue(_ cue: Int, at seconds: Double) {
-        learningCue = nil
-        cueTimes[cue] = max(0, seconds - Self.launchReportLead)
-    }
-
-    /// A new track, or none: its cue times are unknown again.
+    /// A new track, or none: its cue times and cue point are unknown again.
     func forgetCues() {
         end(.newTrack)
-        cueTimes = [:]
-        mainCue = nil
-        mainCueSettlesUntil = nil
-        learningCue = nil
+        applyCues(cueMemory.forgetTrack())
+    }
+
+    /// Sends what the cue module asks: OSC to this deck, and quantize holds through the Bridge's one QuantizeOverride.
+    func applyCues(_ sends: [CueModule.Send]) {
+        for send in sends {
+            switch send {
+            case .osc(let path, let argument): sendDeck(path, argument)
+            case .hold(let reason): overrideQuantize(reason)
+            case .release(let reason): restoreQuantize(reason)
+            }
+        }
     }
 
     // MARK: LEDs
