@@ -180,8 +180,8 @@ struct JogMarkerCoordinatorTests {
         #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x47, 0x02], [0xE0, 0x0F, 0x05]])
     }
 
-    @Test("Touch wins (#306): a touched platter turns the playing deck's needle and BarRamp is ignored; let go, it eases back")
-    func touchWins() throws {
+    @Test("The platter never moves the needle (the user's pick for v1.1): touched and turned, a playing deck's needle stays on its BarRamp")
+    func platterLeavesNeedle() throws {
         let (rig, port) = try Self.started()
         Self.feed(rig, "Deck/1/Playing", .int(1))
         Self.feed(rig, "Deck/1/BPM", .float(120))
@@ -196,50 +196,44 @@ struct JogMarkerCoordinatorTests {
         rig.clock.now = 0.05
         Self.feed(rig, "Deck/1/BarRamp", .float(0.5))
         Self.tick(rig, at: 0.1)
-        #expect(Self.bends(port).last == [0xE0, 0x00, 0x20])   // a quarter turn: 4096, not the ramp's 8192
-        // Let go: the next ramp eases back; 250 ms on it's the deck's phase, 0.5 run on 0.15 at 120 BPM: 10649.
-        rig.coordinator.midi(.noteOff(channel: 0, note: 40, velocity: 0), source: Rig.lc6000.id)
-        rig.clock.now = 0.2
-        Self.feed(rig, "Deck/1/BarRamp", .float(0.5))
-        Self.tick(rig, at: 0.2)
-        #expect(Self.bends(port).last == [0xE0, 0x00, 0x20])   // the ease starts where the platter left it
-        Self.tick(rig, at: 0.5)
-        #expect(Self.bends(port).last == [0xE0, 0x19, 0x53])
+        // The ramp's 0.5, run on 0.05 s at 120 BPM: 0.525 of a turn, 8601 (E0 19 43); the platter's quarter is ignored.
+        #expect(Self.bends(port).last == [0xE0, 0x19, 0x43])
+        #expect(!Self.bends(port).contains([0xE0, 0x00, 0x20]))
     }
 
-    @Test("Paused, a ramp (0.5) sets it but doesn't run on; a quarter turn of the platter (900 counts) moves it to 0.75: 12288")
+    @Test("Paused, a turn of the platter (900 counts) doesn't move the needle: the seek moves the deck's BarRamp, which does")
     func pausedPlatter() throws {
         let (rig, port) = try Self.started()
         Self.feed(rig, "Deck/1/BPM", .float(120))
         Self.feed(rig, "Deck/1/BarRamp", .float(0.5))
         Self.tick(rig, at: 0.2)
-        #expect(Self.bends(port) == [])
         // Platter at 1000, then 1900: 900 counts forward (CC 17 then CC 49).
         for (msb, lsb) in [(UInt8(7), UInt8(104)), (14, 108)] {
             rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: msb), source: Rig.lc6000.id)
             rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
         }
         Self.tick(rig, at: 0.3)
-        #expect(Self.bends(port) == [[0xE0, 0x00, 0x60]])
+        #expect(Self.bends(port) == [])
     }
 
-    @Test("Playing then paused, the needle stops where it was: BarRamp 0, paused a quarter-second on (1/8), then 900 counts: 3/8, 6144")
+    @Test("Playing then paused, the needle stops where it was: BarRamp 0, paused a quarter-second on, it holds 1/8 (2048), platter or not")
     func pauseFreezes() throws {
         let (rig, port) = try Self.started()
         Self.feed(rig, "Deck/1/Playing", .int(1))
         Self.feed(rig, "Deck/1/BPM", .float(120))
         Self.feed(rig, "Deck/1/BarRamp", .float(0))
-        rig.clock.now = 0.25
+        Self.tick(rig, at: 0.25)
+        #expect(Self.bends(port).last == [0xE0, 0x00, 0x10])
         Self.feed(rig, "Deck/1/Playing", .int(0))
         port.wd.removeAll()
-        rig.clock.now = 1
         for (msb, lsb) in [(UInt8(7), UInt8(104)), (14, 108)] {
             rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: msb), source: Rig.lc6000.id)
             rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
         }
         Self.tick(rig, at: 1)
-        #expect(Self.bends(port) == [[0xE0, 0x00, 0x30]])
+        #expect(Self.bends(port).allSatisfy { $0 == [0xE0, 0x00, 0x10] })
     }
+
 
     @Test("The play light: 127 while playing; loaded and paused, it blinks every half-second")
     func playLight() throws {

@@ -225,23 +225,13 @@ public final class Coordinator {
         for index in controllers.indices where address == controllers[index].bridge.deckAddress("BarRamp").lowercased() {
             let bridge = controllers[index].bridge
             let bpm = bridge.playing ? bridge.bpm ?? masterBPM ?? 120 : 0
-            // A touched platter wins (#306): the ramp waits until it's let go, then the needle eases back.
-            jogNeedles[index, default: JogMarker()].ramp(phase, bpm: bpm, at: clock.now, touched: bridge.platterTouched)
+            // The needle is always the deck's bar phase; the platter never moves it (the user's pick for v1.1).
+            jogNeedles[index, default: JogMarker()].ramp(phase, bpm: bpm, at: clock.now)
         }
     }
 
-    /// Platter moves turn each deck's hand; a touched platter's win over the ramp (#306).
-    private func jogPlatter() {
-        for index in controllers.indices where controllers[index].bridge.jogCountsPending != 0 {
-            let bridge = controllers[index].bridge
-            jogNeedles[index, default: JogMarker()].platter(
-                counts: bridge.jogCountsPending, countsPerRev: bridge.mapping.jog?.countsPerRev ?? 0, at: clock.now,
-                touched: bridge.platterTouched
-            )
-            needlesMoved.insert(index)
-            bridge.jogCountsPending = 0
-        }
-    }
+
+
 
     /// The marker and the play light, from the tick: the hand while playing or after a platter move, at most 30 a
     /// second; the light 127 while playing, blinking every half-second while loaded and paused.
@@ -583,7 +573,6 @@ public final class Coordinator {
             for notice in controllers[index].bridge.notices { log.log(notice) }
             controllers[index].bridge.notices.removeAll()
         }
-        jogPlatter()
         disconnectFailedOutputs()
     }
 
