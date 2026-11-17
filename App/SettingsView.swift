@@ -181,7 +181,7 @@ struct SettingsView: View {
         }
         section(nil) {
             switchRow("Controller LEDs", isOn: settings.ledsEnabled)
-            switchRow("Show the deck on the jog display", hint: "LC6000 only. Off until tested on hardware.",
+            switchRow("Show the deck on the jog display", hint: "LC6000 only.",
                       isOn: settings.jogDisplay)
             ForEach(settings.wrappedValue.warnings, id: \.self) { note($0, color: Theme.attention) }
             if settings.wrappedValue.controllers.count < 4 {

@@ -20,8 +20,8 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     public var ringColors = RingColors.vivid
     /// Light or dark (#127). Syndicate's own LIGHT MODE can't be read over OSC, so the DJ picks it to match.
     public var appearance = Appearance.matchMacOS
-    /// "Show the deck on the jog display" (#165). Off until a hardware check passes.
-    public var jogDisplay = false
+    /// "Show the deck on the jog display" (#165). On for new settings since the v1.1 hardware check.
+    public var jogDisplay = true
     /// A controller profile chosen by hand for a MIDI device (#200): device name → profile id. A device not listed is
     /// Automatic, matched by its name; so is one whose chosen profile no longer exists.
     public var profileChoices: [String: String] = [:]
@@ -44,6 +44,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         customDeckColors = try c.decodeIfPresent(DeckColors.self, forKey: .customDeckColors) ?? .defaults
         appearance = try c.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .matchMacOS
         ringColors = try c.decodeIfPresent(RingColors.self, forKey: .ringColors) ?? .vivid
+        // Settings saved before the switch existed keep it off; new settings have it on (v1.1, RELEASE step 3).
         jogDisplay = try c.decodeIfPresent(Bool.self, forKey: .jogDisplay) ?? false
         profileChoices = try c.decodeIfPresent([String: String].self, forKey: .profileChoices) ?? [:]
     }
