@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 @testable import ControllerBridgeRender
 import Testing
 
@@ -27,5 +28,58 @@ struct AppStoreFrameTests {
     func wide() {
         let shot = AppStoreFrame.layout(shot: CGSize(width: 2000, height: 800)).shot
         #expect(shot == CGRect(x: 120, y: 452, width: 2640, height: 1056))
+    }
+}
+
+/// The composed frame (#29): Apple's sizes, flat RGB with no alpha (App Store Connect refuses alpha), the ground
+/// color around the shot, the shot where the layout puts it, and a caption drawn in the band.
+@Suite("App Store frame image")
+struct AppStoreFrameImageTests {
+    /// A solid red 100×50 shot.
+    static func red() -> CGImage {
+        let context = CGContext(data: nil, width: 100, height: 50, bitsPerComponent: 8, bytesPerRow: 400,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 100, height: 50))
+        return context.makeImage()!
+    }
+
+    static let ground = CGColor(srgbRed: 0x0B / 255.0, green: 0x0B / 255.0, blue: 0x0B / 255.0, alpha: 1)
+
+    /// The image's pixels, read once: `pixel(x, y)` is [r, g, b], top-left origin.
+    struct Pixels {
+        let data: Data, bytesPerRow: Int, bytesPerPixel: Int
+        init(_ image: CGImage) {
+            data = image.dataProvider!.data! as Data
+            bytesPerRow = image.bytesPerRow
+            bytesPerPixel = image.bitsPerPixel / 8
+        }
+        func pixel(_ x: Int, _ y: Int) -> [UInt8] {
+            let offset = y * bytesPerRow + x * bytesPerPixel
+            return [data[offset], data[offset + 1], data[offset + 2]]
+        }
+    }
+
+    @Test("2880×1800 and 1440×900, no alpha")
+    func sizes() throws {
+        let frames = try #require(AppStoreFrame.images(shot: Self.red(), caption: "Your controller in Syndicate",
+                                                        ground: Self.ground, text: CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)))
+        #expect(frames.large.width == 2880 && frames.large.height == 1800)
+        #expect(frames.small.width == 1440 && frames.small.height == 900)
+        let opaque: [CGImageAlphaInfo] = [.none, .noneSkipLast, .noneSkipFirst]
+        for image in [frames.large, frames.small] { #expect(opaque.contains(image.alphaInfo)) }
+    }
+
+    @Test("The ground in the margin, the shot in its rect, and caption ink in the band")
+    func content() throws {
+        let frames = try #require(AppStoreFrame.images(shot: Self.red(), caption: "Your controller in Syndicate",
+                                                        ground: Self.ground, text: CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)))
+        let large = Pixels(frames.large)
+        #expect(large.pixel(10, 10) == [UInt8(0x0B), 0x0B, 0x0B])
+        // A 100×50 shot is 2:1, wider than the area: width 2640, height 1320, y 320…1640.
+        #expect(large.pixel(1440, 980) == [UInt8(255), 0, 0])
+        #expect(large.pixel(1440, 300) == [UInt8(0x0B), 0x0B, 0x0B])
+        let band = (0..<280).flatMap { y in stride(from: 120, to: 2760, by: 8).map { large.pixel($0, y) } }
+        #expect(band.contains { $0[0] > 200 && $0[1] > 200 && $0[2] > 200 }, "caption text drawn")
     }
 }

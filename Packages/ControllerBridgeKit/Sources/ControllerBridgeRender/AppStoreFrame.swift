@@ -21,3 +21,48 @@ public enum AppStoreFrame {
         return (caption, shot)
     }
 }
+
+import CoreText
+import Foundation
+
+extension AppStoreFrame {
+    /// The frame at 2880×1800 and, downscaled once from it, 1440×900: `ground` all round, `caption` centered in Geist
+    /// SemiBold in the band, `shot` where the layout puts it. Flat RGB, no alpha. Nil if CoreGraphics can't draw.
+    public static func images(shot: CGImage, caption: String, ground: CGColor, text: CGColor) -> (large: CGImage, small: CGImage)? {
+        _ = JogDisplayRenderer.fontsRegistered
+        guard let large = draw(size: canvas, { context in
+            context.setFillColor(ground)
+            context.fill(CGRect(origin: .zero, size: canvas))
+            let layout = layout(shot: CGSize(width: shot.width, height: shot.height))
+            context.interpolationQuality = .high
+            // Top-left layout into CoreGraphics' bottom-left space.
+            context.draw(shot, in: CGRect(x: layout.shot.minX, y: canvas.height - layout.shot.maxY,
+                                          width: layout.shot.width, height: layout.shot.height))
+            let font = CTFontCreateWithName("Geist-SemiBold" as CFString, 92, nil)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: caption, attributes: [
+                kCTFontAttributeName as NSAttributedString.Key: font,
+                kCTForegroundColorAttributeName as NSAttributedString.Key: text,
+            ]))
+            let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+            let baseline = canvas.height - layout.caption.midY - (CTFontGetAscent(font) - CTFontGetDescent(font)) / 2
+            context.textPosition = CGPoint(x: layout.caption.midX - width / 2, y: baseline)
+            CTLineDraw(line, context)
+        }) else { return nil }
+        let half = CGSize(width: canvas.width / 2, height: canvas.height / 2)
+        guard let small = draw(size: half, { context in
+            context.interpolationQuality = .high
+            context.draw(large, in: CGRect(origin: .zero, size: half))
+        }) else { return nil }
+        return (large, small)
+    }
+
+    /// An sRGB bitmap with no alpha channel, drawn by `body`.
+    private static func draw(size: CGSize, _ body: (CGContext) -> Void) -> CGImage? {
+        guard let context = CGContext(
+            data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ) else { return nil }
+        body(context)
+        return context.makeImage()
+    }
+}

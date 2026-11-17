@@ -75,7 +75,7 @@ public enum JogDisplayRenderer {
     /// The Geist faces the design uses, bundled with this target (#221) so the image is the same in the app and under
     /// `swift test`: unregistered, CoreText would quietly draw another font. Registered once, for this process.
     static let fontNames = ["Geist-Bold", "Geist-Medium", "GeistMono-SemiBold"]
-    private static let fontsRegistered: Void = {
+    static let fontsRegistered: Void = {
         let urls = fontNames.compactMap { Bundle.module.url(forResource: $0, withExtension: "ttf", subdirectory: "Fonts") }
         // Already registered (the app registers its own copies) is fine: the same faces either way.
         CTFontManagerRegisterFontURLs(urls as CFArray, .process, true, nil)
