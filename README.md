@@ -28,7 +28,7 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 | Key Lock / Slip | `PitchPreserve` / `CueSlip` |
 | Shift + Key Lock (pitch reset) | `TempoSlider` 0.0, then the fader waits to meet 0.0. Nothing while the tempo slider is disabled (a synced follower) |
 | Pitch Bend − / + (hold) | `PhaseMinus` / `PhasePlus` 1/0, nudging the tempo while held |
-| Shift + Pitch Bend − / + | Transposes the deck down or up a semitone (`PitchDown` / `PitchUp`, once per press). Syndicate applies it only with the deck's P (key lock) on |
+| Shift + Pitch Bend − / + | Transposes the deck down or up a semitone (`PitchDown` / `PitchUp`, once per press). It turns the deck's key lock (P) on first, since Syndicate transposes only with it on |
 | Param ◀ ▶ | `BeatSkip ∓1` |
 | Browse knob turn and press (Shift for Enter), Back, Forward, Track ◀ ▶ | `Browser/Up`, `Browser/Down`, `Browser/L{deck}`, `Back`, `Enter` |
 
