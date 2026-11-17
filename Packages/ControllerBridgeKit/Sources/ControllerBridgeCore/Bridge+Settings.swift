@@ -30,8 +30,7 @@ extension Bridge {
         synced = old.synced
         sliderEnabled = old.sliderEnabled
         looping = old.looping
-        cues = old.cues
-        palette = old.palette
+        padModule.carryFeedback(from: old.padModule)
         jogModule.progressReported(old.jogModule.progress)
         duration = old.duration
         reportedTempo = old.reportedTempo

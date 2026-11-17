@@ -43,7 +43,7 @@ public struct DeckColors: Equatable, Sendable, Codable {
     /// Before Syndicate's palette arrives: its factory deck colors, cue palette slots 1, 3, 5 and 7 of the same
     /// factory table the pads use (red, yellow, cyan, purple).
     public static let defaults = DeckColors(rgb: Dictionary(uniqueKeysWithValues: (1...4).map {
-        ($0, Bridge.defaultPalette[2 * $0 - 1] ?? [0, 0, 0])
+        ($0, PadModule.defaultPalette[2 * $0 - 1] ?? [0, 0, 0])
     }))
 
     /// The deck whose color a cue palette slot holds: slots 1, 3, 5 and 7 are decks 1-4 (#123). Nil for any other.

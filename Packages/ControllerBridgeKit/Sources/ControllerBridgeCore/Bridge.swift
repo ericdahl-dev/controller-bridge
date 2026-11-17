@@ -150,10 +150,6 @@ final class Bridge {
     /// The capture window is recording this controller (#186, #187): its LEDs are the LED test's, so the bridge paints
     /// none until the capture ends and it repaints.
     var ledsCaptured = false
-    /// Each hot cue's color slot, 0 for an empty cue.
-    lazy var cues = [Int](repeating: 0, count: mapping.notes.pads.count)
-    /// Cue colors by slot, Syndicate's defaults until ColorPalette feedback arrives.
-    var palette = Bridge.defaultPalette
 
     /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
     private var ledCache: [Int: UInt8] = [:]
@@ -334,7 +330,7 @@ final class Bridge {
             if !loaded {
                 forgetCues()
                 // The track is gone: forget its cues, where it was and how long it was.
-                cues = [Int](repeating: 0, count: mapping.notes.pads.count)
+                padModule.clearCues(count: mapping.notes.pads.count)
                 jogModule.progressReported(nil)
                 duration = nil
                 track = nil
@@ -349,7 +345,7 @@ final class Bridge {
             if value != sliderEnabled { rearmPickup() }
             sliderEnabled = value
         case "loop": looping = value
-        case "cues": cues = Self.cueSlots(message.arguments, pads: mapping.notes.pads.count)
+        case "cues": padModule.cuesFeedback(message.arguments)
         case "trackinfo":
             // Title, artist, key, BPM, length in seconds, …: only the length is used, for jog seeking.
             guard message.arguments.count >= 5 else { return }

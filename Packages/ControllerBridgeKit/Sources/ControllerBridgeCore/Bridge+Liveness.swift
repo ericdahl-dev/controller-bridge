@@ -13,7 +13,7 @@ extension Bridge {
         synced = false
         sliderEnabled = true
         looping = false
-        cues = [Int](repeating: 0, count: 8)
+        padModule.clearCues(count: 8)
         jogModule.progressReported(nil)
         duration = nil
         bpm = nil

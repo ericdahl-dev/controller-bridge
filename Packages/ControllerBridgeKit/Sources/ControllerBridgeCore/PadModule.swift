@@ -24,6 +24,18 @@ struct PadModule {
     /// Syndicate's hot cues per deck: its Cues feedback has eight slots. A pad past them has no cue (#311).
     static let syndicateCues = 8
     private let rollSizes: [String]
+    private let leds: Mapping.LEDs
+    /// Each pad's cue color slot, from Cues feedback; 0 is no cue.
+    private(set) var cues: [Int]
+    /// Syndicate's cue colors by slot, from ColorPalette feedback (#18).
+    private var palette = PadModule.defaultPalette
+
+    /// Syndicate's default cue colors by slot.
+    static let defaultPalette: [Int: [Int]] = [
+        1: [255, 0, 0], 2: [255, 128, 0], 3: [255, 255, 0], 4: [0, 255, 0],
+        5: [0, 255, 255], 6: [0, 0, 255], 7: [128, 0, 255], 8: [255, 0, 255],
+    ]
+    static let off: UInt8 = 0
 
     private let pads: Mapping.Pads
     /// `notes.pads`: the notes the pads send in every mode, unless the profile gives each mode its own (#225).
@@ -34,12 +46,75 @@ struct PadModule {
         pads = mapping.pads
         padNotes = mapping.notes.pads
         rollSizes = mapping.pads.rollSizes
+        leds = mapping.leds
+        cues = [Int](repeating: 0, count: mapping.notes.pads.count)
     }
 
     /// The bridge's own state across a settings swap (#115): the pad mode.
     mutating func carry(from old: PadModule) {
         mode = old.mode
     }
+
+    /// Syndicate's feedback across a settings swap: the cues and the palette.
+    mutating func carryFeedback(from old: PadModule) {
+        cues = old.cues
+        palette = old.palette
+    }
+
+    // MARK: Cues and colors
+
+    /// Cues feedback: a slot and a name per cue, one per pad (#196). Syndicate sends 8; pads past what it sends are
+    /// empty.
+    mutating func cuesFeedback(_ arguments: [OSCArgument]) {
+        let slots = stride(from: 0, to: arguments.count, by: 2).prefix(cues.count).map { index -> Int in
+            if case .int(let slot) = arguments[index] { return Int(slot) }
+            return 0
+        }
+        cues = slots + Array(repeating: 0, count: max(0, cues.count - slots.count))
+    }
+
+    /// No cues (a track gone, Syndicate gone): `count` empty slots.
+    mutating func clearCues(count: Int) {
+        cues = [Int](repeating: 0, count: count)
+    }
+
+    /// ColorPalette feedback: a slot, then its red, green and blue (0-255), several slots flattened in groups of four.
+    /// False when there wasn't a whole group, so nothing changed.
+    mutating func paletteFeedback(_ arguments: [OSCArgument]) -> Bool {
+        let numbers = arguments.compactMap(\.wholeNumber)
+        guard numbers.count >= 4 else { return false }
+        for start in stride(from: 0, through: numbers.count - 4, by: 4) {
+            palette[numbers[start]] = Array(numbers[(start + 1)...(start + 3)])
+        }
+        return true
+    }
+
+    /// Each pad's LED velocity in the current mode. Hot Cue: each cue in its color, a held one in its brightest
+    /// version, vivid by Settings (#151). Loop: each cue in the loop color. Roll: every pad with a roll size in the
+    /// roll color (#311). Slicer: off. An empty cue is off.
+    func velocities(held: Set<Int>, ringColors: RingColors) -> [UInt8] {
+        switch mode {
+        case .hotCue:
+            return cues.enumerated().map { index, slot in
+                guard slot != 0 else { return Self.off }
+                let color = palette[slot] ?? [255, 255, 255]
+                guard held.contains(index) else { return velocity(color) }
+                let bright = Self.brightest(color)
+                return ringColors == .vivid ? leds.colorTable.vivid(for: bright) : velocity(bright)
+            }
+        case .loop: return cues.map { $0 == 0 ? Self.off : velocity(leds.loopPadColor) }
+        case .roll: return cues.indices.map { $0 < rollSizes.count ? velocity(leds.rollPadColor) : Self.off }
+        case .slicer: return Array(repeating: Self.off, count: cues.count)
+        }
+    }
+
+    /// The color scaled up so its strongest channel is 255.
+    static func brightest(_ rgb: [Int]) -> [Int] {
+        guard let top = rgb.max(), top > 0 else { return rgb }
+        return rgb.map { $0 * 255 / top }
+    }
+
+    private func velocity(_ rgb: [Int]) -> UInt8 { leds.colorTable.velocity(for: rgb) }
 
     /// A mode button (pressed): held pads go, then the mode switches.
     mutating func modeButton(_ mode: PadMode) -> [Send] {

@@ -12,33 +12,10 @@ enum PadMode: CaseIterable {
 }
 
 extension Bridge {
-    /// Syndicate's default cue colors by slot.
-    static let defaultPalette: [Int: [Int]] = [
-        1: [255, 0, 0], 2: [255, 128, 0], 3: [255, 255, 0], 4: [0, 255, 0],
-        5: [0, 255, 255], 6: [0, 0, 255], 7: [128, 0, 255], 8: [255, 0, 255],
-    ]
-
-    /// The color slots from Cues feedback: a slot and a name per cue, one per pad (#196). Syndicate sends 8; pads past
-    /// what it sends are empty.
-    static func cueSlots(_ arguments: [OSCArgument], pads: Int) -> [Int] {
-        let slots = stride(from: 0, to: arguments.count, by: 2).prefix(pads).map { index -> Int in
-            if case .int(let slot) = arguments[index] { return Int(slot) }
-            return 0
-        }
-        return slots + Array(repeating: 0, count: max(0, pads - slots.count))
-    }
-
-    /// ColorPalette feedback: a slot, then its red, green and blue (0-255). Syndicate may send several slots in one
-    /// message, as OSC arrays, flattened to groups of four.
+    /// ColorPalette feedback (#18): the pad module keeps the cue colors; the pads repaint.
     func colorPalette(_ arguments: [OSCArgument]) {
-        let numbers = arguments.compactMap(\.wholeNumber)
-        guard numbers.count >= 4 else { return }
-        for start in stride(from: 0, through: numbers.count - 4, by: 4) {
-            palette[numbers[start]] = Array(numbers[(start + 1)...(start + 3)])
-        }
-        refreshLEDs()
+        if padModule.paletteFeedback(arguments) { refreshLEDs() }
     }
-
 
     /// A mode button. Switching mode first releases any held pad, so a hot cue or roll never sticks.
     func padModeButton(_ mode: PadMode) -> (Bool) -> Void {
@@ -156,30 +133,10 @@ extension Bridge {
         led(note, UInt8(clamping: velocity))
     }
 
-    /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad with a roll size in the roll
-    /// color, the rest off (#311).
-    /// Slicer: off. An empty cue is off.
+    /// Each pad's velocity in the current mode, from the pad module, with which pads are held.
     func padColors() -> [UInt8] {
-        let leds = mapping.leds
-        switch padMode {
-        case .hotCue:
-            return cues.enumerated().map { index, slot in
-                guard slot != 0 else { return Self.off }
-                let color = palette[slot] ?? [255, 255, 255]
-                // A held hot cue shows the brightest version of its color, so you can see which one is sounding.
-                // Held, it's vivid too (#151), so the sounding cue stands out in its hue, not whiter.
-                return held.contains(.pad(index)) ? ringVelocity(Self.brightest(color)) : velocity(color)
-            }
-        case .loop: return cues.map { $0 == 0 ? Self.off : velocity(leds.loopPadColor) }
-        case .roll: return cues.indices.map { $0 < mapping.pads.rollSizes.count ? velocity(leds.rollPadColor) : Self.off }
-        case .slicer: return Array(repeating: Self.off, count: cues.count)
-        }
-    }
-
-    /// The color scaled up so its strongest channel is 255.
-    static func brightest(_ rgb: [Int]) -> [Int] {
-        guard let top = rgb.max(), top > 0 else { return rgb }
-        return rgb.map { $0 * 255 / top }
+        let heldPads = Set(mapping.notes.pads.indices.filter { held.contains(.pad($0)) })
+        return padModule.velocities(held: heldPads, ringColors: ringColors)
     }
 
     /// The ring's and a held pad's velocity, by the Settings mapping (#151), through the profile's color table (#197).

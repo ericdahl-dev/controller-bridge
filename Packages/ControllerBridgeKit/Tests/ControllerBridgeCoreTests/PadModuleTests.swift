@@ -104,3 +104,50 @@ struct PadModuleActionTests {
         #expect(pads.pressed(0, Self.still) == [])
     }
 }
+
+@Suite("Pad module: cues, palette and pad colors")
+struct PadModuleColorTests {
+    static let lc6000 = PadModuleModeTests.lc6000
+
+    /// Cues feedback: a slot and a name per cue.
+    static func cues(_ slots: [Int]) -> [OSCArgument] { slots.flatMap { [OSCArgument.int(Int32($0)), .string("c")] } }
+
+    @Test("Hot Cue: each cue in its palette color (slot 1 red = 48), empty off; held, the brightest version (#151)")
+    func hotCueColors() {
+        var pads = PadModule(mapping: Self.lc6000)
+        pads.cuesFeedback(Self.cues([1, 0, 9, 0, 0, 0, 0, 0]))
+        // Slot 9 isn't in the palette yet: white, 0x3F. Then the palette gives it a dim red: 32, and 48 held.
+        #expect(pads.velocities(held: [], ringColors: .exact) == [48, 0, 0x3F, 0, 0, 0, 0, 0])
+        let applied = pads.paletteFeedback([.int(9), .int(128), .int(0), .int(0)])
+        #expect(applied)
+        #expect(pads.velocities(held: [], ringColors: .exact) == [48, 0, 32, 0, 0, 0, 0, 0])
+        #expect(pads.velocities(held: [2], ringColors: .exact) == [48, 0, 48, 0, 0, 0, 0, 0])
+        let short = pads.paletteFeedback([.int(1), .int(2)])
+        #expect(!short, "fewer than four numbers: ignored")
+    }
+
+    @Test("Roll: every pad with a roll size in the roll color (56). Loop: cues in the loop color (12). Slicer: off")
+    func otherModes() {
+        var pads = PadModule(mapping: Self.lc6000)
+        pads.cuesFeedback(Self.cues([1, 0, 4, 0, 0, 0, 0, 8]))
+        _ = pads.modeButton(.roll)
+        #expect(pads.velocities(held: [], ringColors: .exact) == [56, 56, 56, 56, 56, 56, 56, 56])
+        _ = pads.modeButton(.loop)
+        #expect(pads.velocities(held: [], ringColors: .exact) == [12, 0, 12, 0, 0, 0, 0, 12])
+        _ = pads.modeButton(.slicer)
+        #expect(pads.velocities(held: [], ringColors: .exact) == [0, 0, 0, 0, 0, 0, 0, 0])
+    }
+
+    @Test("Clearing the cues (a track gone) and carrying them across a settings swap (#115)")
+    func clearAndCarry() {
+        var pads = PadModule(mapping: Self.lc6000)
+        pads.cuesFeedback(Self.cues([1, 2, 0, 0, 0, 0, 0, 0]))
+        _ = pads.paletteFeedback([.int(2), .int(0), .int(0), .int(255)])
+        var new = PadModule(mapping: Self.lc6000)
+        new.carryFeedback(from: pads)
+        #expect(new.cues == [1, 2, 0, 0, 0, 0, 0, 0])
+        #expect(new.velocities(held: [], ringColors: .exact) == pads.velocities(held: [], ringColors: .exact))
+        pads.clearCues(count: 8)
+        #expect(pads.cues == [0, 0, 0, 0, 0, 0, 0, 0])
+    }
+}
