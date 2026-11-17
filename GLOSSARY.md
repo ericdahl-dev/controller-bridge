@@ -58,7 +58,7 @@ One optional setting in a controller profile; left out, it takes the LC6000's va
 What the pads do: Hot Cue, Roll, Loop or Slicer.
 
 **Needle strip**:
-The LC6000's touch strip for jumping to a place in the track.
+The hardware: the LC6000's touch strip for jumping to a place in the track.
 _Avoid_: needle (that's the jog display's), needle drop
 
 **Platter ring**:
@@ -128,8 +128,8 @@ The jog display's four beat sections, lit by the master clock's beat on every de
 _Avoid_: beat ring, platter ring (that's the LEDs')
 
 **Needle**:
-The jog display's hand, showing where the deck is in its own bar.
-_Avoid_: marker, pointer
+The jog display's hand, showing where the deck is in its own bar; called `marker` in code (#303 renames it after 1.1.0).
+_Avoid_: pointer
 
 **Preview**:
 What a deck's jog display would show, drawn by DeckBridge for Diagnostics, for every deck, whether or not anything is sent.
