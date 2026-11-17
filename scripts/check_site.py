@@ -281,9 +281,40 @@ def check_home_controllers(root, controllers):
     page = Page()
     with open(os.path.join(root, HOME), encoding="utf-8") as f:
         page.feed(f.read())
+    out = []
     if page.controllers != wanted:
-        return [f"{HOME}: its controller list ({described(page.controllers)}) isn't {CONTROLLERS}'s ({described(wanted)})"]
-    return []
+        out.append(f"{HOME}: its controller list ({described(page.controllers)}) isn't {CONTROLLERS}'s ({described(wanted)})")
+    # The FAQPage JSON-LD's answer names every supported controller, so search and answer engines read the same list.
+    answer = None
+    for block in page.json_ld:
+        try:
+            answer = answer or questions(json.loads(block)).get(CONTROLLERS_QUESTION)
+        except ValueError:
+            pass  # reported by check_page
+    if answer is None:
+        out.append(f'{HOME}: the JSON-LD has no "{CONTROLLERS_QUESTION}" question')
+    else:
+        for c in controllers:
+            if c.get("status", "supported") == "supported" and c["name"] not in answer:
+                out.append(f'{HOME}: the JSON-LD answer to "{CONTROLLERS_QUESTION}" doesn\'t name {c["name"]}')
+    return out
+
+
+CONTROLLERS_QUESTION = "Which controllers does DeckBridge support?"
+
+
+def questions(node):
+    """Every JSON-LD Question's name and its accepted answer's text, anywhere in the block."""
+    found = {}
+    if isinstance(node, dict):
+        if node.get("@type") == "Question" and isinstance(node.get("acceptedAnswer"), dict):
+            found[node.get("name")] = str(node["acceptedAnswer"].get("text", ""))
+        for value in node.values():
+            found.update(questions(value))
+    elif isinstance(node, list):
+        for value in node:
+            found.update(questions(value))
+    return found
 
 
 def problems(root, app_prompts=None):

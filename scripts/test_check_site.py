@@ -23,7 +23,9 @@ WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no co
            ' To have your visits removed, email us. On the capture page it counts only that a capture started and finished.</p>'
            '<p>The web capture saves the file on your computer; nothing is uploaded.</p>')
 
-CAPTURE_LD = '<script type="application/ld+json">{"text": "Record it at https://getdeckbridge.app/capture/."}</script>'
+CAPTURE_LD = ('<script type="application/ld+json">{"@type": "FAQPage", "mainEntity": [{"@type": "Question", '
+              '"name": "Which controllers does DeckBridge support?", "acceptedAnswer": {"@type": "Answer", '
+              '"text": "The LC6000 PRIME. Record yours at https://getdeckbridge.app/capture/."}}]}</script>')
 
 CONTROLLERS = '[{"name": "LC6000 PRIME", "maker": "Denon DJ"}]\n'
 
@@ -283,7 +285,7 @@ class CheckSiteTests(unittest.TestCase):
 
     def test_the_home_page_links_the_web_capture_in_the_faq_and_its_json_ld(self):
         no_link = GOOD["index.html"].replace(' <a href="capture/">record it in your browser</a>', "")
-        no_ld = GOOD["index.html"].replace(CAPTURE_LD, "")
+        no_ld = GOOD["index.html"].replace(" Record yours at https://getdeckbridge.app/capture/.", "")
         self.assertEqual(check_site.problems(self.site({"index.html": no_link})),
                          ["index.html: doesn't link the web capture (capture/)"])
         self.assertEqual(check_site.problems(self.site({"index.html": no_ld})),
@@ -333,6 +335,16 @@ class CheckSiteTests(unittest.TestCase):
                                              'data-status="supported">Denon DJ LC6000 PRIME</li></ul>', "")
         self.assertEqual(check_site.problems(self.site({"index.html": missing})), [
             "index.html: its controller list (none) isn't controllers.json's (Denon DJ LC6000 PRIME: supported)",
+        ])
+
+    def test_the_faq_json_ld_names_every_supported_controller(self):
+        home = GOOD["index.html"].replace("The LC6000 PRIME.", "One controller.")
+        self.assertEqual(check_site.problems(self.site({"index.html": home})), [
+            'index.html: the JSON-LD answer to "Which controllers does DeckBridge support?" doesn\'t name LC6000 PRIME',
+        ])
+        no_question = GOOD["index.html"].replace("Which controllers does DeckBridge support?", "What is it?")
+        self.assertEqual(check_site.problems(self.site({"index.html": no_question})), [
+            'index.html: the JSON-LD has no "Which controllers does DeckBridge support?" question',
         ])
 
     def test_an_in_progress_controller_is_allowed(self):
