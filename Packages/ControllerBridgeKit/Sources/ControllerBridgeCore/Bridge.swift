@@ -214,6 +214,7 @@ final class Bridge {
     func start(stale: Bool = false) {
         feedbackStale = stale
         rearmPickup()
+        rearmMixer()
         ledCache.removeAll()
         padLEDCache.removeAll()
         mixerState.meterShown = nil   // shown again on the next tick, on what may be a new port (#320)

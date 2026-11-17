@@ -14,6 +14,8 @@ struct MixerState {
     /// Controls waiting to meet Syndicate's value (pickup), and where each last was.
     var armed: Set<MixerValue> = []
     var position: [MixerValue: Double] = [:]
+    /// Just after a deck switch, controls with no report from the new channel wait until then (#321).
+    var waitUntil: Double?
     /// The meter: Syndicate's latest level, the peak being held and since when, and what the LEDs show.
     var meterLevel: Double?
     var meterPeak = 0.0
@@ -124,9 +126,13 @@ extension Bridge {
     /// Whether the control at `level` drives Syndicate: always unless armed; armed, once it's within tolerance of the
     /// reported value or moves across it.
     fileprivate func mixerPickedUp(_ kind: MixerValue, at level: Double) -> Bool {
-        guard let mixer = mapping.mixer, mixer.pickup, mixerState.armed.contains(kind),
-            let reported = mixerState.reported[kind]
-        else { return true }
+        guard let mixer = mapping.mixer, mixer.pickup else { return true }
+        guard let reported = mixerState.reported[kind] else {
+            // No report yet: it passes through, except just after a deck switch, while the new channel's is due.
+            if let until = mixerState.waitUntil, clock.now < until { return false }
+            return true
+        }
+        guard mixerState.armed.contains(kind) else { return true }
         let previous = mixerState.position[kind]
         mixerState.position[kind] = level
         let near = abs(level - reported) <= mixer.pickupTolerance
@@ -160,6 +166,28 @@ extension Bridge {
         if level > 1 { return UInt8(clamping: meter.clip ?? top) }
         let index = min(meter.steps.count - 1, max(0, Int((level * Double(meter.steps.count - 1)).rounded(.down))))
         return UInt8(clamping: meter.steps[index])
+    }
+}
+
+extension Bridge {
+    /// Every fader and knob waits to meet Syndicate again (#321): after a capture swept them, or a replug, the hardware
+    /// may be anywhere.
+    func rearmMixer() {
+        for (kind, _) in mixerControls {
+            mixerState.armed.insert(kind)
+            mixerState.position[kind] = nil
+            mixerState.lastSent[kind] = nil
+        }
+        mixerState.msb = [:]
+    }
+
+    /// Another deck, another mixer channel (#321): what the old channel reported is forgotten, so its cue, mute and
+    /// solo don't show or invert on the new one, and the faders wait for the new channel's values.
+    func forgetMixerChannel() {
+        mixerState.reported = [:]
+        mixerState.recentSends = [:]
+        rearmMixer()
+        mixerState.waitUntil = clock.now + Double(mapping.osc.feedbackAnswerMs) / 1000
     }
 }
 

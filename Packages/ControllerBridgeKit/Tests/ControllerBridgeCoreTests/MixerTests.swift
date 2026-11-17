@@ -98,6 +98,7 @@ struct MixerTests {
     func channelFollowsDeck() throws {
         let rig = try Self.started()
         rig.coordinator.setDeck(2, controller: 0)
+        rig.clock.now += 3   // past the wait for channel 2's values (#321), with none reported
         rig.osc.sent.removeAll()
         Self.cc(rig, 19, 127)
         #expect(rig.osc.sent.last == Self.mixer("Volume", 1, channel: 2))
@@ -300,5 +301,60 @@ struct MixerTests {
         lc6000.coordinator.start()
         Self.meter(lc6000, 0.8, at: 10); Self.tick(lc6000, at: 10.1)
         #expect(Self.meterSends(lc6000) == [])
+    }
+
+    // MARK: Resets (#321): a capture, a replug and a deck switch
+
+    @Test("After a capture swept the fader, it waits to meet Syndicate's volume again instead of jumping it")
+    func captureRearms() throws {
+        let rig = try Self.started()
+        Self.report(rig, "Volume", 0.5)
+        Self.cc(rig, 19, 64)                          // picked up at 0.5
+        rig.coordinator.setCapture(source: Rig.lc6000.id)
+        Self.cc(rig, 19, 127)                         // swept while capturing: drives nothing
+        rig.coordinator.setCapture(source: nil)
+        rig.osc.sent.removeAll()
+        Self.cc(rig, 19, 126)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("After a replug, the fader waits to meet Syndicate's volume again")
+    func replugRearms() throws {
+        let rig = try Self.started()
+        Self.report(rig, "Volume", 0.5)
+        Self.cc(rig, 19, 64)
+        rig.midi.sources = [MIDIEndpoint(id: 1000, name: "IAC Bus 1")]
+        rig.midi.destinations = []
+        rig.coordinator.devicesChanged()
+        rig.midi.sources = [MIDIEndpoint(id: 1000, name: "IAC Bus 1"), Rig.lc6000]
+        rig.midi.destinations = [Rig.lc6000Out]
+        rig.coordinator.devicesChanged()
+        rig.osc.sent.removeAll()
+        Self.cc(rig, 19, 126)
+        #expect(!rig.osc.sent.contains { $0.address.hasSuffix("/Volume") })
+    }
+
+    @Test("On deck 2, channel 1's cue state is forgotten: its LED goes idle and a press asks channel 2 to turn cue on")
+    func deckSwitchForgetsChannel() throws {
+        let rig = try Self.started()
+        Self.report(rig, "Cue", 1)
+        #expect(rig.leds[84] == 127)
+        rig.coordinator.setDeck(2, controller: 0)
+        #expect(rig.leds[84] == 1)
+        rig.osc.sent.removeAll()
+        Self.press(rig, 84)
+        #expect(rig.osc.sent.contains(OSCMessage("/Syndicate/Mixer/CH2/Cue", [.int(1)])))
+    }
+
+    @Test("Just after a deck switch, the fader waits for the new channel's volume; once it's reported, it picks up there")
+    func deckSwitchWaitsForTheNewChannel() throws {
+        let rig = try Self.started()
+        rig.coordinator.setDeck(2, controller: 0)
+        rig.osc.sent.removeAll()
+        Self.cc(rig, 19, 127)
+        #expect(!rig.osc.sent.contains { $0.address.hasSuffix("/Volume") })
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH2/Volume", [.float(1)]))
+        Self.cc(rig, 19, 126)
+        #expect(rig.osc.sent.last == Self.mixer("Volume", 0.99206, channel: 2))
     }
 }
