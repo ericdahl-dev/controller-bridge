@@ -8,9 +8,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_site
 
 
-def page(title="DeckBridge", description="A bridge.", body="", head=""):
+FOOTER = '<footer><span>Not affiliated with Untitled Audio Syndicate Ltd. or Denon DJ.</span></footer>'
+
+
+def page(title="DeckBridge", description="A bridge.", body="", head="", footer=FOOTER):
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{title}</title>'
-            f'<meta name="description" content="{description}">{head}</head><body>{body}</body></html>')
+            f'<meta name="description" content="{description}">{head}</head><body>{body}{footer}</body></html>')
 
 
 def sitemap(*locs):
@@ -317,6 +320,23 @@ class CheckSiteTests(unittest.TestCase):
         no_offer = GOOD["index.html"].replace(', "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}', "")
         self.assertEqual(check_site.problems(self.site({"index.html": no_offer})), [
             "index.html: the SoftwareApplication JSON-LD has no offers (price and priceCurrency)"])
+
+    def test_the_company_is_always_untitled_audio_syndicate_ltd(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a> <p>Syndicate, by Untitled Audio.</p>'),
+                          "llms.txt": GOOD["llms.txt"] + "- Made by Untitled Audio Syndicate, not us.\n"})
+        self.assertEqual(check_site.problems(root), [
+            'llms.txt: names "Untitled Audio" without "Syndicate Ltd."',
+            'support/index.html: names "Untitled Audio" without "Syndicate Ltd."',
+        ])
+
+    def test_every_page_footer_carries_the_disclaimer(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a>', footer="<footer></footer>")})
+        self.assertEqual(check_site.problems(root), ['support/index.html: the footer doesn\'t name "Untitled Audio Syndicate Ltd."'])
+
+    def test_the_readme_names_the_company_in_full(self):
+        readme = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "README.md")
+        with open(readme, encoding="utf-8") as f:
+            self.assertEqual(check_site.company_problems("README.md", f.read()), [])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})

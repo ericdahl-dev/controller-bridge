@@ -71,9 +71,13 @@ class Page(HTMLParser):
         self.json_ld = []  # the text of each <script type="application/ld+json">
         self._in = None
         self._ld = None
+        self.footer_text = []  # the text inside <footer>
+        self._footer = 0
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag == "footer":
+            self._footer += 1
         if tag in ("title", "h1"):
             self._in = tag
             setattr(self, tag, getattr(self, tag) or "")
@@ -98,6 +102,8 @@ class Page(HTMLParser):
             self.refs.append((attrs["src"], "script" if tag == "script" else True))
 
     def handle_endtag(self, tag):
+        if tag == "footer" and self._footer:
+            self._footer -= 1
         if tag == self._in:
             self._in = None
         if tag == "script" and self._ld is not None:
@@ -109,6 +115,8 @@ class Page(HTMLParser):
             self._ld.append(data)
             return
         self.text.append(data)
+        if self._footer:
+            self.footer_text.append(data)
         if self._in:
             setattr(self, self._in, getattr(self, self._in) + data)
 
@@ -153,6 +161,15 @@ def check_refs(root, file, refs):
 
 
 PRICE_QUESTION = "How much does DeckBridge cost?"
+
+# Syndicate's maker, by its full name wherever the site names it, and in every page's footer disclaimer.
+COMPANY = "Untitled Audio Syndicate Ltd."
+BARE_COMPANY = re.compile(r"Untitled Audio(?! Syndicate Ltd\.)")
+
+
+def company_problems(file, text):
+    """A file that names Syndicate's maker any other way than "Untitled Audio Syndicate Ltd."."""
+    return [f'{file}: names "Untitled Audio" without "Syndicate Ltd."'] if BARE_COMPANY.search(text) else []
 
 
 def json_ld_nodes(blocks):
@@ -210,6 +227,8 @@ def check_page(root, file, text):
     if file in PAGES and page.canonical is not None and page.canonical != page_url(file):
         out.append(f"{file}: its canonical is {page.canonical}, not {page_url(file)}")
     out += [f'{file}: <img src="{src}"> has no alt' for src in page.no_alt]
+    if COMPANY not in " ".join(" ".join(page.footer_text).split()):
+        out.append(f'{file}: the footer doesn\'t name "{COMPANY}"')
     if not any(target(root, file, src) == os.path.join(os.path.normpath(root), ANALYTICS)
                for src in page.scripts if not is_external(src)):
         out.append(f"{file}: doesn't load {ANALYTICS}")
@@ -298,6 +317,7 @@ def problems(root, app_prompts=None):
         if file.endswith(TEXT_FILES):
             with open(path, encoding="utf-8") as f:
                 text = f.read()
+            out += company_problems(file, text)
             if PLACEHOLDER.search(text):
                 out.append(f"{file}: still has a TODO(user) TestFlight placeholder")
             if file.endswith(".html"):
