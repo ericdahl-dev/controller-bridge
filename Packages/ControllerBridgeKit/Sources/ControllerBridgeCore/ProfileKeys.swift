@@ -118,8 +118,8 @@ public enum ProfileKeys {
         ProfileKey("jog.lsb_cc", .wholeNumber, "49", range: cc),
         ProfileKey("jog.counts_per_rev", .wholeNumber, "3600", range: 1...16384),
         ProfileKey("jog.bend_release_ms", .wholeNumber, "80", range: 1...5000),
-        // Whole seconds only for now: the default re-serializes as 2, so the check takes whole numbers (#399).
-        ProfileKey("jog.seek_seconds_per_rev", .wholeNumber, "2", range: 0...60),
+        // Any number of seconds, 2.5 too (#399); the LC6000's 2.0 re-serializes as 2.
+        ProfileKey("jog.seek_seconds_per_rev", .number, "2", range: 0...60),
         ProfileKey("jog.beats_per_rev", .wholeNumber, "4", range: 1...16),
         ProfileKey("jog.require_touch", .bool, "false"),
         ProfileKey("pitch", .object, "{}"),

@@ -152,7 +152,7 @@ equal to the table.
 - `jog.lsb_cc`: a whole number; 0–127; LC6000 `49`
 - `jog.counts_per_rev`: a whole number; 1–16384; LC6000 `3600`
 - `jog.bend_release_ms`: a whole number; 1–5000; LC6000 `80`
-- `jog.seek_seconds_per_rev`: a whole number; 0–60; LC6000 `2`
+- `jog.seek_seconds_per_rev`: a number; 0–60; LC6000 `2`
 - `jog.beats_per_rev`: a whole number; 1–16; LC6000 `4`
 - `jog.require_touch`: true or false; LC6000 `false`
 - `pitch`: an object

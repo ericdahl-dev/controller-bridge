@@ -149,6 +149,17 @@ struct MappingCheckTests {
         ])
     }
 
+    @Test("Seconds per turn may be fractional (#399): 2.5 passes the check and decodes as 2.5")
+    func fractionalSeekSeconds() throws {
+        #expect(Self.problems(#"{"jog": {"seek_seconds_per_rev": 2.5}}"#) == [])
+        var body = try JSONSerialization.jsonObject(with: Mapping.defaultMappingJSON()) as! [String: Any]
+        var jog = body["jog"] as! [String: Any]
+        jog["seek_seconds_per_rev"] = 2.5
+        body["jog"] = jog
+        let mapping = try JSONDecoder().decode(Mapping.self, from: JSONSerialization.data(withJSONObject: body))
+        #expect(mapping.jog?.seekSecondsPerRev == 2.5)
+    }
+
     @Test("Every other number has a range too: a port past 65535, a negative time and a huge time are named")
     func numberRanges() {
         #expect(Self.problems(#"{"osc": {"port": 70000, "feedback_port": 0, "feedback_quiet_ms": -5, "feedback_answer_ms": 1e300}}"#) == [
