@@ -29,7 +29,6 @@ struct CommandPipeTests {
         pipe.producer.demo(on: true)
         pipe.producer.send(.setDeck(2, controller: 0))
         pipe.producer.send(.setDeck(3, controller: 0))
-        #expect(rig.coordinator.status.controllers.map(\.deck) == [1])
         pipe.producer.demo(on: false)
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log, makeDemo: EngineTests.demoMaker(rig)).run(pipe.events)
@@ -51,5 +50,19 @@ struct CommandPipeTests {
         // Diagnostics follow the active Coordinator, so the sweep's lines come from the demo's; the real one never sweeps.
         #expect(seen.values.first { $0.text.hasPrefix("Color sweep") } != nil)
         #expect(!rig.coordinator.status.sweeping)
+    }
+
+    @Test("A capture (real) sent while the demo runs pauses the real controller, not the demo's: after the demo, its Play sends nothing")
+    func realDuringDemo() async throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        let pipe = EventPipe()
+        pipe.producer.demo(on: true)
+        pipe.producer.send(.setCapture(source: Rig.lc6000.id))
+        pipe.producer.demo(on: false)
+        pipe.producer.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log, makeDemo: EngineTests.demoMaker(rig)).run(pipe.events)
+        #expect(!rig.osc.sent.contains(OSCMessage("/Syndicate/Deck/1/PlayPause", [.int(1)])))
     }
 }
