@@ -152,6 +152,49 @@ def check_refs(root, file, refs):
     return out
 
 
+PRICE_QUESTION = "How much does DeckBridge cost?"
+
+
+def json_ld_nodes(blocks):
+    """Every object in the page's JSON-LD blocks, at any depth."""
+    out = []
+    def walk(node):
+        if isinstance(node, dict):
+            out.append(node)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+    for block in blocks:
+        try:
+            walk(json.loads(block))
+        except ValueError:
+            pass  # reported by check_page
+    return out
+
+
+def check_price(file, blocks):
+    """The app's price in the JSON-LD offers and the FAQ answer about cost agree: "free" for a price of 0."""
+    nodes = json_ld_nodes(blocks)
+    app = next((n for n in nodes if n.get("@type") == "SoftwareApplication"), None)
+    offers = app.get("offers") if app else None
+    if not (isinstance(offers, dict) and "price" in offers and "priceCurrency" in offers):
+        return [f"{file}: the SoftwareApplication JSON-LD has no offers (price and priceCurrency)"]
+    answer = next((str(n.get("acceptedAnswer", {}).get("text", "")) for n in nodes
+                   if n.get("@type") == "Question" and n.get("name") == PRICE_QUESTION), None)
+    if answer is None:
+        return [f'{file}: the JSON-LD has no "{PRICE_QUESTION}" question']
+    price = str(offers["price"])
+    if float(price) == 0:
+        if "free" not in answer.lower():
+            return [f'{file}: the JSON-LD offers it free, but its answer to "{PRICE_QUESTION}" doesn\'t say free']
+    elif price not in answer:
+        return [f'{file}: the JSON-LD offers {price} {offers["priceCurrency"]}, but its answer to "{PRICE_QUESTION}" '
+                f"doesn't say {price}"]
+    return []
+
+
 def check_page(root, file, text):
     page = Page()
     page.feed(text)
@@ -188,6 +231,7 @@ def check_page(root, file, text):
             out.append(f"{file}: doesn't link the LC6000 page (for/lc6000/)")
         if not any(CAPTURE_URL in block for block in page.json_ld):
             out.append(f"{file}: its JSON-LD doesn't name {CAPTURE_URL}")
+        out += check_price(file, page.json_ld)
     if file == PRIVACY:
         said = " ".join(" ".join(page.text).split()).lower()
         out += [f'{file}: doesn\'t say "{words}"' for words in PRIVACY_STATEMENTS if words not in said]

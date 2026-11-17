@@ -91,7 +91,7 @@ No. The DeckBridge app collects no data: no account, no analytics, no tracking. 
 
 - **Version 1.0.1** is in beta on TestFlight now. Join the beta: https://testflight.apple.com/join/HWcpqqpz
 - **Mac App Store:** coming soon.
-- **Price:** pricing has not been announced. <!-- TODO(user): price -->
+- **Price:** free.
 
 ## Privacy
 
