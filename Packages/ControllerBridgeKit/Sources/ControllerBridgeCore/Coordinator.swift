@@ -609,7 +609,7 @@ public final class Coordinator {
         }
         let onPads = layers.filter {
             let bridge = controllers[$0].bridge
-            return bridge.padChannel == channel && bridge.padChannel != bridge.channel
+            return (bridge.padChannel == channel && bridge.padChannel != bridge.channel) || bridge.shiftedPadChannel == channel
         }
         if let padLayer = onPads.count == 1 ? onPads.first : onPads.contains(current) ? current : onPads.first {
             if padLayer != current { activateLayer(padLayer, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source)) }
@@ -874,6 +874,11 @@ public final class Coordinator {
             let layers = profile.mapping.midi.layers
             if let layer = layers.first(where: { $0.channel == channel }), layer.padChannel != nil || layers.contains(where: { $0.padChannel != nil }) {
                 mapping.pads.channel = layer.padChannel
+            }
+            // The same for the Shift pads' channel (#324).
+            if let layer = layers.first(where: { $0.channel == channel }),
+               layer.shiftedPadChannel != nil || layers.contains(where: { $0.shiftedPadChannel != nil }) {
+                mapping.pads.shiftedChannel = layer.shiftedPadChannel
             }
         }
         let bridge = makeBridge( mapping)
