@@ -9,6 +9,8 @@ struct JogDisplayDriverTests {
     final class FakePort: JogDisplayPort, @unchecked Sendable {
         var controller: [[UInt8]] = []
         var wd: [[UInt8]] = []
+        /// Whether the unit's WD port is there (#305).
+        var isAttached = true
         func sendController(_ bytes: [UInt8]) { controller.append(bytes) }
         func sendWD(_ bytes: [UInt8]) { wd.append(bytes) }
     }
