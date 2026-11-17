@@ -14,7 +14,7 @@ extension Bridge {
         sliderEnabled = true
         looping = false
         cues = [Int](repeating: 0, count: 8)
-        progress = nil
+        jogModule.progressReported(nil)
         duration = nil
         bpm = nil
         lastPulseTime = nil

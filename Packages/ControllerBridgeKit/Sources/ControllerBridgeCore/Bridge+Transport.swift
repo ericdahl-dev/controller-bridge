@@ -132,11 +132,9 @@ extension Bridge {
             send(address: address, [.int(0)])
             latchedReverse = nil
         }
-        bendDirection = 0
+        jogModule.releaseAll()
         cueDown = false
         shiftCueDown = false
-        platterTouched = false
-        needleTouched = false
         if shift {
             shift = false
             refreshLEDs()
