@@ -18,6 +18,6 @@ DeckBridge is a menu-bar app (no Dock icon) that bridges a Denon LC6000 PRIME DJ
 
 The demo sends nothing to the network and is off at every launch. The app has no accounts and no sign-in, and collects no data. Start at login is off by default.
 
-Syndicate and the Denon LC6000 PRIME are named only to describe compatibility. DeckBridge isn't affiliated with or endorsed by Untitled Audio Syndicate or Denon DJ.
+Syndicate and the Denon LC6000 PRIME are named only to describe compatibility. DeckBridge isn't affiliated with or endorsed by Untitled Audio Syndicate Ltd. or Denon DJ.
 
 Support: deckbridge@ericdahl.dev · https://getdeckbridge.app/support

@@ -49,5 +49,12 @@ class AppReviewLabelTests(unittest.TestCase):
             self.assertIn(f'"{tab}"', tabs)
 
 
+class AppReviewDisclaimerTests(unittest.TestCase):
+    def test_the_disclaimer_names_the_company_as_the_user_decided(self):
+        # The user's decision (#29): Syndicate's maker is "Untitled Audio Syndicate Ltd." in the not-affiliated line.
+        self.assertIn("isn't affiliated with or endorsed by Untitled Audio Syndicate Ltd. or Denon DJ.",
+                      read("docs/APP_REVIEW.md"))
+
+
 if __name__ == "__main__":
     unittest.main()
