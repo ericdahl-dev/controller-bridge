@@ -55,7 +55,8 @@ How the draft decides:
   - per-mode pad notes and how the pad mode is chosen (the capture only records Hot Cue mode)
   - the LEDs
   - any button the capture has no step for
-  - the mixer, which isn't in profiles yet (#207)
+  - the mixer (`mapping.mixer`, #207): the capture has no mixer steps yet, so take the faders, EQ, filter, cue/mute/solo
+    and the VU meter from the MIDI chart
 - **What the capture reads:**
   - the buttons' notes, with the deck's channel taken from Play
   - the pads, and their channel when it isn't the deck's
