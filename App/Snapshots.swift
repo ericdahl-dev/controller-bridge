@@ -305,6 +305,17 @@ enum Snapshots {
             tab: .osc, scrolls: false
         )
         writeAppKit(filtered.frame(width: 720, height: 460), to: "\(directory)/diagnostics-osc-log-filtered.png", width: 720)
+        // The user's case (#261): TempoSlider and Cues off, listed above the OSC log as in the panel.
+        let missing = BridgeStatus()
+        missing.bridges = connected.bridges
+        missing.feedback = .listening(port: 9096)
+        missing.syndicateFeedback = .live
+        missing.missingSubscriptions = [.tempoSlider, .cues]
+        let missingWindow = DiagnosticsWindow(
+            log: log, status: missing, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            tab: .osc, scrolls: false
+        )
+        writeAppKit(missingWindow.frame(width: 720, height: 560), to: "\(directory)/diagnostics-osc-log-missing.png", width: 720)
     }
 
     /// The shared button styles (#67): normal, selected (bar + heavier text) and keyboard focus (ring).

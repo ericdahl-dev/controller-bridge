@@ -4,10 +4,20 @@ public struct HelpMessage: Equatable, Sendable {
     public var text: String
     /// Whether the panel links the setup guide next to it.
     public var showsGuide: Bool
+    /// Syndicate subscriptions to turn on, one row each under `text` (#261); empty for any other message.
+    public var subscriptions: [SubscriptionRow]
 
-    public init(text: String, showsGuide: Bool) {
+    public init(text: String, showsGuide: Bool, subscriptions: [SubscriptionRow] = []) {
         self.text = text
         self.showsGuide = showsGuide
+        self.subscriptions = subscriptions
+    }
+
+    /// What VoiceOver says for the list as a whole, before its rows: how many, then the header.
+    public var subscriptionsLabel: String? {
+        guard !subscriptions.isEmpty else { return nil }
+        let count = subscriptions.count == 1 ? "1 subscription off" : "\(subscriptions.count) subscriptions off"
+        return "\(count). " + (text.hasSuffix(":") ? String(text.dropLast()) + "." : text)
     }
 
     public init?(_ state: BridgeState) {
@@ -71,12 +81,30 @@ public struct HelpMessage: Equatable, Sendable {
         }
         let missing = state.missingSubscriptions
         guard !missing.isEmpty else { return nil }
-        let each = missing.map { "\($0.name) is off: \($0.breaks)." }.joined(separator: " ")
-        return HelpMessage(text: each + (missing.count == 1 ? " Turn it on in \(place)." : " Turn them on in \(place)."), showsGuide: true)
+        // A list, one row each (#261): Syndicate's own label, then what goes wrong without it.
+        let these = missing.count == 1 ? "this" : "these"
+        return HelpMessage(text: "Turn \(these) on in Syndicate › OSC Feedback, then Save and Close:", showsGuide: true,
+                           subscriptions: missing.map { SubscriptionRow(name: $0.name, consequence: $0.breaks) })
     }
 
     /// "A, B and C".
     private static func list(_ items: [String]) -> String {
         items.count < 2 ? items.joined() : items.dropLast().joined(separator: ", ") + " and " + items.last!
     }
+}
+
+/// One Syndicate subscription that's off (#261): its label on Syndicate's OSC Feedback screen, and what goes wrong
+/// without it, as a sentence.
+public struct SubscriptionRow: Equatable, Sendable {
+    public var name: String
+    public var consequence: String
+
+    /// `consequence` may come in lowercase, as the status words do; the row starts it with a capital.
+    public init(name: String, consequence: String) {
+        self.name = name
+        self.consequence = consequence.prefix(1).uppercased() + consequence.dropFirst()
+    }
+
+    /// What VoiceOver says for the row.
+    public var spoken: String { "\(name): " + consequence.prefix(1).lowercased() + consequence.dropFirst() }
 }

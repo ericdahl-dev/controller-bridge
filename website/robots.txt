@@ -1,0 +1,24 @@
+# DeckBridge wants to be found and cited, by search engines and by AI answer
+# engines alike. Every crawler may read every page: the site has no private
+# areas. The AI and answer crawlers are named on purpose, so the welcome is
+# explicit rather than implied by the wildcard.
+
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-User
+User-agent: Claude-SearchBot
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot
+User-agent: Applebot-Extended
+User-agent: CCBot
+User-agent: Bingbot
+Allow: /
+
+User-agent: *
+Allow: /
+
+Sitemap: https://getdeckbridge.app/sitemap.xml

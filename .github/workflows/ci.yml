@@ -13,8 +13,44 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which jobs a change needs (scripts/ci_changes.py): a change to only the website, its scripts or Markdown docs
+  # skips the two Mac jobs. A skipped job counts as passed for the ruleset's required Kit tests check.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mac: ${{ steps.diff.outputs.mac }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        # an unknown base (a new branch, a force push) lists nothing, and nothing runs everything
+        run: '{ git diff --name-only "$BASE" HEAD || true; } | python3 -I scripts/ci_changes.py | tee -a "$GITHUB_OUTPUT"'
+
+  site:
+    name: Site check
+    # The website (#169): plain files, so a cheap Linux runner. Not a required check yet.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Site check tests
+        run: |
+          python3 -I scripts/test_check_site.py
+          python3 -I scripts/test_ci_changes.py
+      - name: Site analytics tests
+        run: node --test scripts/test_analytics.mjs scripts/test_capture.mjs
+      - name: Site check
+        run: python3 -I scripts/check_site.py website
+
   kit:
     name: Kit tests
+    needs: changes
+    if: needs.changes.outputs.mac == 'true'
     # Standard GitHub-hosted runner: free for public repositories. Avoid -large/-xlarge (always billed).
     runs-on: macos-26
     timeout-minutes: 20
@@ -37,6 +73,8 @@ jobs:
 
   app:
     name: App build (Release, ad-hoc)
+    needs: changes
+    if: needs.changes.outputs.mac == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:

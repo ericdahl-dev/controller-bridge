@@ -1,0 +1,202 @@
+/* DeckBridge site (#169): the fonts and the page CSS the taste-skill kit leaves to the page.
+   Everything else comes from assets/ (the kit: system.css, layout.css, cards.css, motion.css).
+   Fonts are self-hosted, SIL OFL 1.1: Geist and Geist Mono (fonts/Geist-OFL.txt). */
+@font-face { font-family: "Geist"; src: url("fonts/Geist.woff2") format("woff2"); font-weight: 400 600; font-display: swap; }
+@font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono.woff2") format("woff2"); font-weight: 400 600; font-display: swap; }
+
+/* the logo: the app's own icon beside the name */
+.nav__logo img, .footer__mark img { width: 28px; height: 28px; margin-right: var(--s-2); border-radius: 7px; }
+
+/* ---------------------------------------------------------------- the app, as the real screenshots show it
+   Each picture is one of img/*.webp (pr-assets 6d5a5bb; 5-settings 1a71dee, on no page yet: its crop is --sw: 622; --sh: 560; --sx: 409; --sy: 245), cropped to its window by CSS; the files stay whole.
+   --sw/--sh the window's size and --sx/--sy its corner, in the 1440x900 screenshot's pixels. */
+.db-crop { position: relative; display: block; overflow: hidden; aspect-ratio: var(--sw) / var(--sh); border-radius: 10px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / .1), 0 30px 70px -30px rgb(0 0 0 / .8); background: #171717; }
+.db-crop > img { position: absolute; max-width: none; height: auto; width: calc(1440 / var(--sw) * 100%); left: calc(-100% * var(--sx) / var(--sw)); top: calc(-100% * var(--sy) / var(--sh)); }
+/* the hero: the panel rises out of the frame, its top rows above the fade */
+.db-heroshot .db-crop { width: min(100%, 520px); margin-inline: auto; }  /* the 6d5a5bb panel is tall: narrower, so its status rows clear the fade */
+/* a framed screenshot that fits its box whole (the setup guide, the feature panels) */
+.db-shot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--s-6); container-type: size; }
+.db-shot .db-crop { width: min(100cqw, 100cqh * var(--sw) / var(--sh)); }
+.db-split { flex: 1 1 0; min-height: 0; }
+.db-shotframe.panel { position: relative; height: 100%; min-height: 420px; padding: 0; }
+.db-shotpanel { --p-h: 300px; position: relative; }
+@media (max-width: 1023px) { .db-shotframe.panel { height: auto; aspect-ratio: 4 / 3; min-height: 0; } }
+@media (max-width: 639px) { .db-shot { padding: var(--s-4); } .db-shotpanel { --p-h: 200px; } }
+
+/* the four facts under the feature cards */
+.db-facts { list-style: none; margin: var(--s-7) 0 0; padding: 0; }
+.db-facts li { padding-top: var(--s-4); border-top: 1px solid var(--line); }
+.db-facts b { font-weight: 500; }
+@media (min-width: 640px) and (max-width: 1023px) { .db-facts li { grid-column: span 6; } }
+
+/* the signal path diagram */
+.db-path { margin-top: var(--s-7); }
+
+/* the statement moments */
+#next .db-big { font: var(--display-weight) clamp(64px, 12vw, 184px)/.92 var(--font-display); letter-spacing: var(--display-tracking-xl); margin: var(--s-5) 0 var(--s-6); max-width: 9ch; }
+.db-next { max-width: 46ch; color: var(--muted); }
+/* the coming feature's picture: the art made for the LC6000's round jog-wheel display (tools/lc6000-display, #165),
+   in a round jog frame, under the words below 1024 (liquid-type is plain type on touch screens). On a tablet it
+   takes what the screen leaves under the words, and is left out on a screen under 720px tall, where the words
+   nearly fill it; on a phone the section fits its content, so it has a fixed size. A desktop has none. */
+.db-jog { display: none; }
+.db-jog__ring { aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
+  background: #0d0d0d; box-shadow: 0 0 0 10px #262626, 0 0 0 11px rgb(255 255 255 / .12), 0 30px 70px -30px rgb(0 0 0 / .8); }
+.db-jog__ring img { width: 74%; height: auto; border-radius: 22%; }
+@media (min-width: 640px) and (max-width: 1023px) and (min-height: 720px) {
+  .db-jog { display: flex; flex: 1 1 auto; align-items: center; justify-content: center; margin: var(--s-6) 0 0; }
+  .db-jog__ring { width: min(64vw, 280px, 100svh - 600px); }  /* 600: the words above it and the section's padding */
+}
+@media (max-width: 639px) {
+  .db-jog { display: flex; justify-content: center; margin: var(--s-7) 0 var(--s-3); }
+  .db-jog__ring { width: min(56vw, 220px); }
+}
+
+/* the phone: the pill keeps its first fact; the closing name is set to fit 342px */
+@media (max-width: 639px) { .pill__more { display: none; } .close__word { font-size: 15.5vw; } }
+.close__word { line-height: 1.02; }
+
+/* the requirements beside the questions */
+.db-needs ul { list-style: none; margin: var(--s-4) 0 0; padding: 0; display: grid; gap: var(--s-4); }
+.db-needs b { font-weight: 500; }
+/* the questions: details and summary, answer first, open on a click (12 answers held open would run past two screens) */
+.db-faq > details { border-bottom: 1px solid var(--line); }
+.db-faq > details:first-child summary { padding-top: 0; }
+.db-faq summary { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-4); padding: var(--s-4) 0; min-height: 44px; cursor: pointer; list-style: none; font: 500 var(--t-lead)/1.4 var(--font-text); }
+.db-faq summary::-webkit-details-marker { display: none; }
+.db-faq summary::after { content: "+"; flex: none; font: 400 22px/1 var(--font-mono); color: var(--muted); transition: transform var(--dur, .2s) var(--ease, ease); }
+.db-faq details[open] summary::after { transform: rotate(45deg); }
+.db-faq summary:hover::after { color: var(--action); }
+.db-faq details p { margin: 0 0 var(--s-5); max-width: 64ch; }
+@media (min-width: 640px) and (max-width: 1279px) { #features .panel { --p-h: 196px; } }
+@media (max-width: 639px) { #features .panel { --p-h: 140px; } .db-card__in { inset: 16px 16px -1px; padding: 16px 18px; } }
+
+/* ---------------------------------------------------------------- the support and privacy pages: the same system,
+   reading pages, so their sections take the height of what they hold */
+.db-doc-page main.db-doc > section.section, .db-doc-page footer.closing { height: auto; min-height: 0; }
+.db-doc-page main.db-doc > section.section { padding-block: var(--s-8) 0; }
+.db-doc-page main.db-doc > section.db-doc__head { padding-top: calc(var(--nav) + var(--s-9)); }
+.db-doc-page footer.closing { margin-top: var(--s-10); }
+.db-doc__head h1 { font: var(--display-weight) var(--t-h1)/1.02 var(--font-display); letter-spacing: var(--display-tracking-xl); margin: var(--s-4) 0 var(--s-5); max-width: 18ch; }
+.db-doc__lead { max-width: 52ch; color: var(--muted); }
+.db-sig { font: 500 14px/1.4 var(--font-mono); color: var(--p-accent); white-space: nowrap; }
+.db-docsteps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; }
+.db-docsteps > li { counter-increment: s; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: var(--s-4); padding: var(--s-5) 0; border-bottom: 1px solid var(--line); }
+.db-docsteps > li:first-child { padding-top: 0; }
+.db-docsteps > li::before { content: counter(s); grid-row: span 3; font: var(--display-weight) var(--t-h3)/1.1 var(--font-display); color: var(--muted); }
+.db-docsteps h3 { margin: 0 0 var(--s-2); font: 500 13px/1.3 var(--font-mono); letter-spacing: .02em; color: var(--muted); }
+.db-docsteps p { margin: 0; }
+.db-checklist { list-style: none; margin: var(--s-3) 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2) var(--s-5); font: 400 14px/1.5 var(--font-mono); }
+/* a controller page (for/<controller>/, #268): its controls as rows, its lists, the call under the heading */
+.db-map { margin: 0; display: grid; }
+.db-map > div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); column-gap: var(--s-5); padding: var(--s-4) 0; border-bottom: 1px solid var(--line); }
+.db-map > div:first-child { padding-top: 0; }
+.db-map dt { font-weight: 500; }
+.db-map dd { margin: 0; color: var(--muted); }
+.db-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.db-list > li { padding: var(--s-4) 0; border-bottom: 1px solid var(--line); }
+.db-list > li:first-child { padding-top: 0; }
+.db-for__cta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3) var(--s-5); margin-top: var(--s-6); }
+.db-res.db-res--always { display: grid; gap: var(--s-5); margin: var(--s-4) 0 0; }
+.db-res.db-res--always .db-res__row { border-top: 1px solid var(--line); padding-top: var(--s-3); }
+.db-res.db-res--always dt, .db-res.db-res--always dd { margin: 0; font-size: var(--t-small, 14px); color: var(--muted); }
+.db-res.db-res--always b { display: block; font: var(--display-weight) var(--t-h3)/1.1 var(--font-display); letter-spacing: var(--display-tracking); color: var(--ink); }
+@media (max-width: 639px) { .db-map > div { grid-template-columns: minmax(0, 1fr); row-gap: var(--s-1); } }
+/* the controls list under its heading at full width: two columns of rows on a wide screen, so it fits one screen */
+.db-map--cols { margin-top: var(--s-5); }
+@media (min-width: 1024px) {
+  .db-map--cols { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: calc(var(--gutter) * 2); }
+  .db-map--cols > div { padding-block: var(--s-3); }
+  .db-map--cols > div:is(:first-child, :nth-child(2)) { padding-top: 0; }
+}
+.db-checklist li::before { content: "☐ "; color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .92em; }
+.db-prows { display: grid; }
+.db-prow { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--grid-gap, 24px); padding: var(--s-6) 0; border-bottom: 1px solid var(--line); }
+.db-prow:first-child { padding-top: 0; }
+.db-prow h2 { grid-column: 1 / span 5; margin: 0; font: var(--display-weight) var(--t-h3)/1.2 var(--font-display); letter-spacing: var(--display-tracking); }
+.db-prow p { grid-column: 7 / -1; margin: 0; }
+.db-updated { margin-top: var(--s-6); }
+@media (max-width: 639px) { .db-prow { grid-template-columns: minmax(0, 1fr); row-gap: var(--s-3); } .db-prow h2, .db-prow p { grid-column: 1; } .db-checklist { grid-template-columns: minmax(0, 1fr); } }
+
+.db-faq summary { padding: var(--s-3) 0; }
+.db-shotpanel { --p-h: 256px; }
+.db-facts { margin-top: var(--s-6); }
+#why { align-content: start; }
+/* below 1024 the two resolutions the why statement names stand under it as numbers (7-bit MIDI: 128 positions;
+   14-bit: 16,384); left out under 360px wide, where they crowd it, and on a desktop, where it holds the screen alone. */
+.db-res { display: none; }
+@media (min-width: 360px) and (max-width: 1023px) {
+  .db-res { display: grid; gap: var(--s-5); margin: auto 0 0; padding-top: var(--s-6); }
+  .db-res__row { border-top: 1px solid color-mix(in oklab, var(--ink) 25%, transparent); padding-top: var(--s-3); }
+  .db-res dt { font-size: var(--t-small, 14px); color: color-mix(in oklab, var(--ink) 70%, transparent); }
+  .db-res dd { margin: 0; color: color-mix(in oklab, var(--ink) 70%, transparent); }
+  .db-res b { display: block; font: var(--display-weight) var(--t-h2)/1.1 var(--font-display); letter-spacing: var(--display-tracking-xl); color: var(--ink); }
+}
+.db-appicon { width: 96px; height: 96px; border-radius: 22px; }
+.closing__links .footer__col a { overflow-wrap: anywhere; }
+@media (max-width: 639px) { .db-appicon { width: 72px; height: 72px; border-radius: 16px; } .db-faq summary { padding: var(--s-4) 0; } }
+
+/* the signal path, drawn on the lit ground: the controller, DeckBridge and Syndicate, the wires between */
+.db-path { display: grid; place-items: center; padding: var(--s-7) var(--s-6); min-height: 360px; }
+.db-flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr) 170px minmax(0, 1fr); align-items: center; width: 100%; max-width: 1100px; }
+.db-node { background: #1b1b1b; color: #ededea; border-radius: 12px; box-shadow: 0 0 0 1px rgb(255 255 255 / .1), 0 24px 50px -24px rgb(0 0 0 / .7); overflow: hidden; font-size: 14px; }
+.db-node--hub { box-shadow: 0 0 0 1px #00ff48, 0 0 32px -6px rgb(0 255 72 / .45), 0 24px 50px -24px rgb(0 0 0 / .7); }
+.db-node__head { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid rgb(255 255 255 / .08); }
+.db-node__head b { font-weight: 500; }
+.db-node__head span, .db-node__row em { font: 400 13px/1.4 var(--font-mono); color: #bdbdbd; font-style: normal; }
+.db-node__row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 16px; }
+.db-wire { display: grid; gap: 6px; justify-items: center; padding: 0 8px; font: 500 13px/1.3 var(--font-mono); color: var(--ground-ink); }
+.db-wire i { display: block; width: 100%; height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgb(0 0 0 / .15), #00b33a, rgb(0 0 0 / .15)); }
+@media (max-width: 1023px) {
+  .db-flow { grid-template-columns: minmax(0, 1fr); max-width: 420px; }
+  .db-wire { grid-template-columns: 1fr 2px 1fr; align-items: center; padding: 10px 0; }
+  .db-wire span:first-child { justify-self: end; } .db-wire span:last-child { justify-self: start; }
+  .db-wire i { width: 2px; height: 40px; background: #00b33a; }
+}
+@media (max-width: 639px) { .db-faq summary { padding: var(--s-5) 0; } .db-path { padding: var(--s-5) var(--s-4); } }
+.db-wire span { padding: 3px 8px; border-radius: 6px; background: #1b1b1b; color: #ededea; }
+/* the signal path stands on the section's own ground, its three nodes from line to line */
+.db-path { padding: 0; min-height: 0; margin-top: var(--s-7); }
+.db-flow { max-width: none; }
+.db-node { background: #222221; }
+@media (max-width: 1023px) { .db-flow { max-width: 420px; } }
+@media (max-width: 639px) { .db-path.fill { flex: none; } .db-node__row { display: none; } .db-node__head { border-bottom: 0; } }
+/* the wires hang off the DeckBridge node, so the row is the three nodes, line to line */
+.db-flow { --wire: 170px; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--wire); }
+.db-node--hub { position: relative; overflow: visible; }
+.db-node--hub > .db-node__head { border-radius: 12px 12px 0 0; }
+.db-wire { position: absolute; top: 50%; transform: translateY(-50%); width: var(--wire); padding: 0 10px; box-sizing: border-box; }
+.db-wire--in { right: 100%; } .db-wire--out { left: 100%; }
+@media (max-width: 1279px) { .db-flow { --wire: 140px; } .db-wire { font-size: 12px; } }
+@media (max-width: 1023px) {
+  .db-flow { --wire: 72px; grid-template-columns: minmax(0, 1fr); row-gap: var(--wire); column-gap: 0; }
+  .db-wire { top: auto; transform: none; left: 0; right: 0; width: auto; height: var(--wire); padding: 0; grid-template-columns: 1fr 2px 1fr; align-items: center; }
+  .db-wire--in { bottom: 100%; } .db-wire--out { top: 100%; }
+}
+/* each wire is a still line in the signal green */
+i.db-wire { display: block; height: 2px; padding: 0; background: linear-gradient(90deg, rgb(255 255 255 / .12), #00ff48, rgb(255 255 255 / .12)); border-radius: 2px; }
+@media (max-width: 1023px) { i.db-wire { width: 2px; height: var(--wire); left: 50%; background: linear-gradient(rgb(255 255 255 / .12), #00ff48, rgb(255 255 255 / .12)); } }
+.db-doc__head h1 { hyphens: manual; }
+
+/* the web capture (#190) */
+.db-cap { max-width: 720px; }
+.db-cap__panel { padding: var(--s-6); border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.db-cap__panel h2 { margin: 0 0 var(--s-4); font: var(--display-weight) var(--t-h3)/1.2 var(--font-display); letter-spacing: var(--display-tracking); }
+.db-cap__panel p { margin: var(--s-4) 0 0; }
+.db-cap__list { margin: 0; padding-left: 1.2em; display: grid; gap: var(--s-2); }
+.db-cap__note { color: var(--muted); }
+.db-cap__buttons { display: flex; flex-wrap: wrap; gap: var(--s-3); }
+.db-cap__address { font-family: var(--font-mono); user-select: all; }
+.db-cap select { font: inherit; padding: 6px 10px; border-radius: 8px; }
+
+/* ---------------------------------------------------------------- a phone: tight sections
+   The kit makes every section at least one screen tall (system.css, "one section per screen"). On a phone most
+   of ours hold half a screen of content, which left a tall empty ground under each. Under 640px each section is
+   as tall as its content, with shorter padding; #why also drops its one-screen ground (--g-screen). */
+@media (max-width: 639px) {
+  main > :is(section, .section):not(.hero, .section--hero) { min-height: 0; padding: 64px 0 40px; }  /* no --bar: only the page's foot needs room for the action bar */
+  #why { min-height: 0; }
+  main > :is(section, .section) > .wrap > :is(.fill, .db-split) { flex: none; }
+}

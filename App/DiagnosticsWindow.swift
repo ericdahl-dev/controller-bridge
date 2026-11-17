@@ -226,7 +226,9 @@ struct DiagnosticsWindow: View {
         case .osc:
             oscFilters
             // Syndicate subscriptions that are off, each with what it breaks, as the panel says (#211).
-            if !status.missingSubscriptions.isEmpty, let help = status.help { explain(help.text) }
+            if !status.missingSubscriptions.isEmpty, let help = status.help, !help.subscriptions.isEmpty {
+                SubscriptionListView(help: help, size: 12)
+            }
             LineList(lines: lines, empty: tab.emptyText(controllerConnected: connected), scrolls: scrolls)
         case .jog:
             explain("What the LC6000's jog display shows, drawn by the same renderer as the upload, with the beat and marker.")
