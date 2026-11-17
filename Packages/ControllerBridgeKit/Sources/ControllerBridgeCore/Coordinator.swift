@@ -6,7 +6,18 @@ public final class Coordinator {
     private let midiSystem: any MIDISystem
     private let osc: any OSCSender
     private let clock: any Clock
-    private let log: any LogSink
+    private let baseLog: any LogSink
+    /// Every log line also goes to the trace, when there is one (#395).
+    private var log: any LogSink { TracingLog(base: baseLog, trace: trace) }
+    /// The debug trace (#395): set by a Debug build before start(); nil in Release, at no cost.
+    public var trace: TraceSink? {
+        didSet {
+            (osc as? OSCTap)?.onTrace = trace.map { sink in { [weak self] message in self?.traceOSC(.oscOut, message, sink) } }
+            for index in controllers.indices { controllers[index].bridge.trace = trace }
+        }
+    }
+    /// Streaming OSC, both ways, at most 5 a second per address in the trace.
+    private var traceSampler = StreamSampler()
     private var controllers: [Controller]
     /// The controller profiles a device can match.
     private var profiles: [ControllerProfile]
@@ -60,6 +71,7 @@ public final class Coordinator {
 
     private func makeBridge(_ mapping: Mapping) -> Bridge {
         let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
+        bridge.trace = trace
         bridge.deckColors = deckColors
         bridge.ringColors = ringColors
         return bridge
@@ -137,7 +149,7 @@ public final class Coordinator {
         // Every Bridge sends through the tap, so the OSC log sees what goes out while Diagnostics is open.
         self.osc = OSCTap(osc)
         self.clock = clock
-        self.log = log
+        self.baseLog = log
         self.profiles = profiles
         let first = profiles[0]
         controllers = [Controller(bridge: Bridge(mapping: first.mapping, osc: self.osc, clock: clock), profile: first)]
@@ -446,7 +458,8 @@ public final class Coordinator {
         }
         if let destination = chosenOutput ?? sameName ?? Self.match(allowed, bridge.mapping.midi.output) {
             do {
-                bridge.output = try midiSystem.openOutput(destination: destination)
+                let opened = try midiSystem.openOutput(destination: destination)
+                bridge.output = trace.map { TracingOutput(inner: opened, name: destination.name, trace: $0) } ?? opened
                 // Layers sharing a unit open the same port: say it once.
                 if controllers[index].destination?.id != destination.id,
                    !controllers.contains(where: { $0.destination?.id == destination.id }) {
@@ -564,6 +577,10 @@ public final class Coordinator {
         if let diagnostics {
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
+        if let trace {
+            let port = controllers.first { $0.source?.id == source }?.source?.name ?? "source \(source)"
+            trace(.midiIn, "\(port) ch\(Int(event.channel) + 1) \(event.midoText) \(mapping.monitorName(for: event))")
+        }
         let (routed, onlyLayer) = layerHandover(event, source: source)
         // Captured (#186): the layers still follow the unit, so the right one is active after; nothing else runs.
         if source == capturing { return }
@@ -668,6 +685,7 @@ public final class Coordinator {
             }
         }
         diagnostics?(.oscIn(message))
+        if let trace { traceOSC(.oscIn, message, trace) }
         jogClock(message)
         answer?.messages.append(message)
         if SubscriptionCheck.provesSubscriptions(message.address) { status.noDeckData = false }
@@ -1025,5 +1043,12 @@ public final class Coordinator {
             sweep = nil
             endSweep()
         }
+    }
+
+    /// One OSC message in the trace, through the sampler: "/Syndicate/Deck/1/Playing 1".
+    private func traceOSC(_ category: TraceCategory, _ message: OSCMessage, _ trace: TraceSink) {
+        guard let note = traceSampler.admit(message.address, at: clock.now) else { return }
+        let arguments = message.arguments.map(\.pythonText).joined(separator: " ")
+        trace(category, message.address + (arguments.isEmpty ? "" : " " + arguments) + note)
     }
 }

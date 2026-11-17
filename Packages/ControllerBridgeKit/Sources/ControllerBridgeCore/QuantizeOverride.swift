@@ -49,16 +49,32 @@ struct QuantizeOverride: Equatable, Sendable {
 extension Bridge {
     /// Turns this deck's quantize off for `reason`, if nothing else already has (#366).
     func overrideQuantize(_ reason: QuantizeOverride.Reason) {
-        if let change = quantizeOverride.acquire(reason) { sendDeck("Quantize", .int(change.value)) }
+        let change = quantizeOverride.acquire(reason)
+        if let change { sendDeck("Quantize", .int(change.value)) }
+        traceQuantize(reason, "in", change)
     }
 
     /// `reason` is done; the last one out puts quantize back to Use Global.
     func restoreQuantize(_ reason: QuantizeOverride.Reason) {
-        if let change = quantizeOverride.release(reason) { sendDeck("Quantize", .int(change.value)) }
+        let held = quantizeOverride.holds(reason)
+        let change = quantizeOverride.release(reason)
+        if let change { sendDeck("Quantize", .int(change.value)) }
+        if held { traceQuantize(reason, "out", change) }
     }
 
     /// Every reason is done (releasing everything, a new track): quantize back, once, if anything held it.
     func restoreAllQuantize() {
-        if let change = quantizeOverride.releaseAll() { sendDeck("Quantize", .int(change.value)) }
+        let change = quantizeOverride.releaseAll()
+        if let change {
+            sendDeck("Quantize", .int(change.value))
+            trace?(.quantize, "deck \(mapping.deck.number) all out: Quantize Use Global")
+        }
+    }
+
+    /// "deck 1 cueJump in: Quantize None", or "… (already off)" / "… (still held)" when nothing was sent (#395).
+    private func traceQuantize(_ reason: QuantizeOverride.Reason, _ direction: String, _ change: QuantizeOverride.Change?) {
+        guard let trace else { return }
+        let sent = change.map { $0 == .none ? "Quantize None" : "Quantize Use Global" } ?? (direction == "in" ? "already off" : "still held")
+        trace(.quantize, "deck \(mapping.deck.number) \(reason) \(direction): \(sent)")
     }
 }

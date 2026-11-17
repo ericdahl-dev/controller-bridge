@@ -1,0 +1,130 @@
+import Foundation
+@testable import ControllerBridgeCore
+import Testing
+
+/// The debug trace (#395): what Debug builds write to os_log and to a rolling file, so an agent can read what the
+/// controller, Syndicate and the jog display did without asking for a paste.
+@Suite("Debug trace")
+struct TraceTests {
+    @Test("One line: UTC time to the millisecond, the category padded to 13, the text")
+    func lineFormat() {
+        let at = Date(timeIntervalSince1970: 1_763_332_863.123)   // 2025-11-16T22:41:03.123Z
+        #expect(TraceLine.format(at: at, .oscIn, "/Syndicate/Deck/1/Playing 1")
+            == "2025-11-16T22:41:03.123Z osc-in        /Syndicate/Deck/1/Playing 1")
+        #expect(TraceLine.format(at: at, .subscriptions, "Cues: off")
+            == "2025-11-16T22:41:03.123Z subscriptions Cues: off")
+    }
+
+    @Test("Each category's name, as os_log and the file use it")
+    func categoryNames() {
+        #expect(TraceCategory.allCases.map(\.rawValue) == [
+            "midi-in", "midi-out", "osc-in", "osc-out", "jog-display", "coordinator", "capture", "quantize",
+            "subscriptions", "error",
+        ])
+    }
+
+    @Test("Streaming OSC (Position, BarRamp, Meter, …) at most 5 a second per address; the next kept one counts what was skipped")
+    func sampler() {
+        var sampler = StreamSampler()
+        let position = "/Syndicate/Deck/1/Position"
+        var kept: [String] = []
+        // 100 a second for half a second: one every 10 ms.
+        for i in 0..<50 {
+            if let note = sampler.admit(position, at: Double(i) * 0.01) { kept.append(note) }
+        }
+        #expect(kept == ["", " (+19 skipped)", " (+19 skipped)"])
+        // Another deck's Position is its own stream.
+        let otherDeck = sampler.admit("/Syndicate/Deck/2/Position", at: 0.49)
+        #expect(otherDeck == "")
+    }
+
+    @Test("Everything else always passes, unsampled")
+    func nonStreaming() {
+        var sampler = StreamSampler()
+        var playing: [String?] = []
+        for _ in 0..<10 { playing.append(sampler.admit("/Syndicate/Deck/1/Playing", at: 1.0)) }
+        #expect(playing == Array(repeating: "", count: 10))
+        let first = sampler.admit("/Syndicate/Mixer/CH1/Meter", at: 1.0)
+        let soon = sampler.admit("/Syndicate/Mixer/CH1/Meter", at: 1.05)
+        #expect(first == "")
+        #expect(soon == nil, "Meter is streaming on the mixer too")
+    }
+
+    static func tempDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("trace-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    static func read(_ url: URL) -> String { (try? String(contentsOf: url, encoding: .utf8)) ?? "" }
+
+    @Test("The rolling file appends lines; past the cap it moves deckbridge.log to .1 and .1 to .2, keeping 3 files")
+    func rolling() throws {
+        let directory = try Self.tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = RollingLogFile(directory: directory, name: "deckbridge.log", cap: 20, keep: 3)
+        for line in ["aaaaaaaaa", "bbbbbbbbb", "ccccccccc", "ddddddddd", "eeeeeeeee", "fffffffff", "ggggggggg"] {
+            file.append(line)
+        }
+        let main = directory.appendingPathComponent("deckbridge.log")
+        // Each line is 10 bytes with its newline; two fit under the 20-byte cap, the third rolls.
+        #expect(Self.read(main) == "ggggggggg\n")
+        #expect(Self.read(directory.appendingPathComponent("deckbridge.log.1")) == "eeeeeeeee\nfffffffff\n")
+        #expect(Self.read(directory.appendingPathComponent("deckbridge.log.2")) == "ccccccccc\nddddddddd\n")
+        #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("deckbridge.log.3").path))
+        #expect(file.url == main)
+    }
+
+    @Test("A missing folder is made; an existing file is appended to, not replaced")
+    func appendsAcrossLaunches() throws {
+        let directory = try Self.tempDirectory().appendingPathComponent("Logs/DeckBridge")
+        defer { try? FileManager.default.removeItem(at: directory.deletingLastPathComponent().deletingLastPathComponent()) }
+        RollingLogFile(directory: directory, name: "deckbridge.log", cap: 1000, keep: 3).append("first launch")
+        RollingLogFile(directory: directory, name: "deckbridge.log", cap: 1000, keep: 3).append("second launch")
+        #expect(Self.read(directory.appendingPathComponent("deckbridge.log")) == "first launch\nsecond launch\n")
+    }
+}
+
+/// The jog display's raw traffic in the trace (#395), for the WD stall work (#165, agent1): each SysEx out with its
+/// command and length, each reply with its command, status and the time since the last send.
+@Suite("Debug trace: the jog display's WD traffic")
+struct TraceJogDisplayTests {
+    final class Lines: @unchecked Sendable {
+        var list: [String] = []
+    }
+
+    @Test("Hello on the controller port, the upload out on WD, each ack with its status and ms since the last send")
+    func wdTraffic() {
+        let rig = JogDisplayDriverTests.DriverRig()
+        let lines = Lines()
+        rig.driver.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        rig.clock.now = 100
+        rig.driver.connect()
+        #expect(lines.list == ["CTL out cmd=0x60 14 bytes", "CTL out F0 00 20 7F 01 F7"])
+        lines.list.removeAll()
+        rig.driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        let upload = JogDisplayDriverTests.upload(deck: 1, slot: 1)
+        #expect(lines.list.count == upload.start.count + upload.body.count)
+        // The play light off first (90 01 00), then the upload's frames: 0A, 0C, 0D …, 0E.
+        #expect(lines.list.first == "WD out 90 01 00")
+        #expect(lines.list.dropFirst().map { String($0.prefix(17)) }.first == "WD out cmd=0x0A 1")
+        #expect(lines.list.dropFirst().allSatisfy { $0.hasPrefix("WD out cmd=0x") })
+        lines.list.removeAll()
+        rig.clock.now = 100.012
+        rig.driver.reply(JogDisplayDriverTests.accepted)
+        rig.clock.now = 100.020
+        rig.driver.reply(JogDisplayDriverTests.refused)
+        #expect(lines.list.prefix(2) == ["WD in cmd=0x0F status=0x00 +12 ms", "WD in cmd=0x0F status=0x06 +20 ms"])
+    }
+
+    @Test("Short WD messages (the needle's pitch bend, the play light) as hex")
+    func shortMessages() {
+        let rig = JogDisplayDriverTests.DriverRig()
+        let lines = Lines()
+        rig.driver.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        rig.driver.connect()
+        lines.list.removeAll()
+        rig.driver.marker(4096)
+        #expect(lines.list == ["WD out E0 00 20"])
+    }
+}
