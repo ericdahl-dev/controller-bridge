@@ -90,8 +90,6 @@ final class Bridge {
     var latchedReverse: String?
     /// Lines for the log, taken by the Coordinator after each event (#114).
     var notices: [String] = []
-    /// The pitch-range notice was logged already.
-    var pitchRangeNoted = false
     var slipOn = false
 
     // Pitch, jog and Needle Drop state (Bridge+Continuous.swift).

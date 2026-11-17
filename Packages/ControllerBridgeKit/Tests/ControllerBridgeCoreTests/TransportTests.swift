@@ -98,16 +98,20 @@ struct TransportTests {
         #expect(rig.osc.sent.filter { $0.address.hasSuffix("PhasePlus") }.count == 1)
     }
 
-    @Test("Shift + Pitch Bend (pitch range) sends nothing; the log says once that Syndicate has no route for it")
-    func shiftPitchBendIsNotAvailable() throws {
+    @Test("Shift + Pitch Bend − / + transposes (#377): PitchDown or PitchUp 1 once per press, nothing on release, no nudge")
+    func shiftPitchBendTransposes() throws {
         let rig = try Self.started()
         Self.press(rig, 26)   // Shift down
         Self.press(rig, 24)
         Self.release(rig, 24)
         Self.press(rig, 25)
         Self.release(rig, 25)
-        #expect(rig.osc.sent == [])
-        #expect(rig.log.lines.filter { $0.contains("Pitch range") } == ["Pitch range (Shift + Pitch Bend) isn't available in Syndicate"])
+        Self.press(rig, 25)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/PitchDown", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
+        ])
     }
 
     @Test("Shift + Key Lock resets the tempo: one TempoSlider 0.0, Key Lock untouched, and the fader waits to meet 0.0")
