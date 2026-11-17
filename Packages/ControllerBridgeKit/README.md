@@ -117,6 +117,8 @@ Still PROVISIONAL:
 - `midi.channel`: the spec only documents channel 1.
 - `jog.seek_seconds_per_rev` (2.0) and `jog.beats_per_rev` (4): how far a turn seeks or skips while paused. Tune them by
   feel.
+- The mixer's Cue button (`/Syndicate/Mixer/CH{n}/Cue`): the other mixer inputs were confirmed on Syndicate (#207), but
+  Cue did nothing in that spike. Check it with a headphone output set up.
 
 ## Mapping keys
 
