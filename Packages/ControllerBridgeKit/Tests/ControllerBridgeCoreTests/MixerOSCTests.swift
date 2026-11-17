@@ -24,4 +24,13 @@ struct MixerOSCTests {
         #expect(MixerOSC.parse("/Syndicate/Deck/1/Playing", root: "/Syndicate/") == nil)
         #expect(MixerOSC.parse("/Syndicate/Mixer/CHx/Volume", root: "/Syndicate/") == nil)
     }
+
+    @Test("The input addresses the #207 spike confirmed on Syndicate (2026-11-17): each set the value and echoed it back")
+    func confirmedInputs() {
+        let root = "/Syndicate/"
+        #expect(MixerOSC.address(.volume, channel: 1, root: root) == "/Syndicate/Mixer/CH1/Volume")
+        #expect(MixerOSC.address(.eqLow, channel: 1, root: root) == "/Syndicate/Mixer/CH1/EQ/Low")
+        #expect(MixerOSC.address(.filterCut, channel: 1, root: root) == "/Syndicate/Mixer/filter1.cut")
+        #expect(MixerOSC.address(.mute, channel: 1, root: root) == "/Syndicate/Mixer/CH1/Mute")
+    }
 }

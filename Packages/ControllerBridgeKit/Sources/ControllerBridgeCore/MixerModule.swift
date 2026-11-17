@@ -64,8 +64,8 @@ struct MixerModule {
         return nil
     }
 
-    /// A press of cue, mute or solo sends the opposite of what Syndicate last reported (PROVISIONAL until the #207
-    /// spike; sending the new state works whether Syndicate sets or toggles). Its LED waits for Syndicate's answer.
+    /// A press of cue, mute or solo sends the opposite of what Syndicate last reported: they're switches that set the
+    /// state (User Guide 14.9; Mute confirmed by the #207 spike, Cue not yet). Its LED waits for Syndicate's answer.
     /// Nil for a note that isn't the mixer's.
     func note(_ note: Int, pressed: Bool, mixer: Mapping.Mixer) -> [Send]? {
         guard let button = Self.buttons(mixer).first(where: { $0.note == note }) else { return nil }
