@@ -154,4 +154,38 @@ struct ShiftCuePausedTests {
         Self.shiftPad(rig, 33)
         #expect(Self.seek(rig) != nil)
     }
+
+    @Test("A launch more than 4 s after the press isn't the pad's: no pause")
+    func timeout() throws {
+        let rig = try Self.started()
+        rig.clock.now = 100
+        Self.shiftPad(rig)
+        rig.osc.sent.removeAll()
+        rig.clock.now = 104.5
+        Self.feed(rig, "Playing", 1)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("A second Shift + pad press before the launch drops the pause: two quick taps play from the cue")
+    func secondPressCancels() throws {
+        let rig = try Self.started()
+        Self.shiftPad(rig)
+        rig.osc.sent.removeAll()
+        Self.shiftPad(rig)
+        #expect(rig.osc.sent == [], "the second press sends nothing")
+        Self.feed(rig, "Playing", 1)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("Play pressed before the launch drops the pause")
+    func playCancels() throws {
+        let rig = try Self.started()
+        Self.shiftPad(rig)
+        rig.osc.sent.removeAll()
+        PadChannelCoordinatorTests.press(rig, 1, channel: 1)        // Play
+        #expect(rig.osc.sent.map(\.address) == ["/Syndicate/Deck/1/PlayPause"])
+        rig.osc.sent.removeAll()
+        Self.feed(rig, "Playing", 1)
+        #expect(rig.osc.sent == [])
+    }
 }
