@@ -153,3 +153,34 @@ struct BarRampSubscriptionTests {
         #expect(rig.coordinator.status.requiredSubscriptions.contains(.barRamp))
     }
 }
+
+/// Loaded and TrackInfo are two checkboxes behind one subscription (#261). With Loaded off but TrackInfo on, a track's
+/// TrackInfo still shows the deck is loaded, so its other values are judged and Loaded's absence is named (#308).
+@Suite("Loaded off, TrackInfo on")
+struct LoadedOffTrackInfoOnTests {
+    static let withoutLoaded = EverySubscriptionTests.deck1.map(\.1).filter { !$0.address.hasSuffix("/Loaded") }
+
+    @Test("Everything but Loaded, for a loaded track: Loaded is missing, and nothing else")
+    func onlyLoaded() throws {
+        let rig = try SubscriptionsTests.answered(Self.withoutLoaded)
+        #expect(rig.coordinator.status.missingSubscriptions == [.loaded])
+    }
+
+    @Test("TrackInfo and Playing only: Loaded and every other subscription are missing")
+    func trackInfoAndPlaying() throws {
+        let rig = try SubscriptionsTests.answered(Self.withoutLoaded.filter { $0.address.hasSuffix("/TrackInfo") || $0.address.hasSuffix("/Playing") })
+        #expect(rig.coordinator.status.missingSubscriptions == [.playPending, .loaded, .progress, .tempoSlider, .cues, .sync, .loop])
+    }
+
+    @Test("No deck values at all (only the palette and header): no missing subscription is named, Loaded included")
+    func noDeckValues() throws {
+        #expect(try SubscriptionsTests.answered([]).coordinator.status.missingSubscriptions == [])
+    }
+
+    @Test("An empty deck's TrackInfo (player type empty) isn't a loaded deck: nothing judged, nothing missing but Loaded")
+    func emptyDeck() throws {
+        let empty = OSCMessage("/Syndicate/Deck/2/TrackInfo", [.string(""), .string(""), .string(""), .float(0), .float(0), .int(0), .int(0), .string("empty")])
+        let rig = try SubscriptionsTests.answered([empty])
+        #expect(rig.coordinator.status.missingSubscriptions == [.loaded])
+    }
+}
