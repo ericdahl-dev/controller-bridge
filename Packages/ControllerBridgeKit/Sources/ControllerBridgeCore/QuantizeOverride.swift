@@ -45,3 +45,20 @@ struct QuantizeOverride: Equatable, Sendable {
         return .useGlobal
     }
 }
+
+extension Bridge {
+    /// Turns this deck's quantize off for `reason`, if nothing else already has (#366).
+    func overrideQuantize(_ reason: QuantizeOverride.Reason) {
+        if let change = quantizeOverride.acquire(reason) { sendDeck("Quantize", .int(change.value)) }
+    }
+
+    /// `reason` is done; the last one out puts quantize back to Use Global.
+    func restoreQuantize(_ reason: QuantizeOverride.Reason) {
+        if let change = quantizeOverride.release(reason) { sendDeck("Quantize", .int(change.value)) }
+    }
+
+    /// Every reason is done (releasing everything, a new track): quantize back, once, if anything held it.
+    func restoreAllQuantize() {
+        if let change = quantizeOverride.releaseAll() { sendDeck("Quantize", .int(change.value)) }
+    }
+}

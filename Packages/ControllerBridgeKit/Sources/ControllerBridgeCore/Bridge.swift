@@ -138,6 +138,8 @@ final class Bridge {
     /// pause it, with the deck's quantize forced to None until then (#363). Syndicate has no jump-without-play input,
     /// and a pause sent before the launch cancels the jump.
     var pendingCuePause: (cue: Int, armedAt: Double)?
+    /// Who needs this deck's quantize off right now (#366): the cue jump, the paused jog's seeks, return to cue.
+    var quantizeOverride = QuantizeOverride()
     /// Where each hot cue sits, in seconds, learned from a Shift + pad launch (#358): Syndicate never sends cue times.
     var cueTimes: [Int: Double] = [:]
     /// The cue just launched by Shift + pad, whose time the next Position gives.

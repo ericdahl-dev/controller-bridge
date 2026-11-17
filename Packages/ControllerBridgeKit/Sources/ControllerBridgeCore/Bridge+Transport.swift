@@ -101,6 +101,7 @@ extension Bridge {
     /// mapping import all come through here.
     func releaseAll() {
         endCueJump()
+        restoreAllQuantize()
         for control in held.takeAll() { send(address: control.address, control.release) }
         if let address = latchedReverse {
             send(address: address, [.int(0)])
