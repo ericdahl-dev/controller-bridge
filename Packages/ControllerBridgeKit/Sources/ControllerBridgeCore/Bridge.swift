@@ -216,6 +216,7 @@ final class Bridge {
         rearmPickup()
         ledCache.removeAll()
         padLEDCache.removeAll()
+        mixerState.meterShown = nil   // shown again on the next tick, on what may be a new port (#320)
         refreshLEDs()
     }
 
@@ -396,6 +397,8 @@ final class Bridge {
     func repaintLEDs() {
         ledCache.removeAll()
         padLEDCache.removeAll()
+        // The meter shows again on its next tick (#320).
+        mixerState.meterShown = nil
         refreshLEDs()
     }
 
@@ -407,6 +410,7 @@ final class Bridge {
             ledsEnabled = true
             ledCache.removeAll()
             padLEDCache.removeAll()
+            mixerState.meterShown = nil
             refreshLEDs()
         } else {
             // A button goes to the profile's off (#194); a pad or the ring to no color.
@@ -417,6 +421,10 @@ final class Bridge {
             }
             for (note, velocity) in padLEDCache.sorted(by: { $0.key < $1.key }) where velocity != Self.off {
                 padLED(note, Self.off)
+            }
+            // The VU meter too (#320).
+            if let meter = mapping.mixer?.meter, let shown = mixerState.meterShown, shown != 0, ledCC(UInt8(meter.cc), 0) {
+                mixerState.meterShown = nil
             }
             ledsEnabled = false
         }
