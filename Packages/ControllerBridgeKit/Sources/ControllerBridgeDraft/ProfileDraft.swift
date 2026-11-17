@@ -16,6 +16,8 @@ public struct ProfileDraft: Sendable {
     /// Keys a profile file must have that neither the capture nor the docs gave, filled from the LC6000's mapping so
     /// the draft loads (#310). Each is for a person to check; the controller-specific ones keep their TODO.
     public var placeholders: [FromDocs] = []
+    /// False for a draft from the docs alone (#280), before any capture.
+    public var fromCapture = true
 
     public struct FromDocs: Equatable, Sendable {
         public var key: String
@@ -58,6 +60,7 @@ public struct ProfileDraft: Sendable {
     /// name, the docs' keys with their sources, and a TODO for the owner's capture for everything else.
     public static func make(device: String, docs: DocsFacts) -> ProfileDraft {
         var draft = ProfileDraft(profile: .object([]), todos: [])
+        draft.fromCapture = false
         draft.set("id", .string(slug(device)))
         draft.set("name", .string(device))
         draft.set("device_hints", .array([.string(device)]))

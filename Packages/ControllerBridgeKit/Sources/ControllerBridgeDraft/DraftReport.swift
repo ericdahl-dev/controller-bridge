@@ -5,8 +5,11 @@ public enum DraftReport {
         let name = draft.profile["name"].flatMap { if case .string(let s) = $0 { s } else { nil } } ?? "?"
         let id = draft.profile["id"].flatMap { if case .string(let s) = $0 { s } else { nil } } ?? "?"
         var out = "# Draft profile: \(name) (\(id))\n\n"
-        out += "Drafted from a capture (#189). The capture wins over the docs; nothing here is guessed. Fix every problem, "
-            + "resolve or document every TODO, then review it before bundling (docs/ADDING-A-CONTROLLER.md).\n"
+        out += (draft.fromCapture
+            ? "Drafted from a capture (#189). The capture wins over the docs; nothing here is guessed. "
+            : "Drafted from the docs alone (#280), before any owner's capture; nothing here is guessed. The owner's capture "
+                + "settles the TODOs and checks every value from the docs. ")
+            + "Fix every problem, resolve or document every TODO, then review it before bundling (docs/ADDING-A-CONTROLLER.md).\n"
         if !draft.problems.isEmpty {
             out += "\n## Import check\n\n" + draft.problems.map { "- \($0)\n" }.joined()
         }

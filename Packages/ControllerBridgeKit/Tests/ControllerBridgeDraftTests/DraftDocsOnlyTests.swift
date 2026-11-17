@@ -43,4 +43,11 @@ struct DraftDocsOnlyTests {
         #expect(draft.file.value(at: "mapping.midi.layer_note") == nil)
         #expect(draft.problems == [])
     }
+
+    @Test("The report says the draft is from the docs alone, not that a capture wins")
+    func reportSaysDocsOnly() {
+        let text = DraftReport.text(ProfileDraft.make(device: "DDJ-400", docs: DocsFacts()))
+        #expect(text.contains("from the docs alone"))
+        #expect(!text.contains("The capture wins"))
+    }
 }
