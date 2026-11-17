@@ -261,7 +261,8 @@ public final class JogDisplayDriver {
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)
         } else if let running = upload, clock.now - running.startedAt >= Self.timeout {
-            log.log("The jog display didn't answer the upload; it keeps what it showed")
+            log.log("The jog display didn't answer the upload to slot \(running.slot) (\(running.acks) of "
+                    + "\(running.upload.expectedAcks) acks); it keeps what it showed")
             fail()
             onEvent?(.failed(refusal: nil))
         }

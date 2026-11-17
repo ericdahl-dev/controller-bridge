@@ -116,7 +116,19 @@ struct JogDisplayDriverTests {
         rig.driver.tick()
         rig.clock.now = 9
         rig.driver.tick()
-        #expect(rig.log.lines == ["The jog display didn't answer the upload; it keeps what it showed"])
+        // Where it stopped, for the hardware check: the slot, and how many of the upload's acks came (0C, 0D, 0E: 3).
+        #expect(rig.log.lines == ["The jog display didn't answer the upload to slot 1 (0 of 3 acks); it keeps what it showed"])
+    }
+
+    @Test("A timeout after some acks says how many came")
+    func timeoutAfterAcks() {
+        let rig = DriverRig()
+        rig.driver.connect()
+        rig.driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        rig.driver.reply(JogDisplayDriverTests.accepted)
+        rig.clock.now = 5.0
+        rig.driver.tick()
+        #expect(rig.log.lines == ["The jog display didn't answer the upload to slot 1 (1 of 3 acks); it keeps what it showed"])
     }
 
     @Test("Disconnect says goodbye on the Controller port, once")
