@@ -48,3 +48,24 @@ struct DraftShapeProblemTests {
         #expect(draft.problems == ["pads: mode_select is cycle, but notes has no mode_cycle button"])
     }
 }
+
+/// Controller-specific keys the capture can't show are TODOs, never quiet LC6000 values (#310): the roll sizes, and
+/// whether the jog and the needle need a touch. They're placeholders so the file loads, and listed.
+@Suite("Draft TODOs for controller-specific keys")
+struct DraftControllerKeyTodoTests {
+    @Test("roll_sizes, jog.require_touch and needle.require_touch are TODOs with placeholders", arguments: [
+        "mapping.pads.roll_sizes", "mapping.jog.require_touch", "mapping.needle.require_touch",
+    ])
+    func todo(_ key: String) {
+        let draft = ProfileDraft.make(capture: DraftCheckTests.ddj)
+        #expect(draft.todos.contains { $0.key == key })
+        #expect(draft.placeholders.contains { $0.key == key })
+    }
+
+    @Test("The mixer TODO says what to note, now that mapping.mixer exists (#207, #313)")
+    func mixer() {
+        let draft = ProfileDraft.make(capture: DraftCheckTests.ddj)
+        #expect(draft.todos.first { $0.key == "mapping.mixer" }?.how
+            == "Mixer controls (mapping.mixer, #207) aren't captured yet. Note the faders, EQ, filter, cue/mute/solo and VU meter from the MIDI chart.")
+    }
+}
