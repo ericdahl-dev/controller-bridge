@@ -37,4 +37,14 @@ struct JogDisplayRendererTests {
         #expect(JogDisplayRenderer.simulatorImage(content, litBeat: 2, marker: nil) != JogDisplayRenderer.uploadImage(content))
         #expect(JogDisplayRenderer.simulatorImage(content, litBeat: nil, marker: 0.25) != JogDisplayRenderer.uploadImage(content))
     }
+
+    @Test("Each beat slot's upload (#215) is the simulator's image for that beat, without the marker; the four differ")
+    func beatSlotsMatchTheSimulator() {
+        let content = Self.contents[1]
+        let images = (1...4).map { JogDisplayRenderer.uploadImage(content, litBeat: $0) }
+        for beat in 1...4 {
+            #expect(images[beat - 1] == JogDisplayRenderer.simulatorImage(content, litBeat: beat, marker: nil))
+        }
+        #expect(Set(images).count == 4)
+    }
 }

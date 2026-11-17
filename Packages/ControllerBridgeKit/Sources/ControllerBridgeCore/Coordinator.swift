@@ -501,6 +501,14 @@ public final class Coordinator {
         status.controllers[index].lastEvent = event
     }
 
+    /// Another DJ app took the LC6000 as its host, or let go (#333). The detector that calls this comes after the #333
+    /// spike; until then only tests do. Logged once each way, for Diagnostics.
+    func otherHostChanged(_ present: Bool) {
+        guard present != status.otherHost else { return }
+        status.otherHost = present
+        log.log(present ? "Another DJ app is using the LC6000 as its host" : "The other DJ app let go of the LC6000")
+    }
+
     /// Starts or ends the capture of a source (#186). While it's captured, its MIDI drives neither Syndicate nor its
     /// LEDs, though its layers are still followed. Starting releases what its controllers held, like an unplug, forgets
     /// the jog's position, so the first message after only seeds it, and re-arms the pitch pickup. `nil`, an unplug or

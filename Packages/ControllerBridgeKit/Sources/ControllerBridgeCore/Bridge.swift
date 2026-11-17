@@ -134,6 +134,14 @@ final class Bridge {
     var playing = false
     /// A quantized start is waiting for the beat.
     var playPending = false
+    /// Shift + hot cue pad on a stopped deck (#358): the cue tapped, and when, waiting for Syndicate's Playing 1 to
+    /// pause it, with the deck's quantize forced to None until then (#363). Syndicate has no jump-without-play input,
+    /// and a pause sent before the launch cancels the jump.
+    var pendingCuePause: (cue: Int, armedAt: Double)?
+    /// Where each hot cue sits, in seconds, learned from a Shift + pad launch (#358): Syndicate never sends cue times.
+    var cueTimes: [Int: Double] = [:]
+    /// The cue just launched by Shift + pad, whose time the next Position gives.
+    var learningCue: Int?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
     /// When any master clock beat last arrived, pulsed or not.
@@ -323,8 +331,10 @@ final class Bridge {
         switch key {
         case "playing":
             playing = value
+            if value { cueLaunched() }
             if !playing, bendDirection != 0 { endBend() }
-        case "playpending": playPending = value
+        case "playpending":
+            playPending = value
         case "temposlider":
             guard let reported = message.arguments.first?.number else { return }
             tempoReported(reported)
@@ -332,6 +342,7 @@ final class Bridge {
             loaded = value
             if loaded { rearmPickup() }
             if !loaded {
+                forgetCues()
                 // The track is gone: forget its cues, where it was and how long it was.
                 cues = [Int](repeating: 0, count: mapping.notes.pads.count)
                 progress = nil
@@ -356,7 +367,13 @@ final class Bridge {
                 if message.arguments.indices.contains(index), case .string(let value) = message.arguments[index] { return value }
                 return ""
             }
+            let previous = track
             track = (text(0), text(1), text(2), message.arguments[3].number ?? 0, text(7))
+            // Another track: what Shift + pad learned was about the last one (#358). A Resend of the same keeps it.
+            if previous?.title != text(0) || previous?.artist != text(1) { forgetCues() }
+            return
+        case "position":
+            if let cue = learningCue, playing, let seconds = message.arguments.first?.number { learnCue(cue, at: seconds) }
             return
         case "progress":
             progress = message.arguments.first?.number
