@@ -110,4 +110,22 @@ struct JogDisplayBeatSlotTests {
         #expect(shown == [3])                     // slot 3, once it holds the new track
         #expect(drawn.contents.suffix(4).allSatisfy { $0.title != nil })
     }
+
+    @Test("No commit reply (seen twice on hardware, #165): 0.3 s after the last ack the slot counts as stored and the next upload goes")
+    func noCommitReply() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        Self.clock(rig, 1)
+        rig.coordinator.start()
+        let acks = port.wd.filter { $0.count > 6 && [0x0C, 0x0D, 0x0E].contains($0[6]) }.count
+        port.wd.removeAll()
+        for _ in 0..<acks { rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted) }
+        rig.clock.now += 0.29
+        rig.coordinator.tick()
+        #expect(Self.uploadSlots(port) == [])
+        rig.clock.now += 0.02
+        rig.coordinator.tick()
+        #expect(Self.shows(port) == [1])
+        #expect(Self.uploadSlots(port) == [2])
+    }
 }

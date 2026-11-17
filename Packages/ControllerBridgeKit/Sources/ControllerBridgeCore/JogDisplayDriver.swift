@@ -87,6 +87,9 @@ public final class JogDisplayDriver {
 
     /// How long an upload may wait for the unit's answers.
     static let timeout = 5.0
+    /// How long after the last ack an upload counts as stored without the commit reply, which the unit sometimes
+    /// skips while still showing the image (#165).
+    static let commitGrace = 0.3
 
     private var connected = false
     /// Whether the hello went out and no goodbye since.
@@ -213,6 +216,7 @@ public final class JogDisplayDriver {
             running.acks += 1
             if running.acks == running.upload.expectedAcks {
                 running.finished = true
+                running.startedAt = clock.now   // from here, the commit grace
                 for message in running.upload.finish { port?.sendWD(message) }
             }
             upload = running
@@ -221,18 +225,23 @@ public final class JogDisplayDriver {
             fail()
             onEvent?(.failed(refusal: status))
         case .committed where running.finished:
-            upload = nil
-            if renderBeat != nil {
-                if let current { slotContent[running.slot] = current }
-                // Only the slot for the beat now goes on screen; the others wait for their beat.
-                if Int(running.slot) == (lastMasterBeat ?? 1) { showSlot(running) }
-            } else {
-                showSlot(running)
-            }
-            next()
+            stored(running)
         default:
             break
         }
+    }
+
+    /// The unit has the image: show it (in beat mode, only on its beat) and start the next upload.
+    private func stored(_ running: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)) {
+        upload = nil
+        if renderBeat != nil {
+            if let current { slotContent[running.slot] = current }
+            // Only the slot for the beat now goes on screen; the others wait for their beat.
+            if Int(running.slot) == (lastMasterBeat ?? 1) { showSlot(running) }
+        } else {
+            showSlot(running)
+        }
+        next()
     }
 
     private func showSlot(_ running: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)) {
@@ -243,7 +252,9 @@ public final class JogDisplayDriver {
 
     /// Times out a silent upload; starts the next one.
     public func tick() {
-        if let running = upload, clock.now - running.startedAt >= Self.timeout {
+        if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
+            stored(running)
+        } else if let running = upload, clock.now - running.startedAt >= Self.timeout {
             log.log("The jog display didn't answer the upload; it keeps what it showed")
             fail()
             onEvent?(.failed(refusal: nil))
