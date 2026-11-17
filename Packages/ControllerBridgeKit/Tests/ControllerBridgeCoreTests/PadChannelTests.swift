@@ -226,3 +226,29 @@ struct PadChannelImportTests {
         #expect(Mapping.problems(in: Data(#"{"pads": {"channel": "eight"}}"#.utf8)) == [#"pads.channel: expected a whole number, got "eight""#])
     }
 }
+
+/// Shift done in hardware on the pads' own channel (#324): the DDJ-400's Shift pads are on channels 9 (deck 1) and 11
+/// (deck 2), next to its pads on 8 and 10.
+@Suite("Shifted pad channel mapping")
+struct ShiftedPadChannelMappingTests {
+    @Test("Left out, there's none; the LC6000 has none; a profile sets one for its deck and one per layer")
+    func decodes() throws {
+        let lc6000 = try Mapping.bundledDefault()
+        #expect(lc6000.pads.shiftedChannel == nil)
+        #expect(lc6000.midi.layers.map(\.shiftedPadChannel) == [nil, nil, nil, nil])
+        let pads = try JSONDecoder().decode(Mapping.Pads.self, from: Data(#"{ "channel": 8, "shifted_channel": 9 }"#.utf8))
+        #expect(pads.shiftedChannel == 9)
+        let layer = try JSONDecoder().decode(Mapping.Layer.self,
+                                             from: Data(#"{ "channel": 2, "deck": 2, "pad_channel": 10, "shifted_pad_channel": 11 }"#.utf8))
+        #expect(layer == Mapping.Layer(channel: 2, deck: 2, padChannel: 10, shiftedPadChannel: 11))
+    }
+
+    @Test("The import check knows both keys and their range")
+    func checked() throws {
+        #expect(Mapping.problems(in: Data(#"{"pads": {"channel": 8, "shifted_channel": 9}}"#.utf8)) == [])
+        #expect(Mapping.problems(in: Data(#"{"pads": {"shifted_channel": 17}}"#.utf8))
+            == ["pads.shifted_channel: 17 is out of range, expected 1-16"])
+        #expect(Mapping.problems(in: Data(#"{"midi": {"layers": [{"channel": 1, "deck": 1, "shifted_pad_channel": 0}]}}"#.utf8))
+            == ["midi.layers[0].shifted_pad_channel: 0 is out of range, expected 1-16"])
+    }
+}

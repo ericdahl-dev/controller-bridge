@@ -97,6 +97,9 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
 
         public var modeNotes: ModeNotes?
+        /// The channel the pads send on with Shift held (#324), when the hardware does Shift itself: the DDJ-400's
+        /// deck 1 Shift pads are on 9. A pad on it is that pad with Shift.
+        public var shiftedChannel: Int?
 
         /// How the pad mode is chosen (#198): the LC6000's four mode buttons, or one button that cycles them.
         public enum ModeSelect: String, CaseIterable, Equatable, Sendable, Codable {
@@ -137,7 +140,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         }
 
         enum CodingKeys: String, CodingKey {
-            case rollSizes = "roll_sizes", channel, modeNotes = "mode_notes"
+            case rollSizes = "roll_sizes", channel, modeNotes = "mode_notes", shiftedChannel = "shifted_channel"
             case modeSelect = "mode_select", modeCycleVelocities = "mode_cycle_velocities"
         }
 
@@ -148,6 +151,7 @@ public struct Mapping: Equatable, Sendable, Codable {
             modeCycleVelocities = try c.decodeIfPresent(ModeVelocities.self, forKey: .modeCycleVelocities)
             channel = try c.decodeIfPresent(Int.self, forKey: .channel)
             modeNotes = try c.decodeIfPresent(ModeNotes.self, forKey: .modeNotes)
+            shiftedChannel = try c.decodeIfPresent(Int.self, forKey: .shiftedChannel)
         }
     }
 
@@ -207,16 +211,19 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var deck: Int
         /// The channel this layer's pads use (#224), when not `channel`: the DDJ-400/FLX4's deck 2 pads are on 10.
         public var padChannel: Int?
+        /// The channel this layer's pads send on with Shift held (#324): the DDJ-400's deck 2 Shift pads are on 11.
+        public var shiftedPadChannel: Int?
 
         enum CodingKeys: String, CodingKey {
             case channel, deck
-            case padChannel = "pad_channel"
+            case padChannel = "pad_channel", shiftedPadChannel = "shifted_pad_channel"
         }
 
-        public init(channel: Int, deck: Int, padChannel: Int? = nil) {
+        public init(channel: Int, deck: Int, padChannel: Int? = nil, shiftedPadChannel: Int? = nil) {
             self.channel = channel
             self.deck = deck
             self.padChannel = padChannel
+            self.shiftedPadChannel = shiftedPadChannel
         }
     }
 
