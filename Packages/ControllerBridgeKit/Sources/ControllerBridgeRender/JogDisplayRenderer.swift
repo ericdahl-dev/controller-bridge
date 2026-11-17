@@ -66,6 +66,10 @@ public enum JogDisplayRenderer {
     /// which are the unit's own.
     public static func uploadImage(_ content: JogDisplayContent) -> [UInt8] { render(content) }
 
+    /// One beat slot's image (#215): the upload's with master beat `litBeat` (1–4) lit. The unit holds all four and
+    /// shows one per beat; the marker stays the unit's own.
+    public static func uploadImage(_ content: JogDisplayContent, litBeat: Int) -> [UInt8] { render(content, litBeat: litBeat) }
+
     /// The image the Diagnostics simulator shows (#221): the upload's, with the lit beat and the marker the unit would
     /// draw over it. With neither, it is the upload's exactly (a test pins it).
     public static func simulatorImage(_ content: JogDisplayContent, litBeat: Int?, marker: Double?) -> [UInt8] {
