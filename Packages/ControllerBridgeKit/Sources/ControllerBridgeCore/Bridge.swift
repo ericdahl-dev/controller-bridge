@@ -140,6 +140,8 @@ final class Bridge {
     /// Whether this deck's last launch from stopped waited for the beat (PlayPending first): quantize on. Syndicate
     /// doesn't report quantize itself (#358). Nil until a launch is seen.
     var quantizeOn: Bool?
+    /// A launch from stopped is waiting for the beat (PlayPending 1 while stopped).
+    var launchWaited = false
     /// Where each hot cue sits, in seconds, learned from a Shift + pad launch (#358): Syndicate never sends cue times.
     var cueTimes: [Int: Double] = [:]
     /// The cue just launched by Shift + pad, whose time the next Position gives.
@@ -325,11 +327,18 @@ final class Bridge {
         let value = message.arguments.first?.isTrue ?? false
         switch key {
         case "playing":
+            let wasPlaying = playing
             playing = value
+            // Any launch from stopped shows whether quantize is on: PlayPending came first, or it didn't (#358).
+            if value, !wasPlaying {
+                quantizeOn = launchWaited
+                launchWaited = false
+            }
             if value { cueLaunched() }
             if !playing, bendDirection != 0 { endBend() }
         case "playpending":
             playPending = value
+            if value, !playing { launchWaited = true }
             if value, pendingCuePause != nil { pendingCuePause?.quantized = true }
         case "temposlider":
             guard let reported = message.arguments.first?.number else { return }

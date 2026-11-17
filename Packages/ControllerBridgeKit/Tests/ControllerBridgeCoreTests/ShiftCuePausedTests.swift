@@ -106,4 +106,23 @@ struct ShiftCuePausedTests {
         Self.shiftPad(rig, 33)
         #expect(rig.osc.sent == Self.hotCue2)
     }
+
+    @Test("The quantize flag follows every launch from stopped: after a plain Play launch with no PlayPending, Shift + pad seeks again")
+    func quantizeFollowsLaunches() throws {
+        let rig = try Self.started()
+        Self.loadTrack(rig)
+        // Learned with Q on.
+        Self.shiftPad(rig, 33)
+        Self.feed(rig, "PlayPending", 1)
+        Self.feed(rig, "Playing", 1)
+        Self.feed(rig, "PlayPending", 0)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Position", [.float(30.02)]))
+        Self.feed(rig, "Playing", 0)
+        // The user turns Q off in Syndicate and presses Play: it starts at once, no PlayPending.
+        Self.feed(rig, "Playing", 1)
+        Self.feed(rig, "Playing", 0)
+        rig.osc.sent.removeAll()
+        Self.shiftPad(rig, 33)
+        #expect(Self.seek(rig) != nil, "Q off again: a silent seek, \(rig.osc.sent)")
+    }
 }
