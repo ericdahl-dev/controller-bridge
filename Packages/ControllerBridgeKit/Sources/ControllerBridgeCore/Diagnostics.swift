@@ -105,11 +105,14 @@ final class OSCTap: OSCSender, @unchecked Sendable {
     private let inner: any OSCSender
     /// Set and read only on the Coordinator's one consumer.
     var onSend: ((OSCMessage) -> Void)?
+    /// The debug trace's view of what's sent (#395), whether or not Diagnostics is open.
+    var onTrace: ((OSCMessage) -> Void)?
 
     init(_ inner: any OSCSender) { self.inner = inner }
 
     func send(_ message: OSCMessage) {
         inner.send(message)
         onSend?(message)
+        onTrace?(message)
     }
 }

@@ -116,3 +116,25 @@ public final class RollingLogFile: @unchecked Sendable {
         open()
     }
 }
+
+/// A LogSink that also writes each line to the trace, as a coordinator line (#395): connects, ports, problems.
+struct TracingLog: LogSink {
+    let base: any LogSink
+    let trace: TraceSink?
+    func log(_ line: String) {
+        base.log(line)
+        trace?(.coordinator, line)
+    }
+}
+
+/// An LED output that also traces what it sends, with its port (#395).
+struct TracingOutput: MIDIOutput {
+    let inner: any MIDIOutput
+    let name: String
+    let trace: TraceSink
+    func send(_ event: MIDIEvent) throws {
+        try inner.send(event)
+        trace(.midiOut, "\(name) ch\(Int(event.channel) + 1) \(event.midoText)")
+    }
+    func close() { inner.close() }
+}

@@ -138,6 +138,8 @@ final class Bridge {
     var pendingCuePause: (cue: Int, armedAt: Double)?
     /// Who needs this deck's quantize off right now (#366): the cue jump, the paused jog's seeks, return to cue.
     var quantizeOverride = QuantizeOverride()
+    /// The debug trace (#395), from the Coordinator.
+    var trace: TraceSink?
     /// Where each hot cue sits, in seconds, learned from a Shift + pad launch (#358): Syndicate never sends cue times.
     var cueTimes: [Int: Double] = [:]
     /// The cue just launched by Shift + pad, whose time the next Position gives.
