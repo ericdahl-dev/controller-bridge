@@ -1,193 +1,62 @@
 // The mixer section (#207): channel faders, trim, EQ and filter knobs, cue/mute/solo, and VU meters, on mixer channel
 // N for the controller driving deck N. Addresses are in MixerOSC (provisional for input until the #207 spike).
 
-/// The mixer's state in a bridge.
-struct MixerState {
-    /// A 14-bit control's MSB, kept until its LSB arrives.
-    var msb: [MixerValue: UInt8] = [:]
-    /// The last value sent per control, rounded as sent.
-    var lastSent: [MixerValue: Double] = [:]
-    /// Recent sends, for telling Syndicate's echo from an outside change.
-    var recentSends: [MixerValue: [(time: Double, value: Double)]] = [:]
-    /// What Syndicate last reported per control.
-    var reported: [MixerValue: Double] = [:]
-    /// Controls waiting to meet Syndicate's value (pickup), and where each last was.
-    var armed: Set<MixerValue> = []
-    var position: [MixerValue: Double] = [:]
-    /// Just after a deck switch, controls with no report from the new channel wait until then (#321).
-    var waitUntil: Double?
-    /// The meter: Syndicate's latest level, the peak being held and since when, and what the LEDs show.
-    var meterLevel: Double?
-    var meterPeak = 0.0
-    var meterPeakAt = -Double.infinity
-    var meterSentAt: Double?
-    var meterShown: UInt8?
-}
-
 extension Bridge {
-    /// The mixer section's faders and knobs, with the value each drives.
-    var mixerControls: [(value: MixerValue, control: Mapping.Control)] {
-        guard let mixer = mapping.mixer else { return [] }
-        let all: [(MixerValue, Mapping.Control?)] = [
-            (.volume, mixer.volume), (.trim, mixer.trim), (.eqHigh, mixer.eqHigh), (.eqMid, mixer.eqMid),
-            (.eqLow, mixer.eqLow), (.filterCut, mixer.filter), (.filterRes, mixer.filterRes), (.filterWidth, mixer.filterWidth),
-        ]
-        return all.compactMap { value, control in control.map { (value, $0) } }
-    }
-
-    /// A CC from one of the mixer's faders or knobs: sent as 0..1 once it's whole. False for any other CC.
+    /// A CC from one of the mixer's faders or knobs (#383: MixerModule). False for any other CC.
     func mixerCC(_ controller: Int, value: UInt8) -> Bool {
-        for (kind, control) in mixerControls {
-            if control.msbCC == controller {
-                if control.bits == 7 {
-                    sendMixer(kind, mixerLevel(from7Bit: value))
-                } else {
-                    mixerState.msb[kind] = value
-                }
-                return true
-            }
-            if control.bits == 14, control.lsbCC == controller {
-                sendMixer(kind, mixerLevel(from14Bit: join14Bit(msb: mixerState.msb[kind] ?? 0, lsb: value)))
-                return true
-            }
-        }
-        return false
+        guard let mixer = mapping.mixer, let sends = mixerModule.cc(controller, value: value, mixer: mixer, now: clock.now) else { return false }
+        applyMixer(sends)
+        return true
     }
 
-    private func sendMixer(_ kind: MixerValue, _ level: Double) {
-        let rounded = (level * 100_000).rounded() / 100_000
-        guard mixerPickedUp(kind, at: rounded), rounded != mixerState.lastSent[kind] else { return }
-        mixerState.lastSent[kind] = rounded
-        mixerState.recentSends[kind, default: []].removeAll { clock.now - $0.time > Self.echoWindow }
-        mixerState.recentSends[kind, default: []].append((clock.now, rounded))
-        send(address: MixerOSC.address(kind, channel: mapping.deck.number, root: root), [.float(Float(rounded))])
+    /// A press of cue, mute or solo. False for any other note.
+    func mixerNote(_ note: Int, pressed: Bool) -> Bool {
+        guard let mixer = mapping.mixer, let sends = mixerModule.note(note, pressed: pressed, mixer: mixer) else { return false }
+        applyMixer(sends)
+        return true
     }
-}
 
-extension Bridge {
     /// Syndicate's report of a mixer value on this deck's channel.
     func mixerFeedback(_ kind: MixerValue, _ arguments: [OSCArgument]) {
-        guard let value = arguments.first?.number else { return }
-        if mixerControls.contains(where: { $0.value == kind }) { mixerReported(kind, value) }
-        if kind == .meter, let meter = mapping.mixer?.meter {
-            mixerState.meterLevel = value
-            if value >= mixerState.meterPeak || clock.now - mixerState.meterPeakAt > Double(meter.holdMs) / 1000 {
-                mixerState.meterPeak = value
-                mixerState.meterPeakAt = clock.now
-            }
-        }
-        if mixerButtons.contains(where: { $0.value == kind }) {
-            mixerState.reported[kind] = value
-            mixerLEDs()
-        }
-    }
-
-    /// The cue, mute and solo buttons, with the value each toggles.
-    var mixerButtons: [(value: MixerValue, note: Int)] {
-        guard let mixer = mapping.mixer else { return [] }
-        let all: [(MixerValue, Int?)] = [(.cue, mixer.cueNote), (.mute, mixer.muteNote), (.solo, mixer.soloNote)]
-        return all.compactMap { value, note in note.map { (value, $0) } }
-    }
-
-    /// A press of cue, mute or solo sends the opposite of what Syndicate last reported (PROVISIONAL: the input's
-    /// meaning is unconfirmed until the #207 spike; sending the new state works whether Syndicate sets or toggles).
-    /// Its LED waits for Syndicate's answer. False for any other note.
-    func mixerNote(_ note: Int, pressed: Bool) -> Bool {
-        guard let button = mixerButtons.first(where: { $0.note == note }) else { return false }
-        guard pressed else { return true }
-        let on = (mixerState.reported[button.value] ?? 0) > 0.5
-        send(address: MixerOSC.address(button.value, channel: mapping.deck.number, root: root), [.int(on ? 0 : 1)])
-        return true
+        guard let mixer = mapping.mixer, let value = arguments.first?.number else { return }
+        applyMixer(mixerModule.feedback(kind, value, mixer: mixer, now: clock.now))
     }
 
     /// The cue, mute and solo LEDs, from what Syndicate reported: full when on, else as an unlit button.
     func mixerLEDs() {
-        for button in mixerButtons {
-            let on = (mixerState.reported[button.value] ?? 0) > 0.5
-            led(button.note, on ? fullLevel : (mapping.leds.dimUnlitButtons ? dimLevel : offLevel))
+        guard let mixer = mapping.mixer else { return }
+        for button in mixerModule.buttonLEDs(mixer: mixer) {
+            led(button.note, button.on ? fullLevel : (mapping.leds.dimUnlitButtons ? dimLevel : offLevel))
         }
     }
 
-    /// A value the controller didn't send (another controller, the mouse) moved Syndicate away from the control, so
-    /// pickup arms, as the pitch fader's (#22). Syndicate's echo of a send doesn't.
-    private func mixerReported(_ kind: MixerValue, _ value: Double) {
-        mixerState.reported[kind] = value
-        guard let mixer = mapping.mixer, mixer.pickup else { return }
-        let tolerance = mixer.pickupTolerance
-        let echo = mixerState.lastSent[kind].map { abs($0 - value) <= tolerance } == true
-            || (mixerState.recentSends[kind] ?? []).contains { clock.now - $0.time <= Self.echoWindow && abs($0.value - value) <= tolerance }
-        if !echo {
-            mixerState.armed.insert(kind)
-            mixerState.position[kind] = nil
-            mixerState.lastSent[kind] = nil
-        }
-    }
-
-    /// Whether the control at `level` drives Syndicate: always unless armed; armed, once it's within tolerance of the
-    /// reported value or moves across it.
-    fileprivate func mixerPickedUp(_ kind: MixerValue, at level: Double) -> Bool {
-        guard let mixer = mapping.mixer, mixer.pickup else { return true }
-        guard let reported = mixerState.reported[kind] else {
-            // No report yet: it passes through, except just after a deck switch, while the new channel's is due.
-            if let until = mixerState.waitUntil, clock.now < until { return false }
-            return true
-        }
-        guard mixerState.armed.contains(kind) else { return true }
-        let previous = mixerState.position[kind]
-        mixerState.position[kind] = level
-        let near = abs(level - reported) <= mixer.pickupTolerance
-        let crossed = previous.map { ($0 - reported) * (level - reported) < 0 } ?? false
-        guard near || crossed else { return false }
-        mixerState.armed.remove(kind)
-        return true
-    }
-}
-
-extension Bridge {
-    /// Puts the meter on its LEDs, at most `rate_hz` times a second: the peak while it holds, else the level now.
-    /// Syndicate sends Meter around 200 times a second, far more than the LEDs need or the port should carry.
+    /// Puts the meter on its LEDs, at most `rate_hz` times a second. Syndicate sends Meter around 200 times a second,
+    /// far more than the LEDs need or the port should carry.
     func meterTick() {
-        guard let meter = mapping.mixer?.meter, let level = mixerState.meterLevel else { return }
-        if let sent = mixerState.meterSentAt, clock.now - sent < 1 / Double(max(1, meter.rateHz)) - 1e-9 { return }
-        if clock.now - mixerState.meterPeakAt > Double(meter.holdMs) / 1000 {
-            mixerState.meterPeak = level
-            mixerState.meterPeakAt = clock.now
-        }
-        let value = meterValue(max(level, mixerState.meterPeak), meter)
-        guard value != mixerState.meterShown else { return }
+        guard let mixer = mapping.mixer, let meter = mixer.meter, let value = mixerModule.meterTick(mixer: mixer, now: clock.now) else { return }
         guard ledCC(UInt8(meter.cc), value) else { return }
-        mixerState.meterShown = value
-        mixerState.meterSentAt = clock.now
+        mixerModule.meterShown(value, now: clock.now)
     }
 
-    /// The meter CC value for a level: the step for the share of segments lit, or the clip value above 1.0.
-    private func meterValue(_ level: Double, _ meter: Mapping.Mixer.Meter) -> UInt8 {
-        guard let top = meter.steps.last else { return 0 }
-        if level > 1 { return UInt8(clamping: meter.clip ?? top) }
-        let index = min(meter.steps.count - 1, max(0, Int((level * Double(meter.steps.count - 1)).rounded(.down))))
-        return UInt8(clamping: meter.steps[index])
-    }
-}
+    /// Every fader and knob waits to meet Syndicate again (#321): after a capture swept them, or a replug.
+    func rearmMixer() { mixerModule.rearm(mixer: mapping.mixer) }
 
-extension Bridge {
-    /// Every fader and knob waits to meet Syndicate again (#321): after a capture swept them, or a replug, the hardware
-    /// may be anywhere.
-    func rearmMixer() {
-        for (kind, _) in mixerControls {
-            mixerState.armed.insert(kind)
-            mixerState.position[kind] = nil
-            mixerState.lastSent[kind] = nil
-        }
-        mixerState.msb = [:]
-    }
-
-    /// Another deck, another mixer channel (#321): what the old channel reported is forgotten, so its cue, mute and
-    /// solo don't show or invert on the new one, and the faders wait for the new channel's values.
+    /// Another deck, another mixer channel (#321).
     func forgetMixerChannel() {
-        mixerState.reported = [:]
-        mixerState.recentSends = [:]
-        rearmMixer()
-        mixerState.waitUntil = clock.now + Double(mapping.osc.feedbackAnswerMs) / 1000
+        mixerModule.forgetChannel(mixer: mapping.mixer, now: clock.now, answerWindow: Double(mapping.osc.feedbackAnswerMs) / 1000)
+    }
+
+    /// Sends what the mixer module asks, on this deck's mixer channel.
+    private func applyMixer(_ sends: [MixerModule.Send]) {
+        for send in sends {
+            switch send {
+            case .value(let kind, let level):
+                self.send(address: MixerOSC.address(kind, channel: mapping.deck.number, root: root), [.float(Float(level))])
+            case .button(let kind, let state):
+                self.send(address: MixerOSC.address(kind, channel: mapping.deck.number, root: root), [.int(state)])
+            case .buttonLEDs: mixerLEDs()
+            }
+        }
     }
 }
 
