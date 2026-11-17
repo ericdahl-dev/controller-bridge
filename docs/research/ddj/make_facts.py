@@ -3,7 +3,7 @@
 #   python3 docs/research/ddj/make_facts.py
 import json, os
 
-LIST = "DDJ-FLX4 List of MIDI messages Ver 1.0, archived 2025-08-05 (docs/research/controllers.md, 4.2)"
+LIST = "DDJ-FLX4 MIDI list v1.0"   # docs/research/controllers.md, section 4.2, for the archived copy
 M400 = "Mixxx Pioneer-DDJ-400.midi.xml @dc4bf99"
 
 def facts(model):
