@@ -38,6 +38,14 @@ class ReleaseChecklist(unittest.TestCase):
         self.assertIn("[external]", doc)
         self.assertIn("## 1.1.0", doc)  # the ready-to-paste CHANGELOG block
 
+    def test_hardware_checklist_extras(self):
+        # #307: before the checklist, other host apps are quit; and host-mode layers and LEDs (#79, #120) are re-checked.
+        # #306: the platter wins while a deck plays too.
+        doc = read("docs/RELEASE-1.1.md")
+        step = doc[doc.index("## 2. "):doc.index("## 3. ")]
+        for phrase in ["Quit djay and Engine", "host mode", "#79", "#120", "ch16 note 55", "multi-channel", "while it plays"]:
+            self.assertIn(phrase, step)
+
     def test_app_store_submission(self):
         doc = read("docs/RELEASE-1.1.md")
         submit = doc[doc.index("## 9. Submit"):doc.index("## 10.")]

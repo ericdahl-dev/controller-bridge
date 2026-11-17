@@ -19,8 +19,17 @@ step headings are pinned by `scripts/test_release_docs.py`; change both together
   [#165 hardware checklist](https://github.com/ericdahl-dev/deckbridge/issues/165#issuecomment-6929614995) (slices 7
   and 6+7): the image, upright and in the deck's color; title wrap; the layer handover; off, on, replug and quit; the
   needle once per bar; the play light; the platter while paused; tempo changes.
+- **First (#307):** Quit djay and Engine, and any other app that could act as the unit's host. DeckBridge doesn't guard
+  against another host yet (v1.2), so a second host could interfere with the display.
+- **Also, after the 14 (#307, #306):**
+  - **15. The platter while it plays:** touch the top and turn it on a playing deck. The needle follows the platter, not
+    the beat. Let go: within a quarter-second it eases back to the deck's phase.
+  - **16. Layers in host mode (#79, #120):** with DeckBridge as host, step through decks 1–4 with Shift + deck select
+    (the ch16 note 55 overlay). Each deck's controls drive that deck, and the right deck's LEDs light, both in the
+    normal state (controls on ch1) and in the multi-channel state (controls on the layer's channel).
+  - **17. LEDs per layer:** on each layer, Play, Cue, Sync and the pads show that deck's state, not another's.
 - Answer each step pass or fail on #165. **Any fail blocks the release** until it's fixed and checked again.
-- [ ] All 14 pass.
+- [ ] All 17 pass.
 
 ## 3. Turn the jog display on by default
 
