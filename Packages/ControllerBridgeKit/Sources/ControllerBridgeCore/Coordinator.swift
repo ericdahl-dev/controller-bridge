@@ -225,16 +225,18 @@ public final class Coordinator {
         for index in controllers.indices where address == controllers[index].bridge.deckAddress("BarRamp").lowercased() {
             let bridge = controllers[index].bridge
             let bpm = bridge.playing ? bridge.bpm ?? masterBPM ?? 120 : 0
-            jogNeedles[index, default: JogMarker()].ramp(phase, bpm: bpm, at: clock.now)
+            // A touched platter wins (#306): the ramp waits until it's let go, then the needle eases back.
+            jogNeedles[index, default: JogMarker()].ramp(phase, bpm: bpm, at: clock.now, touched: bridge.platterTouched)
         }
     }
 
-    /// Platter moves on the deck in front turn the hand.
+    /// Platter moves turn each deck's hand; a touched platter's win over the ramp (#306).
     private func jogPlatter() {
         for index in controllers.indices where controllers[index].bridge.jogCountsPending != 0 {
             let bridge = controllers[index].bridge
             jogNeedles[index, default: JogMarker()].platter(
-                counts: bridge.jogCountsPending, countsPerRev: bridge.mapping.jog.countsPerRev, at: clock.now
+                counts: bridge.jogCountsPending, countsPerRev: bridge.mapping.jog.countsPerRev, at: clock.now,
+                touched: bridge.platterTouched
             )
             needlesMoved.insert(index)
             bridge.jogCountsPending = 0

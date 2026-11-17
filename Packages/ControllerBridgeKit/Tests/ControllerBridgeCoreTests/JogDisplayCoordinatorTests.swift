@@ -180,6 +180,33 @@ struct JogMarkerCoordinatorTests {
         #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x47, 0x02], [0xE0, 0x0F, 0x05]])
     }
 
+    @Test("Touch wins (#306): a touched platter turns the playing deck's needle and BarRamp is ignored; let go, it eases back")
+    func touchWins() throws {
+        let (rig, port) = try Self.started()
+        Self.feed(rig, "Deck/1/Playing", .int(1))
+        Self.feed(rig, "Deck/1/BPM", .float(120))
+        Self.feed(rig, "Deck/1/BarRamp", .float(0))
+        Self.tick(rig, at: 0)
+        // Touch the top, turn a quarter (platter 1000 then 1900), while Syndicate's ramp keeps coming.
+        rig.coordinator.midi(.noteOn(channel: 0, note: 40, velocity: 127), source: Rig.lc6000.id)
+        for (msb, lsb) in [(UInt8(7), UInt8(104)), (14, 108)] {
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: msb), source: Rig.lc6000.id)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
+        }
+        rig.clock.now = 0.05
+        Self.feed(rig, "Deck/1/BarRamp", .float(0.5))
+        Self.tick(rig, at: 0.1)
+        #expect(Self.bends(port).last == [0xE0, 0x00, 0x20])   // a quarter turn: 4096, not the ramp's 8192
+        // Let go: the next ramp eases back; 250 ms on it's the deck's phase, 0.5 run on 0.15 at 120 BPM: 10649.
+        rig.coordinator.midi(.noteOff(channel: 0, note: 40, velocity: 0), source: Rig.lc6000.id)
+        rig.clock.now = 0.2
+        Self.feed(rig, "Deck/1/BarRamp", .float(0.5))
+        Self.tick(rig, at: 0.2)
+        #expect(Self.bends(port).last == [0xE0, 0x00, 0x20])   // the ease starts where the platter left it
+        Self.tick(rig, at: 0.5)
+        #expect(Self.bends(port).last == [0xE0, 0x19, 0x53])
+    }
+
     @Test("Paused, a ramp (0.5) sets it but doesn't run on; a quarter turn of the platter (900 counts) moves it to 0.75: 12288")
     func pausedPlatter() throws {
         let (rig, port) = try Self.started()
