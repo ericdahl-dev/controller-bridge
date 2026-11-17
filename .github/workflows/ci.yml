@@ -70,6 +70,7 @@ jobs:
           scripts/test-tag-external.sh
           python3 -I scripts/test_ci_profile.py
           python3 -I scripts/test_testflight_distribute.py
+          python3 -I scripts/test_app_review.py
 
   app:
     name: App build (Release, ad-hoc)
