@@ -92,3 +92,75 @@ struct JogDisplayNeedleTests {
         #expect(controller.needle(0, at: 9) == 8192)
     }
 }
+
+/// The controller drives the JogDisplayDriver behind JogDisplayPort (#384): the ADR-0005 gate, the deck in front's
+/// content, the needles and the master beat.
+@Suite("Jog display controller: the display")
+struct JogDisplayControllerDriverTests {
+    typealias Port = JogDisplayDriverTests.FakePort
+
+    final class Events: @unchecked Sendable { var list: [JogDisplayEvent] = [] }
+
+    static func rig() -> (JogDisplayController, Port, Rig.FakeClock, Events) {
+        let port = Port(), clock = Rig.FakeClock(), events = Events()
+        let driver = JogDisplayDriver(port: port, clock: clock, log: Rig.FakeLog(), size: 1) { content in [UInt8(content.deck), 0, 0, 255] }
+        driver.onEvent = { events.list.append($0) }
+        let controller = JogDisplayController(clock: clock)
+        controller.attach(driver)
+        return (controller, port, clock, events)
+    }
+
+    static func entries(playing: Bool = true) -> [JogDisplayController.Entry] {
+        [JogDisplayNeedleTests.playing(1, bpm: 120, ramp: 0, at: 0, playing: playing),
+         JogDisplayController.Entry(connected: true, ownsDisplay: true, activeLayer: false, facts: {
+             var facts = DeckFacts(deck: 2)
+             facts.playing = true
+             facts.bpm = 120
+             facts.barRamp = DeckFacts.BarRamp(phase: 0.5, at: 0)
+             return facts
+         }())]
+    }
+
+    @Test("Off (ADR-0005): through a refresh, header feedback, facts and ticks, nothing reaches either port")
+    func offSendsNothing() {
+        let (controller, port, clock, _) = Self.rig()
+        let entries = Self.entries()
+        controller.refresh(entries, colors: [:])
+        controller.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(2)]))
+        controller.observe(entries)
+        for step in 1...20 { clock.now = Double(step) * 0.05; controller.tick(entries) }
+        #expect(port.controller == [])
+        #expect(port.wd == [])
+    }
+
+    @Test("On: hello, then the deck in front's card (deck 1, the active layer), in its color")
+    func onShowsFront() {
+        let (controller, port, _, events) = Self.rig()
+        controller.setEnabled(true)
+        controller.refresh(Self.entries(), colors: [1: [255, 0, 0]])
+        #expect(port.controller == JogDisplay.hello)
+        #expect(events.list.contains { if case .uploadStarted(_, let content, _) = $0 { content.deck == 1 && content.color == [255, 0, 0] } else { false } })
+    }
+
+    @Test("A tick sends the deck in front's needle to the unit, and every playing deck's to the simulator")
+    func tickNeedles() {
+        let (controller, port, clock, events) = Self.rig()
+        controller.setEnabled(true)
+        let entries = Self.entries()
+        controller.refresh(entries, colors: [:])
+        controller.observe(entries)
+        port.wd.removeAll()
+        clock.now = 0.25
+        controller.tick(entries)
+        #expect(port.wd.contains([0xE0, 0x00, 0x10]))   // deck 1: 2048
+        #expect(events.list.contains(.deckMarker(deck: 2, pitchBend: 10240)))   // deck 2: 0.5 + 1/8
+        #expect(!port.wd.contains([0xE0, 0x00, 0x50]))   // deck 2's isn't sent to the unit
+    }
+
+    @Test("Header/Clock's beat reaches the driver: the lit ring segment")
+    func masterBeat() {
+        let (controller, _, _, events) = Self.rig()
+        controller.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(3)]))
+        #expect(events.list.contains(.masterBeat(3)))
+    }
+}

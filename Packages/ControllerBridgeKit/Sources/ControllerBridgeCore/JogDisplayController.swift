@@ -11,6 +11,16 @@ final class JogDisplayController {
     private var lastPlaying: [Int: Bool] = [:]
     /// Syndicate's master tempo, for a deck whose own BPM isn't known yet.
     private(set) var masterBPM: Double?
+    /// The LC6000's jog display, when the app found its WD port.
+    private var driver: JogDisplayDriver?
+    /// Settings' "Show the deck on the jog display" (ADR-0005): while off, nothing goes to the display's ports, not
+    /// even the hello.
+    private(set) var enabled = false
+    /// The deck the preview follows with no controller connected (#221): the user's pick, 1-4; nil, the first loaded.
+    private(set) var previewDeck: Int?
+    private var lastMarkerSent: Double?
+    /// At most this many marker updates a second.
+    static let markerRate = 30.0
 
     init(clock: any Clock) {
         self.clock = clock
@@ -20,6 +30,71 @@ final class JogDisplayController {
     func feedback(_ message: OSCMessage) {
         let address = message.address.lowercased()
         if address.hasSuffix("/header/bpm"), let bpm = message.arguments.first?.number, bpm > 0 { masterBPM = bpm }
+        // The master clock is the lit ring segment, the same on every deck (the user's pick).
+        if address.hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber, (1...4).contains(beat) {
+            driver?.masterBeat(beat)
+        }
+    }
+
+    /// Drives the display from now on.
+    func attach(_ driver: JogDisplayDriver) {
+        self.driver = driver
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    func setPreviewDeck(_ deck: Int?) {
+        previewDeck = deck
+    }
+
+    /// A message from the display's WD port: the unit's answers to an upload.
+    func reply(_ bytes: [UInt8]) {
+        driver?.reply(bytes)
+    }
+
+    /// The display shows the deck in front; every deck is previewed for the simulator (#221). With none connected,
+    /// nothing reaches a unit (goodbye), but the preview follows a deck from Syndicate. Off, or with no WD port to show
+    /// on (#305), nothing reaches the unit either.
+    func refresh(_ entries: [Entry], colors: [Int: [Int]]) {
+        guard let driver else { return }
+        func content(_ index: Int) -> JogDisplayContent {
+            let facts = entries[index].facts, track = facts.track
+            return JogDisplayContent(deck: facts.deck, color: colors[facts.deck] ?? [255, 255, 255], title: track?.title,
+                                     artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType)
+        }
+        for index in entries.indices { driver.preview(content(index)) }
+        guard let first = entries.indices.first(where: { entries[$0].connected }) else {
+            driver.disconnect()
+            guard let index = Self.front(entries, previewDeck: previewDeck) else { return }
+            return driver.show(content(index))
+        }
+        let front = Self.front(entries, previewDeck: previewDeck) ?? first
+        if enabled, driver.attached { driver.connect() } else { driver.disconnect() }
+        driver.show(content(front))
+    }
+
+    /// The driver's timers, then the needles (every playing deck's for the simulator, the deck in front's to the unit,
+    /// at most 30 a second) and the play light: 127 while playing, blinking every half-second while loaded and paused.
+    func tick(_ entries: [Entry]) {
+        guard let driver else { return }
+        driver.tick()
+        let front = Self.front(entries, previewDeck: previewDeck)
+        let due = lastMarkerSent.map { clock.now - $0 >= 1 / Self.markerRate - 1e-9 } ?? true
+        if due {
+            for index in entries.indices where entries[index].facts.playing {
+                let needle = needle(index, at: clock.now)
+                driver.deckMarker(deck: entries[index].facts.deck, needle)
+                if index == front { driver.marker(needle) }
+            }
+            lastMarkerSent = clock.now
+        }
+        // Every deck's play state for the simulator, from Syndicate's Playing (#317), not the blinking light below.
+        for entry in entries { driver.deckPlaying(deck: entry.facts.deck, entry.facts.playing) }
+        guard let front else { return }
+        let facts = entries[front].facts
+        driver.playLight(facts.playing || (facts.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
     }
 
     /// Each entry's facts, after Syndicate's feedback: a deck that stops keeps its needle where it is, and a new
