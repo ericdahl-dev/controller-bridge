@@ -136,7 +136,10 @@ final class Bridge {
     var playPending = false
     /// Shift + hot cue pad on a stopped deck (#358): the cue tapped, and when, waiting for Syndicate's Playing 1 to
     /// pause it. Syndicate has no jump-without-play input, and a pause sent before the launch cancels the jump.
-    var pendingCuePause: (cue: Int, armedAt: Double)?
+    var pendingCuePause: (cue: Int, armedAt: Double, quantized: Bool)?
+    /// Whether this deck's last launch from stopped waited for the beat (PlayPending first): quantize on. Syndicate
+    /// doesn't report quantize itself (#358). Nil until a launch is seen.
+    var quantizeOn: Bool?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
     /// When any master clock beat last arrived, pulsed or not.
@@ -321,7 +324,9 @@ final class Bridge {
             playing = value
             if value { cueLaunched() }
             if !playing, bendDirection != 0 { endBend() }
-        case "playpending": playPending = value
+        case "playpending":
+            playPending = value
+            if value, pendingCuePause != nil { pendingCuePause?.quantized = true }
         case "temposlider":
             guard let reported = message.arguments.first?.number else { return }
             tempoReported(reported)

@@ -127,14 +127,16 @@ extension Bridge {
     /// Taps cue `cue` on the stopped deck; `cueLaunched` pauses it once Syndicate reports it playing.
     func goToCuePaused(_ cue: Int) {
         sendDeck("Cue\(cue)", .int(1))
-        pendingCuePause = (cue, clock.now)
+        pendingCuePause = (cue, clock.now, false)
     }
 
-    /// Syndicate reports the deck playing: if it's the cue tapped by `goToCuePaused`, pause it there.
+    /// Syndicate reports the deck playing: if it's the cue tapped by `goToCuePaused`, pause it there. With quantize
+    /// on the pause would come late enough to be heard (#358, the user: "not OK with Q on"), so it plays, as a hot cue.
     func cueLaunched() {
-        guard pendingCuePause != nil else { return }
+        guard let pending = pendingCuePause else { return }
         pendingCuePause = nil
-        sendDeck("Playing", .int(0))
+        quantizeOn = pending.quantized
+        if !pending.quantized { sendDeck("Playing", .int(0)) }
     }
 
     // MARK: LEDs

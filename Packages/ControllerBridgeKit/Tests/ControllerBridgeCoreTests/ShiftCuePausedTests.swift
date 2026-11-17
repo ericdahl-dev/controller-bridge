@@ -46,4 +46,15 @@ struct ShiftCuePausedTests {
         Self.feed(rig, "Playing", 1)
         #expect(rig.osc.sent == [], "only the launch the pad started is paused")
     }
+
+    @Test("Q on (PlayPending 1 before Playing 1): no pause; the user hears the cue, as a normal hot cue")
+    func quantizeOnPlays() throws {
+        let rig = try Self.started()
+        Self.shiftPad(rig)
+        rig.osc.sent.removeAll()
+        Self.feed(rig, "PlayPending", 1)
+        Self.feed(rig, "Playing", 1)
+        Self.feed(rig, "PlayPending", 0)
+        #expect(rig.osc.sent == [])
+    }
 }
