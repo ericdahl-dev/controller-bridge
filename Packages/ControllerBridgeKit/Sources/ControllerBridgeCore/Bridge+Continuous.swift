@@ -90,113 +90,58 @@ extension Bridge {
         return true
     }
 
-    // MARK: Needle Drop
+    // MARK: Jog and Needle Drop (#383: JogModule)
 
-    func needleMSB(_ value: UInt8) {
-        needleMSBValue = value
-    }
+    func needleMSB(_ value: UInt8) { jogModule.needleMSB(value) }
 
-    /// The strip's 14-bit position (#103), as a seek across the whole track. Sent when the LSB arrives, so an MSB on
-    /// its own never seeks to a half-updated place.
     func needleLSB(_ value: UInt8) {
-        guard let needle = mapping.needle, needleTouched || !needle.requireTouch else { return }
-        let position = join14Bit(msb: needleMSBValue, lsb: value)
-        let fraction = Float(Double(position) / 16383)
-        // Paused, unquantized (#366); playing, a seek in time with the grid, as Syndicate does it.
-        if playing { sendDeck("WaveformSeek", .float(fraction)) } else { pausedSeek(fraction) }
+        guard let needle = mapping.needle else { return }
+        applyJog(jogModule.needleLSB(value, needle: needle, playing: playing, now: clock.now))
     }
 
-    // MARK: Jog
+    func needleTouch(_ pressed: Bool) { applyJog(jogModule.needleTouch(pressed)) }
 
-    func jogMSB(_ value: UInt8) {
-        jogMSBValue = value
-    }
+    func jogMSB(_ value: UInt8) { jogModule.jogMSB(value) }
 
-    /// The platter's 14-bit position (#103). Movement is the change since the last position, taking the shorter way
-    /// around the wrap at 16384, so 16376 → 3 is 11 forward. Read when the LSB arrives, so an MSB carry never jumps.
     func jogLSB(_ value: UInt8) {
-        let position = join14Bit(msb: jogMSBValue, lsb: value)
-        defer { jogPosition = position }
-        guard let previous = jogPosition else { return }
-        var counts = (position - previous) % 16384
-        if counts > 8192 { counts -= 16384 } else if counts < -8192 { counts += 16384 }
-        jog(counts: counts)
+        guard let wheel = mapping.jog else { return }
+        applyJog(jogModule.jogLSB(value, wheel: wheel, playing: playing, duration: duration, now: clock.now))
     }
 
     /// A relative jog's tick on the platter's top (#204), in the profile's encoder format.
-    func jogRelative(_ value: UInt8) {
-        jog(counts: mapping.midi.encoderFormat.ticks(value))
-    }
+    func jogRelative(_ value: UInt8) { jogTicks(mapping.midi.encoderFormat.ticks(value), needsTouch: true) }
 
     /// A relative jog's tick on the platter's edge (#204): it moves without a touch.
-    func jogRelativeEdge(_ value: UInt8) {
-        jog(counts: mapping.midi.encoderFormat.ticks(value), needsTouch: false)
+    func jogRelativeEdge(_ value: UInt8) { jogTicks(mapping.midi.encoderFormat.ticks(value), needsTouch: false) }
+
+    private func jogTicks(_ counts: Int, needsTouch: Bool) {
+        guard let wheel = mapping.jog else { return }
+        applyJog(jogModule.jog(counts: counts, needsTouch: needsTouch, wheel: wheel, playing: playing, duration: duration, now: clock.now))
     }
 
-    private func jog(counts: Int, needsTouch: Bool = true) {
-        guard let wheel = mapping.jog, counts != 0, platterTouched || !wheel.requireTouch || !needsTouch else { return }
-        lastJogTime = clock.now
-        if playing {
-            let direction = counts > 0 ? 1 : -1
-            guard direction != bendDirection else { return }
-            bendDirection = direction
-            hold(.bend, "PhaseBend", press: [.int(Int32(direction))], release: [.int(0)])
-            return
+    func platterTouch(_ pressed: Bool) { applyJog(jogModule.platterTouch(pressed)) }
+
+    /// Sends what the jog module asks: OSC to this deck, the bend as a held PhaseBend, and quantize holds through the
+    /// Bridge's one QuantizeOverride.
+    func applyJog(_ sends: [JogModule.Send]) {
+        for send in sends {
+            switch send {
+            case .osc(let path, let argument): sendDeck(path, argument)
+            case .hold(let reason): overrideQuantize(reason)
+            case .release(let reason): restoreQuantize(reason)
+            case .bend(let direction): hold(.bend, "PhaseBend", press: [.int(Int32(direction))], release: [.int(0)])
+            case .endBend: releaseHold(.bend)
+            }
         }
-        // The check keeps these positive; a hand-built mapping with 0 mustn't trap (#92).
-        let countsPerRev = Double(wheel.countsPerRev)
-        guard countsPerRev > 0 else { return }
-        let revolutions = Double(counts) / countsPerRev
-        // Paused: move the playhead.
-        if let duration, let position = progress {
-            let moved = min(1, max(0, position + revolutions * wheel.seekSecondsPerRev / duration))
-            progress = moved
-            pausedSeek(Float(moved))
-        } else {
-            // No track length: skip whole beats, keeping the remainder for the next turn.
-            let countsPerBeat = Int((countsPerRev / wheel.beatsPerRev).rounded())
-            guard countsPerBeat > 0 else { return }
-            seekCountRemainder += counts
-            let beats = seekCountRemainder / countsPerBeat
-            guard beats != 0 else { return }
-            seekCountRemainder -= beats * countsPerBeat
-            sendDeck("BeatSkip", .int(Int32(beats)))
-        }
-    }
-
-    /// How long after the last paused seek the deck's quantize goes back to Use Global (#366).
-    static let seekQuantizeIdle = 0.3
-
-    /// A seek on a paused deck (the jog, the needle strip), with the deck's quantize held at None so Syndicate doesn't
-    /// snap it to the grid (#366, the user: "jog wheel also seems to be quantized when Q is on").
-    func pausedSeek(_ fraction: Float) {
-        overrideQuantize(.jogSeek)
-        lastSeekTime = clock.now
-        sendDeck("WaveformSeek", .float(fraction))
-    }
-
-    /// The seeking has stopped: quantize back, unless something else still holds it off.
-    func seekQuantizeTick() {
-        if quantizeOverride.holds(.jogSeek), clock.now - lastSeekTime >= Self.seekQuantizeIdle - 1e-9 { restoreQuantize(.jogSeek) }
-    }
-
-    func platterTouch(_ pressed: Bool) {
-        platterTouched = pressed
-        if !pressed, bendDirection != 0 { endBend() }
     }
 
     func tick() {
-        if let wheel = mapping.jog, bendDirection != 0, clock.now - lastJogTime >= Double(wheel.bendReleaseMs) / 1000 {
-            endBend()
-        }
+        // The bend ends first and the seek's quantize goes back last, as before the module (#383).
+        let jogSends = jogModule.tick(now: clock.now, wheel: mapping.jog)
+        applyJog(jogSends.filter { $0 == .endBend })
         timingTick()
         meterTick()
         applyCues(cueMemory.tick(now: clock.now))
-        seekQuantizeTick()
-    }
-
-    func endBend() {
-        bendDirection = 0
-        releaseHold(.bend)
+        applyJog(jogSends.filter { $0 != .endBend })
     }
 }

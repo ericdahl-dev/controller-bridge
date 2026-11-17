@@ -32,7 +32,7 @@ extension Bridge {
         looping = old.looping
         cues = old.cues
         palette = old.palette
-        progress = old.progress
+        jogModule.progressReported(old.jogModule.progress)
         duration = old.duration
         reportedTempo = old.reportedTempo
     }

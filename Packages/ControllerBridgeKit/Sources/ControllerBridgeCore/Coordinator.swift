@@ -523,7 +523,7 @@ public final class Coordinator {
         for controller in controllers where controller.source?.id == source {
             controller.bridge.ledsCaptured = true
             controller.bridge.releaseAll()
-            controller.bridge.jogPosition = nil
+            controller.bridge.jogModule.forgetPlatter()
             // The capture sweeps the pitch fader, so it waits for pickup after, instead of jumping the tempo.
             controller.bridge.rearmPickup()
             controller.bridge.rearmMixer()   // and the mixer's faders and knobs (#321)

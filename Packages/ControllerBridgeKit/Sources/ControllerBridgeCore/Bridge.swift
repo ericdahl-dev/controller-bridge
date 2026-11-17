@@ -107,26 +107,11 @@ final class Bridge {
     var faderPosition: Double?
     /// TempoSlider values sent lately, with when, so a late echo of one isn't taken for an outside change.
     var recentTempoSends: [(time: Double, value: Double)] = []
-    /// The direction of the PhaseBend being held (1 or -1), or 0 when none is.
-    var bendDirection = 0
-    var lastJogTime = 0.0
-    /// When the jog or needle strip last seeked a paused deck (#366).
-    var lastSeekTime = 0.0
-    var platterTouched = false
-    var needleTouched = false
-    /// Where the playhead is, 0...1, and the track's length in seconds, from feedback.
-    var progress: Double?
     var duration: Double?
-    /// Paused jog ticks not yet worth a whole beat.
-    var seekCountRemainder = 0
-    /// The jog's and the Needle Drop's last MSB, and the platter's last position, for 14-bit pairs (#103).
-    var jogMSBValue: UInt8 = 0
-    var jogPosition: Int?
     /// The loaded track's TrackInfo, for the jog display (#165): nil when nothing is loaded.
     var track: (title: String, artist: String, key: String, bpm: Double, playerType: String)?
     /// The deck's live tempo from Syndicate's BPM feedback, for the jog needle's run between BarRamps (#165).
     var bpm: Double?
-    var needleMSBValue: UInt8 = 0
 
     // Syndicate's state, from feedback.
     var playing = false
@@ -140,6 +125,8 @@ final class Bridge {
     /// where the cue point is (Syndicate never reports it), and until when a stop after CUE-while-playing gives it.
     /// The hot-cue jump and the main cue point (#383).
     var cueMemory = CueModule()
+    /// The jog's bend and the paused jog and strip seeks (#383).
+    var jogModule = JogModule()
     var cueDown = false
     var shiftCueDown = false
     /// The deck's latest BarRamp, for DeckFacts (#383).
@@ -288,10 +275,7 @@ final class Bridge {
         if mixerNote(note, pressed: pressed) { return }
         if padChannel == channel, padNote(note, pressed: pressed) { return }
         if let needle = mapping.needle, note == needle.touchNote {
-            needleTouched = pressed
-            // The strip let go: its seeks are done (#366).
-            if !pressed { restoreQuantize(.jogSeek) }
-            return
+            return needleTouch(pressed)
         }
         // A shifted note (#226) is its button with Shift held, for that press or release only; Shift then goes back to
         // what it was (a handler may clear it, and the app's own Shift may be held).
@@ -336,7 +320,7 @@ final class Bridge {
         case "playing":
             playing = value
             applyCues(cueMemory.playingChanged(value, now: clock.now))
-            if !playing, bendDirection != 0 { endBend() }
+            applyJog(jogModule.playingChanged(playing))
         case "playpending":
             playPending = value
         case "temposlider":
@@ -349,7 +333,7 @@ final class Bridge {
                 forgetCues()
                 // The track is gone: forget its cues, where it was and how long it was.
                 cues = [Int](repeating: 0, count: mapping.notes.pads.count)
-                progress = nil
+                jogModule.progressReported(nil)
                 duration = nil
                 track = nil
             }
@@ -385,7 +369,7 @@ final class Bridge {
             cueMemory.positionReported(seconds, playing: playing, now: clock.now)
             return
         case "progress":
-            progress = message.arguments.first?.number
+            jogModule.progressReported(message.arguments.first?.number)
             return
         default: return
         }
