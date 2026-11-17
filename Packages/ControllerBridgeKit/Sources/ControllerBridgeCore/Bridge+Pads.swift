@@ -98,19 +98,26 @@ extension Bridge {
         for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
     }
 
+    /// Syndicate's hot cues per deck: its Cues feedback has eight slots. A pad past them has no cue (#311).
+    static let syndicateCues = 8
+
     /// A pad press or release. `index` is 0-based, so hot cue `index + 1`.
     func handlePad(_ index: Int, pressed: Bool) {
         defer { refreshLEDs() }
         guard pressed else { return releaseHold(.pad(index)) }
         let cue = Int32(index + 1)
         switch padMode {
-        case .hotCue: hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
+        case .hotCue:
+            guard index < Self.syndicateCues else { return }
+            hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
         case .roll:
             // The profile's roll sizes (#196); a pad past the list does nothing.
             let sizes = mapping.pads.rollSizes
             guard sizes.indices.contains(index) else { return }
             hold(.pad(index), "SlipLoop/" + sizes[index], press: [.int(1)], release: [.int(0)])
-        case .loop: sendDeck("SetCueLoop", .int(cue))
+        case .loop:
+            guard index < Self.syndicateCues else { return }
+            sendDeck("SetCueLoop", .int(cue))
         case .slicer: break
         }
     }
@@ -145,7 +152,8 @@ extension Bridge {
         led(note, UInt8(clamping: velocity))
     }
 
-    /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad in the roll color.
+    /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad with a roll size in the roll
+    /// color, the rest off (#311).
     /// Slicer: off. An empty cue is off.
     func padColors() -> [UInt8] {
         let leds = mapping.leds
@@ -159,7 +167,7 @@ extension Bridge {
                 return held.contains(.pad(index)) ? ringVelocity(Self.brightest(color)) : velocity(color)
             }
         case .loop: return cues.map { $0 == 0 ? Self.off : velocity(leds.loopPadColor) }
-        case .roll: return Array(repeating: velocity(leds.rollPadColor), count: cues.count)
+        case .roll: return cues.indices.map { $0 < mapping.pads.rollSizes.count ? velocity(leds.rollPadColor) : Self.off }
         case .slicer: return Array(repeating: Self.off, count: cues.count)
         }
     }
