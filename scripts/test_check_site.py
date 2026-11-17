@@ -338,6 +338,16 @@ class CheckSiteTests(unittest.TestCase):
         with open(readme, encoding="utf-8") as f:
             self.assertEqual(check_site.company_problems("README.md", f.read()), [])
 
+    def test_the_readme_documents_shift_hot_cue(self):
+        # Shift + hot cue pad on a stopped deck (#358, #363): the README's LC6000 controls table has a row for it, naming
+        # the stopped deck, and the quantize reset to Use Global.
+        readme = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "README.md")
+        with open(readme, encoding="utf-8") as f:
+            rows = [line for line in f if line.startswith("| Shift + pad")]
+        self.assertEqual(len(rows), 1, "one Shift + pad row")
+        for words in ("Hot Cue", "stopped", "Use Global"):
+            self.assertIn(words, rows[0])
+
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
         self.assertEqual(check_site.problems(root), ["img/Syndicate_logo.png: looks like another company's logo",
