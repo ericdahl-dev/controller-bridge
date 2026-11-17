@@ -22,4 +22,31 @@ struct TraceTests {
             "subscriptions", "error",
         ])
     }
+
+    @Test("Streaming OSC (Position, BarRamp, Meter, …) at most 5 a second per address; the next kept one counts what was skipped")
+    func sampler() {
+        var sampler = StreamSampler()
+        let position = "/Syndicate/Deck/1/Position"
+        var kept: [String] = []
+        // 100 a second for half a second: one every 10 ms.
+        for i in 0..<50 {
+            if let note = sampler.admit(position, at: Double(i) * 0.01) { kept.append(note) }
+        }
+        #expect(kept == ["", " (+19 skipped)", " (+19 skipped)"])
+        // Another deck's Position is its own stream.
+        let otherDeck = sampler.admit("/Syndicate/Deck/2/Position", at: 0.49)
+        #expect(otherDeck == "")
+    }
+
+    @Test("Everything else always passes, unsampled")
+    func nonStreaming() {
+        var sampler = StreamSampler()
+        var playing: [String?] = []
+        for _ in 0..<10 { playing.append(sampler.admit("/Syndicate/Deck/1/Playing", at: 1.0)) }
+        #expect(playing == Array(repeating: "", count: 10))
+        let first = sampler.admit("/Syndicate/Mixer/CH1/Meter", at: 1.0)
+        let soon = sampler.admit("/Syndicate/Mixer/CH1/Meter", at: 1.05)
+        #expect(first == "")
+        #expect(soon == nil, "Meter is streaming on the mixer too")
+    }
 }

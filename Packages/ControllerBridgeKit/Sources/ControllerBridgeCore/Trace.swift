@@ -33,3 +33,32 @@ public enum TraceLine {
         return "\(stamp) \(name) \(text.replacingOccurrences(of: "\n", with: " "))"
     }
 }
+
+/// Keeps the trace readable (#395): Syndicate streams some feedback (Position ~100/s per deck, BarRamp ~200/s, Meter
+/// ~100/s per channel, #209), so each such address is kept at most `perSecond` times a second, and the next line kept
+/// says how many were skipped. Every other message is kept.
+public struct StreamSampler: Sendable {
+    /// The streaming feedback, by the address's last part, as Diagnostics' streaming filter (#218).
+    public static let streamingNames: Set<String> = ["position", "barramp", "meter", "clock", "currentstep", "sampleprogress",
+                                                     "progress", "time"]
+    public let perSecond: Double
+    private var last: [String: Double] = [:]
+    private var skipped: [String: Int] = [:]
+
+    public init(perSecond: Double = 5) {
+        self.perSecond = perSecond
+    }
+
+    /// Nil to skip this message; otherwise what to append to its line: "" or " (+N skipped)".
+    public mutating func admit(_ address: String, at now: Double) -> String? {
+        let name = address.split(separator: "/").last.map { $0.lowercased() } ?? ""
+        guard Self.streamingNames.contains(name) else { return "" }
+        if let previous = last[address], now - previous < 1 / perSecond - 1e-9 {
+            skipped[address, default: 0] += 1
+            return nil
+        }
+        last[address] = now
+        let count = skipped.removeValue(forKey: address) ?? 0
+        return count > 0 ? " (+\(count) skipped)" : ""
+    }
+}
