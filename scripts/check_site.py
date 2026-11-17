@@ -238,12 +238,44 @@ def check_capture_prompts(root, app_prompts):
     return []
 
 
+CONTROLLERS = "controllers.json"
+CONTROLLER_STATUSES = ["supported", "in progress"]
+
+
+def load_controllers(root):
+    """controllers.json (#201): the one list of controllers the page and its JSON-LD show. Each has a name and a maker,
+    and an optional status, "supported" (the default) or "in progress". Returns (entries, problems)."""
+    path = os.path.join(root, CONTROLLERS)
+    if not os.path.isfile(path):
+        return [], [f"{CONTROLLERS}: missing"]
+    try:
+        with open(path, encoding="utf-8") as f:
+            entries = json.load(f)
+    except ValueError as e:
+        return [], [f"{CONTROLLERS}: doesn't parse as JSON: {e}"]
+    if not isinstance(entries, list):
+        return [], [f"{CONTROLLERS}: should be a list"]
+    out = []
+    for n, entry in enumerate(entries):
+        entry = entry if isinstance(entry, dict) else {}
+        if not (isinstance(entry.get("name"), str) and entry["name"] and isinstance(entry.get("maker"), str) and entry["maker"]):
+            out.append(f"{CONTROLLERS}[{n}]: needs a name and a maker")
+        status = entry.get("status", "supported")
+        if status not in CONTROLLER_STATUSES:
+            out.append(f'{CONTROLLERS}[{n}]: status "{status}" isn\'t one of {", ".join(CONTROLLER_STATUSES)}')
+    if not any(isinstance(e, dict) and e.get("name") and e.get("status", "supported") == "supported" for e in entries):
+        out.append(f"{CONTROLLERS}: lists no supported controller")
+    return entries, out
+
+
 def problems(root, app_prompts=None):
     """`app_prompts`: the app's capture prompt list (#190), which the site's capture/prompts.json must equal byte for
     byte; None skips the check (a site checked on its own)."""
     files = sorted(os.path.relpath(os.path.join(d, f), root).replace(os.sep, "/")
                    for d, _, names in os.walk(root) for f in names)
     out = [f"{page}: missing" for page in PAGES + ROOT_FILES if page not in files]
+    controllers, controller_problems = load_controllers(root)
+    out += controller_problems
     size = 0
     for file in files:
         path = os.path.join(root, file)

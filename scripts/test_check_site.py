@@ -25,7 +25,10 @@ WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no co
 
 CAPTURE_LD = '<script type="application/ld+json">{"text": "Record it at https://getdeckbridge.app/capture/."}</script>'
 
+CONTROLLERS = '[{"name": "LC6000 PRIME", "maker": "Denon DJ"}]\n'
+
 GOOD = {
+    "controllers.json": CONTROLLERS,
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD,
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="capture/">record it in your browser</a>'
@@ -301,6 +304,25 @@ class CheckSiteTests(unittest.TestCase):
                          ["for/lc6000/index.html: its canonical is https://getdeckbridge.app/, "
                           "not https://getdeckbridge.app/for/lc6000/"])
         self.assertEqual(check_site.problems(self.site({"for/lc6000/index.html": own})), [])
+
+    def test_controllers_json_is_the_one_list_of_controllers(self):
+        self.assertEqual(check_site.problems(self.site(remove=["controllers.json"])), ["controllers.json: missing"])
+        bad = check_site.problems(self.site({"controllers.json": "[{"}))
+        self.assertEqual(len(bad), 1, bad)
+        self.assertTrue(bad[0].startswith("controllers.json: doesn't parse as JSON: "), bad)
+        self.assertEqual(check_site.problems(self.site({"controllers.json": '[{"name": "", "maker": "Denon DJ"}, {"maker": "x"}]'})), [
+            "controllers.json[0]: needs a name and a maker",
+            "controllers.json[1]: needs a name and a maker",
+            "controllers.json: lists no supported controller",
+        ])
+        self.assertEqual(check_site.problems(self.site({"controllers.json":
+            '[{"name": "LC6000 PRIME", "maker": "Denon DJ"}, {"name": "DDJ-400", "maker": "Pioneer DJ", "status": "soon"}]'})),
+            ['controllers.json[1]: status "soon" isn\'t one of supported, in progress'])
+
+    def test_an_in_progress_controller_is_allowed(self):
+        root = self.site({"controllers.json":
+            '[{"name": "LC6000 PRIME", "maker": "Denon DJ"}, {"name": "DDJ-400", "maker": "Pioneer DJ", "status": "in progress"}]'})
+        self.assertEqual(check_site.problems(root), [])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
