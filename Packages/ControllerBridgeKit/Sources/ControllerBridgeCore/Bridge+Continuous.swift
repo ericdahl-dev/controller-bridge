@@ -12,7 +12,7 @@ extension Bridge {
     }
 
     private func sendPitch() {
-        let pitch = mapping.pitch
+        guard let pitch = mapping.pitch else { return }
         // A 7-bit fader is one CC (#195); the LC6000's is an MSB/LSB pair.
         let t = pitch.bits == 7
             ? tempoSlider(from7Bit: pitchMSBValue, invert: pitch.invert, deadZone: pitch.deadZone)
@@ -53,7 +53,7 @@ extension Bridge {
     func tempoReported(_ value: Double) {
         reportedTempo = value
         tempoWaitUntil = nil
-        let tolerance = mapping.pitch.pickupTolerance
+        let tolerance = mapping.pitch?.pickupTolerance ?? 0
         let isEcho = lastTempo.map { abs($0 - value) <= tolerance } == true
             || recentTempoSends.contains { clock.now - $0.time <= Self.echoWindow && abs($0.value - value) <= tolerance }
         if !isEcho { rearmPickup() }
@@ -61,7 +61,7 @@ extension Bridge {
 
     /// Dim while the fader waits to be picked up, so it can be caught by feel; otherwise full at the center.
     var pitchCenterVelocity: UInt8 {
-        if mapping.pitch.pickup, pickupArmed, reportedTempo != nil { return dimLevel }
+        if mapping.pitch?.pickup == true, pickupArmed, reportedTempo != nil { return dimLevel }
         return lastTempo == 0 ? fullLevel : offLevel
     }
 
@@ -76,14 +76,14 @@ extension Bridge {
     /// the reported value or moves across it. With no report yet there is nothing to meet, so the fader passes
     /// through, except just after a deck switch, when it waits for the new deck's report (`tempoWaitUntil`).
     private func pickedUp(at position: Double) -> Bool {
-        guard mapping.pitch.pickup, pickupArmed else { return true }
+        guard let pitch = mapping.pitch, pitch.pickup, pickupArmed else { return true }
         guard let reported = reportedTempo else {
             if let until = tempoWaitUntil, clock.now < until { return false }
             return true
         }
         let previous = faderPosition
         faderPosition = position
-        let near = abs(position - reported) <= mapping.pitch.pickupTolerance
+        let near = abs(position - reported) <= pitch.pickupTolerance
         let crossed = previous.map { ($0 - reported) * (position - reported) < 0 } ?? false
         guard near || crossed else { return false }
         pickupArmed = false

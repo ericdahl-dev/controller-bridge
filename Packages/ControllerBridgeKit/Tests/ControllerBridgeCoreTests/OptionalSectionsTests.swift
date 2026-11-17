@@ -58,3 +58,34 @@ struct OptionalBrowseTests {
         #expect(browse.selectTurnCC == 6 && browse.autoLoopSizeCC == 3)
     }
 }
+
+/// No pitch fader (#341): the section left out, its CCs do nothing, and the demo skips its fader move.
+@Suite("Optional pitch")
+struct OptionalPitchTests {
+    @Test("No pitch: the profile loads, and the LC6000's pitch CCs (8 and 40) send nothing")
+    func noPitch() throws {
+        let profile = try OptionalSectionsTests.profile(without: ["pitch"])
+        #expect(profile.mapping.pitch == nil)
+        let rig = OptionalSectionsTests.rig(profile)
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 8, value: 70), source: Rig.lc6000.id)
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 40, value: 0), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("The demo runs a profile with no pitch fader: no tempo is ever sent")
+    func demo() throws {
+        let clock = Rig.FakeClock()
+        let session = DemoSession(profile: try OptionalSectionsTests.profile(without: ["pitch"]), clock: clock,
+                                  log: Rig.FakeLog(), ledOutput: Rig.FakeOutput())
+        session.start()
+        for _ in 0..<900 { clock.now += 0.01; session.tick() }
+        #expect(session.sentToSyndicate.contains { $0.address.hasSuffix("/PlayPause") }, "the demo still ran")
+        #expect(!session.sentToSyndicate.contains { $0.address.hasSuffix("/TempoSlider") })
+    }
+
+    @Test("The LC6000 still has its pitch fader: 14 bits on CCs 8 and 40")
+    func lc6000Pitch() throws {
+        let pitch = try #require(try Mapping.bundledDefault().pitch)
+        #expect(pitch.bits == 14 && pitch.msbCC == 8 && pitch.lsbCC == 40)
+    }
+}

@@ -104,13 +104,13 @@ enum DemoScript {
     static func steps(for mapping: Mapping) -> [Step] {
         let channel = UInt8(clamping: mapping.midi.channel - 1)
         let play = UInt8(clamping: mapping.notes.buttons["play"] ?? 0)
-        let pitch = UInt8(clamping: mapping.pitch.msbCC)
         var steps = [
             Step(at: 0.5, event: .noteOn(channel: channel, note: play, velocity: 127)),
             Step(at: 0.6, event: .noteOff(channel: channel, note: play, velocity: 0)),
         ]
-        // The pitch fader from center (0x40) up a quarter (0x50), in five moves.
-        for (index, msb) in [UInt8(0x40), 0x44, 0x48, 0x4C, 0x50].enumerated() {
+        // The pitch fader from center (0x40) up a quarter (0x50), in five moves; none on a controller without one.
+        let pitch = UInt8(clamping: mapping.pitch?.msbCC ?? 0)
+        for (index, msb) in (mapping.pitch == nil ? [] : [UInt8(0x40), 0x44, 0x48, 0x4C, 0x50]).enumerated() {
             steps.append(Step(at: 1.0 + Double(index) * 0.25, event: .controlChange(channel: channel, controller: pitch, value: msb)))
         }
         // The jog, the platter position counting up 8 at a time as a slow forward turn does (#103): a nudge while

@@ -188,9 +188,9 @@ final class Bridge {
             ccNames[cc] = "jog_relative"
             if let edge { ccNames[edge] = "jog_relative_edge" }
         }
-        ccNames[mapping.pitch.msbCC] = "pitch_msb"
+        if let pitch = mapping.pitch { ccNames[pitch.msbCC] = "pitch_msb" }
         // A 7-bit fader has no LSB, even if a merged mapping still names one (#195).
-        if mapping.pitch.bits == 14, let lsb = mapping.pitch.lsbCC { ccNames[lsb] = "pitch_lsb" }
+        if let pitch = mapping.pitch, pitch.bits == 14, let lsb = pitch.lsbCC { ccNames[lsb] = "pitch_lsb" }
         if let needle = mapping.needle {
             ccNames[needle.msbCC] = "needle_msb"
             ccNames[needle.lsbCC] = "needle_lsb"
