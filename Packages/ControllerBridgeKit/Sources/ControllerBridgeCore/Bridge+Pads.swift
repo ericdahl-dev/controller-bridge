@@ -179,6 +179,8 @@ extension Bridge {
     func forgetCues() {
         endCueJump()
         cueTimes = [:]
+        mainCue = nil
+        mainCueSettlesUntil = nil
         learningCue = nil
     }
 
