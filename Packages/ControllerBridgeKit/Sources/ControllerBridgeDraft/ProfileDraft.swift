@@ -215,6 +215,16 @@ public struct ProfileDraft: Sendable {
                      : "Not in the capture or the docs. LEDs need the controller's MIDI chart or a probe with the owner (the capture's LED answers are free text).")
             }
         }
+        // Controller-specific keys the capture can't show (#310): placeholders so the file loads, never quiet values.
+        if profile.value(at: "mapping.pads.roll_sizes") == nil {
+            todo("mapping.pads.roll_sizes", "Which slip-loop size each pad plays in Roll mode, shortest first, from the manual or the pads' printed labels.")
+        }
+        if profile.value(at: "mapping.jog.require_touch") == nil {
+            todo("mapping.jog.require_touch", "Whether the jog should act only while its top is touched: true if the platter has a touch sensor and should ignore a spin of its edge.")
+        }
+        if profile.value(at: "mapping.needle.require_touch") == nil {
+            todo("mapping.needle.require_touch", "Whether the needle strip should act only while touched: true if it sends a touch note (needle.touch_note).")
+        }
         todo("mapping.mixer", "Mixer keys (#207) aren't in profiles yet. Note the faders, EQ and VU from the MIDI chart for when they are.")
     }
 
