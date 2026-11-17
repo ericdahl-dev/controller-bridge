@@ -252,3 +252,43 @@ struct ShiftedPadChannelMappingTests {
             == ["midi.layers[0].shifted_pad_channel: 0 is out of range, expected 1-16"])
     }
 }
+
+/// The Coordinator seam (#324). DeckBridge gives Shift no meaning on a pad yet, so a Shift pad plays as its pad;
+/// before this, the DDJ-400's Shift pads did nothing at all.
+@Suite("Shifted pad channel at the Coordinator")
+struct ShiftedPadChannelCoordinatorTests {
+    static func hotCues(_ rig: Rig) -> [String] { PadChannelInheritanceTests.hotCues(rig) }
+
+    @Test("A pad on the shifted channel (9) is that pad with Shift, the same as Shift held and the pad on 8")
+    func shiftedChannel() throws {
+        let override = #"{ "pads": { "channel": 8, "shifted_channel": 9 } }"#
+        let viaShift = try PadChannelCoordinatorTests.started(override)
+        viaShift.coordinator.midi(.noteOn(channel: 0, note: 26, velocity: 127), source: Rig.lc6000.id)   // Shift
+        viaShift.osc.sent.removeAll()
+        PadChannelCoordinatorTests.press(viaShift, 32, channel: 8)
+        let shifted = try PadChannelCoordinatorTests.started(override)
+        PadChannelCoordinatorTests.press(shifted, 32, channel: 9)
+        #expect(shifted.osc.sent == viaShift.osc.sent)
+        #expect(Self.hotCues(shifted) == ["/Syndicate/Deck/1/HotCue"])
+    }
+
+    @Test("Per layer: deck 2's Shift pads on 11 bring layer 2 to the front and play deck 2")
+    func perLayer() throws {
+        let layers = [Mapping.Layer(channel: 1, deck: 1, padChannel: 8, shiftedPadChannel: 9),
+                      Mapping.Layer(channel: 2, deck: 2, padChannel: 10, shiftedPadChannel: 11)]
+        let rig = try PadChannelInheritanceTests.layered(#"""
+            { "midi": { "layers": [ { "channel": 1, "deck": 1, "pad_channel": 8, "shifted_pad_channel": 9 },
+                                    { "channel": 2, "deck": 2, "pad_channel": 10, "shifted_pad_channel": 11 } ] } }
+            """#, layers: layers)
+        PadChannelCoordinatorTests.press(rig, 32, channel: 11)
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, true])
+        #expect(Self.hotCues(rig) == ["/Syndicate/Deck/2/HotCue"])
+    }
+
+    @Test("The LC6000, with no shifted channel, ignores a pad on channel 9")
+    func lc6000() throws {
+        let rig = try PadChannelCoordinatorTests.started(nil)
+        PadChannelCoordinatorTests.press(rig, 32, channel: 9)
+        #expect(Self.hotCues(rig) == [])
+    }
+}

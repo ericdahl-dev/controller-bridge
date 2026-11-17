@@ -163,6 +163,8 @@ final class Bridge {
     private var padLEDCache: [Int: UInt8] = [:]
     /// The pads' MIDI channel, 0-15 (#224): the deck's unless the profile gives the pads their own.
     let padChannel: UInt8
+    /// The channel the pads send on with Shift held, 0-15 (#324), when the hardware does Shift itself; nil otherwise.
+    let shiftedPadChannel: UInt8?
     /// Settings' LEDs switch (#19). While off, nothing is sent to the controller's LEDs.
     private(set) var ledsEnabled = true
 
@@ -174,6 +176,7 @@ final class Bridge {
         // A loaded mapping's channel is checked to be 1-16; clamping keeps a hand-built one from trapping.
         channel = UInt8(clamping: mapping.midi.channel - 1)
         padChannel = UInt8(clamping: (mapping.pads.channel ?? mapping.midi.channel) - 1)
+        shiftedPadChannel = mapping.pads.shiftedChannel.map { UInt8(clamping: $0 - 1) }
         buttonNames = Dictionary(mapping.notes.buttons.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         shiftedNames = Dictionary(mapping.notes.shifted.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         var ccNames: [Int: String] = [:]
@@ -219,6 +222,23 @@ final class Bridge {
     // MARK: MIDI in
 
     func handle(_ event: MIDIEvent) {
+        // A pad on the shifted pad channel (#324) is that pad with Shift held, for that press or release only, as a
+        // shifted note is (#226).
+        if let shiftedPadChannel {
+            let pad: (note: UInt8, pressed: Bool)? = switch event {
+            case .noteOn(shiftedPadChannel, let note, let velocity): (note, velocity > 0)
+            case .noteOff(shiftedPadChannel, let note, _): (note, false)
+            default: nil
+            }
+            if let pad {
+                let wasShifted = shift
+                shift = true
+                _ = padNote(Int(pad.note), pressed: pad.pressed)
+                shift = wasShifted
+                refreshLEDs()
+                return
+            }
+        }
         // Pads on their own channel (#224) play only there; on the deck's channel they're handled with the other notes.
         if padChannel != channel {
             switch event {
