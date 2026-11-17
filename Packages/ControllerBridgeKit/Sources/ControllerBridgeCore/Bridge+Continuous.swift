@@ -174,6 +174,7 @@ extension Bridge {
         }
         timingTick()
         meterTick()
+        cueJumpTick()
     }
 
     func endBend() {

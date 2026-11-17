@@ -25,7 +25,7 @@ struct ControllerBridgeApp: App {
         MenuBarExtra {
             StatusPanel(
                 status: model.status, setDemo: model.setDemo, setDeck: { model.setDeck($0, controller: $1) },
-                helpAdd: { model.captureDevice = $0 }
+                helpAdd: { model.captureRequest.device = $0 }
             )
                 .environment(\.deckColors, model.status.deckColors)
         } label: {

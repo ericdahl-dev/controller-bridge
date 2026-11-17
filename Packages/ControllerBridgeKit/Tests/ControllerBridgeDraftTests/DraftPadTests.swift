@@ -44,3 +44,36 @@ struct DraftPadTests {
         #expect(draft.todos.contains { $0.key == "mapping.pads.mode_select" })
     }
 }
+
+/// The pad count is the capture's (#310, #196 allows 1–16): as many as its prompt list asks hot cues for.
+@Suite("Draft pad count")
+struct DraftPadCountTests {
+    static func capture(pads: Int, notes: [Int]) -> CaptureFile {
+        let prompts = [CapturePrompt(id: "deck1.play", text: "Play", gesture: .press)]
+            + (1...pads).map { CapturePrompt(id: "deck1.hotcue\($0)", text: "Pad \($0)", gesture: .press) }
+        var file = ControllerBridgeDraftTests.capture(device: "X", inputs: ["X"], steps:
+            [pressed("deck1.play", note: 1)] + notes.enumerated().map { pressed("deck1.hotcue\($0 + 1)", note: $1) })
+        file.prompts = prompts
+        return file
+    }
+
+    @Test("Four pads asked, four captured: notes.pads has four")
+    func four() {
+        let draft = ProfileDraft.make(capture: Self.capture(pads: 4, notes: [10, 11, 12, 13]))
+        #expect(draft.profile.value(at: "mapping.notes.pads") == .array([10, 11, 12, 13].map(DraftJSON.int)))
+    }
+
+    @Test("Sixteen pads asked, sixteen captured: notes.pads has sixteen")
+    func sixteen() {
+        let draft = ProfileDraft.make(capture: Self.capture(pads: 16, notes: Array(100...115)))
+        #expect(draft.profile.value(at: "mapping.notes.pads") == .array((100...115).map(DraftJSON.int)))
+    }
+
+    @Test("Four asked, three captured: a TODO naming the fourth, and how many there are")
+    func missing() {
+        let draft = ProfileDraft.make(capture: Self.capture(pads: 4, notes: [10, 11, 12]))
+        #expect(draft.profile.value(at: "mapping.notes.pads") == nil)
+        #expect(draft.todos.first { $0.key == "mapping.notes.pads" }?.how.contains("deck1.hotcue4") == true)
+        #expect(draft.todos.first { $0.key == "mapping.notes.pads" }?.how.contains("all 4") == true)
+    }
+}

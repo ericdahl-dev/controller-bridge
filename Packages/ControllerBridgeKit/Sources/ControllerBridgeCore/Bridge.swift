@@ -134,6 +134,14 @@ final class Bridge {
     var playing = false
     /// A quantized start is waiting for the beat.
     var playPending = false
+    /// Shift + hot cue pad on a stopped deck (#358): the cue tapped, and when, waiting for Syndicate's Playing 1 to
+    /// pause it, with the deck's quantize forced to None until then (#363). Syndicate has no jump-without-play input,
+    /// and a pause sent before the launch cancels the jump.
+    var pendingCuePause: (cue: Int, armedAt: Double)?
+    /// Where each hot cue sits, in seconds, learned from a Shift + pad launch (#358): Syndicate never sends cue times.
+    var cueTimes: [Int: Double] = [:]
+    /// The cue just launched by Shift + pad, whose time the next Position gives.
+    var learningCue: Int?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
     /// When any master clock beat last arrived, pulsed or not.
@@ -163,6 +171,8 @@ final class Bridge {
     private var padLEDCache: [Int: UInt8] = [:]
     /// The pads' MIDI channel, 0-15 (#224): the deck's unless the profile gives the pads their own.
     let padChannel: UInt8
+    /// The channel the pads send on with Shift held, 0-15 (#324), when the hardware does Shift itself; nil otherwise.
+    let shiftedPadChannel: UInt8?
     /// Settings' LEDs switch (#19). While off, nothing is sent to the controller's LEDs.
     private(set) var ledsEnabled = true
 
@@ -174,6 +184,7 @@ final class Bridge {
         // A loaded mapping's channel is checked to be 1-16; clamping keeps a hand-built one from trapping.
         channel = UInt8(clamping: mapping.midi.channel - 1)
         padChannel = UInt8(clamping: (mapping.pads.channel ?? mapping.midi.channel) - 1)
+        shiftedPadChannel = mapping.pads.shiftedChannel.map { UInt8(clamping: $0 - 1) }
         buttonNames = Dictionary(mapping.notes.buttons.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         shiftedNames = Dictionary(mapping.notes.shifted.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         var ccNames: [Int: String] = [:]
@@ -211,15 +222,35 @@ final class Bridge {
     func start(stale: Bool = false) {
         feedbackStale = stale
         rearmPickup()
+        rearmMixer()
         ledCache.removeAll()
         padLEDCache.removeAll()
+        mixerState.meterShown = nil   // shown again on the next tick, on what may be a new port (#320)
         refreshLEDs()
     }
 
     // MARK: MIDI in
 
     func handle(_ event: MIDIEvent) {
+        // A pad on the shifted pad channel (#324) is that pad with Shift held, for that press or release only, as a
+        // shifted note is (#226).
+        if let shiftedPadChannel {
+            let pad: (note: UInt8, pressed: Bool)? = switch event {
+            case .noteOn(shiftedPadChannel, let note, let velocity): (note, velocity > 0)
+            case .noteOff(shiftedPadChannel, let note, _): (note, false)
+            default: nil
+            }
+            if let pad {
+                let wasShifted = shift
+                shift = true
+                _ = padNote(Int(pad.note), pressed: pad.pressed)
+                shift = wasShifted
+                refreshLEDs()
+                return
+            }
+        }
         // Pads on their own channel (#224) play only there; on the deck's channel they're handled with the other notes.
+        // With their own channel, a deck-channel note is a button even when a pad has the same number (#322).
         if padChannel != channel {
             switch event {
             case .noteOn(padChannel, let note, let velocity):
@@ -228,8 +259,6 @@ final class Bridge {
             case .noteOff(padChannel, let note, _):
                 _ = padNote(Int(note), pressed: false)
                 return
-            case .noteOn(channel, let note, _), .noteOff(channel, let note, _):
-                if pad(for: Int(note)) != nil { return }
             default:
                 break
             }
@@ -248,7 +277,7 @@ final class Bridge {
 
     private func handleNote(_ note: Int, pressed: Bool) {
         if mixerNote(note, pressed: pressed) { return }
-        if padNote(note, pressed: pressed) { return }
+        if padChannel == channel, padNote(note, pressed: pressed) { return }
         if note == mapping.needle.touchNote {
             needleTouched = pressed
             return
@@ -295,8 +324,10 @@ final class Bridge {
         switch key {
         case "playing":
             playing = value
+            if value { cueLaunched() }
             if !playing, bendDirection != 0 { endBend() }
-        case "playpending": playPending = value
+        case "playpending":
+            playPending = value
         case "temposlider":
             guard let reported = message.arguments.first?.number else { return }
             tempoReported(reported)
@@ -304,6 +335,7 @@ final class Bridge {
             loaded = value
             if loaded { rearmPickup() }
             if !loaded {
+                forgetCues()
                 // The track is gone: forget its cues, where it was and how long it was.
                 cues = [Int](repeating: 0, count: mapping.notes.pads.count)
                 progress = nil
@@ -328,7 +360,13 @@ final class Bridge {
                 if message.arguments.indices.contains(index), case .string(let value) = message.arguments[index] { return value }
                 return ""
             }
+            let previous = track
             track = (text(0), text(1), text(2), message.arguments[3].number ?? 0, text(7))
+            // Another track: what Shift + pad learned was about the last one (#358). A Resend of the same keeps it.
+            if previous?.title != text(0) || previous?.artist != text(1) { forgetCues() }
+            return
+        case "position":
+            if let cue = learningCue, playing, let seconds = message.arguments.first?.number { learnCue(cue, at: seconds) }
             return
         case "progress":
             progress = message.arguments.first?.number
@@ -377,6 +415,8 @@ final class Bridge {
     func repaintLEDs() {
         ledCache.removeAll()
         padLEDCache.removeAll()
+        // The meter shows again on its next tick (#320).
+        mixerState.meterShown = nil
         refreshLEDs()
     }
 
@@ -388,6 +428,7 @@ final class Bridge {
             ledsEnabled = true
             ledCache.removeAll()
             padLEDCache.removeAll()
+            mixerState.meterShown = nil
             refreshLEDs()
         } else {
             // A button goes to the profile's off (#194); a pad or the ring to no color.
@@ -398,6 +439,10 @@ final class Bridge {
             }
             for (note, velocity) in padLEDCache.sorted(by: { $0.key < $1.key }) where velocity != Self.off {
                 padLED(note, Self.off)
+            }
+            // The VU meter too (#320).
+            if let meter = mapping.mixer?.meter, let shown = mixerState.meterShown, shown != 0, ledCC(UInt8(meter.cc), 0) {
+                mixerState.meterShown = nil
             }
             ledsEnabled = false
         }

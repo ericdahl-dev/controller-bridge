@@ -55,7 +55,8 @@ How the draft decides:
   - per-mode pad notes and how the pad mode is chosen (the capture only records Hot Cue mode)
   - the LEDs
   - any button the capture has no step for
-  - the mixer, which isn't in profiles yet (#207)
+  - the mixer (`mapping.mixer`, #207): the capture has no mixer steps yet, so take the faders, EQ, filter, cue/mute/solo
+    and the VU meter from the MIDI chart
 - **What the capture reads:**
   - the buttons' notes, with the deck's channel taken from Play
   - the pads, and their channel when it isn't the deck's
@@ -71,11 +72,16 @@ How the draft decides:
 
 Work through `<id>.report.md`:
 
-1. **Import check.** Fix every problem listed. The draft has to pass the same check a bundled profile does.
-2. **Disagreements.** For each one, decide whether the capture or the docs is right, and note why in the PR.
-3. **TODOs.** Resolve each one: with the owner and MIDI Monitor, from the chart, or by leaving the key out because the
+1. **Import check.** Fix every problem listed. The draft has to pass the same check a bundled profile does, and load as
+   a profile file: the report includes the decoder's own rules, such as a jog with no pair and no `relative_cc`.
+2. **Placeholders.** A profile file needs every section, so each key the capture and the docs didn't give is filled
+   with the LC6000's value and listed under "Placeholders from the LC6000". Replace each one with the controller's
+   real value. A placeholder can collide with a real control (the LC6000's needle on CC 64, for example); until
+   #341 lets a profile leave out a section the controller doesn't have, that collision is in the import check.
+3. **Disagreements.** For each one, decide whether the capture or the docs is right, and note why in the PR.
+4. **TODOs.** Resolve each one: with the owner and MIDI Monitor, from the chart, or by leaving the key out because the
    controller has no such control. A TODO you can't resolve goes in the PR as a known gap.
-4. **Name and hints.** Set `id`, `name` and `device_hints` to what the controller's ports are really called. The
+5. **Name and hints.** Set `id`, `name` and `device_hints` to what the controller's ports are really called. The
    draft uses the device name the capture saw. Check that `exclude_hints` names every port that isn't for the
    controls, such as a display port.
 

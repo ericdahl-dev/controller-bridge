@@ -3,6 +3,8 @@
 
 extension Bridge {
     func play(_ pressed: Bool) {
+        // Play wins over a Shift + pad tap still waiting to be paused (#358).
+        if pressed { endCueJump() }
         if pressed { sendDeck("PlayPause", .int(1)) }
     }
 
@@ -98,6 +100,7 @@ extension Bridge {
     /// Sends every recorded release once, then forgets them. Quit, unplug, sleep, a deck or device change and a
     /// mapping import all come through here.
     func releaseAll() {
+        endCueJump()
         for control in held.takeAll() { send(address: control.address, control.release) }
         if let address = latchedReverse {
             send(address: address, [.int(0)])

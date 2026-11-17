@@ -386,7 +386,7 @@ struct SettingsView: View {
             get: { picker.selected },
             set: { id in
                 if id == Self.notFoundTag {
-                    model.captureDevice = picker.device
+                    model.captureRequest.device = picker.device
                     openWindow(id: CaptureWindow.id)
                     // Nothing was chosen: redraw the menu so it shows the saved choice again, not this item.
                     profileMenuRedraw += 1
@@ -474,6 +474,8 @@ struct SettingsView: View {
                 Button("Reset to default") { settings.wrappedValue.customDeckColors = .defaults }
                     .buttonStyle(PillButtonStyle(kind: .quiet))
             }
+            // #363: the jump turns the deck's quantize off and back to Use Global; Syndicate doesn't say what it was.
+            hint("Shift + a hot cue pad on a stopped deck jumps to the cue at once. For the jump, DeckBridge turns that deck's quantize off in Syndicate, then sets it to Use Global, so a deck's own quantize setting is reset.")
         }
     }
 
@@ -492,7 +494,8 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: Theme.Radius.small)
                     .fill(Color(RGB(deckColor: DeckColors.ledPreview(
                         shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors,
-                        table: model.profiles.first?.mapping.leds.colorTable ?? .rgb222
+                        // The LC6000's own table, as the label says (#313), not whichever profile is first.
+                        table: model.profiles.first { $0.id == "denon-lc6000-prime" }?.mapping.leds.colorTable ?? .rgb222
                     ))))
                     .frame(width: 26, height: 26)
                     .accessibilityLabel("Deck \(deck) on the LC6000")

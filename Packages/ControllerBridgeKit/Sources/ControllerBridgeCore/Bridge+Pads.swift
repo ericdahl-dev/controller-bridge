@@ -98,21 +98,88 @@ extension Bridge {
         for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
     }
 
+    /// Syndicate's hot cues per deck: its Cues feedback has eight slots. A pad past them has no cue (#311).
+    static let syndicateCues = 8
+
     /// A pad press or release. `index` is 0-based, so hot cue `index + 1`.
     func handlePad(_ index: Int, pressed: Bool) {
         defer { refreshLEDs() }
         guard pressed else { return releaseHold(.pad(index)) }
         let cue = Int32(index + 1)
         switch padMode {
-        case .hotCue: hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
+        case .hotCue:
+            guard index < Self.syndicateCues else { return }
+            // Shift on a stopped deck (#358): go to the cue without playing.
+            if shift, !playing, !playPending { return goToCuePaused(index + 1) }
+            hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
         case .roll:
             // The profile's roll sizes (#196); a pad past the list does nothing.
             let sizes = mapping.pads.rollSizes
             guard sizes.indices.contains(index) else { return }
             hold(.pad(index), "SlipLoop/" + sizes[index], press: [.int(1)], release: [.int(0)])
-        case .loop: sendDeck("SetCueLoop", .int(cue))
+        case .loop:
+            guard index < Self.syndicateCues else { return }
+            sendDeck("SetCueLoop", .int(cue))
         case .slicer: break
         }
+    }
+
+    /// Syndicate's first Position after a launch is this far past the cue (the live check on #358: 0.06 s, every run).
+    static let launchReportLead = 0.06
+    /// How long a Shift + pad tap waits for its launch before the pause is dropped and quantize put back.
+    static let cuePauseTimeout = 4.0
+
+    /// Goes to cue `cue` on the stopped deck, at once whatever quantize is (#363): the deck's quantize is set to None
+    /// for the jump, then back to Use Global (Syndicate doesn't report a deck's own setting; the user's pick). Learned,
+    /// a WaveformSeek there, which is silent and, unquantized, lands exactly. Otherwise it taps the cue, and
+    /// `cueLaunched` pauses it once Syndicate reports it playing, learning where it is.
+    func goToCuePaused(_ cue: Int) {
+        // A second press before the launch: the user wants it to play from the cue, so the pause is dropped.
+        if pendingCuePause != nil { return endCueJump() }
+        sendDeck("Quantize", .int(1))
+        if let time = cueTimes[cue], let duration, duration > 0 {
+            sendDeck("WaveformSeek", .float(Float(time / duration)))
+            return sendDeck("Quantize", .int(0))
+        }
+        sendDeck("Cue\(cue)", .int(1))
+        pendingCuePause = (cue, clock.now)
+    }
+
+    /// Syndicate reports the deck playing: if it's the cue tapped by `goToCuePaused`, pause it there and put quantize
+    /// back. A launch long after the press isn't the pad's.
+    func cueLaunched() {
+        guard let pending = pendingCuePause else { return }
+        guard clock.now - pending.armedAt <= Self.cuePauseTimeout else { return endCueJump() }
+        pendingCuePause = nil
+        learningCue = pending.cue
+        sendDeck("Playing", .int(0))
+        sendDeck("Quantize", .int(0))
+    }
+
+    /// Drops a Shift + pad tap still waiting for its launch, and puts the deck's quantize back to Use Global. Every way
+    /// out calls it: the timeout, a second press, Play, a new track, releasing everything (unplug, quit).
+    func endCueJump() {
+        guard pendingCuePause != nil else { return }
+        pendingCuePause = nil
+        sendDeck("Quantize", .int(0))
+    }
+
+    /// The tick: a tap whose launch never came puts quantize back after the timeout.
+    func cueJumpTick() {
+        if let pending = pendingCuePause, clock.now - pending.armedAt > Self.cuePauseTimeout { endCueJump() }
+    }
+
+    /// The first Position after a Shift + pad launch: where cue `cue` sits.
+    func learnCue(_ cue: Int, at seconds: Double) {
+        learningCue = nil
+        cueTimes[cue] = max(0, seconds - Self.launchReportLead)
+    }
+
+    /// A new track, or none: its cue times are unknown again.
+    func forgetCues() {
+        endCueJump()
+        cueTimes = [:]
+        learningCue = nil
     }
 
     // MARK: LEDs
@@ -145,7 +212,8 @@ extension Bridge {
         led(note, UInt8(clamping: velocity))
     }
 
-    /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad in the roll color.
+    /// Hot Cue: each cue in its color. Loop: each cue in the loop color. Roll: every pad with a roll size in the roll
+    /// color, the rest off (#311).
     /// Slicer: off. An empty cue is off.
     func padColors() -> [UInt8] {
         let leds = mapping.leds
@@ -159,7 +227,7 @@ extension Bridge {
                 return held.contains(.pad(index)) ? ringVelocity(Self.brightest(color)) : velocity(color)
             }
         case .loop: return cues.map { $0 == 0 ? Self.off : velocity(leds.loopPadColor) }
-        case .roll: return Array(repeating: velocity(leds.rollPadColor), count: cues.count)
+        case .roll: return cues.indices.map { $0 < mapping.pads.rollSizes.count ? velocity(leds.rollPadColor) : Self.off }
         case .slicer: return Array(repeating: Self.off, count: cues.count)
         }
     }

@@ -81,10 +81,13 @@ extension Mapping {
     /// an LED may share its button's note.
     private static func uses(_ merged: OrderedJSON) -> (notes: [(String, Double)], ccs: [(String, Double)]) {
         var notes: [(String, Double)] = [], ccs: [(String, Double)] = []
+        // With per-mode pad notes (#225), the pads send those; notes.pads only counts them (#322).
+        let hasModeNotes = merged["pads"]?["mode_notes"] != nil
         for path in leafPaths(merged) {
             guard case .number(let n, _)? = value(at: path, in: merged) else { continue }
             let pattern = path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
-            if pattern.hasPrefix("notes.") || pattern == "needle.touch_note" || mixerNotes.map({ "mixer.\($0)" }).contains(pattern) {
+            if pattern == "notes.pads[]", hasModeNotes { continue }
+            if pattern.hasPrefix("notes.") || pattern.hasPrefix("pads.mode_notes.") || pattern == "needle.touch_note" || mixerNotes.map({ "mixer.\($0)" }).contains(pattern) {
                 notes.append((path, n))
             } else if ["jog.msb_cc", "jog.lsb_cc", "pitch.msb_cc", "pitch.lsb_cc", "needle.msb_cc", "needle.lsb_cc", "browse.select_turn_cc",
                        "browse.auto_loop_size_cc", "jog.relative_cc", "jog.relative_edge_cc"].contains(pattern)
@@ -101,7 +104,9 @@ extension Mapping {
         let (notes, ccs) = uses(merged)
         let (deck, pads) = channels(merged)
         // A note can arrive on the pads' channels or the deck's (#251): two notes collide only where those meet.
-        let noteChannels = notes.map { (path: $0.0, n: $0.1, channels: $0.0.hasPrefix("notes.pads[") ? pads : deck) }
+        let noteChannels = notes.map { use in
+            (path: use.0, n: use.1, channels: use.0.hasPrefix("notes.pads[") || use.0.hasPrefix("pads.mode_notes.") ? pads : deck)
+        }
         let anyChannel = ccs.map { (path: $0.0, n: $0.1, channels: deck) }
         let layers = layerChannels(merged).map { (path: $0.0, n: $0.1, channels: Set([0.0])) }
         var out: [String] = []
@@ -125,20 +130,30 @@ extension Mapping {
     }
 
     /// The channels the deck's buttons arrive on (midi.channel and every layer's) and the pads' (pads.channel, or each
-    /// layer's pad_channel, else the deck's) (#224, #251).
+    /// layer's pad_channel, else the deck's; pads.channel only when no layer sets its own; and the Shift pads' channels) (#224, #251, #323, #343).
     private static func channels(_ merged: OrderedJSON) -> (deck: Set<Double>, pads: Set<Double>) {
         func number(_ value: OrderedJSON?) -> Double? { if case .number(let n, _)? = value { n } else { nil } }
         var deck = Set([number(merged["midi"]?["channel"]) ?? 1])
         var pads: Set<Double> = []
         let padChannel = number(merged["pads"]?["channel"])
         if case .array(let layers)? = merged["midi"]?["layers"], !layers.isEmpty {
+            // As the Coordinator runs them (#323): once a layer sets a pad channel, the top-level one isn't inherited.
+            let anyOwn = layers.contains { number($0["pad_channel"]) != nil }
             for layer in layers {
                 guard let channel = number(layer["channel"]) else { continue }
                 deck.insert(channel)
-                pads.insert(number(layer["pad_channel"]) ?? padChannel ?? channel)
+                pads.insert(number(layer["pad_channel"]) ?? (anyOwn ? channel : padChannel ?? channel))
             }
         }
         if pads.isEmpty { pads = padChannel.map { [$0] } ?? deck }
+        // The Shift pads' channels (#324, #343): the pads' notes arrive there too. The top-level one only when no layer
+        // sets its own, as for pad_channel.
+        let shifted = number(merged["pads"]?["shifted_channel"])
+        if case .array(let layers)? = merged["midi"]?["layers"], layers.contains(where: { number($0["shifted_pad_channel"]) != nil }) {
+            for layer in layers { if let channel = number(layer["shifted_pad_channel"]) { pads.insert(channel) } }
+        } else if let shifted {
+            pads.insert(shifted)
+        }
         return (deck, pads)
     }
 
@@ -268,6 +283,9 @@ extension Mapping {
         // The pads' own MIDI channel (#224), for the deck and for each deck layer.
         "pads.channel": .number(0, isInteger: true),
         "midi.layers[].pad_channel": .number(0, isInteger: true),
+        // With Shift held, when the hardware does Shift on the pads' channel (#324).
+        "pads.shifted_channel": .number(0, isInteger: true),
+        "midi.layers[].shifted_pad_channel": .number(0, isInteger: true),
         // Each pad mode's own notes (#225).
         "pads.mode_notes": .object([
             ("hotcue", .array([.number(0, isInteger: true)])), ("roll", .array([.number(0, isInteger: true)])),
@@ -288,6 +306,7 @@ extension Mapping {
             "midi.layers[].channel": 1...16,
             "midi.layers[].deck": 1...4,
             "midi.layers[].pad_channel": 1...16, "pads.channel": 1...16,
+            "midi.layers[].shifted_pad_channel": 1...16, "pads.shifted_channel": 1...16,
             "pads.mode_notes.hotcue[]": 0...127, "pads.mode_notes.roll[]": 0...127,
             "pads.mode_notes.loop[]": 0...127, "pads.mode_notes.slicer[]": 0...127,
             "midi.layer_note": 0...127,

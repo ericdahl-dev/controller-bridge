@@ -48,8 +48,8 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
     /// Its checkboxes as one name: "TempoSlider and TempoSliderEnabled".
     public var syndicateName: String { checkboxes.joined(separator: " and ") }
 
-    /// The subscriptions a profile needs, the only ones asked for and judged (#211). Every profile needs these eight
-    /// today; mixer and player-type ones (#207, #210) join when a profile uses them.
+    /// The subscriptions a profile needs, the only ones asked for and judged (#211): the eight every profile needs, then
+    /// the mixer ones its mixer controls use (#207). Player-type ones (#210) will join the same way.
     public static func required(for mapping: Mapping) -> [Subscription] {
         guard let mixer = mapping.mixer else { return always }
         let uses: [(Subscription, Bool)] = [
@@ -125,6 +125,11 @@ struct SubscriptionCheck: Equatable {
             let deck = String(parts[parts.count - 2]), value = String(parts[parts.count - 1])
             values[deck, default: []].insert(value)
             if value == "loaded", message.arguments.first?.wholeNumber == 1 { loaded.insert(deck) }
+            // With Loaded off, a track's TrackInfo still shows its deck is loaded (#308): player type last, "empty"
+            // for an empty deck.
+            if value == "trackinfo", case .string(let kind)? = message.arguments.last, !kind.isEmpty, kind.lowercased() != "empty" {
+                loaded.insert(deck)
+            }
         }
         // With Loaded and TrackInfo on, every deck sends Loaded, an empty one 0 (#211 capture). Deck values without it
         // mean that subscription is off, and then no deck can be judged loaded.
@@ -138,10 +143,11 @@ struct SubscriptionCheck: Equatable {
             guard let at = message.address.range(of: "/Mixer/", options: .caseInsensitive) else { return nil }
             return MixerOSC.parse(message.address, root: String(message.address[..<at.lowerBound]) + "/")?.value
         })
+        // TrackInfo came but no deck sent Loaded: its checkbox is off (with it on, every deck sends Loaded).
+        let anyLoaded = values.values.contains { $0.contains("loaded") }
         missing = required.filter { subscription in
             if !subscription.mixerValues.isEmpty { return mixer.isDisjoint(with: subscription.mixerValues) }
-            // Loaded is what marks a deck loaded, judged above.
-            guard subscription != .loaded else { return false }
+            guard subscription != .loaded else { return !values.isEmpty && !anyLoaded }
             return loaded.contains { deck in !subscription.values.contains { (values[deck] ?? []).contains($0) } }
         }
     }

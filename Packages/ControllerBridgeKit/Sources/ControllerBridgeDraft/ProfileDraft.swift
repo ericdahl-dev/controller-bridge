@@ -13,6 +13,9 @@ public struct ProfileDraft: Sendable {
     public var fromDocs: [FromDocs] = []
     /// Where the capture and the docs disagree. The capture's value is kept.
     public var conflicts: [Conflict] = []
+    /// Keys a profile file must have that neither the capture nor the docs gave, filled from the LC6000's mapping so
+    /// the draft loads (#310). Each is for a person to check; the controller-specific ones keep their TODO.
+    public var placeholders: [FromDocs] = []
 
     public struct FromDocs: Equatable, Sendable {
         public var key: String
@@ -47,6 +50,7 @@ public struct ProfileDraft: Sendable {
         draft.shifted(capture)
         draft.merge(docs)
         draft.unknowns()
+        draft.fill()
         return draft
     }
 
@@ -55,8 +59,17 @@ public struct ProfileDraft: Sendable {
     /// What the profile check says about the draft's mapping as a new controller's own profile (#251): its keys
     /// against each other, never against the LC6000's. Empty means it passes as written.
     public var problems: [String] {
-        guard let mapping = profile["mapping"] else { return [] }
-        return Mapping.problems(in: Data(mapping.text().utf8), whole: true)
+        guard let mapping = file["mapping"] else { return [] }
+        let json = Data(mapping.text().utf8)
+        // The decoder's own shape rules (a jog needs a pair or relative_cc, a cycling pad mode needs its button)
+        // aren't in the check, so decode too and add what it throws (#310).
+        var shape: [String] = []
+        do { _ = try JSONDecoder().decode(Mapping.self, from: json) } catch let error as Mapping.JogError {
+            shape.append(error.description)
+        } catch let error as Mapping.ShapeError {
+            shape.append(error.description)
+        } catch {}
+        return Mapping.problems(in: json, whole: true) + shape
     }
 
     mutating func todo(_ key: String, _ how: String) {
@@ -130,9 +143,11 @@ public struct ProfileDraft: Sendable {
     /// records Hot Cue mode, so per-mode notes (#225) and how the mode is chosen (#198) are always TODOs.
     private mutating func pads(_ capture: CaptureFile) {
         let key = "mapping.notes.pads"
-        let controls = (1...8).map { control(capture, "deck1.hotcue\($0)", for: "\(key)[\($0 - 1)]") }
+        // As many pads as the capture's prompt list asks hot cues for (1–16, #196, #310).
+        let count = max(1, min(16, capture.prompts.filter { $0.id.hasPrefix("deck1.hotcue") && $0.shiftedOf == nil }.count))
+        let controls = (1...count).map { control(capture, "deck1.hotcue\($0)", for: "\(key)[\($0 - 1)]") }
         todos.removeAll { $0.key.hasPrefix("\(key)[") }
-        let missing = (1...8).filter { controls[$0 - 1]?.kind != .note }
+        let missing = (1...count).filter { controls[$0 - 1]?.kind != .note }
         if missing.isEmpty, case let pads = controls.compactMap({ $0 }) {
             set(key, .array(pads.map { .int($0.number ?? 0) }))
             let channels = Set(pads.map(\.channel))
@@ -143,9 +158,9 @@ public struct ProfileDraft: Sendable {
                 set("mapping.pads.channel", .int(channel))
             }
         } else {
-            todo(key, "No note for \(missing.map { "deck1.hotcue\($0)" }.joined(separator: ", ")). Run those steps again; notes.pads needs all eight.")
+            todo(key, "No note for \(missing.map { "deck1.hotcue\($0)" }.joined(separator: ", ")). Run those steps again; notes.pads needs all \(count).")
         }
-        todo("mapping.pads.mode_notes", "Only if the pads send other notes in Roll, Loop and Slicer modes (#225): press pad 1–8 in each mode and list them. The capture only records Hot Cue mode.")
+        todo("mapping.pads.mode_notes", "Only if the pads send other notes in Roll, Loop and Slicer modes (#225): press each pad in each mode and list them. The capture only records Hot Cue mode.")
         todo("mapping.pads.mode_select", "Four mode buttons (\"buttons\") or one that cycles (\"cycle\", #198)? From the manual, or by pressing the mode buttons in MIDI Monitor.")
     }
 
@@ -163,8 +178,31 @@ public struct ProfileDraft: Sendable {
         }
     }
 
+    /// The profile file to write and load: what the capture and the docs gave (`profile`), then the placeholders.
+    public var file: DraftJSON {
+        var file = profile
+        for placeholder in placeholders { file.set(placeholder.key, placeholder.value) }
+        return file
+    }
+
+    /// Every key a whole profile needs that the draft lacks, from the LC6000's mapping, so the file loads (#310).
+    /// Buttons are never filled (a profile has only its own), nor an absolute jog pair beside a relative jog.
+    private mutating func fill() {
+        guard let data = try? Mapping.defaultMappingJSON(),
+              let text = String(data: data, encoding: .utf8),
+              let defaults = try? DocsFacts(json: Data(#"{"mapping": \#(text)}"#.utf8)) else { return }
+        let relativeJog = profile.value(at: "mapping.jog.relative_cc") != nil
+        let sevenBitPitch = profile.value(at: "mapping.pitch.bits") == .int(7)
+        for (key, value) in defaults.facts where profile.value(at: key) == nil {
+            if key.hasPrefix("mapping.notes."), key != "mapping.notes.pads" { continue }
+            if relativeJog, ["mapping.jog.msb_cc", "mapping.jog.lsb_cc"].contains(key) { continue }
+            if sevenBitPitch, key == "mapping.pitch.lsb_cc" { continue }
+            placeholders.append(FromDocs(key: key, value: value, source: "the LC6000's value, a placeholder"))
+        }
+    }
+
     /// What neither the capture nor the docs set and a controller must say for itself: its other buttons and its
-    /// LEDs. Everything else (OSC, timings, tolerances) inherits the defaults on import.
+    /// LEDs. Everything else a profile file needs (OSC, timings, tolerances) is a listed placeholder (`fill`, #310).
     private mutating func unknowns() {
         guard let data = try? Mapping.defaultMappingJSON(),
               let schema = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
@@ -177,7 +215,17 @@ public struct ProfileDraft: Sendable {
                      : "Not in the capture or the docs. LEDs need the controller's MIDI chart or a probe with the owner (the capture's LED answers are free text).")
             }
         }
-        todo("mapping.mixer", "Mixer keys (#207) aren't in profiles yet. Note the faders, EQ and VU from the MIDI chart for when they are.")
+        // Controller-specific keys the capture can't show (#310): placeholders so the file loads, never quiet values.
+        if profile.value(at: "mapping.pads.roll_sizes") == nil {
+            todo("mapping.pads.roll_sizes", "Which slip-loop size each pad plays in Roll mode, shortest first, from the manual or the pads' printed labels.")
+        }
+        if profile.value(at: "mapping.jog.require_touch") == nil {
+            todo("mapping.jog.require_touch", "Whether the jog should act only while its top is touched: true if the platter has a touch sensor and should ignore a spin of its edge.")
+        }
+        if profile.value(at: "mapping.needle.require_touch") == nil {
+            todo("mapping.needle.require_touch", "Whether the needle strip should act only while touched: true if it sends a touch note (needle.touch_note).")
+        }
+        todo("mapping.mixer", "Mixer controls (mapping.mixer, #207) aren't captured yet. Note the faders, EQ, filter, cue/mute/solo and VU meter from the MIDI chart.")
     }
 
     /// Steps repeated with Shift held. The shifted control is the step's first (the held Shift note is already left out).

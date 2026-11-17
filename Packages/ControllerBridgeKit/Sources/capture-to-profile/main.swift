@@ -27,10 +27,10 @@ let docs: DocsFacts
 do { docs = try docsPath.map { try DocsFacts(json: Data(contentsOf: URL(fileURLWithPath: $0))) } ?? DocsFacts() } catch { fail("Can't read the docs facts: \(error)") }
 
 let draft = ProfileDraft.make(capture: capture, docs: docs)
-guard case .string(let id)? = draft.profile["id"] else { fail("The draft has no id.") }
+guard case .string(let id)? = draft.file["id"] else { fail("The draft has no id.") }
 do {
     try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
-    try (draft.profile.text() + "\n").write(to: out.appendingPathComponent("\(id).json"), atomically: true, encoding: .utf8)
+    try (draft.file.text() + "\n").write(to: out.appendingPathComponent("\(id).json"), atomically: true, encoding: .utf8)
     try (ReplayFixture.make(capture: capture, profile: id).text() + "\n")
         .write(to: out.appendingPathComponent("\(id).fixture.json"), atomically: true, encoding: .utf8)
     try DraftReport.text(draft).write(to: out.appendingPathComponent("\(id).report.md"), atomically: true, encoding: .utf8)
