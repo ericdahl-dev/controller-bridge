@@ -75,6 +75,11 @@ final class Rig {
         return out
     }
 
+    /// A rig running `mapping` as it is, such as a whole test-only profile's (#341).
+    init(mapping: Mapping) {
+        coordinator = Coordinator(mapping: mapping, midi: midi, osc: osc, clock: clock, log: log)
+    }
+
     /// A rig whose mapping is the default with `override` (a JSON mapping file) merged over it.
     init(override: String? = nil) throws {
         let mapping = try override.map { try Mapping.bundledDefault(overriddenBy: Data($0.utf8)) } ?? Mapping.bundledDefault()

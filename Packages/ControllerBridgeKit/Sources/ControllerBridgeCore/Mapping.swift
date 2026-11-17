@@ -11,7 +11,8 @@ public struct Mapping: Equatable, Sendable, Codable {
     public var deck: Deck
     public var jog: Jog
     public var pitch: Pitch
-    public var needle: Needle
+    /// The Needle Drop strip; nil on a controller without one (#341).
+    public var needle: Needle?
     public var browse: Browse
     public var notes: Notes
     public var leds: LEDs
@@ -32,7 +33,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         deck = try c.decode(Deck.self, forKey: .deck)
         jog = try c.decode(Jog.self, forKey: .jog)
         pitch = try c.decode(Pitch.self, forKey: .pitch)
-        needle = try c.decode(Needle.self, forKey: .needle)
+        needle = try c.decodeIfPresent(Needle.self, forKey: .needle)
         browse = try c.decode(Browse.self, forKey: .browse)
         notes = try c.decode(Notes.self, forKey: .notes)
         leds = try c.decode(LEDs.self, forKey: .leds)

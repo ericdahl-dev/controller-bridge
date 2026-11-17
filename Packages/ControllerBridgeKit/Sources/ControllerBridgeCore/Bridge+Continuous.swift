@@ -99,7 +99,7 @@ extension Bridge {
     /// The strip's 14-bit position (#103), as a seek across the whole track. Sent when the LSB arrives, so an MSB on
     /// its own never seeks to a half-updated place.
     func needleLSB(_ value: UInt8) {
-        guard needleTouched || !mapping.needle.requireTouch else { return }
+        guard let needle = mapping.needle, needleTouched || !needle.requireTouch else { return }
         let position = join14Bit(msb: needleMSBValue, lsb: value)
         sendDeck("WaveformSeek", .float(Float(Double(position) / 16383)))
     }

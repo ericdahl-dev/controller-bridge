@@ -191,8 +191,10 @@ final class Bridge {
         ccNames[mapping.pitch.msbCC] = "pitch_msb"
         // A 7-bit fader has no LSB, even if a merged mapping still names one (#195).
         if mapping.pitch.bits == 14, let lsb = mapping.pitch.lsbCC { ccNames[lsb] = "pitch_lsb" }
-        ccNames[mapping.needle.msbCC] = "needle_msb"
-        ccNames[mapping.needle.lsbCC] = "needle_lsb"
+        if let needle = mapping.needle {
+            ccNames[needle.msbCC] = "needle_msb"
+            ccNames[needle.lsbCC] = "needle_lsb"
+        }
         ccNames[mapping.browse.selectTurnCC] = "select_turn"
         ccNames[mapping.browse.autoLoopSizeCC] = "auto_loop_size"
         self.ccNames = ccNames
@@ -270,7 +272,7 @@ final class Bridge {
     private func handleNote(_ note: Int, pressed: Bool) {
         if mixerNote(note, pressed: pressed) { return }
         if padChannel == channel, padNote(note, pressed: pressed) { return }
-        if note == mapping.needle.touchNote {
+        if let needle = mapping.needle, note == needle.touchNote {
             needleTouched = pressed
             return
         }
