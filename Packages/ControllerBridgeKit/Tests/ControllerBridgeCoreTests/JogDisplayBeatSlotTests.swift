@@ -15,9 +15,10 @@ struct JogDisplayBeatSlotTests {
         var contents: [JogDisplayContent] = []
     }
 
-    static func attach(_ rig: Rig) -> (Port, Drawn) {
+    static func attach(_ rig: Rig, loading: Bool = false) -> (Port, Drawn) {
         let port = Port(), drawn = Drawn()
-        let driver = JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1, renderBeat: { content, beat in
+        let driver = JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1,
+                                      renderLoading: loading ? { [9, 9, 9, 255] } : nil, renderBeat: { content, beat in
             drawn.beats.append(beat)
             drawn.contents.append(content)
             return [UInt8(beat), 0, 0, 255]
@@ -263,5 +264,41 @@ struct JogDisplayBeatSlotTests {
         }
         #expect(tries == 3)
         #expect(Self.uploadSlots(port) == [3])
+    }
+
+    /// The 0A that leads each upload (the one just before its 0C) in `port`'s WD messages: its mask and slot.
+    static func leads(_ port: Port) -> [[UInt8]] {
+        port.wd.indices.filter { $0 > 0 && port.wd[$0].count > 6 && port.wd[$0][6] == 0x0C }
+            .map { port.wd[$0 - 1] }.filter { $0.count > 11 && $0[6] == 0x0A }.map { [$0[9], $0[11]] }
+    }
+
+    @Test("With a loading graphic: slot 5 goes up first, then each beat upload leads with slot 5 shown (not the blank), so a switch never goes black")
+    func loadingLeads() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig, loading: true)
+        Self.clock(rig, 3)
+        rig.coordinator.start()
+        var slots: [UInt8] = []
+        var leads: [[UInt8]] = []
+        for _ in 0..<5 {
+            slots += Self.uploadSlots(port)
+            leads += Self.leads(port).prefix(1)
+            Self.answer(rig, port)
+        }
+        #expect(slots == [5, 3, 4, 1, 2])
+        #expect(leads == [[0x01, 0x06], [0x0D, 0x05], [0x0D, 0x05], [0x0D, 0x05], [0x0D, 0x05]])
+    }
+
+    @Test("A reconnect (the switch off and on) uploads the loading graphic to slot 5 again, first")
+    func loadingAfterReconnect() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig, loading: true)
+        Self.clock(rig, 1)
+        rig.coordinator.start()
+        for _ in 0..<5 { Self.answer(rig, port) }
+        rig.coordinator.setJogDisplay(enabled: false)
+        port.wd.removeAll()
+        rig.coordinator.setJogDisplay(enabled: true)
+        #expect(Self.uploadSlots(port) == [5])
     }
 }
