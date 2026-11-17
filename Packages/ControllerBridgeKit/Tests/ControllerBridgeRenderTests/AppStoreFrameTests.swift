@@ -5,29 +5,26 @@ import Testing
 
 /// The Mac App Store screenshot frame (#29): 2880×1800, a caption band across the top, and the shot fitted below it
 /// inside 120 px margins, centered, never stretched out of its shape. Worked by hand: the shot area is x 120…2760,
-/// y 280…1680 (2640×1400).
+/// y 360…1680 (2640×1320, 2:1).
 @Suite("App Store frame layout")
 struct AppStoreFrameTests {
-    @Test("A shot of the area's own shape fills it: 1320×700 at 2x is 120, 280, 2640×1400")
+    @Test("A shot of the area's own shape fills it: 1320×660 at 2x is 120, 360, 2640×1320")
     func sameShape() {
-        let layout = AppStoreFrame.layout(shot: CGSize(width: 1320, height: 700))
-        #expect(layout.shot == CGRect(x: 120, y: 280, width: 2640, height: 1400))
-        #expect(layout.caption == CGRect(x: 120, y: 0, width: 2640, height: 280))
+        let layout = AppStoreFrame.layout(shot: CGSize(width: 1320, height: 660))
+        #expect(layout.shot == CGRect(x: 120, y: 360, width: 2640, height: 1320))
+        #expect(layout.caption == CGRect(x: 120, y: 0, width: 2640, height: 360))
     }
 
-    @Test("A tall panel (720×1056) fits the height, 1400, and is centered: width 954.5…, x 962.7…")
+    @Test("A tall panel (720×1056) fits the height, 1320, and is centered: 990, 360, 900×1320")
     func tall() {
-        let shot = AppStoreFrame.layout(shot: CGSize(width: 720, height: 1056)).shot
-        #expect(abs(shot.height - 1400) < 0.001)
-        #expect(abs(shot.width - 720 * 1400 / 1056.0) < 0.001)
-        #expect(abs(shot.minX - (1440 - 720 * 1400 / 1056.0 / 2)) < 0.001)
-        #expect(shot.minY == 280)
+        #expect(AppStoreFrame.layout(shot: CGSize(width: 720, height: 1056)).shot == CGRect(x: 990, y: 360, width: 900, height: 1320))
     }
 
-    @Test("A wide shot (2000×800, wider than the area) fits the width: 120, 452, 2640×1056")
+    @Test("A wide shot (2500×800, wider than the area) fits the width: 120, 597.6, 2640×844.8")
     func wide() {
-        let shot = AppStoreFrame.layout(shot: CGSize(width: 2000, height: 800)).shot
-        #expect(shot == CGRect(x: 120, y: 452, width: 2640, height: 1056))
+        let shot = AppStoreFrame.layout(shot: CGSize(width: 2500, height: 800)).shot
+        #expect(shot.minX == 120 && shot.width == 2640)
+        #expect(abs(shot.height - 844.8) < 0.001 && abs(shot.minY - 597.6) < 0.001)
     }
 }
 
@@ -76,7 +73,7 @@ struct AppStoreFrameImageTests {
                                                         ground: Self.ground, text: CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)))
         let large = Pixels(frames.large)
         #expect(large.pixel(10, 10) == [UInt8(0x0B), 0x0B, 0x0B])
-        // A 100×50 shot is 2:1, wider than the area: width 2640, height 1320, y 320…1640.
+        // A 100×50 shot is 2:1, the area's own shape: x 120…2760, y 360…1680.
         #expect(large.pixel(1440, 980) == [UInt8(255), 0, 0])
         #expect(large.pixel(1440, 300) == [UInt8(0x0B), 0x0B, 0x0B])
         let band = (0..<280).flatMap { y in stride(from: 120, to: 2760, by: 8).map { large.pixel($0, y) } }
@@ -123,16 +120,22 @@ struct AppStoreFrameSubtitleTests {
         rows.contains { y in stride(from: 120, to: 2760, by: 6).contains { x in pixels.pixel(x, y).allSatisfy { $0 > 120 } } }
     }
 
-    @Test("With a subtitle there's ink low in the band (y 200…270); without one, none there")
+    @Test("With a subtitle there's ink low in the band (y 240…300); without one, none there")
     func subtitle() throws {
-        #expect(Self.ink(try Self.frame(subtitle: "A built-in demo controller shows the bridge at work."), rows: 200..<270))
-        #expect(!Self.ink(try Self.frame(subtitle: nil), rows: 200..<270))
+        #expect(Self.ink(try Self.frame(subtitle: "A built-in demo controller shows the bridge at work."), rows: 240..<300))
+        #expect(!Self.ink(try Self.frame(subtitle: nil), rows: 240..<300))
     }
 
-    @Test("A 2 px hairline 3 px outside the shot (red 100×50 starts at y 320: rows 316–317) differs from the ground")
+    @Test("A 2 px hairline 3 px outside the shot (red 100×50 starts at y 360: rows 356–357) differs from the ground")
     func edge() throws {
         let pixels = try Self.frame(subtitle: nil)
-        #expect(pixels.pixel(1440, 317) != [UInt8(0x0B), 0x0B, 0x0B])
-        #expect(pixels.pixel(1440, 310) == [UInt8(0x0B), 0x0B, 0x0B])
+        #expect(pixels.pixel(1440, 357) != [UInt8(0x0B), 0x0B, 0x0B])
+        #expect(pixels.pixel(1440, 350) == [UInt8(0x0B), 0x0B, 0x0B])
+    }
+
+    @Test("The frame's faces are the real Geist the Render target bundles, not a fallback", arguments: AppStoreFrame.faces)
+    func faces(_ name: String) {
+        _ = AppStoreFrame.layout(shot: CGSize(width: 1, height: 1))
+        #expect(AppStoreFrame.resolves(name))
     }
 }

@@ -1,11 +1,21 @@
 // The Mac App Store screenshot frame (#29): a 2880×1800 canvas (16:10, Apple's largest Mac size) with a caption band
 // across the top and the app's snapshot fitted below it. Downscaled once to 1440×900 for the smaller size.
 import CoreGraphics
+import CoreText
 
 public enum AppStoreFrame {
     public static let canvas = CGSize(width: 2880, height: 1800)
     static let margin: CGFloat = 120
-    static let captionHeight: CGFloat = 280
+    static let captionHeight: CGFloat = 360
+
+    /// The faces the frame draws in: Geist Bold for the caption, Medium for the subtitle, both bundled with this target.
+    public static let faces = ["Geist-Bold", "Geist-Medium"]
+
+    /// Whether `name` resolves to that face itself, not CoreText's quiet fallback.
+    static func resolves(_ name: String) -> Bool {
+        _ = JogDisplayRenderer.fontsRegistered
+        return CTFontCopyPostScriptName(CTFontCreateWithName(name as CFString, 12, nil)) as String == name
+    }
 
     /// Where the caption and the shot go, top-left origin. The shot keeps its shape: as large as fits the area below
     /// the caption inside the margins, centered there.
@@ -44,7 +54,7 @@ extension AppStoreFrame {
             context.setStrokeColor(text.copy(alpha: 0.18) ?? text)
             context.setLineWidth(2)
             context.stroke(placed.insetBy(dx: -3, dy: -3))
-            // The caption, and under it the subtitle, centered in the band (top-left y: title 110, subtitle 225; alone,
+            // The caption, and under it the subtitle, centered in the band (top-left y: title 130, subtitle 260; alone,
             // the title is centered).
             func centered(_ string: String, font name: String, size: CGFloat, color: CGColor, at y: CGFloat) {
                 let font = CTFontCreateWithName(name as CFString, size, nil)
@@ -57,8 +67,8 @@ extension AppStoreFrame {
                                                y: canvas.height - y - (CTFontGetAscent(font) - CTFontGetDescent(font)) / 2)
                 CTLineDraw(line, context)
             }
-            centered(caption, font: "Geist-SemiBold", size: 92, color: text, at: subtitle == nil ? layout.caption.midY : 110)
-            if let subtitle { centered(subtitle, font: "Geist-Medium", size: 46, color: text.copy(alpha: 0.72) ?? text, at: 225) }
+            centered(caption, font: faces[0], size: 92, color: text, at: subtitle == nil ? layout.caption.midY : 130)
+            if let subtitle { centered(subtitle, font: faces[1], size: 46, color: text.copy(alpha: 0.72) ?? text, at: 260) }
         }) else { return nil }
         let half = CGSize(width: canvas.width / 2, height: canvas.height / 2)
         guard let small = draw(size: half, { context in
