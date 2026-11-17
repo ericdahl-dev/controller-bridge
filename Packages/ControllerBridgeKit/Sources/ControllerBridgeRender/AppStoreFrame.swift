@@ -28,7 +28,8 @@ import Foundation
 extension AppStoreFrame {
     /// The frame at 2880×1800 and, downscaled once from it, 1440×900: `ground` all round, `caption` centered in Geist
     /// SemiBold in the band, `shot` where the layout puts it. Flat RGB, no alpha. Nil if CoreGraphics can't draw.
-    public static func images(shot: CGImage, caption: String, ground: CGColor, text: CGColor) -> (large: CGImage, small: CGImage)? {
+    public static func images(shot: CGImage, caption: String, subtitle: String? = nil, ground: CGColor,
+                              text: CGColor) -> (large: CGImage, small: CGImage)? {
         _ = JogDisplayRenderer.fontsRegistered
         guard let large = draw(size: canvas, { context in
             context.setFillColor(ground)
@@ -36,17 +37,28 @@ extension AppStoreFrame {
             let layout = layout(shot: CGSize(width: shot.width, height: shot.height))
             context.interpolationQuality = .high
             // Top-left layout into CoreGraphics' bottom-left space.
-            context.draw(shot, in: CGRect(x: layout.shot.minX, y: canvas.height - layout.shot.maxY,
-                                          width: layout.shot.width, height: layout.shot.height))
-            let font = CTFontCreateWithName("Geist-SemiBold" as CFString, 92, nil)
-            let line = CTLineCreateWithAttributedString(NSAttributedString(string: caption, attributes: [
-                kCTFontAttributeName as NSAttributedString.Key: font,
-                kCTForegroundColorAttributeName as NSAttributedString.Key: text,
-            ]))
-            let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
-            let baseline = canvas.height - layout.caption.midY - (CTFontGetAscent(font) - CTFontGetDescent(font)) / 2
-            context.textPosition = CGPoint(x: layout.caption.midX - width / 2, y: baseline)
-            CTLineDraw(line, context)
+            let placed = CGRect(x: layout.shot.minX, y: canvas.height - layout.shot.maxY,
+                                width: layout.shot.width, height: layout.shot.height)
+            context.draw(shot, in: placed)
+            // A hairline round the shot, so a shot on its own ground still has an edge.
+            context.setStrokeColor(text.copy(alpha: 0.18) ?? text)
+            context.setLineWidth(2)
+            context.stroke(placed.insetBy(dx: -3, dy: -3))
+            // The caption, and under it the subtitle, centered in the band (top-left y: title 110, subtitle 225; alone,
+            // the title is centered).
+            func centered(_ string: String, font name: String, size: CGFloat, color: CGColor, at y: CGFloat) {
+                let font = CTFontCreateWithName(name as CFString, size, nil)
+                let line = CTLineCreateWithAttributedString(NSAttributedString(string: string, attributes: [
+                    kCTFontAttributeName as NSAttributedString.Key: font,
+                    kCTForegroundColorAttributeName as NSAttributedString.Key: color,
+                ]))
+                let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+                context.textPosition = CGPoint(x: layout.caption.midX - width / 2,
+                                               y: canvas.height - y - (CTFontGetAscent(font) - CTFontGetDescent(font)) / 2)
+                CTLineDraw(line, context)
+            }
+            centered(caption, font: "Geist-SemiBold", size: 92, color: text, at: subtitle == nil ? layout.caption.midY : 110)
+            if let subtitle { centered(subtitle, font: "Geist-Medium", size: 46, color: text.copy(alpha: 0.72) ?? text, at: 225) }
         }) else { return nil }
         let half = CGSize(width: canvas.width / 2, height: canvas.height / 2)
         guard let small = draw(size: half, { context in

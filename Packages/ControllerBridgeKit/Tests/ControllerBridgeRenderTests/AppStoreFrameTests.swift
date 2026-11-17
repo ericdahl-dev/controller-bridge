@@ -106,3 +106,33 @@ struct AppStoreFrameGroundTests {
         #expect(ground.components?.prefix(3).map { ($0 * 255).rounded() } == [255, 0, 0])
     }
 }
+
+/// As the 1.0 set looked (#29): a subtitle line under the caption, and a hairline round the shot so a shot on its own
+/// ground still has an edge.
+@Suite("App Store frame subtitle and edge")
+struct AppStoreFrameSubtitleTests {
+    static func frame(subtitle: String?) throws -> AppStoreFrameImageTests.Pixels {
+        let frames = try #require(AppStoreFrame.images(shot: AppStoreFrameImageTests.red(), caption: "Try it with no hardware",
+                                                        subtitle: subtitle, ground: AppStoreFrameImageTests.ground,
+                                                        text: CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)))
+        return AppStoreFrameImageTests.Pixels(frames.large)
+    }
+
+    /// Whether rows `rows` of the band hold light ink.
+    static func ink(_ pixels: AppStoreFrameImageTests.Pixels, rows: Range<Int>) -> Bool {
+        rows.contains { y in stride(from: 120, to: 2760, by: 6).contains { x in pixels.pixel(x, y).allSatisfy { $0 > 120 } } }
+    }
+
+    @Test("With a subtitle there's ink low in the band (y 200…270); without one, none there")
+    func subtitle() throws {
+        #expect(Self.ink(try Self.frame(subtitle: "A built-in demo controller shows the bridge at work."), rows: 200..<270))
+        #expect(!Self.ink(try Self.frame(subtitle: nil), rows: 200..<270))
+    }
+
+    @Test("A 2 px hairline 3 px outside the shot (red 100×50 starts at y 320: rows 316–317) differs from the ground")
+    func edge() throws {
+        let pixels = try Self.frame(subtitle: nil)
+        #expect(pixels.pixel(1440, 317) != [UInt8(0x0B), 0x0B, 0x0B])
+        #expect(pixels.pixel(1440, 310) == [UInt8(0x0B), 0x0B, 0x0B])
+    }
+}
