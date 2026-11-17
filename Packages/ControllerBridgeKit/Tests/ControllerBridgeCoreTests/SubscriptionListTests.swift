@@ -4,11 +4,12 @@ import Testing
 /// The one list of Syndicate OSC FEEDBACK subscriptions (#211): the setup guide shows it and the check judges it.
 @Suite("Subscription list")
 struct SubscriptionListTests {
-    @Test("The eight, then BarRamp (#165), in the setup guide's order, by the names Syndicate's OSC FEEDBACK screen uses")
+    @Test("The eight, then BarRamp (#165), then the mixer's (#207), in the setup guide's order, by Syndicate's names")
     func names() {
         #expect(Subscription.allCases.map(\.syndicateName) == [
             "Playing", "PlayPending", "Loaded and TrackInfo", "Position/Progress", "TempoSlider and TempoSliderEnabled", "Cues",
             "BPM and Sync", "Loop", "BarRamp",
+            "Volume", "Trim", "Low and Mid and High", "cut and res and width", "Mute and Solo and Cue", "Meter",
         ])
         #expect(Subscription.always == [.playing, .playPending, .loaded, .progress, .tempoSlider, .cues, .sync, .loop])
     }

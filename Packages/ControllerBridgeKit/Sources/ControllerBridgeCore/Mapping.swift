@@ -17,9 +17,11 @@ public struct Mapping: Equatable, Sendable, Codable {
     public var leds: LEDs
     /// What the pads play beyond their notes (#196): the roll each pad plays in Roll mode.
     public var pads: Pads
+    /// The mixer section (#207), for controllers that have one. Nil on the LC6000.
+    public var mixer: Mixer?
 
     enum CodingKeys: String, CodingKey {
-        case midi, osc, deck, jog, pitch, needle, browse, notes, leds, pads
+        case midi, osc, deck, jog, pitch, needle, browse, notes, leds, pads, mixer
     }
 
     /// `pads` may be left out: the LC6000's roll sizes.
@@ -35,6 +37,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         notes = try c.decode(Notes.self, forKey: .notes)
         leds = try c.decode(LEDs.self, forKey: .leds)
         pads = try c.decodeIfPresent(Pads.self, forKey: .pads) ?? Pads()
+        mixer = try c.decodeIfPresent(Mixer.self, forKey: .mixer)
         if pads.modeSelect == .cycle, notes.buttons["mode_cycle"] == nil {
             throw ShapeError("pads: mode_select is cycle, but notes has no mode_cycle button")
         }
@@ -647,4 +650,111 @@ public struct Mapping: Equatable, Sendable, Codable {
 /// A mapping the bridge can't run with. Each problem names the key and what was expected.
 public enum MappingError: Error, Equatable {
     case invalid([String])
+}
+
+extension Mapping {
+    /// A fader or knob: one CC (7-bit) or an MSB/LSB pair (14-bit), as the pitch fader (#195, #207).
+    public struct Control: Equatable, Sendable, Codable {
+        public var bits: Int
+        public var msbCC: Int
+        public var lsbCC: Int?
+
+        public init(bits: Int, msbCC: Int, lsbCC: Int?) {
+            self.bits = bits
+            self.msbCC = msbCC
+            self.lsbCC = lsbCC
+        }
+
+        enum CodingKeys: String, CodingKey { case bits, msbCC = "msb_cc", lsbCC = "lsb_cc" }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            bits = try c.decodeIfPresent(Int.self, forKey: .bits) ?? 14
+            msbCC = try c.decode(Int.self, forKey: .msbCC)
+            lsbCC = try c.decodeIfPresent(Int.self, forKey: .lsbCC)
+            if bits == 14, lsbCC == nil {
+                let name = c.codingPath.last.map { "mixer.\($0.stringValue)" } ?? "mixer"
+                throw ShapeError("\(name): lsb_cc is missing (or set bits to 7)")
+            }
+        }
+    }
+
+    /// The mixer section (#207). Every control is optional and on the controller entry's MIDI channel; the mixer
+    /// channel is the deck the entry drives.
+    public struct Mixer: Equatable, Sendable, Codable {
+        public var volume: Control?
+        public var trim: Control?
+        public var eqHigh: Control?
+        public var eqMid: Control?
+        public var eqLow: Control?
+        public var filter: Control?
+        public var filterRes: Control?
+        public var filterWidth: Control?
+        /// The headphone cue, mute and solo buttons: a note each, whose LED follows Syndicate.
+        public var cueNote: Int?
+        public var muteNote: Int?
+        public var soloNote: Int?
+        public var meter: Meter?
+        /// As the pitch fader's (#22): after Syndicate reports a value the controller didn't send, a control waits
+        /// until it meets it.
+        public var pickup: Bool
+        public var pickupTolerance: Double
+
+        /// The channel's VU meter LEDs: one CC whose value lights a number of segments.
+        public struct Meter: Equatable, Sendable, Codable {
+            public var cc: Int
+            /// The CC value for 0, 1, 2… segments lit, lowest first.
+            public var steps: [Int]
+            /// The value for a clip (Syndicate's Meter above 1.0); nil keeps the top step.
+            public var clip: Int?
+            /// How long a peak holds before the meter falls back, in milliseconds.
+            public var holdMs: Int
+            /// The most updates a second, per channel.
+            public var rateHz: Int
+
+            public init(cc: Int, steps: [Int], clip: Int?, holdMs: Int, rateHz: Int) {
+                self.cc = cc
+                self.steps = steps
+                self.clip = clip
+                self.holdMs = holdMs
+                self.rateHz = rateHz
+            }
+
+            enum CodingKeys: String, CodingKey { case cc, steps, clip, holdMs = "hold_ms", rateHz = "rate_hz" }
+
+            public init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                cc = try c.decode(Int.self, forKey: .cc)
+                steps = try c.decode([Int].self, forKey: .steps)
+                clip = try c.decodeIfPresent(Int.self, forKey: .clip)
+                holdMs = try c.decodeIfPresent(Int.self, forKey: .holdMs) ?? 300
+                rateHz = try c.decodeIfPresent(Int.self, forKey: .rateHz) ?? 30
+            }
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case volume, trim, eqHigh = "eq_high", eqMid = "eq_mid", eqLow = "eq_low", filter
+            case filterRes = "filter_res", filterWidth = "filter_width"
+            case cueNote = "cue_note", muteNote = "mute_note", soloNote = "solo_note", meter, pickup
+            case pickupTolerance = "pickup_tolerance"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            volume = try c.decodeIfPresent(Control.self, forKey: .volume)
+            trim = try c.decodeIfPresent(Control.self, forKey: .trim)
+            eqHigh = try c.decodeIfPresent(Control.self, forKey: .eqHigh)
+            eqMid = try c.decodeIfPresent(Control.self, forKey: .eqMid)
+            eqLow = try c.decodeIfPresent(Control.self, forKey: .eqLow)
+            filter = try c.decodeIfPresent(Control.self, forKey: .filter)
+            filterRes = try c.decodeIfPresent(Control.self, forKey: .filterRes)
+            filterWidth = try c.decodeIfPresent(Control.self, forKey: .filterWidth)
+            cueNote = try c.decodeIfPresent(Int.self, forKey: .cueNote)
+            muteNote = try c.decodeIfPresent(Int.self, forKey: .muteNote)
+            soloNote = try c.decodeIfPresent(Int.self, forKey: .soloNote)
+            meter = try c.decodeIfPresent(Meter.self, forKey: .meter)
+            pickup = try c.decodeIfPresent(Bool.self, forKey: .pickup) ?? true
+            pickupTolerance = try c.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? 0.02
+        }
+    }
 }

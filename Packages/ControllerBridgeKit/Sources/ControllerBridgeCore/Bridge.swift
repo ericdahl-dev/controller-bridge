@@ -67,7 +67,7 @@ final class Bridge {
     private(set) var outputFailed = false
     private let osc: any OSCSender
     let clock: any Clock
-    private let root: String
+    let root: String
     /// The mapping's MIDI channel, 0-based.
     let channel: UInt8
     /// Button names by note, from the mapping.
@@ -146,6 +146,8 @@ final class Bridge {
     var feedbackStale = false
     /// An LED sweep (#26) owns the controller's LEDs.
     var ledsHeld = false
+    /// The mixer section's state (#207): pair halves, what was sent, what Syndicate reported, and the meter.
+    var mixerState = MixerState()
     /// The capture window is recording this controller (#186, #187): its LEDs are the LED test's, so the bridge paints
     /// none until the capture ends and it repaints.
     var ledsCaptured = false
@@ -245,6 +247,7 @@ final class Bridge {
     }
 
     private func handleNote(_ note: Int, pressed: Bool) {
+        if mixerNote(note, pressed: pressed) { return }
         if padNote(note, pressed: pressed) { return }
         if note == mapping.needle.touchNote {
             needleTouched = pressed
@@ -266,6 +269,7 @@ final class Bridge {
     }
 
     private func handleCC(_ controller: Int, value: UInt8) {
+        if mixerCC(controller, value: value) { return }
         guard let name = ccNames[controller], let handler = Self.ccHandlers[name] else { return }
         handler(self)(value)
     }
@@ -279,6 +283,11 @@ final class Bridge {
         if address == (root + "ColorPalette").lowercased() { return colorPalette(message.arguments) }
         // The master clock is one for all decks too.
         if address == (root + "Header/Clock").lowercased() { return headerClock(message.arguments) }
+        // The mixer channel of this deck (#207).
+        if mapping.mixer != nil, let mixer = MixerOSC.parse(message.address, root: root) {
+            if mixer.channel == mapping.deck.number { mixerFeedback(mixer.value, message.arguments) }
+            return
+        }
         let deckPrefix = (root + "Deck/\(mapping.deck.number)/").lowercased()
         guard address.hasPrefix(deckPrefix) else { return }
         let key = address.dropFirst(deckPrefix.count)
@@ -337,6 +346,7 @@ final class Bridge {
         loopLEDs()
         padLEDs()
         led(mapping.leds.pitchCenter, pitchCenterVelocity)
+        mixerLEDs()
     }
 
     /// A button LED's full, dim and off velocities, from the profile (#194).
@@ -412,6 +422,14 @@ final class Bridge {
             // The Coordinator treats this as an unplug once the current event is handled.
             outputFailed = true
         }
+    }
+
+    /// An LED driven by a CC, such as a VU meter (#207): straight out, as the caller limits how often. False when held,
+    /// off or not shown, so nothing went out.
+    func ledCC(_ controller: UInt8, _ value: UInt8) -> Bool {
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, let output else { return false }
+        do { try output.send(.controlChange(channel: channel, controller: controller, value: value)) } catch { outputFailed = true }
+        return true
     }
 
     /// A pad's LED (#224): on the pads' own channel when the profile gives one, else like any other LED.

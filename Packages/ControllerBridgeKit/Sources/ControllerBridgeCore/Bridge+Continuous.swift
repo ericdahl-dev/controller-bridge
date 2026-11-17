@@ -173,6 +173,7 @@ extension Bridge {
             endBend()
         }
         timingTick()
+        meterTick()
     }
 
     func endBend() {

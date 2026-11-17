@@ -84,10 +84,12 @@ extension Mapping {
         for path in leafPaths(merged) {
             guard case .number(let n, _)? = value(at: path, in: merged) else { continue }
             let pattern = path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
-            if pattern.hasPrefix("notes.") || pattern == "needle.touch_note" {
+            if pattern.hasPrefix("notes.") || pattern == "needle.touch_note" || mixerNotes.map({ "mixer.\($0)" }).contains(pattern) {
                 notes.append((path, n))
             } else if ["jog.msb_cc", "jog.lsb_cc", "pitch.msb_cc", "pitch.lsb_cc", "needle.msb_cc", "needle.lsb_cc", "browse.select_turn_cc",
-                       "browse.auto_loop_size_cc", "jog.relative_cc", "jog.relative_edge_cc"].contains(pattern) {
+                       "browse.auto_loop_size_cc", "jog.relative_cc", "jog.relative_edge_cc"].contains(pattern)
+                // A mixer fader's CCs are inputs too; the meter's CC is an output, so it can't clash with one (#207).
+                || mixerControls.contains(where: { pattern == "mixer.\($0).msb_cc" || pattern == "mixer.\($0).lsb_cc" }) {
                 ccs.append((path, n))
             }
         }
@@ -240,7 +242,21 @@ extension Mapping {
         return .object(pairs.filter { $0.key != "pads" && $0.key != "shifted" })
     }
 
+    /// The mixer's faders and knobs (#207), and every key the section takes.
+    private static let mixerControls = ["volume", "trim", "eq_high", "eq_mid", "eq_low", "filter", "filter_res", "filter_width"]
+    private static let mixerNotes = ["cue_note", "mute_note", "solo_note"]
+    private static let mixerSchema: OrderedJSON = {
+        let int = OrderedJSON.number(0, isInteger: true)
+        let control = OrderedJSON.object([("msb_cc", int), ("lsb_cc", int), ("bits", int)])
+        return .object(mixerControls.map { ($0, control) } + mixerNotes.map { ($0, int) } + [
+            ("meter", .object([("cc", int), ("steps", .array([int])), ("clip", int), ("hold_ms", int), ("rate_hz", int)])),
+            ("pickup", .bool(true)), ("pickup_tolerance", .number(0.02, isInteger: false)),
+        ])
+    }()
+
     private static let optionalKeys: [String: OrderedJSON] = [
+        // The mixer section (#207): the LC6000 has none.
+        "mixer": mixerSchema,
         "jog.relative_cc": .number(0, isInteger: true),
         "jog.relative_edge_cc": .number(0, isInteger: true),
         // One cycling pad-mode button (#198): its note, and its LED's velocity per mode.
@@ -292,7 +308,14 @@ extension Mapping {
             "osc.feedback_quiet_ms": 0...60000, "osc.feedback_answer_ms": 0...60000, "leds.pulse_ms": 0...60000,
             "jog.bend_release_ms": 1...5000,
             "pitch.dead_zone": 0...1, "pitch.pickup_tolerance": 0...1,
+            "mixer.cue_note": 0...127, "mixer.mute_note": 0...127, "mixer.solo_note": 0...127,
+            "mixer.meter.cc": 0...127, "mixer.meter.steps[]": 0...127, "mixer.meter.clip": 0...127,
+            "mixer.meter.hold_ms": 0...10000, "mixer.meter.rate_hz": 1...120, "mixer.pickup_tolerance": 0...1,
         ]
+        for control in mixerControls {
+            table["mixer.\(control).msb_cc"] = 0...127
+            table["mixer.\(control).lsb_cc"] = 0...127
+        }
         for color in ["ring_color", "roll_pad_color", "loop_pad_color"] { table["leds.\(color)[]"] = 0...255 }
         return table
     }()
@@ -300,9 +323,11 @@ extension Mapping {
     private static let colors: Set<String> = ["leds.ring_color", "leds.roll_pad_color", "leds.loop_pad_color", "leds.color_table[].rgb"]
 
     /// Numbers that are one of a few values, not a range (#195).
-    private static let numberChoices: [String: [Double]] = [
-        "pitch.bits": [7, 14],
-    ]
+    private static let numberChoices: [String: [Double]] = {
+        var table: [String: [Double]] = ["pitch.bits": [7, 14]]
+        for control in mixerControls { table["mixer.\(control).bits"] = [7, 14] }
+        return table
+    }()
 
     private static let choices: [String: [String]] = [
         "leds.beat_pulse": LEDs.BeatPulse.allRawValues,
@@ -330,6 +355,8 @@ extension Mapping {
             return "expected 3 values, got \(items.count)"
         case .array(let items) where pattern == "leds.color_table" && items.isEmpty:
             return "expected at least one entry"
+        case .array(let items) where pattern == "mixer.meter.steps" && items.isEmpty:
+            return "expected at least one value"
         case .array(let items) where pattern == "notes.pads" && !(1...16).contains(items.count):
             // 4, 8 or 16 pads, or anything between (#196).
             return "expected 1-16 pads, got \(items.count)"
