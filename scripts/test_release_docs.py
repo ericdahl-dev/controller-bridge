@@ -25,10 +25,11 @@ class ReleaseChecklist(unittest.TestCase):
             ("4", "CHANGELOG"),
             ("5", "TestFlight What to Test"),
             ("6", "Internal build"),
-            ("7", "External build"),
-            ("8", "Site"),
-            ("9", "App Store listing"),
-            ("10", "After the release"),
+            ("7", "External build and a short beta"),
+            ("8", "App Store listing"),
+            ("9", "Submit 1.1.0 to the App Store"),
+            ("10", "Site"),
+            ("11", "After the release"),
         ])
 
     def test_version_and_tags(self):
@@ -37,9 +38,17 @@ class ReleaseChecklist(unittest.TestCase):
         self.assertIn("[external]", doc)
         self.assertIn("## 1.1.0", doc)  # the ready-to-paste CHANGELOG block
 
+    def test_app_store_submission(self):
+        doc = read("docs/RELEASE-1.1.md")
+        submit = doc[doc.index("## 9. Submit"):doc.index("## 10.")]
+        for phrase in ["Free", "#29", "docs/APP_REVIEW.md", "Data Not Collected", "the user submits"]:
+            self.assertIn(phrase, submit)
+        beta = doc[doc.index("## 7. External"):doc.index("## 8.")]
+        self.assertIn("24–48 hours", beta)
+
     def test_site_step_links_the_held_pr(self):
         doc = read("docs/RELEASE-1.1.md")
-        site = doc[doc.index("## 8. Site"):doc.index("## 9.")]
+        site = doc[doc.index("## 10. Site"):doc.index("## 11.")]
         self.assertIn("https://github.com/ericdahl-dev/deckbridge/pull/300", site)
 
 

@@ -75,15 +75,35 @@ The LC6000's jog display shows the deck (#165).
 - The user installs it from TestFlight and runs the What to Test list once, on the unit.
 - [ ] Internal build checked.
 
-## 7. External build
+## 7. External build and a short beta
 
 - **Who:** the CoS, with the user's OK. **Gate:** step 6.
 - Send the same build to the external **Syndicate** group and Beta App Review, by #244's path. Run the Release workflow
   by hand with version `1.1.0`, the build number from step 6, and **external** ticked. (A new tag whose message contains
   `[external]` does the same, for a new build.)
-- [ ] Submitted for Beta App Review; approved.
+- Once Beta App Review approves it, run a short external beta: **24–48 hours**, with no blocking crash reports (check
+  TestFlight's crashes and feedback). A blocking crash goes back to step 3's fix loop with a new build.
+- [ ] Approved, and the beta closed with nothing blocking.
 
-## 8. Site
+## 8. App Store listing
+
+- **Who:** agent1 (#29). **Gate:** step 3 (the screenshots show the display switch on).
+- The Mac App Store listing's text and screenshots for 1.1.0.
+- [ ] Ready in App Store Connect.
+
+## 9. Submit 1.1.0 to the App Store
+
+- **Who:** the user submits it in App Store Connect; the CoS prepares it. **Gate:** steps 7 and 8.
+- DeckBridge goes to the Mac App Store with 1.1.0:
+  - **Price:** Free.
+  - **Listing and screenshots:** from #29 (step 8).
+  - **Review notes:** `docs/APP_REVIEW.md`, pasted into App Review Information › Notes.
+  - **App Privacy:** "Data Not Collected".
+  - **Build:** the 1.1.0 build the beta ran.
+- Then the user submits it in App Store Connect, and the release waits for App Review.
+- [ ] Submitted; approved; released.
+
+## 10. Site
 
 - **Who:** agent3. **Gate:** step 6: v1.1.0 is tagged and on TestFlight (release day).
 - The site lives on `main` (#170); Coolify deploys it. agent3's v1.1 site update is held on its own branch, `site-v1.1`, as draft
@@ -92,13 +112,7 @@ The LC6000's jog display shows the deck (#165).
   with `check_site` and the taste-skill gate passing.
 - [ ] Merged and deployed.
 
-## 9. App Store listing
-
-- **Who:** agent1 (#29). **Gate:** step 3 (the screenshots show the display switch on).
-- The Mac App Store listing's text and screenshots for 1.1.0.
-- [ ] Ready in App Store Connect.
-
-## 10. After the release
+## 11. After the release
 
 - Close the v1.1 milestone. v1.2 work resumes: the #207 mixer spike first, then #213 and #260 at the unit.
 - [ ] Done.
