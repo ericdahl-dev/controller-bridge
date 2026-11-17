@@ -117,7 +117,8 @@ struct MixerModule {
 
     /// Every fader and knob waits to meet Syndicate again (#321): after a capture swept them, or a replug.
     mutating func rearm(mixer: Mapping.Mixer?) {
-        for (kind, _) in mixer.map(Self.controls) ?? [] {
+        let kinds = mixer.map { Self.controls($0).map(\.value) } ?? []
+        for kind in kinds {
             armed.insert(kind)
             position[kind] = nil
             lastSent[kind] = nil
