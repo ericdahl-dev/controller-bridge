@@ -243,6 +243,15 @@ def check_capture_prompts(root, app_prompts):
 VERSION_MENTION = re.compile(r"(?:\b[Vv]ersion|\bDeckBridge) (\d+\.\d+\.\d+)(?![\d.]|\s*\))")
 
 
+# "Coming in v1.1": a feature promised for a version, which can't still be coming once that version ships.
+COMING = re.compile(r"coming in v(\d+(?:\.\d+){1,2})", re.IGNORECASE)
+
+
+def version_tuple(version):
+    parts = [int(p) for p in version.split(".")]
+    return tuple(parts + [0] * (3 - len(parts)))
+
+
 # The web capture's app_version, "web x.y.z" (#190): the site's version too.
 CAPTURE_PAGE_JS = "capture/capture-page.js"
 CAPTURE_VERSION = re.compile(r'APP_VERSION\s*=\s*"web (\d+\.\d+\.\d+)"')
@@ -296,6 +305,10 @@ def problems(root, app_prompts=None):
             if PLACEHOLDER.search(text):
                 out.append(f"{file}: still has a TODO(user) TestFlight placeholder")
             if app_version:
+                shipped = version_tuple(app_version)
+                for coming in sorted(set(m.lower() for m in COMING.findall(text))):
+                    if version_tuple(coming) <= shipped:
+                        out.append(f"{file}: says coming in v{coming}, but the app is {app_version}")
                 for mentioned in sorted(set(VERSION_MENTION.findall(text)) - {app_version}):
                     out.append(f"{file}: says DeckBridge {mentioned}, but the app's softwareVersion is {app_version}")
             if file.endswith(".html"):

@@ -28,7 +28,7 @@ LC6000 PRIME <--MIDI LEDs-- DeckBridge  <--OSC feedback, port 9096--  Syndicate
 - **Demo controller:** try DeckBridge without hardware. A scripted controller plays against a simulated session.
 - **A second controller:** a second LC6000 can drive another deck.
 - **Syndicate on another Mac:** DeckBridge can reach Syndicate over the local network.
-- **Coming in v1.1:** the jog-wheel display showing art in real time.
+- **New in v1.1:** the jog-wheel display shows the deck's track, key and BPM, with Syndicate's master clock around the ring and the deck's own bar in the needle.
 
 ## Requirements
 

@@ -326,6 +326,14 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(stale),
                          ["capture/capture-page.js: writes captures as web 1.0.0, but the app's softwareVersion is 1.0.1"])
 
+    def test_nothing_is_coming_in_a_version_that_has_shipped(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a> <p>Coming in v1.0: art. Coming in v1.2: more.</p>'),
+                          "llms.txt": GOOD["llms.txt"] + "- Jog art, coming in v1.0.1.\n"})
+        self.assertEqual(check_site.problems(root), [
+            "llms.txt: says coming in v1.0.1, but the app is 1.0.1",
+            "support/index.html: says coming in v1.0, but the app is 1.0.1",
+        ])
+
     def test_the_home_page_names_the_apps_version(self):
         root = self.site({"index.html": GOOD["index.html"].replace(APP_LD, "")})
         self.assertEqual(check_site.problems(root), ["index.html: the JSON-LD has no SoftwareApplication softwareVersion"])
