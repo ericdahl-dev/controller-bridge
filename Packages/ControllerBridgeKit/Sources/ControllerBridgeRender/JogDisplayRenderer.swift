@@ -18,17 +18,34 @@ public enum JogDisplayRenderer {
     /// RGBA bytes, row by row, top first, upright: what `JogImage.forUnit` turns and encodes. `litBeat` (1–4) lights
     /// that beat's section; `marker` draws the marker that many turns clockwise from 12 o'clock.
     public static func render(_ content: JogDisplayContent, litBeat: Int? = nil, marker: Double? = nil) -> [UInt8] {
+        drawing { context in
+            draw(content, litBeat: litBeat, in: context)
+            if let marker { drawMarker(turns: marker, in: context) }
+        }
+    }
+
+    /// The loading graphic (#165): design B's ground and unlit ring, no deck info, and "Loading…" in the middle. It
+    /// goes into slot 5 once per connect, and shows while a new card's beat slots upload, instead of a black screen.
+    public static func loadingImage() -> [UInt8] {
+        drawing { context in
+            context.setFillColor(background)
+            context.fill(CGRect(x: 0, y: 0, width: 198, height: 198))
+            ring(litBeat: nil, in: context)
+            line("Loading…", font: "Geist-Medium", size: 18, lineHeight: 1.1, top: 99 - 18 * 1.1 / 2, color: caption, in: context)
+        }
+    }
+
+    /// RGBA rows of a 198×198 image, drawn with a top-left origin and y down, as the rows are stored and the design measures.
+    private static func drawing(_ body: (CGContext) -> Void) -> [UInt8] {
         _ = fontsRegistered
         var pixels = [UInt8](repeating: 0, count: size * size * 4)
         guard let context = CGContext(
             data: &pixels, width: size, height: size, bitsPerComponent: 8, bytesPerRow: size * 4,
             space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return pixels }
-        // Top-left origin, y down, as the rows are stored and as the design measures.
         context.translateBy(x: 0, y: CGFloat(size))
         context.scaleBy(x: 1, y: -1)
-        draw(content, litBeat: litBeat, in: context)
-        if let marker { drawMarker(turns: marker, in: context) }
+        body(context)
         return pixels
     }
 

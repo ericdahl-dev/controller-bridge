@@ -47,4 +47,28 @@ struct JogDisplayRendererTests {
         }
         #expect(Set(images).count == 4)
     }
+
+    /// One pixel of a 198×198 RGBA image, upright: [r, g, b, a].
+    static func pixel(_ rgba: [UInt8], x: Int, y: Int) -> [UInt8] { Array(rgba[(y * 198 + x) * 4..<(y * 198 + x) * 4 + 4]) }
+
+    @Test("The loading graphic (#165, slot 5) is design B's ground and unlit ring with no deck info, and the word in the middle")
+    func loadingImage() {
+        let loading = JogDisplayRenderer.loadingImage()
+        let card = JogDisplayRenderer.uploadImage(Self.contents[1])
+        #expect(loading.count == 198 * 198 * 4)
+        // The ground: a corner, and just inside the ring, are the card's.
+        #expect(Self.pixel(loading, x: 2, y: 2) == Self.pixel(card, x: 2, y: 2))
+        #expect(Self.pixel(loading, x: 99, y: 18) == Self.pixel(card, x: 2, y: 2))
+        // The ring: the middle of each quarter (radius 90, at 45°, 135°, 225° and 315°) is the card's, unlit.
+        for (x, y) in [(163, 35), (163, 163), (35, 163), (35, 35)] {
+            #expect(Self.pixel(loading, x: x, y: y) == Self.pixel(card, x: x, y: y), "\(x),\(y)")
+        }
+        // No deck info: where the card has its deck-color rule, the loading graphic has ground.
+        #expect(Self.pixel(card, x: 99, y: 128) != Self.pixel(card, x: 2, y: 2))
+        #expect(Self.pixel(loading, x: 99, y: 128) == Self.pixel(card, x: 2, y: 2))
+        // The word: some pixels across the middle row are drawn in the text color, not ground.
+        let ground = Self.pixel(card, x: 2, y: 2)
+        #expect((60...138).contains { Self.pixel(loading, x: $0, y: 99) != ground })
+        #expect(loading != card)
+    }
 }
