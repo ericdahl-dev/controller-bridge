@@ -1,6 +1,6 @@
 # DeckBridge
 
-A Mac menu-bar app that lets you use a **Denon LC6000 PRIME** with **[Untitled Audio Syndicate](https://untitledaudiosyndicate.com)** through Syndicate's OSC API, with LED feedback.
+A Mac menu-bar app that lets you use a **Denon LC6000 PRIME** with **[Syndicate](https://untitledaudiosyndicate.com)** by Untitled Audio Syndicate Ltd. through Syndicate's OSC API, with LED feedback.
 
 Syndicate's own MIDI mapping (0.3.7) can't handle the LC6000's 14-bit jog wheel or its 14-bit pitch fader, and it gives LED feedback only to the DDJ-FLX4 and FLX10 ([Syndicate User Guide 0.3.7, section 13.9](https://untitledaudiosyndicate.com/user-guide/index.html#c13-9): 14-bit CC pairs and generic MIDI LED feedback are listed as not supported). The app reads the LC6000's MIDI, converts it, and sends it to Syndicate's fixed OSC addresses. It also listens to Syndicate's OSC feedback to light the controller.
 
