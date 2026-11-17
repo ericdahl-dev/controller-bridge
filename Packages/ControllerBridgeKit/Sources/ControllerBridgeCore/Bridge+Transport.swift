@@ -4,7 +4,10 @@
 extension Bridge {
     func play(_ pressed: Bool) {
         // Play wins over a Shift + pad tap still waiting to be paused (#358).
-        if pressed { endCueJump() }
+        if pressed {
+            endCueJump()
+            restoreQuantize(.jogSeek)
+        }
         if pressed { sendDeck("PlayPause", .int(1)) }
     }
 
