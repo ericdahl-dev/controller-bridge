@@ -87,6 +87,46 @@ public final class JogDisplayDriver {
 
     /// How long an upload may wait for the unit's answers.
     static let timeout = 5.0
+
+    /// The debug trace (#395): every message to the unit and every reply, for the WD work (#165).
+    public var trace: TraceSink?
+    /// When the last SysEx went out on WD, so a reply's trace line says how long it took.
+    private var lastWDSend: Double?
+
+    private func sendWD(_ bytes: [UInt8]) {
+        port?.sendWD(bytes)
+        if bytes.first == 0xF0 { lastWDSend = clock.now }
+        trace?(.jogDisplay, "WD out " + Self.describe(bytes))
+    }
+
+    private func sendController(_ bytes: [UInt8]) {
+        port?.sendController(bytes)
+        trace?(.jogDisplay, "CTL out " + Self.describe(bytes))
+    }
+
+    /// "cmd=0x0A 11 bytes" for the unit's own SysEx (F0, a 5-byte head, the command); anything else as hex.
+    static func describe(_ bytes: [UInt8]) -> String {
+        if bytes.count > 7, bytes[0] == 0xF0, Array(bytes[1...3]) == [0x00, 0x02, 0x0B] {
+            return String(format: "cmd=0x%02X %d bytes", bytes[6], bytes.count)
+        }
+        return bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+    }
+
+    /// "WD in cmd=0x0F status=0x00 +12 ms": a reply's command, its status (the first payload byte, when there is one)
+    /// and the time since the last SysEx sent.
+    private func traceReply(_ bytes: [UInt8]) {
+        guard let trace else { return }
+        var text = "WD in "
+        if bytes.count > 9, bytes[0] == 0xF0, Array(bytes[1...3]) == [0x00, 0x02, 0x0B] {
+            text += String(format: "cmd=0x%02X", bytes[6])
+            let length = Int(bytes[7]) << 7 | Int(bytes[8])
+            if length > 0, bytes.count > 9 { text += String(format: " status=0x%02X", bytes[9]) }
+        } else {
+            text += bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+        }
+        if let lastWDSend { text += " +\(Int(((clock.now - lastWDSend) * 1000).rounded())) ms" }
+        trace(.jogDisplay, text)
+    }
     /// How long after the last ack an upload counts as stored without the commit reply, which the unit sometimes
     /// skips while still showing the image (#165).
     static let commitGrace = 0.3
@@ -135,7 +175,7 @@ public final class JogDisplayDriver {
         slotContent = [:]
         lastMarker = nil
         lastPlayLight = nil
-        for message in JogDisplay.hello { port.sendController(message) }
+        for message in JogDisplay.hello { sendController(message) }
         onEvent?(.connected)
         next()
     }
@@ -148,7 +188,7 @@ public final class JogDisplayDriver {
         lastMarker = nil
         lastPlayLight = nil
         current = nil
-        port?.sendController(JogDisplay.goodbye)
+        sendController(JogDisplay.goodbye)
         onEvent?(.disconnected)
     }
 
@@ -162,7 +202,7 @@ public final class JogDisplayDriver {
     public func marker(_ pitchBend: Int) {
         guard pitchBend != lastMarker else { return }
         lastMarker = pitchBend
-        if connected { port?.sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)]) }
+        if connected { sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)]) }
         onEvent?(.marker(pitchBend: pitchBend))
     }
 
@@ -182,7 +222,7 @@ public final class JogDisplayDriver {
         // middle of an upload: a show between its chunks can spoil it (ack 06). The upload's end shows the beat now.
         let slot = UInt8(beat)
         guard renderBeat != nil, upload == nil, let current, slotContent[slot] == current else { return }
-        if connected { port?.sendWD(JogDisplay.show(slot: slot)) }
+        if connected { sendWD(JogDisplay.show(slot: slot)) }
         shownSlot = slot
         onEvent?(.shown(slot: slot))
     }
@@ -198,7 +238,7 @@ public final class JogDisplayDriver {
     public func playLight(_ on: Bool) {
         guard on != lastPlayLight else { return }
         lastPlayLight = on
-        if connected { port?.sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
+        if connected { sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
         onEvent?(.playLight(on))
     }
 
@@ -211,6 +251,7 @@ public final class JogDisplayDriver {
 
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
+        traceReply(bytes)
         guard var running = upload, let reply = JogDisplay.Reply(bytes) else { return }
         switch reply {
         case .accepted where !running.finished:
@@ -218,7 +259,7 @@ public final class JogDisplayDriver {
             if running.acks == running.upload.expectedAcks {
                 running.finished = true
                 running.startedAt = clock.now   // from here, the commit grace
-                for message in running.upload.finish { port?.sendWD(message) }
+                for message in running.upload.finish { sendWD(message) }
             }
             upload = running
         case .refused(let status):
@@ -241,7 +282,7 @@ public final class JogDisplayDriver {
             // once it holds what's current; the others wait for their beat.
             let beat = UInt8(lastMasterBeat ?? 1)
             if let current, slotContent[beat] == current {
-                port?.sendWD(JogDisplay.show(slot: beat))
+                sendWD(JogDisplay.show(slot: beat))
                 shownSlot = beat
                 onEvent?(.shown(slot: beat))
             }
@@ -252,7 +293,7 @@ public final class JogDisplayDriver {
     }
 
     private func showSlot(_ running: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)) {
-        port?.sendWD(running.upload.show)
+        sendWD(running.upload.show)
         shownSlot = running.slot
         onEvent?(.shown(slot: running.slot))
     }
@@ -324,7 +365,7 @@ public final class JogDisplayDriver {
 
     private func send(_ job: JogDisplay.Upload, slot: UInt8, content: JogDisplayContent, port: any JogDisplayPort) {
         upload = (job, slot, 0, false, clock.now)
-        for message in job.start + job.body { port.sendWD(message) }
+        for message in job.start + job.body { sendWD(message) }
         onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
         // The upload's start turns the play light off (90 01 00): the next tick puts it back.
         lastPlayLight = false

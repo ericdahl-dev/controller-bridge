@@ -84,3 +84,47 @@ struct TraceTests {
         #expect(Self.read(directory.appendingPathComponent("deckbridge.log")) == "first launch\nsecond launch\n")
     }
 }
+
+/// The jog display's raw traffic in the trace (#395), for the WD stall work (#165, agent1): each SysEx out with its
+/// command and length, each reply with its command, status and the time since the last send.
+@Suite("Debug trace: the jog display's WD traffic")
+struct TraceJogDisplayTests {
+    final class Lines: @unchecked Sendable {
+        var list: [String] = []
+    }
+
+    @Test("Hello on the controller port, the upload out on WD, each ack with its status and ms since the last send")
+    func wdTraffic() {
+        let rig = JogDisplayDriverTests.DriverRig()
+        let lines = Lines()
+        rig.driver.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        rig.clock.now = 100
+        rig.driver.connect()
+        #expect(lines.list == ["CTL out cmd=0x60 14 bytes", "CTL out F0 00 20 7F 01 F7"])
+        lines.list.removeAll()
+        rig.driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        let upload = JogDisplayDriverTests.upload(deck: 1, slot: 1)
+        #expect(lines.list.count == upload.start.count + upload.body.count)
+        // The play light off first (90 01 00), then the upload's frames: 0A, 0C, 0D …, 0E.
+        #expect(lines.list.first == "WD out 90 01 00")
+        #expect(lines.list.dropFirst().map { String($0.prefix(17)) }.first == "WD out cmd=0x0A 1")
+        #expect(lines.list.dropFirst().allSatisfy { $0.hasPrefix("WD out cmd=0x") })
+        lines.list.removeAll()
+        rig.clock.now = 100.012
+        rig.driver.reply(JogDisplayDriverTests.accepted)
+        rig.clock.now = 100.020
+        rig.driver.reply(JogDisplayDriverTests.refused)
+        #expect(lines.list.prefix(2) == ["WD in cmd=0x0F status=0x00 +12 ms", "WD in cmd=0x0F status=0x06 +20 ms"])
+    }
+
+    @Test("Short WD messages (the needle's pitch bend, the play light) as hex")
+    func shortMessages() {
+        let rig = JogDisplayDriverTests.DriverRig()
+        let lines = Lines()
+        rig.driver.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        rig.driver.connect()
+        lines.list.removeAll()
+        rig.driver.marker(4096)
+        #expect(lines.list == ["WD out E0 00 20"])
+    }
+}
