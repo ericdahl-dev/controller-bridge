@@ -24,7 +24,9 @@ enum BridgeHost {
         // with no WD port, or with the switch off, it only previews, for the Diagnostics simulator (#221).
         let jogEvents = jogSink(jogSimulator)
         // Beat mode (#215): each content goes up four times, one per lit master beat, and each beat shows its slot.
-        let driver = JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log, renderBeat: { content, beat in
+        // The loading graphic goes into slot 5 on each connect and shows while new cards upload, not black (#165).
+        let driver = JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log,
+                                      renderLoading: { JogDisplayRenderer.loadingImage() }, renderBeat: { content, beat in
             JogDisplayRenderer.uploadImage(content, litBeat: beat)
         }) { content in
             JogDisplayRenderer.uploadImage(content)
