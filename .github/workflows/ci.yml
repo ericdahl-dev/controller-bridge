@@ -42,6 +42,8 @@ jobs:
         run: |
           python3 -I scripts/test_check_site.py
           python3 -I scripts/test_ci_changes.py
+          # The release checklist and What to Test (#165, v1.1): Markdown, so it runs here, where a docs-only change runs.
+          python3 -I scripts/test_release_docs.py
       - name: Site analytics tests
         run: node --test scripts/test_analytics.mjs scripts/test_capture.mjs
       - name: Site check
