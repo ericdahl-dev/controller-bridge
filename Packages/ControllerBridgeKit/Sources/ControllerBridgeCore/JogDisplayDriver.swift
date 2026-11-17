@@ -82,6 +82,8 @@ public final class JogDisplayDriver {
     private let renderBeat: ((JogDisplayContent, Int) -> [UInt8])?
     /// The beats still to upload for the current content, the master's beat first.
     private var beatQueue: [Int] = []
+    /// What each beat slot holds on the unit now: a slot is shown on its beat only if it holds the current content.
+    private var slotContent: [UInt8: JogDisplayContent] = [:]
 
     /// How long an upload may wait for the unit's answers.
     static let timeout = 5.0
@@ -127,6 +129,7 @@ public final class JogDisplayDriver {
         // What the preview showed goes to the unit now, and the marker and light are sent afresh.
         if wanted == nil { wanted = current }
         current = nil
+        slotContent = [:]
         lastMarker = nil
         lastPlayLight = nil
         for message in JogDisplay.hello { port.sendController(message) }
@@ -172,6 +175,12 @@ public final class JogDisplayDriver {
         guard beat != lastMasterBeat else { return }
         lastMasterBeat = beat
         onEvent?(.masterBeat(beat))
+        // Beat mode (#215): show the beat's slot, if it holds what's current; otherwise the screen holds.
+        let slot = UInt8(beat)
+        guard renderBeat != nil, let current, slotContent[slot] == current else { return }
+        if connected { port?.sendWD(JogDisplay.show(slot: slot)) }
+        shownSlot = slot
+        onEvent?(.shown(slot: slot))
     }
 
     /// A deck's play state, reported on change; nothing is sent to the unit.
@@ -212,14 +221,24 @@ public final class JogDisplayDriver {
             fail()
             onEvent?(.failed(refusal: status))
         case .committed where running.finished:
-            port?.sendWD(running.upload.show)
-            shownSlot = running.slot
-            onEvent?(.shown(slot: running.slot))
             upload = nil
+            if renderBeat != nil {
+                if let current { slotContent[running.slot] = current }
+                // Only the slot for the beat now goes on screen; the others wait for their beat.
+                if Int(running.slot) == (lastMasterBeat ?? 1) { showSlot(running) }
+            } else {
+                showSlot(running)
+            }
             next()
         default:
             break
         }
+    }
+
+    private func showSlot(_ running: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)) {
+        port?.sendWD(running.upload.show)
+        shownSlot = running.slot
+        onEvent?(.shown(slot: running.slot))
     }
 
     /// Times out a silent upload; starts the next one.

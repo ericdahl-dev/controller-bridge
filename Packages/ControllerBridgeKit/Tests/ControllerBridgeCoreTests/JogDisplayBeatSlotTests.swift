@@ -65,4 +65,26 @@ struct JogDisplayBeatSlotTests {
         #expect(Array(drawn.beats.suffix(4)) == [3, 4, 1, 2])
         #expect(Set(drawn.contents.map(\.deck)) == [1])
     }
+
+    /// The show messages (0A) in `port`'s WD messages, as their slots.
+    static func shows(_ port: Port) -> [UInt8] {
+        port.wd.filter { $0.count > 11 && $0[6] == 0x0A && $0[11] != 0x06 }.map { $0[11] }
+    }
+
+    @Test("While the four go up, only the master's beat (3) is shown; then each beat shows its slot, with mask 0D, and uploads nothing")
+    func showPerBeat() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        Self.clock(rig, 3)
+        rig.coordinator.start()
+        var shown: [UInt8] = []
+        for _ in 0..<4 {
+            Self.answer(rig, port)
+            shown += Self.shows(port)
+        }
+        #expect(shown == [3])
+        port.wd.removeAll()
+        for beat in [4, 1, 2, 3] { Self.clock(rig, beat) }
+        #expect(port.wd == [4, 1, 2, 3].map { JogDisplay.show(slot: $0) })
+    }
 }
