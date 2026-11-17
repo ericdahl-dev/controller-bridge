@@ -57,11 +57,11 @@ final class JogDisplayController {
     /// The display shows the deck in front; every deck is previewed for the simulator (#221). With none connected,
     /// nothing reaches a unit (goodbye), but the preview follows a deck from Syndicate. Off, or with no WD port to show
     /// on (#305), nothing reaches the unit either.
-    func refresh(_ entries: [Entry], colors: [Int: [Int]]) {
+    func refresh(_ entries: [Entry], color: (Int) -> [Int]?) {
         guard let driver else { return }
         func content(_ index: Int) -> JogDisplayContent {
             let facts = entries[index].facts, track = facts.track
-            return JogDisplayContent(deck: facts.deck, color: colors[facts.deck] ?? [255, 255, 255], title: track?.title,
+            return JogDisplayContent(deck: facts.deck, color: color(facts.deck) ?? [255, 255, 255], title: track?.title,
                                      artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType)
         }
         for index in entries.indices { driver.preview(content(index)) }

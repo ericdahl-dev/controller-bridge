@@ -125,7 +125,7 @@ struct JogDisplayControllerDriverTests {
     func offSendsNothing() {
         let (controller, port, clock, _) = Self.rig()
         let entries = Self.entries()
-        controller.refresh(entries, colors: [:])
+        controller.refresh(entries, color: { _ in nil })
         controller.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(2)]))
         controller.observe(entries)
         for step in 1...20 { clock.now = Double(step) * 0.05; controller.tick(entries) }
@@ -137,7 +137,7 @@ struct JogDisplayControllerDriverTests {
     func onShowsFront() {
         let (controller, port, _, events) = Self.rig()
         controller.setEnabled(true)
-        controller.refresh(Self.entries(), colors: [1: [255, 0, 0]])
+        controller.refresh(Self.entries(), color: { [1: [255, 0, 0]][$0] })
         #expect(port.controller == JogDisplay.hello)
         #expect(events.list.contains { if case .uploadStarted(_, let content, _) = $0 { content.deck == 1 && content.color == [255, 0, 0] } else { false } })
     }
@@ -147,7 +147,7 @@ struct JogDisplayControllerDriverTests {
         let (controller, port, clock, events) = Self.rig()
         controller.setEnabled(true)
         let entries = Self.entries()
-        controller.refresh(entries, colors: [:])
+        controller.refresh(entries, color: { _ in nil })
         controller.observe(entries)
         port.wd.removeAll()
         clock.now = 0.25

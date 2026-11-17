@@ -160,147 +160,48 @@ public final class Coordinator {
 
     // MARK: Jog display (#165)
 
-    /// The LC6000's jog display, when the app found its WD port.
-    private var jogDisplay: JogDisplayDriver?
-    /// Settings' "Show the deck on the jog display". Off until a hardware check passes (#165): while off, nothing goes
-    /// to the display's ports, not even the hello.
-    private var jogDisplayEnabled = false
+    /// The jog display (#384): the deck in front, the needles and the driver. The Coordinator only forwards to it.
+    private lazy var jogController = JogDisplayController(clock: clock)
 
     /// Turns the jog display on (hello, then the deck in front) or off (goodbye, then nothing).
     public func setJogDisplay(enabled: Bool) {
-        jogDisplayEnabled = enabled
+        jogController.setEnabled(enabled)
         status.requiredSubscriptions = requiredSubscriptions
         updateJogDisplay()
     }
-    /// Each controller entry's needle: its deck's own phase in the bar, else where its platter left it (#165).
-    private var jogNeedles: [Int: JogMarker] = [:]
-    private var masterBPM: Double?
-    private var lastMarkerSent: Double?
-    /// The entries whose platter moved since the last needles went out.
-    private var needlesMoved: Set<Int> = []
-    /// At most this many marker updates a second.
-    static let markerRate = 30.0
-
-    /// The controller whose deck the display shows: of the connected ones, those whose profile owns a WD port that's
-    /// present (the LC6000's, by its exclude_hints, #305) come first; then the active layer, else the first.
-    private var frontIndex: Int? {
-        let connected = controllers.indices.filter { controllers[$0].source != nil }
-        let names = midiSystem.sources.map { $0.name.lowercased() }
-        let owners = connected.filter { index in
-            controllers[index].profile.excludeHints.contains { hint in names.contains { $0.contains(hint.lowercased()) } }
-        }
-        let candidates = owners.isEmpty ? connected : owners
-        return candidates.first { status.controllers[$0].activeLayer } ?? candidates.first
-    }
-
-    /// The deck the preview follows with no controller connected (#221): the user's pick, 1-4; nil follows the first
-    /// loaded deck.
-    private var jogPreviewDeck: Int?
 
     /// Picks the deck the jog display preview follows while no controller is connected; nil, the first loaded deck.
     public func setJogPreviewDeck(_ deck: Int?) {
-        jogPreviewDeck = deck
+        jogController.setPreviewDeck(deck)
         updateJogDisplay()
-    }
-
-    /// With no controller connected, the controller entry whose deck the preview shows from Syndicate's feedback: the
-    /// picked deck's, else the first loaded one's, else the first.
-    private var previewIndex: Int? {
-        if let pick = jogPreviewDeck, let index = controllers.indices.first(where: { status.controllers[$0].deck == pick }) {
-            return index
-        }
-        return controllers.indices.first { controllers[$0].bridge.loaded } ?? controllers.indices.first
-    }
-
-    /// The deck the jog display (or its preview) shows.
-    private var jogIndex: Int? { frontIndex ?? previewIndex }
-
-    /// The user's pick (#165): each deck's needle is its own phase, from its BarRamp at its BPM; the master clock is
-    /// the lit ring segment, the same on every deck.
-    private func jogClock(_ message: OSCMessage) {
-        let address = message.address.lowercased()
-        if address.hasSuffix("/header/bpm"), let bpm = message.arguments.first?.number, bpm > 0 { masterBPM = bpm }
-        if address.hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber, (1...4).contains(beat) {
-            jogDisplay?.masterBeat(beat)
-        }
-        // A deck that stops keeps its needle where it is; a paused deck's ramp sets it without running on.
-        if address.hasSuffix("/playing"), message.arguments.first?.isTrue == false {
-            for index in controllers.indices where address == controllers[index].bridge.deckAddress("Playing").lowercased() {
-                jogNeedles[index]?.freeze(at: clock.now)
-            }
-        }
-        guard address.hasSuffix("/barramp"), let phase = message.arguments.first?.number else { return }
-        for index in controllers.indices where address == controllers[index].bridge.deckAddress("BarRamp").lowercased() {
-            let bridge = controllers[index].bridge
-            let bpm = bridge.playing ? bridge.bpm ?? masterBPM ?? 120 : 0
-            // The needle is always the deck's bar phase; the platter never moves it (the user's pick for v1.1).
-            jogNeedles[index, default: JogMarker()].ramp(phase, bpm: bpm, at: clock.now)
-        }
-    }
-
-
-
-
-    /// The marker and the play light, from the tick: the hand while playing or after a platter move, at most 30 a
-    /// second; the light 127 while playing, blinking every half-second while loaded and paused.
-    private func jogMarkerTick() {
-        // Connected or only previewing (#221): the driver sends only while connected.
-        guard let driver = jogDisplay else { return }
-        let due = lastMarkerSent.map { clock.now - $0 >= 1 / Self.markerRate - 1e-9 } ?? true
-        if due {
-            // Every deck's needle for the simulator; the unit gets the deck in front's. A paused deck's stays put.
-            for index in controllers.indices where controllers[index].bridge.playing || needlesMoved.contains(index) {
-                let needle = (jogNeedles[index] ?? JogMarker()).pitchBend(at: clock.now)
-                driver.deckMarker(deck: status.controllers[index].deck, needle)
-                if index == jogIndex { driver.marker(needle) }
-            }
-            lastMarkerSent = clock.now
-            needlesMoved.removeAll()
-        }
-        // Every deck's play state for the simulator, from Syndicate's Playing (#317), not the blinking light below.
-        for index in controllers.indices { driver.deckPlaying(deck: status.controllers[index].deck, controllers[index].bridge.playing) }
-        guard let front = jogIndex else { return }
-        let bridge = controllers[front].bridge
-        driver.playLight(bridge.playing || (bridge.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
     }
 
     /// Drives the jog display from now on: it says hello and shows the deck in front once a controller is connected.
     public func attachJogDisplay(_ driver: JogDisplayDriver) {
-        jogDisplay = driver
+        jogController.attach(driver)
         updateJogDisplay()
     }
 
     /// A message from the jog display's WD port: the unit's answers to an upload.
     public func jogDisplayReply(_ bytes: [UInt8]) {
-        jogDisplay?.reply(bytes)
+        jogController.reply(bytes)
     }
 
-    /// The display shows the deck in front: the active layer, else the first connected controller. With none
-    /// connected, it says goodbye.
-    private func updateJogDisplay() {
-        guard let driver = jogDisplay else { return }
-        // Every deck's content, live, for the simulator (#221); only the deck in front is uploaded below.
-        for index in controllers.indices { driver.preview(jogContent(index)) }
-        let connected = controllers.indices.filter { controllers[$0].source != nil }
-        // With no controller connected, nothing reaches a unit, but the preview follows a deck from Syndicate (#221).
-        guard let first = connected.first else {
-            driver.disconnect()
-            guard let index = previewIndex else { return }
-            return driver.show(jogContent(index))
+    /// What the jog display knows of each controller entry: plain values and the Bridge's DeckFacts (#383).
+    private var jogEntries: [JogDisplayController.Entry] {
+        // A connected controller whose profile excludes a WD port that's present owns the display (#305).
+        let names = midiSystem.sources.map { $0.name.lowercased() }
+        return controllers.indices.map { index in
+            var facts = controllers[index].bridge.facts
+            facts.deck = status.controllers[index].deck
+            let owns = controllers[index].profile.excludeHints.contains { hint in names.contains { $0.contains(hint.lowercased()) } }
+            return JogDisplayController.Entry(connected: controllers[index].source != nil, ownsDisplay: owns,
+                                              activeLayer: status.controllers[index].activeLayer, facts: facts)
         }
-        let front = frontIndex ?? first
-        // Off in Settings, or with no WD port to show on (#305), nothing reaches the unit (a goodbye only if it had said
-        // hello), but the driver keeps previewing for the Diagnostics simulator (#221).
-        if jogDisplayEnabled, driver.attached { driver.connect() } else { driver.disconnect() }
-        driver.show(jogContent(front))
     }
 
-    /// What the display shows for a controller entry: its deck, color and track.
-    private func jogContent(_ index: Int) -> JogDisplayContent {
-        let deck = status.controllers[index].deck
-        let track = controllers[index].bridge.track
-        return JogDisplayContent(deck: deck, color: deckColors[deck] ?? [255, 255, 255], title: track?.title,
-                                 artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType)
+    private func updateJogDisplay() {
+        jogController.refresh(jogEntries, color: { self.deckColors[$0] })
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -552,8 +453,7 @@ public final class Coordinator {
     public func tick() {
         runSweep()
         for bridge in bridges { bridge.tick() }
-        jogDisplay?.tick()
-        jogMarkerTick()
+        jogController.tick(jogEntries)
         checkLiveness()
         disconnectFailedOutputs()
     }
@@ -681,9 +581,10 @@ public final class Coordinator {
         }
         diagnostics?(.oscIn(message))
         if let trace { traceOSC(.oscIn, message, trace) }
-        jogClock(message)
+        jogController.feedback(message)
         feedbackArrived(message)
         for bridge in bridges { bridge.handle(message) }
+        jogController.observe(jogEntries)
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
         // What the display shows may have changed (a load, a key or BPM change); equal content draws nothing.
         if message.address.lowercased().hasSuffix("/trackinfo") || message.address.lowercased().hasSuffix("/loaded") {
@@ -741,7 +642,7 @@ public final class Coordinator {
     private var requiredSubscriptions: [Subscription] {
         var needed = Set(bridges.flatMap { Subscription.required(for: $0.mapping) })
         // The jog needle reads the deck's BarRamp (#165): asked for only while the display is on.
-        if jogDisplayEnabled { needed.insert(.barRamp) }
+        if jogController.enabled { needed.insert(.barRamp) }
         return Subscription.allCases.filter(needed.contains)
     }
 
