@@ -98,6 +98,13 @@ enum Snapshots {
                 $0.feedback = .listening(port: 9096)
                 $0.syndicateFeedback = .live
             }),
+            // Another DJ app holds the LC6000 as its host (#333).
+            ("other-host", {
+                $0.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+                $0.feedback = .listening(port: 9096)
+                $0.syndicateFeedback = .live
+                $0.otherHost = true
+            }),
             ("port-in-use", {
                 $0.bridges = [ControllerStatus(deck: 3, connected: true, profile: "Denon LC6000 PRIME")]
                 $0.feedback = .portInUse(port: 9096)

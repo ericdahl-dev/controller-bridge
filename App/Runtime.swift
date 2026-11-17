@@ -68,6 +68,7 @@ enum BridgeHost {
                 status.syndicateFeedback = coordinatorStatus.feedback
                 status.noDeckData = coordinatorStatus.noDeckData
                 status.missingSubscriptions = coordinatorStatus.missingSubscriptions
+                status.otherHost = coordinatorStatus.otherHost
                 status.requiredSubscriptions = coordinatorStatus.requiredSubscriptions
                 status.lastDropout = coordinatorStatus.lastDropout
                 status.sweeping = coordinatorStatus.sweeping
