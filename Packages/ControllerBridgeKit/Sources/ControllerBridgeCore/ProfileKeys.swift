@@ -30,6 +30,8 @@ public struct ProfileKey: Equatable, Sendable {
     /// How many items a list takes, and what one is called in a problem ("value", "entry", "pad").
     public let count: ClosedRange<Int>?
     public let item: String
+    /// What the decoder uses when the key is left out, as JSON text; nil when the decoder needs it, or has none.
+    public let fallback: String?
 
     /// What's wrong with a list of `n` items, or nil when its length is fine.
     func countProblem(_ n: Int) -> String? {
@@ -40,7 +42,7 @@ public struct ProfileKey: Equatable, Sendable {
     }
 
     init(_ path: String, _ kind: Kind, _ lc6000: String?, range: ClosedRange<Double>? = nil, choices: [String] = [],
-         numberChoices: [Double] = [], count: ClosedRange<Int>? = nil, item: String = "value") {
+         numberChoices: [Double] = [], count: ClosedRange<Int>? = nil, item: String = "value", fallback: String? = nil) {
         self.path = path
         self.kind = kind
         self.lc6000 = lc6000
@@ -49,6 +51,7 @@ public struct ProfileKey: Equatable, Sendable {
         self.numberChoices = numberChoices
         self.count = count
         self.item = item
+        self.fallback = fallback
     }
 }
 
@@ -82,14 +85,14 @@ public enum ProfileKeys {
         ProfileKey("midi.input", .text, #""LC6000""#),
         ProfileKey("midi.output", .text, #""LC6000""#),
         ProfileKey("midi.channel", .wholeNumber, "1", range: channel),
-        ProfileKey("midi.ignore_notes", .list, "[52]"),
+        ProfileKey("midi.ignore_notes", .list, "[52]", fallback: "[]"),
         ProfileKey("midi.ignore_notes[]", .wholeNumber, "52", range: note),
-        ProfileKey("midi.layers", .list, #"[{"channel": 1, "deck": 1}, {"channel": 2, "deck": 2}, {"channel": 3, "deck": 3}, {"channel": 4, "deck": 4}]"#),
+        ProfileKey("midi.layers", .list, #"[{"channel": 1, "deck": 1}, {"channel": 2, "deck": 2}, {"channel": 3, "deck": 3}, {"channel": 4, "deck": 4}]"#, fallback: "[]"),
         ProfileKey("midi.layers[]", .object, "{}"),
         ProfileKey("midi.layers[].channel", .wholeNumber, "1", range: channel),
         ProfileKey("midi.layers[].deck", .wholeNumber, "1", range: 1...4),
         ProfileKey("midi.layer_note", .wholeNumber, "51", range: note),
-        ProfileKey("midi.encoder_format", .text, #""twos_complement""#, choices: EncoderFormat.allRawValues),
+        ProfileKey("midi.encoder_format", .text, #""twos_complement""#, choices: EncoderFormat.allRawValues, fallback: #""twos_complement""#),
         ProfileKey("osc", .object, "{}"),
         ProfileKey("osc.host", .text, #""127.0.0.1""#),
         ProfileKey("osc.port", .wholeNumber, "9090", range: 1...65535),
@@ -110,13 +113,13 @@ public enum ProfileKeys {
         ProfileKey("jog.beats_per_rev", .wholeNumber, "4", range: 1...16),
         ProfileKey("jog.require_touch", .bool, "false"),
         ProfileKey("pitch", .object, "{}"),
-        ProfileKey("pitch.bits", .wholeNumber, "14", numberChoices: [7, 14]),
+        ProfileKey("pitch.bits", .wholeNumber, "14", numberChoices: [7, 14], fallback: "14"),
         ProfileKey("pitch.msb_cc", .wholeNumber, "8", range: cc),
         ProfileKey("pitch.lsb_cc", .wholeNumber, "40", range: cc),
         ProfileKey("pitch.invert", .bool, "false"),
         ProfileKey("pitch.dead_zone", .number, "0.005", range: 0...1),
-        ProfileKey("pitch.pickup", .bool, "true"),
-        ProfileKey("pitch.pickup_tolerance", .number, "0.02", range: 0...1),
+        ProfileKey("pitch.pickup", .bool, "true", fallback: "true"),
+        ProfileKey("pitch.pickup_tolerance", .number, "0.02", range: 0...1, fallback: "0.02"),
         ProfileKey("needle", .object, "{}"),
         ProfileKey("needle.msb_cc", .wholeNumber, "64", range: cc),
         ProfileKey("needle.lsb_cc", .wholeNumber, "65", range: cc),
@@ -137,26 +140,26 @@ public enum ProfileKeys {
         ProfileKey("leds.ring", .wholeNumber, "40", range: note),
         ProfileKey("leds.ring_color", .list, "[0, 128, 255]", count: 3...3),
         ProfileKey("leds.ring_color[]", .wholeNumber, "0", range: byte),
-        ProfileKey("leds.ring_follows_deck", .bool, "true"),
+        ProfileKey("leds.ring_follows_deck", .bool, "true", fallback: "true"),
         ProfileKey("leds.roll_pad_color", .list, "[255, 140, 0]", count: 3...3),
         ProfileKey("leds.roll_pad_color[]", .wholeNumber, "255", range: byte),
         ProfileKey("leds.loop_pad_color", .list, "[0, 255, 0]", count: 3...3),
         ProfileKey("leds.loop_pad_color[]", .wholeNumber, "0", range: byte),
         ProfileKey("leds.dim_unlit_buttons", .bool, "true"),
-        ProfileKey("leds.mirror_shifted", .bool, "false"),
+        ProfileKey("leds.mirror_shifted", .bool, "false", fallback: "false"),
         ProfileKey("leds.beat_pulse", .text, #""off""#, choices: Mapping.LEDs.BeatPulse.allRawValues),
         ProfileKey("leds.pulse_ms", .wholeNumber, "100", range: 0...60000),
         ProfileKey("leds.stale_idle", .text, #""dim""#, choices: Mapping.LEDs.StaleIdle.allRawValues),
         ProfileKey("leds.levels", .object, "{}"),
-        ProfileKey("leds.levels.full", .wholeNumber, "127", range: note),
-        ProfileKey("leds.levels.dim", .wholeNumber, "1", range: note),
-        ProfileKey("leds.levels.off", .wholeNumber, "0", range: note),
+        ProfileKey("leds.levels.full", .wholeNumber, "127", range: note, fallback: "127"),
+        ProfileKey("leds.levels.dim", .wholeNumber, "1", range: note, fallback: "1"),
+        ProfileKey("leds.levels.off", .wholeNumber, "0", range: note, fallback: "0"),
         // "rgb222", or a list of entries (#197): the list form is its own keys below.
-        ProfileKey("leds.color_table", .text, #""rgb222""#, choices: ["rgb222"], count: 1...Int.max, item: "entry"),
+        ProfileKey("leds.color_table", .text, #""rgb222""#, choices: ["rgb222"], count: 1...Int.max, item: "entry", fallback: #""rgb222""#),
         ProfileKey("pads", .object, "{}"),
-        ProfileKey("pads.roll_sizes", .list, #"["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]"#),
+        ProfileKey("pads.roll_sizes", .list, #"["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]"#, fallback: #"["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]"#),
         ProfileKey("pads.roll_sizes[]", .text, #""ThirtySecond""#, choices: Mapping.Pads.RollSize.allRawValues),
-        ProfileKey("pads.mode_select", .text, #""buttons""#, choices: Mapping.Pads.ModeSelect.allRawValues),
+        ProfileKey("pads.mode_select", .text, #""buttons""#, choices: Mapping.Pads.ModeSelect.allRawValues, fallback: #""buttons""#),
     ]
 
     private static let optionalKeys: [ProfileKey] = [
@@ -184,7 +187,7 @@ public enum ProfileKeys {
         ProfileKey("pads.mode_notes.\($0)[]", .wholeNumber, nil, range: note),
     ] } + [
         // Shift done in hardware (#226): a button's own note with Shift held.
-        ProfileKey("notes.shifted", .object, nil),
+        ProfileKey("notes.shifted", .object, nil, fallback: "{}"),
     ] + (buttons.map(\.0) + ["platter_touch", "param_back", "param_forward"]).map {
         ProfileKey("notes.shifted.\($0)", .wholeNumber, nil, range: note)
     } + [
@@ -194,16 +197,16 @@ public enum ProfileKeys {
         ProfileKey("mixer.\($0)", .object, nil),
         ProfileKey("mixer.\($0).msb_cc", .wholeNumber, nil, range: cc),
         ProfileKey("mixer.\($0).lsb_cc", .wholeNumber, nil, range: cc),
-        ProfileKey("mixer.\($0).bits", .wholeNumber, nil, numberChoices: [7, 14]),
+        ProfileKey("mixer.\($0).bits", .wholeNumber, nil, numberChoices: [7, 14], fallback: "14"),
     ] } + mixerNotes.map { ProfileKey("mixer.\($0)", .wholeNumber, nil, range: note) } + [
         ProfileKey("mixer.meter", .object, nil),
         ProfileKey("mixer.meter.cc", .wholeNumber, nil, range: cc),
         ProfileKey("mixer.meter.steps", .list, nil, count: 1...Int.max),
         ProfileKey("mixer.meter.steps[]", .wholeNumber, nil, range: note),
         ProfileKey("mixer.meter.clip", .wholeNumber, nil, range: note),
-        ProfileKey("mixer.meter.hold_ms", .wholeNumber, nil, range: 0...10000),
-        ProfileKey("mixer.meter.rate_hz", .wholeNumber, nil, range: 1...120),
-        ProfileKey("mixer.pickup", .bool, nil),
-        ProfileKey("mixer.pickup_tolerance", .number, nil, range: 0...1),
+        ProfileKey("mixer.meter.hold_ms", .wholeNumber, nil, range: 0...10000, fallback: "300"),
+        ProfileKey("mixer.meter.rate_hz", .wholeNumber, nil, range: 1...120, fallback: "30"),
+        ProfileKey("mixer.pickup", .bool, nil, fallback: "true"),
+        ProfileKey("mixer.pickup_tolerance", .number, nil, range: 0...1, fallback: "0.02"),
     ]
 }

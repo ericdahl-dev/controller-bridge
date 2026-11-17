@@ -173,3 +173,62 @@ struct ProfileKeysTests {
         return current
     }
 }
+
+/// The decoder's defaults (#382): a key left out decodes to the table's fallback. Each case removes the key from (or,
+/// for the mixer, adds a section without it to) the LC6000's mapping, decodes it, and reads the field back.
+@Suite("Profile key table: the decoder's fallbacks")
+struct ProfileKeyFallbackTests {
+    static func decoded(without path: String, adding extra: [String: Any] = [:]) throws -> Mapping {
+        var body = try JSONSerialization.jsonObject(with: Mapping.defaultJSON()) as! [String: Any]
+        for (key, value) in extra { body[key] = value }
+        let parts = path.split(separator: ".").map(String.init)
+        func remove(_ object: [String: Any], _ parts: ArraySlice<String>) -> [String: Any] {
+            var object = object
+            guard let first = parts.first else { return object }
+            if parts.count == 1 { object[first] = nil } else if let child = object[first] as? [String: Any] {
+                object[first] = remove(child, parts.dropFirst())
+            }
+            return object
+        }
+        body = remove(body, parts[...])
+        return try JSONDecoder().decode(Mapping.self, from: JSONSerialization.data(withJSONObject: body))
+    }
+
+    static func fallback<T: Decodable>(_ path: String, _ type: T.Type) throws -> T {
+        let text = try #require(ProfileKeys.key(path)?.fallback, "\(path) has no fallback")
+        return try JSONDecoder().decode(T.self, from: Data(text.utf8))
+    }
+
+    static func mixer() -> [String: Any] { ["mixer": ["volume": ["msb_cc": 100, "lsb_cc": 102], "meter": ["cc": 101, "steps": [0, 64]]]] }
+
+    @Test("Each left-out key decodes to the table's fallback")
+    func fallbacks() throws {
+        #expect(try Self.decoded(without: "pads.roll_sizes").pads.rollSizes == Self.fallback("pads.roll_sizes", [String].self))
+        #expect(try Self.decoded(without: "pads.mode_select").pads.modeSelect.rawValue == Self.fallback("pads.mode_select", String.self))
+        #expect(try Self.decoded(without: "midi.ignore_notes").midi.ignoreNotes == Self.fallback("midi.ignore_notes", [Int].self))
+        #expect(try Self.decoded(without: "midi.layers").midi.layers.isEmpty)
+        #expect(try Self.fallback("midi.layers", [[String: Int]].self).isEmpty)
+        #expect(try Self.decoded(without: "midi.encoder_format").midi.encoderFormat.rawValue
+                == Self.fallback("midi.encoder_format", String.self))
+        #expect(try Self.decoded(without: "pitch.bits").pitch?.bits == Self.fallback("pitch.bits", Int.self))
+        #expect(try Self.decoded(without: "pitch.pickup").pitch?.pickup == Self.fallback("pitch.pickup", Bool.self))
+        #expect(try Self.decoded(without: "pitch.pickup_tolerance").pitch?.pickupTolerance
+                == Self.fallback("pitch.pickup_tolerance", Double.self))
+        #expect(try Self.decoded(without: "leds.ring_follows_deck").leds.ringFollowsDeck == Self.fallback("leds.ring_follows_deck", Bool.self))
+        #expect(try Self.decoded(without: "leds.mirror_shifted").leds.mirrorShifted == Self.fallback("leds.mirror_shifted", Bool.self))
+        #expect(try Self.decoded(without: "leds.color_table").leds.colorTable == .rgb222)
+        #expect(try Self.fallback("leds.color_table", String.self) == "rgb222")
+        for level in ["full", "dim", "off"] {
+            let levels = try Self.decoded(without: "leds.levels.\(level)").leds.levels
+            let value = level == "full" ? levels.full : level == "dim" ? levels.dim : levels.off
+            #expect(try value == Self.fallback("leds.levels.\(level)", Int.self), "\(level)")
+        }
+        #expect(try Self.decoded(without: "notes.shifted").notes.shifted == Self.fallback("notes.shifted", [String: Int].self))
+        let mixer = try #require(try Self.decoded(without: "", adding: Self.mixer()).mixer)
+        #expect(try mixer.volume?.bits == Self.fallback("mixer.volume.bits", Int.self))
+        #expect(try mixer.meter?.holdMs == Self.fallback("mixer.meter.hold_ms", Int.self))
+        #expect(try mixer.meter?.rateHz == Self.fallback("mixer.meter.rate_hz", Int.self))
+        #expect(try mixer.pickup == Self.fallback("mixer.pickup", Bool.self))
+        #expect(try mixer.pickupTolerance == Self.fallback("mixer.pickup_tolerance", Double.self))
+    }
+}
