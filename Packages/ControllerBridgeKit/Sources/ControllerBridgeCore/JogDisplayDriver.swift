@@ -7,6 +7,12 @@
 public protocol JogDisplayPort: AnyObject, Sendable {
     func sendController(_ bytes: [UInt8])
     func sendWD(_ bytes: [UInt8])
+    /// Whether the unit's WD port is there now (#305). Without it there's no display to say hello to.
+    var isAttached: Bool { get }
+}
+
+extension JogDisplayPort {
+    public var isAttached: Bool { true }
 }
 
 /// What the display shows for the deck in front (#165). Two of these that are equal draw the same image.
@@ -99,6 +105,9 @@ public final class JogDisplayDriver {
         self.size = size
         self.render = render
     }
+
+    /// Whether a unit's WD port is there to show on (#305).
+    public var attached: Bool { port?.isAttached == true }
 
     /// The unit is attached: say hello as a host, then show what's wanted. With no port it stays a preview.
     public func connect() {

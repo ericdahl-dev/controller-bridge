@@ -173,10 +173,16 @@ public final class Coordinator {
     /// At most this many marker updates a second.
     static let markerRate = 30.0
 
-    /// The controller whose deck the display shows: the active layer, else the first connected one.
+    /// The controller whose deck the display shows: of the connected ones, those whose profile owns a WD port that's
+    /// present (the LC6000's, by its exclude_hints, #305) come first; then the active layer, else the first.
     private var frontIndex: Int? {
         let connected = controllers.indices.filter { controllers[$0].source != nil }
-        return connected.first { status.controllers[$0].activeLayer } ?? connected.first
+        let names = midiSystem.sources.map { $0.name.lowercased() }
+        let owners = connected.filter { index in
+            controllers[index].profile.excludeHints.contains { hint in names.contains { $0.contains(hint.lowercased()) } }
+        }
+        let candidates = owners.isEmpty ? connected : owners
+        return candidates.first { status.controllers[$0].activeLayer } ?? candidates.first
     }
 
     /// The deck the preview follows with no controller connected (#221): the user's pick, 1-4; nil follows the first
@@ -280,10 +286,10 @@ public final class Coordinator {
             guard let index = previewIndex else { return }
             return driver.show(jogContent(index))
         }
-        let front = connected.first { status.controllers[$0].activeLayer } ?? first
-        // Off in Settings, nothing reaches the unit (a goodbye only if it had said hello), but the driver keeps
-        // previewing for the Diagnostics simulator (#221).
-        if jogDisplayEnabled { driver.connect() } else { driver.disconnect() }
+        let front = frontIndex ?? first
+        // Off in Settings, or with no WD port to show on (#305), nothing reaches the unit (a goodbye only if it had said
+        // hello), but the driver keeps previewing for the Diagnostics simulator (#221).
+        if jogDisplayEnabled, driver.attached { driver.connect() } else { driver.disconnect() }
         driver.show(jogContent(front))
     }
 

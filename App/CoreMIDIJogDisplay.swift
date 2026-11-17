@@ -42,6 +42,9 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
         if isNew { MIDIPortConnectSource(input, source, nil) }
     }
 
+    /// The WD port is there now (#305): without it, nothing is sent and no upload is waited on.
+    var isAttached: Bool { Self.find(sources: false, hint: Self.wdHint) != nil }
+
     func sendController(_ bytes: [UInt8]) { send(bytes, hint: Self.controllerHint) }
     func sendWD(_ bytes: [UInt8]) {
         listen()
