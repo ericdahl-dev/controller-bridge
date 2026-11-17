@@ -306,6 +306,11 @@ def check_capture_prompts(root, app_prompts):
 VERSION_MENTION = re.compile(r"(?:\b[Vv]ersion|\bDeckBridge) (\d+\.\d+\.\d+)(?![\d.]|\s*\))")
 
 
+# The web capture's app_version, "web x.y.z" (#190): the site's version too.
+CAPTURE_PAGE_JS = "capture/capture-page.js"
+CAPTURE_VERSION = re.compile(r'APP_VERSION\s*=\s*"web (\d+\.\d+\.\d+)"')
+
+
 def app_version(root):
     """The home page JSON-LD's SoftwareApplication softwareVersion: the one version the site may name."""
     path = os.path.join(root, HOME)
@@ -359,6 +364,11 @@ def problems(root, app_prompts=None):
                     out.append(f"{file}: says DeckBridge {mentioned}, but the app's softwareVersion is {app_version}")
             if file.endswith(".html"):
                 out += check_page(root, file, text)
+        if file == CAPTURE_PAGE_JS and app_version:
+            with open(path, encoding="utf-8") as f:
+                for written in CAPTURE_VERSION.findall(f.read()):
+                    if written != app_version:
+                        out.append(f"{file}: writes captures as web {written}, but the app's softwareVersion is {app_version}")
         elif file.endswith(".css"):
             with open(path, encoding="utf-8") as f:
                 css = f.read()

@@ -372,6 +372,13 @@ class CheckSiteTests(unittest.TestCase):
             "support/index.html: says DeckBridge 1.0.0, but the app's softwareVersion is 1.0.1",
         ])
 
+    def test_the_web_capture_writes_the_apps_version(self):
+        same = self.site({"capture/capture-page.js": 'var APP_VERSION = "web 1.0.1";'})
+        self.assertEqual(check_site.problems(same), [])
+        stale = self.site({"capture/capture-page.js": 'var APP_VERSION = "web 1.0.0";'})
+        self.assertEqual(check_site.problems(stale),
+                         ["capture/capture-page.js: writes captures as web 1.0.0, but the app's softwareVersion is 1.0.1"])
+
     def test_the_home_page_names_the_apps_version(self):
         root = self.site({"index.html": GOOD["index.html"].replace('"softwareVersion": "1.0.1", ', "")})
         self.assertEqual(check_site.problems(root), ["index.html: the JSON-LD has no SoftwareApplication softwareVersion"])
