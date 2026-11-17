@@ -101,7 +101,9 @@ extension Bridge {
     func needleLSB(_ value: UInt8) {
         guard let needle = mapping.needle, needleTouched || !needle.requireTouch else { return }
         let position = join14Bit(msb: needleMSBValue, lsb: value)
-        sendDeck("WaveformSeek", .float(Float(Double(position) / 16383)))
+        let fraction = Float(Double(position) / 16383)
+        // Paused, unquantized (#366); playing, a seek in time with the grid, as Syndicate does it.
+        if playing { sendDeck("WaveformSeek", .float(fraction)) } else { pausedSeek(fraction) }
     }
 
     // MARK: Jog
@@ -150,7 +152,7 @@ extension Bridge {
         if let duration, let position = progress {
             let moved = min(1, max(0, position + revolutions * wheel.seekSecondsPerRev / duration))
             progress = moved
-            sendDeck("WaveformSeek", .float(Float(moved)))
+            pausedSeek(Float(moved))
         } else {
             // No track length: skip whole beats, keeping the remainder for the next turn.
             let countsPerBeat = Int((countsPerRev / wheel.beatsPerRev).rounded())
@@ -161,6 +163,22 @@ extension Bridge {
             seekCountRemainder -= beats * countsPerBeat
             sendDeck("BeatSkip", .int(Int32(beats)))
         }
+    }
+
+    /// How long after the last paused seek the deck's quantize goes back to Use Global (#366).
+    static let seekQuantizeIdle = 0.3
+
+    /// A seek on a paused deck (the jog, the needle strip), with the deck's quantize held at None so Syndicate doesn't
+    /// snap it to the grid (#366, the user: "jog wheel also seems to be quantized when Q is on").
+    func pausedSeek(_ fraction: Float) {
+        overrideQuantize(.jogSeek)
+        lastSeekTime = clock.now
+        sendDeck("WaveformSeek", .float(fraction))
+    }
+
+    /// The seeking has stopped: quantize back, unless something else still holds it off.
+    func seekQuantizeTick() {
+        if quantizeOverride.holds(.jogSeek), clock.now - lastSeekTime >= Self.seekQuantizeIdle - 1e-9 { restoreQuantize(.jogSeek) }
     }
 
     func platterTouch(_ pressed: Bool) {
@@ -175,6 +193,7 @@ extension Bridge {
         timingTick()
         meterTick()
         cueJumpTick()
+        seekQuantizeTick()
     }
 
     func endBend() {

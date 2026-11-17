@@ -112,6 +112,8 @@ final class Bridge {
     /// The direction of the PhaseBend being held (1 or -1), or 0 when none is.
     var bendDirection = 0
     var lastJogTime = 0.0
+    /// When the jog or needle strip last seeked a paused deck (#366).
+    var lastSeekTime = 0.0
     var platterTouched = false
     var needleTouched = false
     /// Where the playhead is, 0...1, and the track's length in seconds, from feedback.
@@ -289,6 +291,8 @@ final class Bridge {
         if padChannel == channel, padNote(note, pressed: pressed) { return }
         if let needle = mapping.needle, note == needle.touchNote {
             needleTouched = pressed
+            // The strip let go: its seeks are done (#366).
+            if !pressed { restoreQuantize(.jogSeek) }
             return
         }
         // A shifted note (#226) is its button with Shift held, for that press or release only; Shift then goes back to

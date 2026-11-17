@@ -197,13 +197,15 @@ struct ContinuousTests {
         rig.coordinator.midi(.noteOn(channel: 0, note: 70, velocity: 127), source: Rig.lc6000.id)
         Self.strip(rig, 127, 127)
         Self.strip(rig, 64, 0)   // 8192 / 16383
-        #expect(rig.osc.sent == [
+        // The deck is paused, so the seeks also hold its quantize at None (#366, JogQuantizeTests); only the seeks here.
+        let seeks = { rig.osc.sent.filter { $0.address.hasSuffix("/WaveformSeek") } }
+        #expect(seeks() == [
             OSCMessage("/Syndicate/Deck/1/WaveformSeek", [.float(1.0)]),
             OSCMessage("/Syndicate/Deck/1/WaveformSeek", [.float(0.500_030_5)]),
         ])
         rig.coordinator.midi(.noteOff(channel: 0, note: 70, velocity: 0), source: Rig.lc6000.id)
         Self.strip(rig, 0, 0)
-        #expect(rig.osc.sent.count == 2)
+        #expect(seeks().count == 2)
     }
 
     @Test("Release-all clears the needle touch: afterwards, moving the strip seeks nothing")

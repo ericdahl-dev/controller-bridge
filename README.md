@@ -15,8 +15,8 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 |---|---|
 | Pitch fader (14-bit CC 8 + 40) | `TempoSlider` −1…+1 at full resolution, with pickup so the tempo never jumps |
 | Jog while playing | `PhaseBend` ±1, released 80 ms after the wheel stops |
-| Jog while paused | `WaveformSeek`, using the track length from feedback. Falls back to `BeatSkip` |
-| Needle Drop strip, while touched | `WaveformSeek` |
+| Jog while paused | `WaveformSeek`, using the track length from feedback, with the deck's `Quantize` at None (1) while seeking so Syndicate doesn't snap it to the grid, then Use Global (0) 300 ms after the last move. Falls back to `BeatSkip` |
+| Needle Drop strip, while touched | `WaveformSeek`. On a paused deck, the deck's `Quantize` is None while touched, then Use Global |
 | Play / Cue / Sync / Master | `PlayPause` / `Cue` (hold) / `TempoSync` / `TempoMaster` |
 | Pads in Hot Cue mode | `HotCue n 1/0` (press and hold) |
 | Shift + pad in Hot Cue mode, deck stopped | Goes to that cue without playing, at once: `Quantize 1` (None), then a silent `WaveformSeek` to the cue, then `Quantize 0` (Use Global). The first press on each cue (per track) taps `Cue n` and pauses it on `Playing 1` instead, with a short blip, to learn where the cue is. Syndicate doesn't report a deck's own quantize, so a deck set to its own quantize is reset to Use Global. On a playing deck it's a hot cue |
