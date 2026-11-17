@@ -60,7 +60,16 @@ public struct ProfileDraft: Sendable {
     /// against each other, never against the LC6000's. Empty means it passes as written.
     public var problems: [String] {
         guard let mapping = file["mapping"] else { return [] }
-        return Mapping.problems(in: Data(mapping.text().utf8), whole: true)
+        let json = Data(mapping.text().utf8)
+        // The decoder's own shape rules (a jog needs a pair or relative_cc, a cycling pad mode needs its button)
+        // aren't in the check, so decode too and add what it throws (#310).
+        var shape: [String] = []
+        do { _ = try JSONDecoder().decode(Mapping.self, from: json) } catch let error as Mapping.JogError {
+            shape.append(error.description)
+        } catch let error as Mapping.ShapeError {
+            shape.append(error.description)
+        } catch {}
+        return Mapping.problems(in: json, whole: true) + shape
     }
 
     mutating func todo(_ key: String, _ how: String) {

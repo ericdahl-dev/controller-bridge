@@ -36,3 +36,15 @@ struct DraftDecodesTests {
         #expect(!draft.placeholders.contains { $0.key.hasPrefix("mapping.notes.") })
     }
 }
+
+/// The draft's check runs the decoder too (#310): shape rules it throws (such as a cycling pad mode with no cycle
+/// button) show in the report like the import check's problems.
+@Suite("Draft check includes the decoder's rules")
+struct DraftShapeProblemTests {
+    @Test("Docs say the pad mode cycles, but there's no mode_cycle button: the decoder's words")
+    func cycle() throws {
+        let docs = try DocsFacts(json: Data(#"{ "mapping": { "pads": { "mode_select": "cycle" } } }"#.utf8))
+        let draft = ProfileDraft.make(capture: try #require(DraftLC6000Tests.walked()), docs: docs)
+        #expect(draft.problems == ["pads: mode_select is cycle, but notes has no mode_cycle button"])
+    }
+}
