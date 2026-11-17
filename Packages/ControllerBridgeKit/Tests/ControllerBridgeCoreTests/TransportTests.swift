@@ -98,7 +98,7 @@ struct TransportTests {
         #expect(rig.osc.sent.filter { $0.address.hasSuffix("PhasePlus") }.count == 1)
     }
 
-    @Test("Shift + Pitch Bend − / + transposes (#377): PitchDown or PitchUp 1 once per press, nothing on release, no nudge")
+    @Test("Shift + Pitch Bend − / + transposes (#377): key lock on, then PitchDown or PitchUp 1, once per press; nothing on release, no nudge")
     func shiftPitchBendTransposes() throws {
         let rig = try Self.started()
         Self.press(rig, 26)   // Shift down
@@ -107,11 +107,25 @@ struct TransportTests {
         Self.press(rig, 25)
         Self.release(rig, 25)
         Self.press(rig, 25)
+        let on = OSCMessage("/Syndicate/Deck/1/PitchPreserve", [.int(1)])
         #expect(rig.osc.sent == [
-            OSCMessage("/Syndicate/Deck/1/PitchDown", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
+            on, OSCMessage("/Syndicate/Deck/1/PitchDown", [.int(1)]),
+            on, OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
+            on, OSCMessage("/Syndicate/Deck/1/PitchUp", [.int(1)]),
         ])
+    }
+
+    @Test("Shift + Pitch Bend turns key lock on first, as Syndicate transposes only with P on (the user's pick): its LED lights, and the next Key Lock press turns it off")
+    func transposeTurnsKeyLockOn() throws {
+        let rig = try Self.started()
+        Self.press(rig, 26)   // Shift down
+        Self.press(rig, 25)
+        Self.release(rig, 25)
+        Self.release(rig, 26)
+        #expect(rig.leds[22] == 127)
+        rig.osc.sent.removeAll()
+        Self.press(rig, 22)   // Key Lock
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PitchPreserve", [.int(0)])])
     }
 
     @Test("Shift + Key Lock resets the tempo: one TempoSlider 0.0, Key Lock untouched, and the fader waits to meet 0.0")
