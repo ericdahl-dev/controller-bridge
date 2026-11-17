@@ -128,4 +128,20 @@ struct JogDisplayBeatSlotTests {
         #expect(Self.shows(port) == [1])
         #expect(Self.uploadSlots(port) == [2])
     }
+
+    @Test("Switch off: through a start, a load, master beats and ticks, beat mode sends nothing to either port")
+    func offSendsNothing() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        rig.coordinator.setJogDisplay(enabled: false)
+        rig.coordinator.start()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        for step in 1...16 {
+            Self.clock(rig, (step - 1) % 4 + 1)
+            rig.clock.now = Double(step) * 0.25
+            rig.coordinator.tick()
+        }
+        #expect(port.controller == [])
+        #expect(port.wd == [])
+    }
 }
