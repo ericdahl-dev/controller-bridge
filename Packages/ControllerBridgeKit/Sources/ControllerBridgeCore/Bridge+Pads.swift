@@ -109,6 +109,8 @@ extension Bridge {
         switch padMode {
         case .hotCue:
             guard index < Self.syndicateCues else { return }
+            // Shift on a stopped deck (#358): go to the cue without playing.
+            if shift, !playing, !playPending { return goToCuePaused(index + 1) }
             hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
         case .roll:
             // The profile's roll sizes (#196); a pad past the list does nothing.
@@ -120,6 +122,19 @@ extension Bridge {
             sendDeck("SetCueLoop", .int(cue))
         case .slicer: break
         }
+    }
+
+    /// Taps cue `cue` on the stopped deck; `cueLaunched` pauses it once Syndicate reports it playing.
+    func goToCuePaused(_ cue: Int) {
+        sendDeck("Cue\(cue)", .int(1))
+        pendingCuePause = (cue, clock.now)
+    }
+
+    /// Syndicate reports the deck playing: if it's the cue tapped by `goToCuePaused`, pause it there.
+    func cueLaunched() {
+        guard pendingCuePause != nil else { return }
+        pendingCuePause = nil
+        sendDeck("Playing", .int(0))
     }
 
     // MARK: LEDs

@@ -134,6 +134,9 @@ final class Bridge {
     var playing = false
     /// A quantized start is waiting for the beat.
     var playPending = false
+    /// Shift + hot cue pad on a stopped deck (#358): the cue tapped, and when, waiting for Syndicate's Playing 1 to
+    /// pause it. Syndicate has no jump-without-play input, and a pause sent before the launch cancels the jump.
+    var pendingCuePause: (cue: Int, armedAt: Double)?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
     /// When any master clock beat last arrived, pulsed or not.
@@ -316,6 +319,7 @@ final class Bridge {
         switch key {
         case "playing":
             playing = value
+            if value { cueLaunched() }
             if !playing, bendDirection != 0 { endBend() }
         case "playpending": playPending = value
         case "temposlider":
