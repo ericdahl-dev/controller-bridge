@@ -110,7 +110,8 @@ enum DemoScript {
         ]
         // The pitch fader from center (0x40) up a quarter (0x50), in five moves; none on a controller without one.
         let pitch = UInt8(clamping: mapping.pitch?.msbCC ?? 0)
-        for (index, msb) in (mapping.pitch == nil ? [] : [UInt8(0x40), 0x44, 0x48, 0x4C, 0x50]).enumerated() {
+        let pitchMoves: [UInt8] = mapping.pitch == nil ? [] : [0x40, 0x44, 0x48, 0x4C, 0x50]
+        for (index, msb) in pitchMoves.enumerated() {
             steps.append(Step(at: 1.0 + Double(index) * 0.25, event: .controlChange(channel: channel, controller: pitch, value: msb)))
         }
         // The jog, the platter position counting up 8 at a time as a slow forward turn does (#103): a nudge while
