@@ -32,6 +32,7 @@ final class CaptureController {
     private var paused: MIDIEndpoint.ID?
     /// The picked source, watched for an unplug mid-capture (#229).
     private var watched: MIDIEndpoint?
+    private var watch: CaptureWatch?
     private var demoTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
     private let setCapture: (MIDIEndpoint.ID?) -> Void
@@ -80,6 +81,7 @@ final class CaptureController {
             let listened = [endpoint] + ports.input.dropFirst().compactMap { name in others.first { $0.name == name } }
             paused = endpoint.id
             watched = endpoint
+            watch = CaptureWatch(source: endpoint.id)
             setCapture(endpoint.id)
             listen(to: listened)
             // The output on the same device entity; by name only when exactly one destination has it.
@@ -297,13 +299,15 @@ final class CaptureController {
     private func devicesChanged() {
         guard let watched, flow.phase == .steps else { return }
         let time = ProcessInfo.processInfo.systemUptime
-        let present = CaptureMIDIInput.isPresent(watched)
-        if !present, !flow.isDisconnected {
+        switch watch?.sourcesChanged(online: CaptureMIDIInput.onlineSourceIDs()) {
+        case .disconnected:
             flow.disconnected(at: time)
-        } else if present, flow.isDisconnected {
+        case .reconnected:
             input?.connect()
             setCapture(watched.id)
             flow.reconnected(at: time)
+        case nil:
+            break
         }
         announce()
     }
