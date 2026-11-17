@@ -57,4 +57,35 @@ struct ShiftCuePausedTests {
         Self.feed(rig, "PlayPending", 0)
         #expect(rig.osc.sent == [])
     }
+
+    /// A 200-second track.
+    static func loadTrack(_ rig: Rig, title: String = "t") {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [.string(title), .string("a"), .string("8A"), .float(120),
+                                                                            .float(200), .int(100), .int(400), .string("track")]))
+    }
+
+    /// The fraction a WaveformSeek asked for, if that's all that was sent.
+    static func seek(_ rig: Rig) -> Float? {
+        guard rig.osc.sent.count == 1, rig.osc.sent[0].address == "/Syndicate/Deck/1/WaveformSeek",
+              case .float(let fraction)? = rig.osc.sent[0].arguments.first else { return nil }
+        return fraction
+    }
+
+    @Test("Learn, then seek (Q off): the first press learns cue 2 from the first Position (30.02 s, less 0.06); the next seeks there silently")
+    func learnThenSeek() throws {
+        let rig = try Self.started()
+        Self.loadTrack(rig)
+        Self.shiftPad(rig, 33)                       // pad 2
+        Self.feed(rig, "Playing", 1)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Position", [.float(30.02)]))
+        Self.feed(rig, "Playing", 0)
+        rig.osc.sent.removeAll()
+        Self.shiftPad(rig, 33)
+        // Cue time 29.96 s; WaveformSeek lands 0.10 s before what it's asked (the live check), so it asks 30.06 / 200.
+        let fraction = try #require(Self.seek(rig), "only a WaveformSeek: \(rig.osc.sent)")
+        #expect(abs(fraction - 0.1503) < 0.00001)
+        rig.osc.sent.removeAll()
+        Self.feed(rig, "Playing", 1)
+        #expect(rig.osc.sent == [], "a seek arms no pause")
+    }
 }

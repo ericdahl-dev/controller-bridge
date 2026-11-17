@@ -124,8 +124,17 @@ extension Bridge {
         }
     }
 
-    /// Taps cue `cue` on the stopped deck; `cueLaunched` pauses it once Syndicate reports it playing.
+    /// Syndicate's first Position after a launch is this far past the cue (the live check on #358: 0.06 s, every run).
+    static let launchReportLead = 0.06
+    /// WaveformSeek lands this far before the time it's asked for (the live check on #358: 0.10 s, every seek).
+    static let seekLands = 0.10
+
+    /// Goes to cue `cue` on the stopped deck. Known (and quantize off), a WaveformSeek there, which is silent. Otherwise
+    /// it taps the cue, and `cueLaunched` pauses it once Syndicate reports it playing, learning where it is.
     func goToCuePaused(_ cue: Int) {
+        if quantizeOn == false, let time = cueTimes[cue], let duration, duration > 0 {
+            return sendDeck("WaveformSeek", .float(Float((time + Self.seekLands) / duration)))
+        }
         sendDeck("Cue\(cue)", .int(1))
         pendingCuePause = (cue, clock.now, false)
     }
@@ -136,7 +145,14 @@ extension Bridge {
         guard let pending = pendingCuePause else { return }
         pendingCuePause = nil
         quantizeOn = pending.quantized
+        learningCue = pending.cue
         if !pending.quantized { sendDeck("Playing", .int(0)) }
+    }
+
+    /// The first Position after a Shift + pad launch: where cue `cue` sits.
+    func learnCue(_ cue: Int, at seconds: Double) {
+        learningCue = nil
+        cueTimes[cue] = max(0, seconds - Self.launchReportLead)
     }
 
     // MARK: LEDs

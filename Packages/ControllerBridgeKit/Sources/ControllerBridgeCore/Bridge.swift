@@ -140,6 +140,10 @@ final class Bridge {
     /// Whether this deck's last launch from stopped waited for the beat (PlayPending first): quantize on. Syndicate
     /// doesn't report quantize itself (#358). Nil until a launch is seen.
     var quantizeOn: Bool?
+    /// Where each hot cue sits, in seconds, learned from a Shift + pad launch (#358): Syndicate never sends cue times.
+    var cueTimes: [Int: Double] = [:]
+    /// The cue just launched by Shift + pad, whose time the next Position gives.
+    var learningCue: Int?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
     /// When any master clock beat last arrived, pulsed or not.
@@ -359,6 +363,9 @@ final class Bridge {
                 return ""
             }
             track = (text(0), text(1), text(2), message.arguments[3].number ?? 0, text(7))
+            return
+        case "position":
+            if let cue = learningCue, playing, let seconds = message.arguments.first?.number { learnCue(cue, at: seconds) }
             return
         case "progress":
             progress = message.arguments.first?.number
