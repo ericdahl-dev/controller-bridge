@@ -220,6 +220,7 @@ final class Bridge {
 
     func handle(_ event: MIDIEvent) {
         // Pads on their own channel (#224) play only there; on the deck's channel they're handled with the other notes.
+        // With their own channel, a deck-channel note is a button even when a pad has the same number (#322).
         if padChannel != channel {
             switch event {
             case .noteOn(padChannel, let note, let velocity):
@@ -228,8 +229,6 @@ final class Bridge {
             case .noteOff(padChannel, let note, _):
                 _ = padNote(Int(note), pressed: false)
                 return
-            case .noteOn(channel, let note, _), .noteOff(channel, let note, _):
-                if pad(for: Int(note)) != nil { return }
             default:
                 break
             }
@@ -248,7 +247,7 @@ final class Bridge {
 
     private func handleNote(_ note: Int, pressed: Bool) {
         if mixerNote(note, pressed: pressed) { return }
-        if padNote(note, pressed: pressed) { return }
+        if padChannel == channel, padNote(note, pressed: pressed) { return }
         if note == mapping.needle.touchNote {
             needleTouched = pressed
             return
