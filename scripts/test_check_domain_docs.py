@@ -75,5 +75,14 @@ class CheckDomainDocsTests(unittest.TestCase):
         self.assertEqual(check_domain_docs.problems(root), ["docs/adr/osc.md: isn't named NNNN-slug.md"])
 
 
+class CIRunsTheCheckTests(unittest.TestCase):
+    def test_ci_runs_the_domain_docs_check_and_its_tests(self):
+        ci = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".github", "workflows", "ci.yml")
+        with open(ci, encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("python3 -I scripts/test_check_domain_docs.py", text)
+        self.assertIn("python3 -I scripts/check_domain_docs.py", text)
+
+
 if __name__ == "__main__":
     unittest.main()
