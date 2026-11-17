@@ -117,6 +117,21 @@ struct TraceJogDisplayTests {
         #expect(lines.list.prefix(2) == ["WD in cmd=0x0F status=0x00 +12 ms", "WD in cmd=0x0F status=0x06 +20 ms"])
     }
 
+    @Test("The unit's identity reply carries its serial number in ASCII: the trace says it arrived, never the bytes")
+    func identityRedacted() {
+        let rig = JogDisplayDriverTests.DriverRig()
+        let lines = Lines()
+        rig.driver.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        rig.clock.now = 200
+        rig.driver.connect()
+        rig.driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        lines.list.removeAll()
+        rig.clock.now = 200.007
+        // A universal identity reply (F0 7E <dev> 06 02 …) with a made-up serial "A12345" (41 31 32 33 34 35).
+        rig.driver.reply([0xF0, 0x7E, 0x00, 0x06, 0x02, 0x00, 0x02, 0x0B, 0x01, 0x00, 0x41, 0x31, 0x32, 0x33, 0x34, 0x35, 0xF7])
+        #expect(lines.list == ["WD in identity reply (serial redacted) +7 ms"])
+    }
+
     @Test("Short WD messages (the needle's pitch bend, the play light) as hex")
     func shortMessages() {
         let rig = JogDisplayDriverTests.DriverRig()
