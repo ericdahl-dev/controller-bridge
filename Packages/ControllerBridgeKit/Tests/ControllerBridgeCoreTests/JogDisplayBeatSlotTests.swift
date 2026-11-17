@@ -71,7 +71,7 @@ struct JogDisplayBeatSlotTests {
         port.wd.filter { $0.count > 11 && $0[6] == 0x0A && $0[11] != 0x06 }.map { $0[11] }
     }
 
-    @Test("While the four go up, only the master's beat (3) is shown; then each beat shows its slot, with mask 0D, and uploads nothing")
+    @Test("While the four go up, only the master's beat (3) is shown, again after each upload; then each beat shows its slot, with mask 0D, and uploads nothing")
     func showPerBeat() throws {
         let rig = try Rig()
         let (port, _) = Self.attach(rig)
@@ -82,7 +82,7 @@ struct JogDisplayBeatSlotTests {
             Self.answer(rig, port)
             shown += Self.shows(port)
         }
-        #expect(shown == [3])
+        #expect(shown == [3, 3, 3, 3])   // each upload starts by showing blank (slot 6): the beat's slot comes back after it
         port.wd.removeAll()
         for beat in [4, 1, 2, 3] { Self.clock(rig, beat) }
         #expect(port.wd == [4, 1, 2, 3].map { JogDisplay.show(slot: $0) })
@@ -107,7 +107,7 @@ struct JogDisplayBeatSlotTests {
             shown += Self.shows(port)
         }
         #expect(slots == [2, 3, 4, 1])
-        #expect(shown == [3])                     // slot 3, once it holds the new track
+        #expect(shown == [3, 3, 3])               // slot 3, once it holds the new track, and again after each later upload
         #expect(drawn.contents.suffix(4).allSatisfy { $0.title != nil })
     }
 
@@ -143,5 +143,21 @@ struct JogDisplayBeatSlotTests {
         }
         #expect(port.controller == [])
         #expect(port.wd == [])
+    }
+
+    @Test("With the master stopped (no new beat), the screen ends on the beat's slot after a load, not on the blank each upload starts with")
+    func endsOnTheBeatNotBlank() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        Self.clock(rig, 2)
+        rig.coordinator.start()
+        _ = Self.uploadAll(rig, port)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        var lastShow: UInt8?
+        for _ in 0..<4 {
+            Self.answer(rig, port)
+            lastShow = port.wd.filter { $0.count > 11 && $0[6] == 0x0A }.last?[11] ?? lastShow
+        }
+        #expect(lastShow == 2)
     }
 }
