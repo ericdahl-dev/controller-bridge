@@ -334,6 +334,20 @@ class CheckSiteTests(unittest.TestCase):
             "support/index.html: says coming in v1.0, but the app is 1.0.1",
         ])
 
+    def test_the_jog_display_is_shown_by_the_apps_renderer_not_the_teaser_art(self):
+        teaser = self.site({"img/jog-art.png": "png", "support/index.html": page(
+            body='<a href="../">Home</a> <img src="../img/jog-art.png" alt="Art">')})
+        self.assertEqual(check_site.problems(teaser), ["support/index.html: shows the v1.1 teaser art (img/jog-art.png); "
+                                                       "use the renderer's images (img/jog-display-*)"])
+        vague = self.site({"img/jog-display-deck1.webp": "webp", "support/index.html": page(
+            body='<a href="../">Home</a> <img src="../img/jog-display-deck1.webp" alt="The jog display">')})
+        self.assertEqual(check_site.problems(vague), [
+            'support/index.html: the alt of ../img/jog-display-deck1.webp doesn\'t say what the ring and the needle show'])
+        good = self.site({"img/jog-display-deck1.webp": "webp", "support/index.html": page(
+            body='<a href="../">Home</a> <img src="../img/jog-display-deck1.webp" '
+                 'alt="Deck 1 playing: the ring lights the master clock\'s beat 2, the needle shows the deck\'s bar">')})
+        self.assertEqual(check_site.problems(good), [])
+
     def test_the_home_page_names_the_apps_version(self):
         root = self.site({"index.html": GOOD["index.html"].replace(APP_LD, "")})
         self.assertEqual(check_site.problems(root), ["index.html: the JSON-LD has no SoftwareApplication softwareVersion"])
