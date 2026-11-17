@@ -96,12 +96,8 @@ public final class Coordinator {
         updateJogDisplay()
     }
 
-    /// When the last feedback message arrived, if any has (#21).
-    private var lastFeedbackAt: Double?
-    /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
-    private var resendSentAt: Double?
-    /// The answer to the last Resend (#150): when it went out, and the addresses that arrived within its window.
-    private var answer: (sentAt: Double, messages: [OSCMessage])?
+    /// Feedback liveness, Resend timing and the subscription verdict (#21, #150, #385).
+    private var health = FeedbackHealth(quiet: 0, answerWindow: 0)
 
     /// Set while the Diagnostics window is open (#26); nil otherwise, so nothing is built for it during a set.
     /// The LED sweep in progress: when it started, its steps and the next one to send.
@@ -559,7 +555,6 @@ public final class Coordinator {
         jogDisplay?.tick()
         jogMarkerTick()
         checkLiveness()
-        checkSubscriptions()
         disconnectFailedOutputs()
     }
 
@@ -687,9 +682,7 @@ public final class Coordinator {
         diagnostics?(.oscIn(message))
         if let trace { traceOSC(.oscIn, message, trace) }
         jogClock(message)
-        answer?.messages.append(message)
-        if SubscriptionCheck.provesSubscriptions(message.address) { status.noDeckData = false }
-        feedbackArrived()
+        feedbackArrived(message)
         for bridge in bridges { bridge.handle(message) }
         for index in controllers.indices { status.controllers[index].master = controllers[index].bridge.isMaster }
         // What the display shows may have changed (a load, a key or BPM change); equal content draws nothing.
@@ -714,33 +707,34 @@ public final class Coordinator {
     /// The OSC settings are shared by every controller; the first one's mapping holds them until Settings (#19).
     private var oscSettings: Mapping.OSC { controllers[0].bridge.mapping.osc }
 
-    private func feedbackArrived() {
-        let now = clock.now
-        let wasStale = status.feedback == .stale
-        // An answer to a Resend still in its answer window is the full state already.
-        let answering = resendSentAt.map { now - $0 < Double(oscSettings.feedbackAnswerMs) / 1000 } ?? false
-        lastFeedbackAt = now
-        resendSentAt = nil
-        status.feedback = .live
-        guard wasStale else { return }
-        log.log("Syndicate feedback is back")
-        for bridge in bridges { bridge.start() }
-        if !answering { requestResend() }
+    /// The health module, with the current OSC settings' windows (Settings may change them).
+    private func checkHealth(_ step: (inout FeedbackHealth, Double) -> FeedbackHealth.Output) {
+        health.quiet = Double(oscSettings.feedbackQuietMs) / 1000
+        health.answerWindow = Double(oscSettings.feedbackAnswerMs) / 1000
+        let output = step(&health, clock.now)
+        status.feedback = health.feedback
+        if output.deckDataProven { status.noDeckData = false }
+        if let verdict = output.verdict {
+            status.noDeckData = verdict.noDeckData
+            status.missingSubscriptions = verdict.missing
+        }
+        switch output.event {
+        case .back:
+            log.log("Syndicate feedback is back")
+            for bridge in bridges { bridge.start() }
+        case .stopped: feedbackStopped()
+        case nil: break
+        }
+        if output.resend { sendResend() }
+    }
+
+    private func feedbackArrived(_ message: OSCMessage) {
+        checkHealth { $0.messageArrived(message, at: $1) }
     }
 
     private func checkLiveness() {
-        let now = clock.now
-        if let last = lastFeedbackAt, resendSentAt == nil, now - last >= Double(oscSettings.feedbackQuietMs) / 1000 {
-            requestResend()
-        }
-        if status.feedback == .live, let sent = resendSentAt, now - sent >= Double(oscSettings.feedbackAnswerMs) / 1000 {
-            feedbackStopped()
-        }
-        // Not live: ask again every quiet period, so a Syndicate that comes back quietly is found.
-        if status.feedback != .live, let sent = resendSentAt, now - sent >= Double(oscSettings.feedbackQuietMs) / 1000 {
-            resendSentAt = nil
-            requestResend()
-        }
+        let required = requiredSubscriptions
+        checkHealth { $0.tick(at: $1, required: required) }
     }
 
     /// What every controller's profile needs, in the guide's order (#211).
@@ -751,19 +745,9 @@ public final class Coordinator {
         return Subscription.allCases.filter(needed.contains)
     }
 
-    /// Once a Resend's answer window closes, what the answer held shows which subscriptions are on (#150).
-    private func checkSubscriptions() {
-        guard let answer, clock.now - answer.sentAt >= Double(oscSettings.feedbackAnswerMs) / 1000 else { return }
-        self.answer = nil
-        guard let check = SubscriptionCheck(answer: answer.messages, required: requiredSubscriptions) else { return }
-        status.noDeckData = check.noDeckData
-        status.missingSubscriptions = check.missing
-    }
-
     /// Syndicate didn't answer: show idle for its state until it's back.
     private func feedbackStopped() {
         let event = "Syndicate feedback stopped"
-        status.feedback = .stale
         status.lastDropout = event
         log.log(event)
         for bridge in bridges { bridge.clearSyndicateState() }
@@ -959,8 +943,7 @@ public final class Coordinator {
     /// Asks Syndicate to resend its state (#84): the OSC destination opened late, so what was sent before was dropped.
     public func resync() {
         // A Resend still "waiting" went out before there was anywhere to send it.
-        resendSentAt = nil
-        requestResend()
+        checkHealth { FeedbackHealth.Output(resend: $0.resync(at: $1)) }
     }
 
     /// Settings' deck colors (#123): the ring repaints, and the status carries them to the badges.
@@ -987,9 +970,10 @@ public final class Coordinator {
 
     /// The one place a Resend is sent. One already waiting for its answer isn't sent again.
     private func requestResend() {
-        guard resendSentAt == nil else { return }
-        resendSentAt = clock.now
-        answer = (clock.now, [])
+        checkHealth { FeedbackHealth.Output(resend: $0.requestResend(at: $1)) }
+    }
+
+    private func sendResend() {
         controllers[0].bridge.send("Feedback/Resend", .int(1))
     }
 
