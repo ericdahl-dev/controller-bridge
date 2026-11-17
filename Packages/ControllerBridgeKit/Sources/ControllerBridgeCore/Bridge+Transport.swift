@@ -5,8 +5,7 @@ extension Bridge {
     func play(_ pressed: Bool) {
         // Play wins over a Shift + pad tap still waiting to be paused (#358).
         guard pressed else { return }
-        endCueJump()
-        restoreQuantize(.jogSeek)
+        end(.play)
         // PLAY while CUE is held keeps the preview playing once CUE is let go, as on a CDJ (#360): set, not toggled,
         // and Syndicate never gets the Cue release, which would take it back to the cue point (the user's test).
         if cueDown {
@@ -155,8 +154,7 @@ extension Bridge {
     /// Sends every recorded release once, then forgets them. Quit, unplug, sleep, a deck or device change and a
     /// mapping import all come through here.
     func releaseAll() {
-        endCueJump()
-        restoreAllQuantize()
+        end(.releaseAll)
         for control in held.takeAll() { send(address: control.address, control.release) }
         if let address = latchedReverse {
             send(address: address, [.int(0)])
