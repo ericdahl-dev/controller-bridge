@@ -47,12 +47,11 @@ enum BridgeHost {
         { event in Task { @MainActor in log.append(event) } }
     }
 
-    /// Hands each jog display event to the simulator, one main-actor hop each (#221).
+    /// Hands each jog display event to the simulator's feed (#221), which hops to the window only while Diagnostics is
+    /// open (#318).
     private nonisolated static func jogSink(_ simulator: JogSimulatorLog) -> @Sendable (JogDisplayEvent) -> Void {
-        { event in
-            let now = Date.now
-            Task { @MainActor in simulator.apply(event, at: now) }
-        }
+        let feed = simulator.feed
+        return { event in feed.receive(event, at: .now) }
     }
 
     /// Copies each Coordinator status change into the menu's status, with one main-actor hop per change. Made here,
