@@ -565,10 +565,11 @@ public final class Coordinator {
         if let diagnostics {
             diagnostics(.midiIn(event, label: mapping.monitorName(for: event), at: clock.now))
         }
-        let routed = layerHandover(event, source: source)
+        let (routed, onlyLayer) = layerHandover(event, source: source)
         // Captured (#186): the layers still follow the unit, so the right one is active after; nothing else runs.
         if source == capturing { return }
-        for index in controllers.indices where controllers[index].source?.id == source {
+        for index in controllers.indices where controllers[index].source?.id == source
+            && (onlyLayer == nil || index == onlyLayer || !controllers[index].followsLayers) {
             controllers[index].bridge.handle(routed)
             for notice in controllers[index].bridge.notices { log.log(notice) }
             controllers[index].bridge.notices.removeAll()
@@ -586,10 +587,13 @@ public final class Coordinator {
     /// - in its normal state every control stays on ch1, so ch1 controls go to the active layer's deck;
     /// - in the other state seen (controls on the layer's own channel), a control on channel N goes to deck N and
     ///   makes layer N active.
-    /// Returns the event as the layers should see it: a ch1 control re-addressed to the active layer's channel.
-    private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) -> MIDIEvent {
+    /// - a pad on a layer's own pad channel (#323) brings that layer to the front; on a pad channel several layers share
+    ///   (pads.channel only), it plays the layer in front. Neither is the multi-channel state.
+    /// Returns the event as the layers should see it: a ch1 control re-addressed to the active layer's channel; and,
+    /// for a pad, the one layer that handles it.
+    private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) -> (MIDIEvent, only: Int?) {
         let layers = controllers.indices.filter { controllers[$0].source?.id == source && controllers[$0].followsLayers }
-        guard let first = layers.first else { return event }
+        guard let first = layers.first else { return (event, nil) }
         let (channel, note, velocity): (UInt8, UInt8?, UInt8) = switch event {
         case .noteOn(let c, let n, let v): (c, n, v)
         case .noteOff(let c, let n, _): (c, n, 0)
@@ -601,21 +605,29 @@ public final class Coordinator {
             if velocity > 0, let target = layers.first(where: { layerChannel($0) == Int(channel) + 1 }), target != current {
                 activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
             }
-            return event
+            return (event, nil)
+        }
+        let onPads = layers.filter {
+            let bridge = controllers[$0].bridge
+            return bridge.padChannel == channel && bridge.padChannel != bridge.channel
+        }
+        if let padLayer = onPads.count == 1 ? onPads.first : onPads.contains(current) ? current : onPads.first {
+            if padLayer != current { activateLayer(padLayer, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source)) }
+            return (event, padLayer)
         }
         if channel == 0 {
             // The normal state: controls on ch1. The active layer's LEDs go out where its controls are.
             if layerChannel(current) != 1 { multiChannelUnits.remove(source) }
             setLEDChannel(0, for: current)
-            return layerChannel(current) == 1 ? event : event.onChannel(UInt8(layerChannel(current) - 1))
+            return (layerChannel(current) == 1 ? event : event.onChannel(UInt8(layerChannel(current) - 1)), nil)
         }
         // Controls on a layer's own channel: that layer is the one in use, and the unit is in its multi-channel state.
         multiChannelUnits.insert(source)
-        guard let target = layers.first(where: { layerChannel($0) == Int(channel) + 1 }) else { return event }
+        guard let target = layers.first(where: { layerChannel($0) == Int(channel) + 1 }) else { return (event, nil) }
         if target != current { activateLayer(target, leaving: current, among: layers, multiChannel: true) }
         status.controllers[target].activeLayer = true
         setLEDChannel(nil, for: target)
-        return event
+        return (event, nil)
     }
 
     /// One handover: the layer left releases what it held and stops writing LEDs; the new one becomes the only active
@@ -857,9 +869,11 @@ public final class Coordinator {
         mapping.deck.number = status.controllers[index].deck
         if let channel = controllers[index].channel {
             mapping.midi.channel = channel
-            // A deck layer's pads may have their own channel (#224).
-            if let padChannel = profile.mapping.midi.layers.first(where: { $0.channel == channel })?.padChannel {
-                mapping.pads.channel = padChannel
+            // A deck layer's pads may have their own channel (#224). Once any layer sets one, a layer that doesn't has its
+            // pads on its own channel: the top-level pads.channel is only for profiles whose layers set none (#323).
+            let layers = profile.mapping.midi.layers
+            if let layer = layers.first(where: { $0.channel == channel }), layer.padChannel != nil || layers.contains(where: { $0.padChannel != nil }) {
+                mapping.pads.channel = layer.padChannel
             }
         }
         let bridge = makeBridge( mapping)

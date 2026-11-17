@@ -59,6 +59,20 @@ struct ChannelAwareCheckTests {
         #expect(Self.problems(data) == [])
     }
 
+    @Test("Once a layer sets its own pad channel, the others' pads are on their deck channel, as the Coordinator runs them (#323)")
+    func layerPadChannelNotInherited() throws {
+        let data = try Self.profile { mapping in
+            Self.ddjNotes(&mapping, pads: [11, 1, 2, 3, 4, 5, 6, 7])          // pad 1 is note 11, like Play
+            var pads = mapping["pads"] as! [String: Any]
+            pads["channel"] = 8
+            mapping["pads"] = pads
+            var midi = mapping["midi"] as! [String: Any]
+            midi["layers"] = [["channel": 1, "deck": 1], ["channel": 2, "deck": 2, "pad_channel": 10]]
+            mapping["midi"] = midi
+        }
+        #expect(Self.problems(data) == ["notes.play: note 11 is also notes.pads[0]"])
+    }
+
     /// Per-mode pad notes (#225), DDJ-like: each mode's eight pads on their own notes.
     static func modeNotes(_ mapping: inout [String: Any], hotcue: [Int] = Array(0...7), roll: [Int] = Array(112...119),
                           channel: Int? = nil) {
