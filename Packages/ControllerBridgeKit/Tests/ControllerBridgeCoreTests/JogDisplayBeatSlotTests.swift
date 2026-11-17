@@ -222,4 +222,46 @@ struct JogDisplayBeatSlotTests {
         for _ in 0..<4 { beat = beat % 4 + 1; expected.append(UInt8(beat)); Self.clock(rig, beat) }
         #expect(Self.shows(port) == expected)
     }
+
+    @Test("A beat upload that stalls (1 of 3 acks, seen on hardware after a deck change) is tried again, the rest still go up, and every beat shows")
+    func stalledUploadRetried() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        Self.clock(rig, 1)
+        rig.coordinator.start()
+        Self.answer(rig, port)                    // slot 1 stored; slot 2 on the wire
+        port.wd.removeAll()
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted)   // 1 of 3 acks, then nothing
+        rig.clock.now += 5
+        rig.coordinator.tick()
+        #expect(Self.uploadSlots(port) == [2])   // slot 2 again
+        var slots: [UInt8] = [2]
+        for _ in 0..<3 {
+            Self.answer(rig, port)
+            slots += Self.uploadSlots(port)
+        }
+        #expect(slots == [2, 3, 4])
+        Self.answer(rig, port)
+        port.wd.removeAll()
+        for beat in [2, 3, 4, 1] { Self.clock(rig, beat) }
+        #expect(Self.shows(port) == [2, 3, 4, 1])
+    }
+
+    @Test("A slot that stalls three times in a row is given up on, logged, and the rest still go up: no endless retries")
+    func stalledUploadGivenUp() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        Self.clock(rig, 1)
+        rig.coordinator.start()
+        Self.answer(rig, port)                    // slot 1 stored; slot 2 on the wire
+        var tries = 0
+        while Self.uploadSlots(port) == [2], tries < 10 {
+            tries += 1
+            port.wd.removeAll()
+            rig.clock.now += 5
+            rig.coordinator.tick()
+        }
+        #expect(tries == 3)
+        #expect(Self.uploadSlots(port) == [3])
+    }
 }
