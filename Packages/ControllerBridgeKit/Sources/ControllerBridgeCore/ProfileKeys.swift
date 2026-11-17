@@ -1,3 +1,4 @@
+import Foundation
 // The profile key table (#382): every key a controller mapping takes, declared once. Its path (a list item's index
 // written `[]`), its kind, the LC6000's value (ADR-0002: the LC6000 is the default), and its range, choices or list
 // length. The checker and the decoder read it.
@@ -58,6 +59,15 @@ public struct ProfileKey: Equatable, Sendable {
 public enum ProfileKeys {
     /// Every key, in the LC6000's mapping's order, then the optional ones.
     public static let all: [ProfileKey] = lc6000Keys + optionalKeys
+
+    /// The decoder's value for a left-out key, from the table (#382). The table tests pin every fallback, so a key
+    /// without one, or one that doesn't decode, is a programming error.
+    static func fallback<T: Decodable>(_ path: String, as type: T.Type = T.self) -> T {
+        guard let text = key(path)?.fallback, let value = try? JSONDecoder().decode(T.self, from: Data(text.utf8)) else {
+            preconditionFailure("The key table has no usable fallback for \(path)")
+        }
+        return value
+    }
 
     /// The key at `path` (an index written as `[]`).
     public static func key(_ path: String) -> ProfileKey? { byPath[path] }

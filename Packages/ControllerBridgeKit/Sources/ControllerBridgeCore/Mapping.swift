@@ -134,7 +134,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var modeCycleVelocities: ModeVelocities?
 
         /// The LC6000's: 1/32 of a beat on pad 1 up to 4 beats on pad 8.
-        public static let lc6000RollSizes = RollSize.allCases.map(\.rawValue)
+        public static let lc6000RollSizes: [String] = ProfileKeys.fallback("pads.roll_sizes")
 
         public init(rollSizes: [String] = Self.lc6000RollSizes, modeSelect: ModeSelect = .buttons,
                     modeCycleVelocities: ModeVelocities? = nil) {
@@ -150,8 +150,8 @@ public struct Mapping: Equatable, Sendable, Codable {
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? Self.lc6000RollSizes
-            modeSelect = try c.decodeIfPresent(ModeSelect.self, forKey: .modeSelect) ?? .buttons
+            rollSizes = try c.decodeIfPresent([String].self, forKey: .rollSizes) ?? ProfileKeys.fallback("pads.roll_sizes")
+            modeSelect = try c.decodeIfPresent(ModeSelect.self, forKey: .modeSelect) ?? ProfileKeys.fallback("pads.mode_select")
             modeCycleVelocities = try c.decodeIfPresent(ModeVelocities.self, forKey: .modeCycleVelocities)
             channel = try c.decodeIfPresent(Int.self, forKey: .channel)
             modeNotes = try c.decodeIfPresent(ModeNotes.self, forKey: .modeNotes)
@@ -202,10 +202,10 @@ public struct Mapping: Equatable, Sendable, Codable {
             input = try container.decode(String.self, forKey: .input)
             output = try container.decode(String.self, forKey: .output)
             channel = try container.decode(Int.self, forKey: .channel)
-            ignoreNotes = try container.decodeIfPresent([Int].self, forKey: .ignoreNotes) ?? []
-            layers = try container.decodeIfPresent([Layer].self, forKey: .layers) ?? []
+            ignoreNotes = try container.decodeIfPresent([Int].self, forKey: .ignoreNotes) ?? ProfileKeys.fallback("midi.ignore_notes")
+            layers = try container.decodeIfPresent([Layer].self, forKey: .layers) ?? ProfileKeys.fallback("midi.layers")
             layerNote = try container.decodeIfPresent(Int.self, forKey: .layerNote)
-            encoderFormat = try container.decodeIfPresent(EncoderFormat.self, forKey: .encoderFormat) ?? .twosComplement
+            encoderFormat = try container.decodeIfPresent(EncoderFormat.self, forKey: .encoderFormat) ?? ProfileKeys.fallback("midi.encoder_format")
         }
     }
 
@@ -412,13 +412,13 @@ public struct Mapping: Equatable, Sendable, Codable {
         /// `bits` defaults to 14; a 7-bit fader may leave out `lsb_cc` (#195).
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            bits = try container.decodeIfPresent(Int.self, forKey: .bits) ?? 14
+            bits = try container.decodeIfPresent(Int.self, forKey: .bits) ?? ProfileKeys.fallback("pitch.bits")
             msbCC = try container.decode(Int.self, forKey: .msbCC)
             lsbCC = try container.decodeIfPresent(Int.self, forKey: .lsbCC)
             invert = try container.decode(Bool.self, forKey: .invert)
             deadZone = try container.decode(Double.self, forKey: .deadZone)
-            pickup = try container.decodeIfPresent(Bool.self, forKey: .pickup) ?? true
-            pickupTolerance = try container.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? 0.02
+            pickup = try container.decodeIfPresent(Bool.self, forKey: .pickup) ?? ProfileKeys.fallback("pitch.pickup")
+            pickupTolerance = try container.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? ProfileKeys.fallback("pitch.pickup_tolerance")
             if bits == 14, lsbCC == nil { throw ShapeError("pitch: lsb_cc is missing (or set bits to 7)") }
         }
     }
@@ -484,7 +484,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: Key.self)
             pads = try container.decode([Int].self, forKey: Key(stringValue: "pads"))
-            shifted = try container.decodeIfPresent([String: Int].self, forKey: Key(stringValue: "shifted")) ?? [:]
+            shifted = try container.decodeIfPresent([String: Int].self, forKey: Key(stringValue: "shifted")) ?? ProfileKeys.fallback("notes.shifted")
             buttons = [:]
             for key in container.allKeys where !["pads", "shifted"].contains(key.stringValue) {
                 buttons[key.stringValue] = try container.decode(Int.self, forKey: key)
@@ -579,10 +579,10 @@ public struct Mapping: Equatable, Sendable, Codable {
                 dimUnlitButtons: try c.decode(Bool.self, forKey: .dimUnlitButtons),
                 beatPulse: try c.decode(BeatPulse.self, forKey: .beatPulse), pulseMs: try c.decode(Int.self, forKey: .pulseMs),
                 staleIdle: try c.decode(StaleIdle.self, forKey: .staleIdle),
-                ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? true,
+                ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? ProfileKeys.fallback("leds.ring_follows_deck"),
                 levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000,
-                colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? .rgb222,
-                mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? false
+                colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? ProfileKeys.fallback("leds.color_table"),
+                mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? ProfileKeys.fallback("leds.mirror_shifted")
             )
         }
     }
@@ -593,7 +593,8 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var dim: Int
         public var off: Int
 
-        public static let lc6000 = LEDLevels(full: 127, dim: 1, off: 0)
+        public static let lc6000 = LEDLevels(full: ProfileKeys.fallback("leds.levels.full"), dim: ProfileKeys.fallback("leds.levels.dim"),
+                                             off: ProfileKeys.fallback("leds.levels.off"))
 
         public init(full: Int, dim: Int, off: Int) {
             self.full = full
@@ -603,9 +604,9 @@ public struct Mapping: Equatable, Sendable, Codable {
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            full = try c.decodeIfPresent(Int.self, forKey: .full) ?? Self.lc6000.full
-            dim = try c.decodeIfPresent(Int.self, forKey: .dim) ?? Self.lc6000.dim
-            off = try c.decodeIfPresent(Int.self, forKey: .off) ?? Self.lc6000.off
+            full = try c.decodeIfPresent(Int.self, forKey: .full) ?? ProfileKeys.fallback("leds.levels.full")
+            dim = try c.decodeIfPresent(Int.self, forKey: .dim) ?? ProfileKeys.fallback("leds.levels.dim")
+            off = try c.decodeIfPresent(Int.self, forKey: .off) ?? ProfileKeys.fallback("leds.levels.off")
         }
 
         enum CodingKeys: String, CodingKey { case full, dim, off }
@@ -680,7 +681,7 @@ extension Mapping {
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            bits = try c.decodeIfPresent(Int.self, forKey: .bits) ?? 14
+            bits = try c.decodeIfPresent(Int.self, forKey: .bits) ?? ProfileKeys.fallback("mixer.volume.bits")
             msbCC = try c.decode(Int.self, forKey: .msbCC)
             lsbCC = try c.decodeIfPresent(Int.self, forKey: .lsbCC)
             if bits == 14, lsbCC == nil {
@@ -738,8 +739,8 @@ extension Mapping {
                 cc = try c.decode(Int.self, forKey: .cc)
                 steps = try c.decode([Int].self, forKey: .steps)
                 clip = try c.decodeIfPresent(Int.self, forKey: .clip)
-                holdMs = try c.decodeIfPresent(Int.self, forKey: .holdMs) ?? 300
-                rateHz = try c.decodeIfPresent(Int.self, forKey: .rateHz) ?? 30
+                holdMs = try c.decodeIfPresent(Int.self, forKey: .holdMs) ?? ProfileKeys.fallback("mixer.meter.hold_ms")
+                rateHz = try c.decodeIfPresent(Int.self, forKey: .rateHz) ?? ProfileKeys.fallback("mixer.meter.rate_hz")
             }
         }
 
@@ -764,8 +765,8 @@ extension Mapping {
             muteNote = try c.decodeIfPresent(Int.self, forKey: .muteNote)
             soloNote = try c.decodeIfPresent(Int.self, forKey: .soloNote)
             meter = try c.decodeIfPresent(Meter.self, forKey: .meter)
-            pickup = try c.decodeIfPresent(Bool.self, forKey: .pickup) ?? true
-            pickupTolerance = try c.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? 0.02
+            pickup = try c.decodeIfPresent(Bool.self, forKey: .pickup) ?? ProfileKeys.fallback("mixer.pickup")
+            pickupTolerance = try c.decodeIfPresent(Double.self, forKey: .pickupTolerance) ?? ProfileKeys.fallback("mixer.pickup_tolerance")
         }
     }
 }
