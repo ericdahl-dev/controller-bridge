@@ -188,4 +188,48 @@ struct ShiftCuePausedTests {
         Self.feed(rig, "Playing", 1)
         #expect(rig.osc.sent == [])
     }
+
+    // MARK: Where it applies (pins: these pass by construction, and guard the scope)
+
+    @Test("Playing deck: Shift + pad is a normal hot cue")
+    func playingDeck() throws {
+        let rig = try Self.started()
+        Self.feed(rig, "Playing", 1)
+        rig.osc.sent.removeAll()
+        Self.shiftPad(rig, 33)
+        #expect(rig.osc.sent == Self.hotCue2)
+    }
+
+    @Test("Roll mode: Shift + pad on a stopped deck still rolls")
+    func rollUnchanged() throws {
+        let rig = try Self.started()
+        PadChannelCoordinatorTests.press(rig, 28, channel: 1)         // mode_roll
+        rig.osc.sent.removeAll()
+        Self.shiftPad(rig)
+        #expect(rig.osc.sent.allSatisfy { $0.address.contains("/SlipLoop/") } && !rig.osc.sent.isEmpty, "\(rig.osc.sent)")
+    }
+
+    @Test("A pad on the Shift pad channel (#324) on a stopped deck goes to the cue too")
+    func shiftedChannel() throws {
+        let rig = try Self.started(#"{ "pads": { "channel": 8, "shifted_channel": 9 } }"#)
+        PadChannelCoordinatorTests.press(rig, 32, channel: 9)
+        #expect(rig.osc.sent == [Self.cue1])
+    }
+
+    @Test("Per layer: deck 2's Shift pad on 11, deck 2 stopped, taps deck 2's cue")
+    func perLayer() throws {
+        let layers = [Mapping.Layer(channel: 1, deck: 1, padChannel: 8, shiftedPadChannel: 9),
+                      Mapping.Layer(channel: 2, deck: 2, padChannel: 10, shiftedPadChannel: 11)]
+        let rig = try PadChannelInheritanceTests.layered(#"""
+            { "midi": { "layers": [ { "channel": 1, "deck": 1, "pad_channel": 8, "shifted_pad_channel": 9 },
+                                    { "channel": 2, "deck": 2, "pad_channel": 10, "shifted_pad_channel": 11 } ] } }
+            """#, layers: layers)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(0)]))
+        rig.osc.sent.removeAll()
+        PadChannelCoordinatorTests.press(rig, 32, channel: 11)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/Cue1", [.int(1)])])
+        rig.osc.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/Playing", [.int(0)])])
+    }
 }
