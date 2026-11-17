@@ -230,11 +230,7 @@ public final class Coordinator {
         }
     }
 
-    /// Platter moves no longer turn the needle (the user's pick for v1.1, reversing #306): a seek on a paused deck moves
-    /// the deck's BarRamp, which the needle follows. The counts are dropped.
-    private func jogPlatter() {
-        for index in controllers.indices { controllers[index].bridge.jogCountsPending = 0 }
-    }
+
 
 
     /// The marker and the play light, from the tick: the hand while playing or after a platter move, at most 30 a
@@ -577,7 +573,6 @@ public final class Coordinator {
             for notice in controllers[index].bridge.notices { log.log(notice) }
             controllers[index].bridge.notices.removeAll()
         }
-        jogPlatter()
         disconnectFailedOutputs()
     }
 

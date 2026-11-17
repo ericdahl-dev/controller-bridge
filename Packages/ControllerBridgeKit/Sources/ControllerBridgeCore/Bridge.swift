@@ -124,8 +124,6 @@ final class Bridge {
     var jogPosition: Int?
     /// The loaded track's TrackInfo, for the jog display (#165): nil when nothing is loaded.
     var track: (title: String, artist: String, key: String, bpm: Double, playerType: String)?
-    /// Platter counts moved since the Coordinator last read them, for the jog display's marker (#165).
-    var jogCountsPending = 0
     /// The deck's live tempo from Syndicate's BPM feedback, for the jog needle's run between BarRamps (#165).
     var bpm: Double?
     var needleMSBValue: UInt8 = 0
