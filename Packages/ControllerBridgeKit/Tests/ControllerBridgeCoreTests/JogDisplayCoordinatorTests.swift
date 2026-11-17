@@ -324,10 +324,10 @@ struct JogDisplayPipeTests {
 /// like the other switches.
 @Suite("Jog display setting")
 struct JogDisplaySettingTests {
-    @Test("Off by default, and off in settings saved before it")
-    func offByDefault() throws {
+    @Test("On by default for new settings (v1.1, after the hardware check); settings saved before it keep it off")
+    func onByDefault() throws {
         let defaults = BridgeSettings.defaults(from: try Mapping.bundledDefault())
-        #expect(defaults.jogDisplay == false)
+        #expect(defaults.jogDisplay == true)
         var saved = try JSONSerialization.jsonObject(with: JSONEncoder().encode(defaults)) as! [String: Any]
         saved["jogDisplay"] = nil
         let old = try JSONDecoder().decode(BridgeSettings.self, from: JSONSerialization.data(withJSONObject: saved))
