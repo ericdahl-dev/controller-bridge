@@ -21,6 +21,11 @@ public enum DraftReport {
                 "- `\(fact.key)` = \(fact.value.text())" + (fact.source.map { " (\($0))" } ?? " (no source given)") + "\n"
             }.joined()
         }
+        if !draft.placeholders.isEmpty {
+            // Filled so the file loads (#310); none of these was captured or documented.
+            out += "\n## Placeholders from the LC6000 (check each)\n\n"
+                + draft.placeholders.map { "- `\($0.key)` = \($0.value.text())\n" }.joined()
+        }
         out += "\n## TODO\n\n" + (draft.todos.isEmpty ? "None.\n" : draft.todos.map { "- [ ] `\($0.key)`: \($0.how)\n" }.joined())
         return out
     }

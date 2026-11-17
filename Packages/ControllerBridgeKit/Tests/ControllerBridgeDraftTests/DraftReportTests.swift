@@ -21,3 +21,15 @@ struct DraftReportTests {
         #expect(!text.contains("## Import check"))
     }
 }
+
+/// The report lists every placeholder (#310), so nothing filled from the LC6000 passes for known.
+@Suite("Draft report placeholders")
+struct DraftReportPlaceholderTests {
+    @Test("A placeholder section names each key and the LC6000 value it holds")
+    func listed() {
+        let text = DraftReport.text(ProfileDraft.make(capture: DraftCheckTests.ddj))
+        #expect(text.contains("## Placeholders from the LC6000 (check each)\n"))
+        #expect(text.contains("- `mapping.leds.ring` = 40\n"))
+        #expect(text.contains("- `mapping.needle.msb_cc` = 64\n"))
+    }
+}
