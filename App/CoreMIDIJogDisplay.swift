@@ -53,7 +53,7 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
 
     private func send(_ bytes: [UInt8], hint: String) {
         guard let destination = Self.find(sources: false, hint: hint) else { return }
-        let words: [[UInt32]] = bytes.first == 0xF0 ? Self.sysex7(bytes) : [[Self.voice(bytes)]]
+        let words: [[UInt32]] = bytes.first == 0xF0 ? UMP.sysex7(bytes) : [[UMP.voice(bytes)]]
         // At most 512 packets a list, about 4 KB of SysEx: big enough to be fast, small enough for any buffer.
         let capacity = 1024 * 4 * 8 + 1024
         let list = UnsafeMutableRawPointer.allocate(byteCount: capacity, alignment: 8).bindMemory(to: MIDIEventList.self, capacity: 1)
@@ -65,24 +65,6 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
             }
             MIDISendEventList(output, destination, list)
         }
-    }
-
-    /// A SysEx message (F0 … F7) as UMP SysEx7 packets of two words: the bytes between F0 and F7, six at a time.
-    static func sysex7(_ message: [UInt8]) -> [[UInt32]] {
-        let body = Array(message.dropFirst().dropLast())
-        let pieces = stride(from: 0, to: max(body.count, 1), by: 6).map { Array(body[$0..<min($0 + 6, body.count)]) }
-        return pieces.enumerated().map { index, piece in
-            let status: UInt32 = pieces.count == 1 ? 0 : index == 0 ? 1 : index == pieces.count - 1 ? 3 : 2
-            let b = piece.map(UInt32.init) + Array(repeating: 0, count: 6 - piece.count)
-            return [0x3000_0000 | status << 20 | UInt32(piece.count) << 16 | b[0] << 8 | b[1],
-                    b[2] << 24 | b[3] << 16 | b[4] << 8 | b[5]]
-        }
-    }
-
-    /// A three-byte channel message (pitch bend, a note) as one UMP type 2 word.
-    static func voice(_ bytes: [UInt8]) -> UInt32 {
-        let b = bytes + [0, 0, 0]
-        return 0x2000_0000 | UInt32(b[0]) << 16 | UInt32(b[1] & 0x7F) << 8 | UInt32(b[2] & 0x7F)
     }
 
     private static func find(sources: Bool, hint: String) -> MIDIEndpointRef? {
@@ -103,30 +85,15 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
     }
 }
 
-/// Rebuilds SysEx from UMP SysEx7 packets and hands each whole message to the pipe.
+/// Hands each whole SysEx the WD port sends to the pipe. The packet math is the Kit's SysExReassembler (#309).
 final class SysExAssembler: Sendable {
     private let producer: EventPipe.Producer
-    private let buffer = Mutex<[UInt8]>([])
+    private let reassembler = Mutex(SysExReassembler())
 
     init(_ producer: EventPipe.Producer) { self.producer = producer }
 
     func feed(_ words: [UInt32]) {
-        var index = 0
-        while index + 1 < words.count {
-            let first = words[index], second = words[index + 1]
-            index += 2
-            guard first >> 28 == 3 else { continue }
-            let status = first >> 20 & 0xF, count = Int(first >> 16 & 0xF)
-            let bytes = [UInt8(first >> 8 & 0xFF), UInt8(first & 0xFF), UInt8(second >> 24), UInt8(second >> 16 & 0xFF),
-                         UInt8(second >> 8 & 0xFF), UInt8(second & 0xFF)].prefix(count)
-            let whole: [UInt8]? = buffer.withLock { buffer in
-                if status == 0 || status == 1 { buffer = [] }
-                buffer += bytes
-                guard status == 0 || status == 3 else { return nil }
-                return [0xF0] + buffer + [0xF7]
-            }
-            if let whole { producer.jogDisplayReply(whole) }
-        }
+        for message in reassembler.withLock({ $0.feed(words) }) { producer.jogDisplayReply(message) }
     }
 }
 
