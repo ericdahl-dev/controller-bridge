@@ -27,11 +27,20 @@ public struct ProfileKey: Equatable, Sendable {
     public let range: ClosedRange<Double>?
     public let choices: [String]
     public let numberChoices: [Double]
-    /// How many items a list takes.
+    /// How many items a list takes, and what one is called in a problem ("value", "entry", "pad").
     public let count: ClosedRange<Int>?
+    public let item: String
+
+    /// What's wrong with a list of `n` items, or nil when its length is fine.
+    func countProblem(_ n: Int) -> String? {
+        guard let count, !count.contains(n) else { return nil }
+        if count.lowerBound == count.upperBound { return "expected \(count.lowerBound) \(item)s, got \(n)" }
+        if count.upperBound == Int.max { return "expected at least one \(item)" }
+        return "expected \(count.lowerBound)-\(count.upperBound) \(item)s, got \(n)"
+    }
 
     init(_ path: String, _ kind: Kind, _ lc6000: String?, range: ClosedRange<Double>? = nil, choices: [String] = [],
-         numberChoices: [Double] = [], count: ClosedRange<Int>? = nil) {
+         numberChoices: [Double] = [], count: ClosedRange<Int>? = nil, item: String = "value") {
         self.path = path
         self.kind = kind
         self.lc6000 = lc6000
@@ -39,6 +48,7 @@ public struct ProfileKey: Equatable, Sendable {
         self.choices = choices
         self.numberChoices = numberChoices
         self.count = count
+        self.item = item
     }
 }
 
@@ -117,7 +127,7 @@ public enum ProfileKeys {
         ProfileKey("browse.auto_loop_size_cc", .wholeNumber, "3", range: cc),
         ProfileKey("notes", .object, "{}"),
     ] + buttons.map { ProfileKey("notes.\($0.0)", .wholeNumber, "\($0.1)", range: note) } + [
-        ProfileKey("notes.pads", .list, "[32, 33, 34, 35, 36, 37, 38, 39]", count: 1...16),
+        ProfileKey("notes.pads", .list, "[32, 33, 34, 35, 36, 37, 38, 39]", count: 1...16, item: "pad"),
         ProfileKey("notes.pads[]", .wholeNumber, "32", range: note),
         ProfileKey("notes.platter_touch", .wholeNumber, "40", range: note),
         ProfileKey("notes.param_back", .wholeNumber, "68", range: note),
@@ -142,7 +152,7 @@ public enum ProfileKeys {
         ProfileKey("leds.levels.dim", .wholeNumber, "1", range: note),
         ProfileKey("leds.levels.off", .wholeNumber, "0", range: note),
         // "rgb222", or a list of entries (#197): the list form is its own keys below.
-        ProfileKey("leds.color_table", .text, #""rgb222""#, choices: ["rgb222"], count: 1...Int.max),
+        ProfileKey("leds.color_table", .text, #""rgb222""#, choices: ["rgb222"], count: 1...Int.max, item: "entry"),
         ProfileKey("pads", .object, "{}"),
         ProfileKey("pads.roll_sizes", .list, #"["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]"#),
         ProfileKey("pads.roll_sizes[]", .text, #""ThirtySecond""#, choices: Mapping.Pads.RollSize.allRawValues),

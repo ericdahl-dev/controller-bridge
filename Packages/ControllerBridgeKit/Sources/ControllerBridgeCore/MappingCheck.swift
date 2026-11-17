@@ -50,7 +50,7 @@ extension Mapping {
         case let (.object(pairs), .object):
             return .object(pairs.compactMap { pair in
                 let childPath = path.isEmpty ? pair.key : "\(path).\(pair.key)"
-                guard let given = schema[pair.key] ?? optionalKey(childPath) ?? shiftedSchema(childPath, notes: schema) else { return nil }
+                guard let given = schema[pair.key] ?? optionalKey(childPath) else { return nil }
                 let expected = alternative(pair.value, at: childPath) ?? given
                 guard kindProblem(pair.value, expected: expected) == nil else { return nil }
                 return (pair.key, known(pair.value, schema: expected, path: childPath))
@@ -87,12 +87,12 @@ extension Mapping {
             guard case .number(let n, _)? = value(at: path, in: merged) else { continue }
             let pattern = path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
             if pattern == "notes.pads[]", hasModeNotes { continue }
-            if pattern.hasPrefix("notes.") || pattern.hasPrefix("pads.mode_notes.") || pattern == "needle.touch_note" || mixerNotes.map({ "mixer.\($0)" }).contains(pattern) {
+            if pattern.hasPrefix("notes.") || pattern.hasPrefix("pads.mode_notes.") || pattern == "needle.touch_note" || ProfileKeys.mixerNotes.map({ "mixer.\($0)" }).contains(pattern) {
                 notes.append((path, n))
             } else if ["jog.msb_cc", "jog.lsb_cc", "pitch.msb_cc", "pitch.lsb_cc", "needle.msb_cc", "needle.lsb_cc", "browse.select_turn_cc",
                        "browse.auto_loop_size_cc", "jog.relative_cc", "jog.relative_edge_cc"].contains(pattern)
                 // A mixer fader's CCs are inputs too; the meter's CC is an output, so it can't clash with one (#207).
-                || mixerControls.contains(where: { pattern == "mixer.\($0).msb_cc" || pattern == "mixer.\($0).lsb_cc" }) {
+                || ProfileKeys.mixerControls.contains(where: { pattern == "mixer.\($0).msb_cc" || pattern == "mixer.\($0).lsb_cc" }) {
                 ccs.append((path, n))
             }
         }
@@ -201,7 +201,7 @@ extension Mapping {
         case let (.object(pairs), _):
             for (key, child) in pairs {
                 let childPath = path.isEmpty ? key : "\(path).\(key)"
-                guard let expected = schema[key] ?? optionalKey(childPath) ?? shiftedSchema(childPath, notes: schema) else {
+                guard let expected = schema[key] ?? optionalKey(childPath) else {
                     out.append("\(childPath): unknown key")
                     continue
                 }
@@ -237,151 +237,63 @@ extension Mapping {
         return "expected \(wanted), got \(describe(value))"
     }
 
-    /// Keys that take another kind than the default's too, with an example of it: the color table is "rgb222" or a
-    /// list of entries (#197).
-    private static let alternatives: [String: OrderedJSON] = [
-        "leds.color_table": .array([.object([("rgb", .array([.number(0, isInteger: true)])), ("value", .number(0, isInteger: true))])]),
-    ]
-
-    /// The alternative schema at `path` when the value is of its kind.
+    /// Keys that take another kind than the default's too: the color table is "rgb222" or a list of entries (#197),
+    /// whose entries are the table's `leds.color_table[]` keys.
     private static func alternative(_ value: OrderedJSON, at path: String) -> OrderedJSON? {
-        guard let other = alternatives[path], kindProblem(value, expected: other) == nil else { return nil }
-        return other
+        guard path == "leds.color_table", let entry = example("leds.color_table[]") else { return nil }
+        let other = OrderedJSON.array([entry])
+        return kindProblem(value, expected: other) == nil ? other : nil
     }
 
-    /// Keys a profile may add that the LC6000's default leaves out (#204), with an example of each one's kind.
-    /// `notes.shifted` (#226): the notes' own buttons, each a note, so a misspelled button is an unknown key and each
-    /// note gets the notes' range and duplicate checks.
-    private static func shiftedSchema(_ path: String, notes: OrderedJSON) -> OrderedJSON? {
-        guard path == "notes.shifted", case .object(let pairs) = notes else { return nil }
-        return .object(pairs.filter { $0.key != "pads" && $0.key != "shifted" })
-    }
-
-    /// The mixer's faders and knobs (#207), and every key the section takes.
-    private static let mixerControls = ["volume", "trim", "eq_high", "eq_mid", "eq_low", "filter", "filter_res", "filter_width"]
-    private static let mixerNotes = ["cue_note", "mute_note", "solo_note"]
-    private static let mixerSchema: OrderedJSON = {
-        let int = OrderedJSON.number(0, isInteger: true)
-        let control = OrderedJSON.object([("msb_cc", int), ("lsb_cc", int), ("bits", int)])
-        return .object(mixerControls.map { ($0, control) } + mixerNotes.map { ($0, int) } + [
-            ("meter", .object([("cc", int), ("steps", .array([int])), ("clip", int), ("hold_ms", int), ("rate_hz", int)])),
-            ("pickup", .bool(true)), ("pickup_tolerance", .number(0.02, isInteger: false)),
-        ])
-    }()
-
-    private static let optionalKeys: [String: OrderedJSON] = [
-        // The mixer section (#207): the LC6000 has none.
-        "mixer": mixerSchema,
-        "jog.relative_cc": .number(0, isInteger: true),
-        "jog.relative_edge_cc": .number(0, isInteger: true),
-        // One cycling pad-mode button (#198): its note, and its LED's velocity per mode.
-        "notes.mode_cycle": .number(0, isInteger: true),
-        "pads.mode_cycle_velocities": .object([
-            ("hotcue", .number(0, isInteger: true)), ("roll", .number(0, isInteger: true)),
-            ("loop", .number(0, isInteger: true)), ("slicer", .number(0, isInteger: true)),
-        ]),
-        // The pads' own MIDI channel (#224), for the deck and for each deck layer.
-        "pads.channel": .number(0, isInteger: true),
-        "midi.layers[].pad_channel": .number(0, isInteger: true),
-        // With Shift held, when the hardware does Shift on the pads' channel (#324).
-        "pads.shifted_channel": .number(0, isInteger: true),
-        "midi.layers[].shifted_pad_channel": .number(0, isInteger: true),
-        // Each pad mode's own notes (#225).
-        "pads.mode_notes": .object([
-            ("hotcue", .array([.number(0, isInteger: true)])), ("roll", .array([.number(0, isInteger: true)])),
-            ("loop", .array([.number(0, isInteger: true)])), ("slicer", .array([.number(0, isInteger: true)])),
-        ]),
-    ]
-
-    /// An optional key's expected kind by its path, a list element's index written as `[]`.
+    /// An optional key's expected kind (one the LC6000's mapping leaves out), from the key table, by its path with a
+    /// list item's index written `[]`.
     private static func optionalKey(_ path: String) -> OrderedJSON? {
-        optionalKeys[path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)]
+        let pattern = keyPattern(path)
+        guard let key = ProfileKeys.key(pattern), key.lc6000 == nil else { return nil }
+        return example(pattern)
     }
 
-    /// Ranges and choices, by key path. A list element's path ends in `[]`.
-    private static let ranges: [String: ClosedRange<Double>] = {
-        var table: [String: ClosedRange<Double>] = [
-            "midi.channel": 1...16,
-            "deck.number": 1...4,
-            "midi.layers[].channel": 1...16,
-            "midi.layers[].deck": 1...4,
-            "midi.layers[].pad_channel": 1...16, "pads.channel": 1...16,
-            "midi.layers[].shifted_pad_channel": 1...16, "pads.shifted_channel": 1...16,
-            "pads.mode_notes.hotcue[]": 0...127, "pads.mode_notes.roll[]": 0...127,
-            "pads.mode_notes.loop[]": 0...127, "pads.mode_notes.slicer[]": 0...127,
-            "midi.layer_note": 0...127,
-            "notes.pads[]": 0...127,
-            "jog.msb_cc": 0...127, "jog.lsb_cc": 0...127, "jog.relative_cc": 0...127, "jog.relative_edge_cc": 0...127,
-            "pitch.msb_cc": 0...127, "pitch.lsb_cc": 0...127,
-            "needle.msb_cc": 0...127, "needle.lsb_cc": 0...127, "needle.touch_note": 0...127,
-            "midi.ignore_notes[]": 0...127,
-            "browse.select_turn_cc": 0...127, "browse.auto_loop_size_cc": 0...127,
-            "leds.pitch_center": 0...127, "leds.ring": 0...127,
-            "leds.levels.full": 0...127, "leds.levels.dim": 0...127, "leds.levels.off": 0...127,
-            "leds.color_table[].rgb[]": 0...255, "leds.color_table[].value": 0...127,
-            "pads.mode_cycle_velocities.hotcue": 0...127, "pads.mode_cycle_velocities.roll": 0...127,
-            "pads.mode_cycle_velocities.loop": 0...127, "pads.mode_cycle_velocities.slicer": 0...127,
-            "jog.counts_per_rev": 1...16384, "jog.beats_per_rev": 1...16, "jog.seek_seconds_per_rev": 0...60,
-            // Every other number, so no imported value can be absurd (#92).
-            "osc.port": 1...65535, "osc.feedback_port": 1...65535,
-            "osc.feedback_quiet_ms": 0...60000, "osc.feedback_answer_ms": 0...60000, "leds.pulse_ms": 0...60000,
-            "jog.bend_release_ms": 1...5000,
-            "pitch.dead_zone": 0...1, "pitch.pickup_tolerance": 0...1,
-            "mixer.cue_note": 0...127, "mixer.mute_note": 0...127, "mixer.solo_note": 0...127,
-            "mixer.meter.cc": 0...127, "mixer.meter.steps[]": 0...127, "mixer.meter.clip": 0...127,
-            "mixer.meter.hold_ms": 0...10000, "mixer.meter.rate_hz": 1...120, "mixer.pickup_tolerance": 0...1,
-        ]
-        for control in mixerControls {
-            table["mixer.\(control).msb_cc"] = 0...127
-            table["mixer.\(control).lsb_cc"] = 0...127
+    /// A path with each list index written `[]`, as the key table has it.
+    static func keyPattern(_ path: String) -> String {
+        path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
+    }
+
+    /// An example value of the key's kind, with an object's children and a list's item from the table.
+    static func example(_ pattern: String) -> OrderedJSON? {
+        guard let key = ProfileKeys.key(pattern) else { return nil }
+        switch key.kind {
+        case .wholeNumber: return .number(0, isInteger: true)
+        case .number: return .number(0, isInteger: false)
+        case .bool: return .bool(false)
+        case .text: return .string("")
+        case .list: return .array(example(pattern + "[]").map { [$0] } ?? [])
+        case .object:
+            let children = ProfileKeys.all.filter { child in
+                child.path.hasPrefix(pattern + ".") && !child.path.dropFirst(pattern.count + 1).contains(".")
+                    && !child.path.hasSuffix("[]")
+            }
+            return .object(children.compactMap { child in
+                example(child.path).map { (String(child.path.dropFirst(pattern.count + 1)), $0) }
+            })
         }
-        for color in ["ring_color", "roll_pad_color", "loop_pad_color"] { table["leds.\(color)[]"] = 0...255 }
-        return table
-    }()
+    }
 
-    private static let colors: Set<String> = ["leds.ring_color", "leds.roll_pad_color", "leds.loop_pad_color", "leds.color_table[].rgb"]
-
-    /// Numbers that are one of a few values, not a range (#195).
-    private static let numberChoices: [String: [Double]] = {
-        var table: [String: [Double]] = ["pitch.bits": [7, 14]]
-        for control in mixerControls { table["mixer.\(control).bits"] = [7, 14] }
-        return table
-    }()
-
-    private static let choices: [String: [String]] = [
-        "leds.beat_pulse": LEDs.BeatPulse.allRawValues,
-        "leds.stale_idle": LEDs.StaleIdle.allRawValues,
-        "pads.roll_sizes[]": Pads.RollSize.allRawValues,
-        "pads.mode_select": Pads.ModeSelect.allRawValues,
-        "midi.encoder_format": EncoderFormat.allRawValues,
-        "leds.color_table": ["rgb222"],
-    ]
-
-    /// A range, count or choice problem with a value of the right kind; nil when it's fine.
+    /// A range, count or choice problem with a value of the right kind, from the key table; nil when it's fine.
     private static func valueProblem(_ value: OrderedJSON, at path: String) -> String? {
-        let pattern = path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
+        guard let key = ProfileKeys.key(keyPattern(path)) else { return nil }
         switch value {
         case .number(let n, _):
-            // Every note is 0–127, whatever its button is called.
-            if let allowed = numberChoices[pattern], !allowed.contains(n) {
-                return "\(describe(value)) isn't one of \(allowed.map { String(Int($0)) }.joined(separator: ", "))"
+            if !key.numberChoices.isEmpty, !key.numberChoices.contains(n) {
+                return "\(describe(value)) isn't one of \(key.numberChoices.map { String(Int($0)) }.joined(separator: ", "))"
             }
-            let range = ranges[pattern] ?? (pattern.hasPrefix("notes.") ? 0...127 : nil)
-            if let range, !range.contains(n) {
+            if let range = key.range, !range.contains(n) {
                 return "\(describe(value)) is out of range, expected \(Int(range.lowerBound))-\(Int(range.upperBound))"
             }
-        case .array(let items) where colors.contains(pattern) && items.count != 3:
-            return "expected 3 values, got \(items.count)"
-        case .array(let items) where pattern == "leds.color_table" && items.isEmpty:
-            return "expected at least one entry"
-        case .array(let items) where pattern == "mixer.meter.steps" && items.isEmpty:
-            return "expected at least one value"
-        case .array(let items) where pattern == "notes.pads" && !(1...16).contains(items.count):
-            // 4, 8 or 16 pads, or anything between (#196).
-            return "expected 1-16 pads, got \(items.count)"
+        case .array(let items):
+            return key.countProblem(items.count)
         case .string(let text):
-            if let allowed = choices[pattern], !allowed.contains(text) {
-                return "\(describe(value)) isn't one of \(allowed.joined(separator: ", "))"
+            if !key.choices.isEmpty, !key.choices.contains(text) {
+                return "\(describe(value)) isn't one of \(key.choices.joined(separator: ", "))"
             }
         default:
             break
