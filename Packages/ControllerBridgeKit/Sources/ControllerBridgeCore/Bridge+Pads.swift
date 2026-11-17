@@ -180,6 +180,8 @@ extension Bridge {
         endCueJump()
         restoreAllQuantize()
         cueTimes = [:]
+        mainCue = nil
+        mainCueSettlesUntil = nil
         learningCue = nil
     }
 

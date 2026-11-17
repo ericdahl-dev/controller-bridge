@@ -142,6 +142,13 @@ final class Bridge {
     var cueTimes: [Int: Double] = [:]
     /// The cue just launched by Shift + pad, whose time the next Position gives.
     var learningCue: Int?
+    /// The main CUE (#360): held, pressed with Shift (handled by the bridge, not Syndicate), where the deck last was,
+    /// where the cue point is (Syndicate never reports it), and until when a stop after CUE-while-playing gives it.
+    var cueDown = false
+    var shiftCueDown = false
+    var lastPosition: Double?
+    var mainCue: Double?
+    var mainCueSettlesUntil: Double?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
     /// When any master clock beat last arrived, pulsed or not.
@@ -334,6 +341,7 @@ final class Bridge {
         case "playing":
             playing = value
             if value { cueLaunched() }
+            if !value { mainCueStopped() }
             if !playing, bendDirection != 0 { endBend() }
         case "playpending":
             playPending = value
@@ -375,7 +383,9 @@ final class Bridge {
             if previous?.title != text(0) || previous?.artist != text(1) { forgetCues() }
             return
         case "position":
-            if let cue = learningCue, playing, let seconds = message.arguments.first?.number { learnCue(cue, at: seconds) }
+            guard let seconds = message.arguments.first?.number else { return }
+            if let cue = learningCue, playing { learnCue(cue, at: seconds) }
+            positionReported(seconds)
             return
         case "progress":
             progress = message.arguments.first?.number

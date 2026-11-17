@@ -287,9 +287,9 @@ struct TransportTests {
     @Test("Stop releases every held control exactly once, and a second stop sends nothing")
     func stopReleasesHolds() throws {
         let rig = try Self.started()
+        Self.press(rig, 1)   // Play, a trigger: nothing to release (before Cue: with Cue held it latches, #360)
         Self.press(rig, 2)   // Cue, held
         Self.press(rig, 7)   // Censor, held
-        Self.press(rig, 1)   // Play, a trigger: nothing to release
         rig.osc.sent.removeAll()
 
         rig.coordinator.stop()

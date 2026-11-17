@@ -4,11 +4,16 @@
 extension Bridge {
     func play(_ pressed: Bool) {
         // Play wins over a Shift + pad tap still waiting to be paused (#358).
-        if pressed {
-            endCueJump()
-            restoreQuantize(.jogSeek)
+        guard pressed else { return }
+        endCueJump()
+        restoreQuantize(.jogSeek)
+        // PLAY while CUE is held keeps the preview playing once CUE is let go, as on a CDJ (#360): set, not toggled,
+        // and Syndicate never gets the Cue release, which would take it back to the cue point (the user's test).
+        if cueDown {
+            _ = held.take(.cue)
+            return sendDeck("Playing", .int(1))
         }
-        if pressed { sendDeck("PlayPause", .int(1)) }
+        sendDeck("PlayPause", .int(1))
     }
 
     func sync(_ pressed: Bool) {
@@ -61,8 +66,52 @@ extension Bridge {
         refreshLEDs()
     }
 
+    /// CUE is Syndicate's own: back to the cue point and stop while playing, preview while held on it, and a new cue
+    /// point when paused elsewhere. Shift + CUE goes back to the cue point and stops (#360), and never sets one.
     func cue(_ pressed: Bool) {
+        if pressed, shift {
+            shiftCueDown = true
+            if playing { return holdButton(.cue, "Cue", pressed: true) }
+            return returnToMainCue()
+        }
+        if !pressed, shiftCueDown {
+            shiftCueDown = false
+            return holdButton(.cue, "Cue", pressed: false)
+        }
+        cueDown = pressed
+        if pressed {
+            // Syndicate's cue point is where it's paused, or, while playing, where it stops.
+            if playing { mainCueSettlesUntil = clock.now + Self.mainCueSettle } else if let lastPosition { mainCue = lastPosition }
+        }
         holdButton(.cue, "Cue", pressed: pressed)
+    }
+
+    /// How long after CUE-while-playing the deck's stop says where the cue point is.
+    static let mainCueSettle = 0.5
+    /// Closer than this to the cue point is on it.
+    static let onCuePoint = 0.02
+
+    /// Shift + CUE on a paused deck: a WaveformSeek to the cue point, with quantize None so it lands there at once.
+    /// Unknown, or already there: nothing, since Syndicate's Cue would make this spot the cue point.
+    private func returnToMainCue() {
+        guard let mainCue, let lastPosition, let duration, duration > 0, abs(lastPosition - mainCue) > Self.onCuePoint else { return }
+        overrideQuantize(.returnToCue)
+        sendDeck("WaveformSeek", .float(Float(mainCue / duration)))
+        restoreQuantize(.returnToCue)
+    }
+
+    /// Where the deck is, from Syndicate's Position: after CUE while playing, the paused spot is the cue point.
+    func positionReported(_ seconds: Double) {
+        lastPosition = seconds
+        guard !playing, let until = mainCueSettlesUntil else { return }
+        mainCueSettlesUntil = nil
+        if clock.now <= until { mainCue = seconds }
+    }
+
+    /// The deck stopped: right after CUE while playing, it stopped on the cue point.
+    func mainCueStopped() {
+        guard let until = mainCueSettlesUntil, clock.now <= until, let lastPosition else { return }
+        mainCue = lastPosition
     }
 
     /// Censor reverses while held. Shift + Censor latches Reverse instead: each press toggles it (#114). A latched
@@ -114,6 +163,8 @@ extension Bridge {
             latchedReverse = nil
         }
         bendDirection = 0
+        cueDown = false
+        shiftCueDown = false
         platterTouched = false
         needleTouched = false
         if shift {
