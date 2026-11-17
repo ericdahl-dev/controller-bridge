@@ -85,8 +85,9 @@ The LC6000's jog display shows the deck (#165).
 
 ## 8. Site
 
-- **Who:** agent3. **Gate:** step 7 approved (release day).
-- The site lives on `main` (#170); Coolify deploys it. agent3's v1.1 site update is held on its own branch, `site-v1.1` (a draft PR),
+- **Who:** agent3. **Gate:** step 6: v1.1.0 is tagged and on TestFlight (release day).
+- The site lives on `main` (#170); Coolify deploys it. agent3's v1.1 site update is held on its own branch, `site-v1.1`, as draft
+  [PR #300](https://github.com/ericdahl-dev/deckbridge/pull/300) (no auto-merge; merging it deploys the site),
   until release day: "coming in v1.1" becomes shipped, and the jog display goes on the LC6000 page and in the support FAQ. Merge it
   with `check_site` and the taste-skill gate passing.
 - [ ] Merged and deployed.
