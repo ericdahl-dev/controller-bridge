@@ -16,7 +16,7 @@ public struct CaptureSession: Sendable {
     /// The owner's optional note, the only free text in the file.
     public var note: String?
 
-    private typealias Take = [(time: Double, port: Int, bytes: [UInt8], tail: Bool)]
+    typealias Take = [(time: Double, port: Int, bytes: [UInt8], tail: Bool)]
 
     private var index = 0
     private var finished: [(prompt: CapturePrompt, status: StepStatus, take: Take, leds: [LEDAnswer])] = []
@@ -55,15 +55,23 @@ public struct CaptureSession: Sendable {
     }
 
     /// For a step repeated with Shift held, how its control differs from the step it repeats, so far (#229).
+    /// On a layer step (#217), what the layers say so far, with the current take counted as if confirmed.
+    public var currentLayer: LayerFacts? {
+        guard let current, let layer = current.layer else { return nil }
+        let finished = file.steps
+        let preview = Self.step(current, .confirmed, take, noise: Set(idleNoise), before: finished)
+        return CaptureLayers.infer(prompts: prompts, steps: finished + [preview]).first { $0.layer == layer }
+    }
+
     public var currentShift: ShiftLayer? {
         guard let current, current.shiftedOf != nil else { return nil }
-        return step(current, .confirmed, take, noise: Set(idleNoise), before: file.steps).shift
+        return Self.step(current, .confirmed, take, noise: Set(idleNoise), before: file.steps).shift
     }
 
     /// What the current take has detected so far, for showing live.
     public var currentControls: [ControlFacts] {
         guard let current else { return [] }
-        return step(current, .confirmed, take, noise: Set(idleNoise), before: []).controls
+        return Self.step(current, .confirmed, take, noise: Set(idleNoise), before: []).controls
     }
 
     /// One raw MIDI message, at any host clock in seconds, from an input port (an index into `ports.input`). Ignored
@@ -87,6 +95,13 @@ public struct CaptureSession: Sendable {
     public mutating func answerLED(_ answer: LEDAnswer) {
         guard current != nil else { return }
         leds.append(answer)
+    }
+
+    /// The owner's answer to an LED probe about a finished step's control (#187), kept with that step. Ignored for a
+    /// step that isn't in the capture.
+    public mutating func answerLED(_ answer: LEDAnswer, forStep id: String) {
+        guard let index = finished.lastIndex(where: { $0.prompt.id == id }) else { return }
+        finished[index].leds.append(answer)
     }
 
     /// Keeps the current take and moves to the next prompt, which starts at `time` (host seconds) when given.
@@ -126,12 +141,13 @@ public struct CaptureSession: Sendable {
         let noise = unique(idleNoise + repeatedNoise + realtimeNoise)
         var steps: [CaptureStep] = []
         for recorded in finished {
-            var recordedStep = step(recorded.prompt, recorded.status, recorded.take, noise: Set(noise), before: steps)
+            var recordedStep = Self.step(recorded.prompt, recorded.status, recorded.take, noise: Set(noise), before: steps)
             recordedStep.leds = recorded.leds
             steps.append(recordedStep)
         }
         return CaptureFile(
-            appVersion: appVersion, device: device, ports: ports, note: note, prompts: prompts, noise: noise, steps: steps
+            appVersion: appVersion, device: device, ports: ports, note: note, prompts: prompts, noise: noise, steps: steps,
+            layers: CaptureLayers.infer(prompts: prompts, steps: steps)
         )
     }
 
@@ -166,7 +182,8 @@ public struct CaptureSession: Sendable {
     }
 
     /// A step as the file shows it: noise left out, the controls inferred, and the Shift layer against `before`.
-    private func step(_ prompt: CapturePrompt, _ status: StepStatus, _ take: Take, noise: Set<[UInt8]>, before: [CaptureStep]) -> CaptureStep {
+    /// Static, so a file read back can run the same inference (`CaptureFile.inferred()`, #190).
+    static func step(_ prompt: CapturePrompt, _ status: StepStatus, _ take: Take, noise: Set<[UInt8]>, before: [CaptureStep]) -> CaptureStep {
         let heard = take.filter { !Inference.isRealtime($0.bytes) }
         let kept = prompt.gesture == .idle ? heard : heard.filter { Inference.noiseKey($0.bytes).map { !noise.contains($0) } ?? true }
         let bytes = kept.filter { !$0.tail }.map { (port: $0.port, bytes: $0.bytes) }
@@ -181,13 +198,13 @@ public struct CaptureSession: Sendable {
         return CaptureStep(prompt: prompt.id, status: status, messages: messages(kept), controls: controls, shift: shift)
     }
 
-    private func messages(_ take: Take) -> [CaptureMessage] {
+    private static func messages(_ take: Take) -> [CaptureMessage] {
         guard let start = take.first?.time else { return [] }
         return take.map { CaptureMessage(t: Int((($0.time - start) * 1000).rounded()), port: $0.port, bytes: $0.bytes, tail: $0.tail) }
     }
 
     /// How a shifted control differs from the same control in the confirmed unshifted step.
-    private func shiftLayer(of base: String, _ control: ControlFacts?, before: [CaptureStep]) -> ShiftLayer? {
+    private static func shiftLayer(of base: String, _ control: ControlFacts?, before: [CaptureStep]) -> ShiftLayer? {
         guard let control,
             let unshifted = before.last(where: { $0.prompt == base && $0.status == .confirmed })?.controls.first,
             unshifted.kind == control.kind

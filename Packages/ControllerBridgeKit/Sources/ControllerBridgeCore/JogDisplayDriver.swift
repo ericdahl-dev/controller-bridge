@@ -44,8 +44,16 @@ public enum JogDisplayEvent: Equatable, Sendable {
     case shown(slot: UInt8)
     /// The upload stopped: refused with the ack's status, or nil for no answer.
     case failed(refusal: UInt8?)
+    /// The needle on the unit: the deck in front's (pitch bend on WD).
     case marker(pitchBend: Int)
     case playLight(Bool)
+    /// Each deck's needle for the simulator (#165): its own phase in the bar. Nothing is sent for it.
+    case deckMarker(deck: Int, pitchBend: Int)
+    /// The master clock's beat (1-4), the lit ring segment on every deck. Nothing is sent for it (#215 may draw it).
+    case masterBeat(Int)
+    /// What a deck's display would show (#221): every deck, live, for the simulator; only the deck in front is
+    /// uploaded. Nothing is sent for it.
+    case preview(JogDisplayContent)
 }
 
 public final class JogDisplayDriver {
@@ -76,6 +84,10 @@ public final class JogDisplayDriver {
     /// The slot shown; the next upload goes into the other one.
     private var shownSlot: UInt8 = 2
     /// The last content drawn and its image (#221): what the preview drew goes to the unit when it connects, unredrawn.
+    /// Each deck's last previewed content.
+    private var previews: [Int: JogDisplayContent] = [:]
+    private var deckMarkers: [Int: Int] = [:]
+    private var lastMasterBeat: Int?
     private var drawn: (content: JogDisplayContent, image: [UInt8])?
     private var upload: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)?
 
@@ -128,12 +140,33 @@ public final class JogDisplayDriver {
         onEvent?(.marker(pitchBend: pitchBend))
     }
 
+    /// A deck's needle for the simulator, reported on change; nothing is sent to the unit.
+    public func deckMarker(deck: Int, _ pitchBend: Int) {
+        guard deckMarkers[deck] != pitchBend else { return }
+        deckMarkers[deck] = pitchBend
+        onEvent?(.deckMarker(deck: deck, pitchBend: pitchBend))
+    }
+
+    /// The master clock's beat, reported on change; nothing is sent to the unit.
+    public func masterBeat(_ beat: Int) {
+        guard beat != lastMasterBeat else { return }
+        lastMasterBeat = beat
+        onEvent?(.masterBeat(beat))
+    }
+
     /// The play light: note 1 on WD ch1, 127 or 0. Only a change goes out.
     public func playLight(_ on: Bool) {
         guard on != lastPlayLight else { return }
         lastPlayLight = on
         if connected { port?.sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
         onEvent?(.playLight(on))
+    }
+
+    /// A deck's content for the simulator (#221), reported on change; nothing is sent to the unit.
+    public func preview(_ content: JogDisplayContent) {
+        guard previews[content.deck] != content else { return }
+        previews[content.deck] = content
+        onEvent?(.preview(content))
     }
 
     /// A message from the WD port.

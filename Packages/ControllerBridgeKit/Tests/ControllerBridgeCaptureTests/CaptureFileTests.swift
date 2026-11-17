@@ -113,4 +113,22 @@ struct CaptureFileTests {
         #expect(try JSONDecoder().decode([CaptureMessage].self, from: Data(#"[{"t":0,"port":0,"midi":"80 01 00","tail":true}]"#.utf8))
             == [messages[0]])
     }
+
+    @Test("A prompt can name its deck layer, and the step it repeats on that layer; both are left out when unset (#217)")
+    func layerPromptFields() throws {
+        let prompts = [
+            CapturePrompt(id: "layer2.select", text: "Switch to deck 2.", gesture: .press, layer: 2),
+            CapturePrompt(id: "deck2.play", text: "Press Play on deck 2.", gesture: .press, layer: 2, layerOf: "deck1.play"),
+            CapturePrompt(id: "deck1.play", text: "Press Play on deck 1.", gesture: .press),
+        ]
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(prompts)) as? NSArray
+        let literal = try JSONSerialization.jsonObject(with: Data("""
+            [{ "id": "layer2.select", "text": "Switch to deck 2.", "gesture": "press", "layer": 2 },
+             { "id": "deck2.play", "text": "Press Play on deck 2.", "gesture": "press", "layer": 2, "layer_of": "deck1.play" },
+             { "id": "deck1.play", "text": "Press Play on deck 1.", "gesture": "press" }]
+            """.utf8)) as? NSArray
+        #expect(json != nil)
+        #expect(json == literal)
+        #expect(try JSONDecoder().decode([CapturePrompt].self, from: JSONEncoder().encode(prompts)) == prompts)
+    }
 }

@@ -3,7 +3,11 @@ import Foundation
 /// The capture window's model (#186): choose the ports, walk the prompts, done. The view shows it and forwards the
 /// owner's buttons and the MIDI; every rule about what's allowed when lives here, on an injected clock.
 public struct CaptureFlow: Sendable {
-    public enum Phase: Equatable, Sendable { case ports, steps, done }
+    public enum Phase: Equatable, Sendable {
+        case ports, steps, done
+        /// The opt-in LED test after the steps (#187).
+        case leds
+    }
 
     /// How long the idle step listens before Next, in seconds.
     public static let idleSeconds = 5.0
@@ -17,6 +21,13 @@ public struct CaptureFlow: Sendable {
     private var announcedStep: Int?
     private var announcedDetection: [String] = []
     private var announcedDone = false
+    private var ledProbes: [LEDProbe] = []
+    private var ledIndex = 0
+    private var announcedProbe: Int?
+    private var lastColor: String?
+    private var hasColorAnswer = false
+    private var ledsTested = false
+    private var sender = ProbeSender()
     /// The controller went away mid-capture (#229): nothing moves on until it's back or the capture is ended.
     public private(set) var isDisconnected = false
     /// A disconnect or reconnect to announce, ahead of anything else.
@@ -25,9 +36,14 @@ public struct CaptureFlow: Sendable {
     private var idleReadyStep: Int?
     private var announcedIdleReady: Int?
 
-    public init(prompts: [CapturePrompt] = CapturePrompts.djController, appVersion: String) {
+    /// Whether the LED test (#187) is offered. Off by default: it sends to the controller, and stays off until it has
+    /// been checked at a real unit.
+    public let ledTest: Bool
+
+    public init(prompts: [CapturePrompt] = CapturePrompts.djController, appVersion: String, ledTest: Bool = false) {
         self.prompts = prompts
         self.appVersion = appVersion
+        self.ledTest = ledTest
     }
 
     /// Starts the steps on the chosen device and ports, at host time `time` in seconds.
@@ -50,6 +66,8 @@ public struct CaptureFlow: Sendable {
     /// For a shifted step, how Shift changed the control: "Shift: same message", "Shift: channel +1, note +60" (#229).
     /// Nil until the control arrives, and when the step it repeats was skipped.
     public private(set) var shiftReadout: String?
+    /// On a layer step (#217): the select step's button and indicator, or a layered step's offset from deck 1.
+    public private(set) var layerReadout: String?
     public static let refreshInterval = 0.1
     private var lastRefresh = -Double.infinity
     private var stale = false
@@ -80,6 +98,8 @@ public struct CaptureFlow: Sendable {
     private mutating func refresh(at time: Double? = nil) {
         detected = phase == .steps ? session?.currentControls ?? [] : []
         shiftReadout = phase == .steps ? session?.currentShift.map { Self.readout($0, kind: detected.first?.kind) } : nil
+        let layer = phase == .steps ? session?.currentLayer : nil
+        layerReadout = prompt?.layerOf == nil ? layer?.selectReadout : layer?.offsetReadout
         stale = false
         if let time { lastRefresh = time }
     }
@@ -160,6 +180,10 @@ public struct CaptureFlow: Sendable {
         }
         switch phase {
         case .ports: return nil
+        case .leds:
+            guard let probe = ledProbe, announcedProbe != ledIndex else { return nil }
+            announcedProbe = ledIndex
+            return "LED test \(ledIndex + 1) of \(ledProbes.count). \(probe.text)"
         case .done:
             guard !announcedDone else { return nil }
             announcedDone = true
@@ -168,7 +192,8 @@ public struct CaptureFlow: Sendable {
             let skipped = steps.filter { $0.status == .skipped }.count
             return "Capture finished: \(steps.count) steps, \(skipped) skipped."
         case .steps:
-            let detection = detected.map(\.spoken) + (shiftReadout.map { [$0] } ?? [])
+            let notes = [shiftReadout, layerReadout].compactMap { $0 }
+            let detection = detected.map(\.spoken) + notes
             if announcedStep != stepNumber, let prompt {
                 announcedStep = stepNumber
                 announcedDetection = detection
@@ -181,7 +206,7 @@ public struct CaptureFlow: Sendable {
             guard detection != announcedDetection else { return nil }
             announcedDetection = detection
             guard !detected.isEmpty else { return nil }
-            return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + "." + (shiftReadout.map { " \($0)." } ?? "")
+            return "Detected: " + detected.map(\.spoken).joined(separator: ", then ") + "." + notes.map { " \($0)." }.joined()
         }
     }
 
@@ -192,5 +217,89 @@ public struct CaptureFlow: Sendable {
         if shift.channelOffset != 0 { parts.append("channel \(signed(shift.channelOffset))") }
         if shift.numberOffset != 0 { parts.append("\(kind == .cc ? "CC" : "note") \(signed(shift.numberOffset))") }
         return "Shift: " + (parts.isEmpty ? "same message" : parts.joined(separator: ", "))
+    }
+
+    // MARK: The LED test (#187)
+
+    /// An answer to an LED probe.
+    public enum LEDChoice: Equatable, Sendable {
+        case lit(Bool)
+        /// Dim or bright; nil is off.
+        case level(LEDLevel?)
+        /// The color named; nil is off.
+        case color(String?)
+        /// The same color as the previous color answer.
+        case sameAsLast
+    }
+
+    /// The colors the owner can name.
+    public static let ledColors = ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink", "white", "other"]
+
+    /// Whether the LED test can start: from the done page, once (a second run would double the answers).
+    public var canStartLEDs: Bool { ledTest && phase == .done && !ledsTested && file != nil }
+    /// Whether the current probe has lit: its message has gone out. Answers before that are ignored.
+    public var canAnswerLED: Bool { ledProbe != nil && !sender.hasPending }
+    /// "Same as last" needs an earlier color answer.
+    public var canSameAsLast: Bool { canAnswerLED && hasColorAnswer }
+
+    public var ledProbe: LEDProbe? { phase == .leds && ledProbes.indices.contains(ledIndex) ? ledProbes[ledIndex] : nil }
+    public var ledProbeNumber: Int { ledIndex + 1 }
+    public var ledProbeCount: Int { ledProbes.count }
+    /// LED answers in the file so far.
+    public var ledAnswerCount: Int { file?.steps.reduce(0) { $0 + $1.leds.count } ?? 0 }
+
+    /// Starts the LED test from the done page: lights the first probe.
+    public mutating func startLEDs(scope: LEDProbe.Scope, at time: Double) {
+        guard canStartLEDs, let file else { return }
+        ledsTested = true
+        ledProbes = LEDProbe.plan(prompts: prompts, steps: file.steps, scope: scope)
+        ledIndex = 0
+        announcedProbe = nil
+        lastColor = nil
+        guard let first = ledProbes.first else { return }
+        phase = .leds
+        sender.enqueue(first.message)
+    }
+
+    /// Records the answer with the probe's step, turns its control off, and lights the next; after the last, all off.
+    public mutating func answerLED(_ choice: LEDChoice, at time: Double) {
+        guard let probe = ledProbe, canAnswerLED, choice != .sameAsLast || hasColorAnswer else { return }
+        let answer: LEDAnswer = switch choice {
+        case .lit(let lit): LEDAnswer(sent: probe.message, lit: lit)
+        case .level(let level): LEDAnswer(sent: probe.message, lit: level != nil, level: level)
+        case .color(let color): LEDAnswer(sent: probe.message, lit: color != nil, color: color)
+        case .sameAsLast: LEDAnswer(sent: probe.message, lit: lastColor != nil, color: lastColor)
+        }
+        if probe.question == .color {
+            lastColor = answer.color
+            hasColorAnswer = true
+        }
+        session?.answerLED(answer, forStep: probe.step)
+        sender.enqueue(probe.off)
+        ledIndex += 1
+        if let next = ledProbe {
+            sender.enqueue(next.message)
+        } else {
+            finishLEDs()
+        }
+    }
+
+    /// Ends the LED test early: everything off, back to the done page with the answers so far.
+    public mutating func skipLEDs(at time: Double) {
+        guard phase == .leds else { return }
+        sender.dropPending()
+        finishLEDs()
+    }
+
+    public var hasPendingSends: Bool { sender.hasPending }
+
+    /// What to send to the controller now: at most one message per ProbeSender.interval.
+    public mutating func dueSends(at time: Double) -> [[UInt8]] { sender.due(at: time) }
+
+    private mutating func finishLEDs() {
+        sender.enqueueAllOff()
+        phase = .done
+        announcedDone = true
+        connectionNote = "LED test finished: \(ledAnswerCount) answers."
     }
 }

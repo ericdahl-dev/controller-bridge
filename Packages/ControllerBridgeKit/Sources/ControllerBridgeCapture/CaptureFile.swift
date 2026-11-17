@@ -19,14 +19,18 @@ public struct CaptureFile: Codable, Equatable, Sendable {
     /// Messages that aren't credited to any step, as their status and first data byte ("90 34").
     public var noise: [[UInt8]]
     public var steps: [CaptureStep]
+    /// What the steps say about the deck layers (#217). Written only when there's a layer step, so format 1 readers
+    /// without it are unaffected.
+    public var layers: [LayerFacts]
 
     /// The format this version writes and reads.
     public static let currentFormat = 1
 
     public init(
         format: Int = currentFormat, appVersion: String, device: String, ports: CapturePorts, note: String? = nil,
-        prompts: [CapturePrompt], noise: [[UInt8]] = [], steps: [CaptureStep] = []
+        prompts: [CapturePrompt], noise: [[UInt8]] = [], steps: [CaptureStep] = [], layers: [LayerFacts] = []
     ) {
+        self.layers = layers
         self.format = format
         self.appVersion = appVersion
         self.device = device
@@ -38,7 +42,7 @@ public struct CaptureFile: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case format, appVersion = "app_version", device, ports, note, prompts, noise, steps
+        case format, appVersion = "app_version", device, ports, note, prompts, noise, steps, layers
     }
 
     public init(from decoder: any Decoder) throws {
@@ -52,6 +56,7 @@ public struct CaptureFile: Codable, Equatable, Sendable {
         prompts = try c.decode([CapturePrompt].self, forKey: .prompts)
         noise = try c.decode([String].self, forKey: .noise).map(Hex.bytes)
         steps = try c.decode([CaptureStep].self, forKey: .steps)
+        layers = try c.decodeIfPresent([LayerFacts].self, forKey: .layers) ?? []
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -64,10 +69,34 @@ public struct CaptureFile: Codable, Equatable, Sendable {
         try c.encode(prompts, forKey: .prompts)
         try c.encode(noise.map(Hex.string), forKey: .noise)
         try c.encode(steps, forKey: .steps)
+        if !layers.isEmpty { try c.encode(layers, forKey: .layers) }
     }
 
     public static func decode(_ data: Data) throws -> CaptureFile {
         try JSONDecoder().decode(CaptureFile.self, from: data)
+    }
+
+    /// The capture with each step's messages, controls and Shift layer worked out again from its raw messages (#190),
+    /// by the same inference the app's capture runs: what a file written without them (the web capture's) needs before
+    /// a draft profile is made from it, layers included (#217). Noise, LED answers, the note, ports and prompts are kept
+    /// as written. An app capture comes out unchanged.
+    public func inferred() -> CaptureFile {
+        let noise = Set(self.noise)
+        var out = self
+        out.steps = []
+        for step in steps {
+            guard let prompt = prompts.first(where: { $0.id == step.prompt }) else {
+                out.steps.append(step)
+                continue
+            }
+            // Tails keep their flag (#229): kept in the file, left out of the inference.
+            let take: CaptureSession.Take = step.messages.map { (Double($0.t) / 1000, $0.port, $0.bytes, $0.tail) }
+            var redone = CaptureSession.step(prompt, step.status, take, noise: noise, before: out.steps)
+            redone.leds = step.leds
+            out.steps.append(redone)
+        }
+        out.layers = CaptureLayers.infer(prompts: prompts, steps: out.steps)
+        return out
     }
 
     /// Pretty-printed with sorted keys, so two captures diff cleanly.
@@ -121,15 +150,23 @@ public struct CapturePrompt: Codable, Equatable, Sendable {
     public var gesture: CaptureGesture
     /// The prompt this one repeats with Shift held.
     public var shiftedOf: String?
+    /// The deck layer this step is about (#217): the layer a select step switches to, or a layered control's layer.
+    public var layer: Int?
+    /// The prompt this one repeats on `layer`, such as deck2.play for deck1.play.
+    public var layerOf: String?
 
-    public init(id: String, text: String, gesture: CaptureGesture, shiftedOf: String? = nil) {
+    public init(
+        id: String, text: String, gesture: CaptureGesture, shiftedOf: String? = nil, layer: Int? = nil, layerOf: String? = nil
+    ) {
         self.id = id
         self.text = text
         self.gesture = gesture
         self.shiftedOf = shiftedOf
+        self.layer = layer
+        self.layerOf = layerOf
     }
 
-    enum CodingKeys: String, CodingKey { case id, text, gesture, shiftedOf = "shifted_of" }
+    enum CodingKeys: String, CodingKey { case id, text, gesture, shiftedOf = "shifted_of", layer, layerOf = "layer_of" }
 }
 
 /// What the owner did with a step.
@@ -269,26 +306,35 @@ public struct ShiftLayer: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey { case of, channelOffset = "channel_offset", numberOffset = "number_offset" }
 }
 
+/// How bright an LED lit at a low value (#187).
+public enum LEDLevel: String, Codable, Sendable {
+    case dim, bright
+}
+
 /// The owner's answer to one LED probe message.
 public struct LEDAnswer: Codable, Equatable, Sendable {
     public var sent: [UInt8]
     public var lit: Bool
     /// The color the owner named, if it lit.
     public var color: String?
+    /// For a low value: whether it lit dim or bright (#187).
+    public var level: LEDLevel?
 
-    public init(sent: [UInt8], lit: Bool, color: String? = nil) {
+    public init(sent: [UInt8], lit: Bool, color: String? = nil, level: LEDLevel? = nil) {
         self.sent = sent
         self.lit = lit
         self.color = color
+        self.level = level
     }
 
-    enum CodingKeys: String, CodingKey { case sent, lit, color }
+    enum CodingKeys: String, CodingKey { case sent, lit, color, level }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sent = try Hex.bytes(c.decode(String.self, forKey: .sent))
         lit = try c.decode(Bool.self, forKey: .lit)
         color = try c.decodeIfPresent(String.self, forKey: .color)
+        level = try c.decodeIfPresent(LEDLevel.self, forKey: .level)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -296,6 +342,7 @@ public struct LEDAnswer: Codable, Equatable, Sendable {
         try c.encode(Hex.string(sent), forKey: .sent)
         try c.encode(lit, forKey: .lit)
         try c.encodeIfPresent(color, forKey: .color)
+        try c.encodeIfPresent(level, forKey: .level)
     }
 }
 

@@ -14,8 +14,8 @@ final class JogSimulatorLog {
     private(set) var sim = JogSimulator()
     /// Each deck's last uploaded content: what its preview draws.
     private(set) var contents: [Int: JogDisplayContent] = [:]
-    /// The marker arrives ~100 times a second while playing; the preview redraws it at most 30 (#221).
-    @ObservationIgnored private var markerLimiter = RedrawLimiter<Int>(interval: 1.0 / 30)
+    /// Each deck's needle redraws at most 30 times a second (#221), whatever rate it arrives at.
+    @ObservationIgnored private var needleLimiters: [Int: RedrawLimiter<Int>] = [:]
 
     func apply(_ event: JogDisplayEvent, at now: Date = .now) {
         switch event {
@@ -26,15 +26,25 @@ final class JogSimulatorLog {
             sim.apply(.uploadStarted(slot: Int(slot), deck: content.deck, bytes: bytes, at: now))
         case .shown(let slot): sim.apply(.shown(slot: Int(slot)))
         case .failed: sim.apply(.failed)
-        case .marker(let pitchBend):
-            if let value = markerLimiter.offer(pitchBend, at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(pitchBend: value)) }
+        // The unit's needle is the front deck's, which deckMarker already brings; the simulator draws every deck's.
+        case .marker: break
+        case .deckMarker(let deck, let pitchBend):
+            var limiter = needleLimiters[deck] ?? RedrawLimiter<Int>(interval: 1.0 / 30)
+            if let value = limiter.offer(pitchBend, at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(deck: deck, pitchBend: value)) }
+            needleLimiters[deck] = limiter
+        // The master clock's beat: the lit segment on every deck (#165).
+        case .masterBeat(let beat): sim.apply(.masterBeat(beat))
         case .playLight(let on): sim.apply(.playing(on))
+        // Every deck's content, live (#221): the simulator draws all of them, not only the one uploaded.
+        case .preview(let content): contents[content.deck] = content
         }
     }
 
-    /// The display timer: a marker held back by the limiter, once its interval has passed.
+    /// The display timer: each deck's needle held back by its limiter, once its interval has passed.
     func tick(_ now: Date) {
-        if let value = markerLimiter.tick(at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(pitchBend: value)) }
+        for deck in needleLimiters.keys.sorted() {
+            if let value = needleLimiters[deck]?.tick(at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(deck: deck, pitchBend: value)) }
+        }
     }
 }
 
@@ -55,7 +65,7 @@ struct JogDisplayPane: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: Theme.Step.x4)], spacing: Theme.Step.x4) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Theme.Step.x3)], spacing: Theme.Step.x4) {
                         ForEach(decks, id: \.self) { deck in
                             if let content = log.contents[deck] { JogDeckPreview(deck: deck, content: content, sim: log.sim) }
                         }
@@ -84,6 +94,7 @@ private struct JogDeckPreview: View {
     let sim: JogSimulator
 
     var body: some View {
+        let onUnit = sim.front == deck
         let litBeat = sim.litBeat(deck: deck)
         let summary = JogDeckSummary(deck: deck, title: content.title, key: content.key, bpm: content.bpm, beat: litBeat)
         VStack(spacing: Theme.Step.x2) {
@@ -91,7 +102,7 @@ private struct JogDeckPreview: View {
                 Image(decorative: image, scale: 1)
                     .interpolation(.high)
                     .resizable()
-                    .frame(width: 180, height: 180)
+                    .frame(width: 140, height: 140)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
             }
@@ -102,14 +113,20 @@ private struct JogDeckPreview: View {
                 Text(sim.playing(deck: deck) ? "Playing" : "Paused")
                     .font(Theme.ui(12)).foregroundStyle(Theme.text)
             }
-            Text(sim.status(deck: deck).readout())
-                .font(Theme.data(11))
-                .foregroundStyle(Theme.caption)
+            // The deck the unit shows (the one followed) carries the readout; the others are previews only.
+            Text(onUnit ? "On the LC6000\n" + sim.status(deck: deck).readout() : "Not on the LC6000 now")
+                .font(Theme.data(10))
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(onUnit ? Theme.text : Theme.caption)
                 .multilineTextAlignment(.center)
+        }
+        .padding(Theme.Step.x2)
+        .overlay {
+            if onUnit { RoundedRectangle(cornerRadius: Theme.Radius.medium).stroke(Theme.live, lineWidth: 1.5) }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(summary.spoken)
-        .accessibilityValue(sim.status(deck: deck).readout())
+        .accessibilityValue(onUnit ? "On the LC6000. " + sim.status(deck: deck).readout() : "Not on the LC6000 now")
     }
 
     /// The renderer's RGBA (198×198, premultiplied, top row first) as an image.

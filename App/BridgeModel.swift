@@ -135,7 +135,12 @@ final class BridgeModel {
         }
     }
 
+    /// Ends an open capture (#187: turns off what the LED test lit), run first when the app quits.
+    var endCapture: (() -> Void)?
+
     func quit(_ done: @escaping @MainActor () -> Void) {
+        endCapture?()
+        endCapture = nil
         guard let producer, let engine else { return done() }
         var finished = false
         let finish = { if !finished { finished = true; done() } }

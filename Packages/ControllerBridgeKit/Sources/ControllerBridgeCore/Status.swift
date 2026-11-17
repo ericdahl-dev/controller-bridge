@@ -12,7 +12,7 @@ public struct CoordinatorStatus: Equatable, Sendable {
     /// LED subscriptions a loaded deck's answer lacked (#150), in `Subscription` order. Empty when none are missing.
     public var missingSubscriptions: [Subscription] = []
     /// The subscriptions the controllers' profiles need, in the setup guide's order (#211).
-    public var requiredSubscriptions: [Subscription] = Subscription.allCases
+    public var requiredSubscriptions: [Subscription] = Subscription.always
     /// An LED sweep (#26) is running.
     public var sweeping = false
     /// The built-in demo controller (#64) is running instead of the real one.

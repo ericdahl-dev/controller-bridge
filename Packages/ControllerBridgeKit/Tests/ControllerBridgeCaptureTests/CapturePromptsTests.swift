@@ -1,4 +1,5 @@
 import ControllerBridgeCapture
+import Foundation
 import Testing
 
 /// The standard prompt list for a DJ controller (#186): a contract shared with the draft-profile tool (#189) and the
@@ -46,5 +47,27 @@ struct CapturePromptsTests {
     @Test("The pitch prompt says which way to move, so the direction can be read from the values")
     func pitchDirection() {
         #expect(Self.list.first { $0.id == "deck1.pitch" }?.text == "Move the pitch fader slowly all the way from the top to the bottom.")
+    }
+
+    @Test("The list is the JSON file the web capture copies (#190), kept in canonical form: sorted keys, pretty, one trailing newline")
+    func sharedJSON() throws {
+        let json = CapturePrompts.djControllerJSON
+        #expect(try JSONDecoder().decode([CapturePrompt].self, from: json) == Self.list)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        var canonical = try encoder.encode(Self.list)
+        canonical.append(0x0A)
+        #expect(json == canonical)
+    }
+
+    @Test("The deck 2 layer steps: the select step is layer 2, and deck 2's Play repeats deck 1's on layer 2 (#217)")
+    func layerSteps() {
+        let select = Self.list.first { $0.id == "layer2.select" }
+        let play = Self.list.first { $0.id == "deck2.play" }
+        #expect(select?.layer == 2)
+        #expect(select?.layerOf == nil)
+        #expect(play?.layer == 2)
+        #expect(play?.layerOf == "deck1.play")
+        #expect(Self.list.filter { $0.layer != nil }.map(\.id) == ["layer2.select", "deck2.play"])
     }
 }

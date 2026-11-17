@@ -271,7 +271,7 @@ enum Snapshots {
             )
             writeAppKit(blank.frame(width: 720, height: 460), to: "\(directory)/diagnostics-\(name)-empty.png", width: 720)
         }
-        // The Jog display tab (#221): deck 1 playing on beat 2 with its upload accepted, deck 2 paused and refused.
+        // The Jog display tab (#221): deck 1 playing with its upload accepted, deck 2 paused and refused, the master on beat 2.
         let jog = JogSimulatorLog()
         let at = Date(timeIntervalSinceReferenceDate: 784_000_000)
         jog.apply(.connected, at: at)
@@ -284,7 +284,13 @@ enum Snapshots {
                                  bytes: 14_812), at: at)
         jog.apply(.shown(slot: 1), at: at)
         jog.apply(.playLight(true), at: at)
-        jog.apply(.marker(pitchBend: 6_000), at: at)
+        // Each deck's own needle, the master on beat 2 for every ring (#165): deck 1 a little behind the beat, deck 2 paused.
+        jog.apply(.masterBeat(2), at: at)
+        jog.apply(.deckMarker(deck: 1, pitchBend: 3_600), at: at)
+        jog.apply(.deckMarker(deck: 2, pitchBend: 12_000), at: at)
+        // Decks 3 and 4 from Syndicate only: previewed, not on the unit (#221).
+        jog.apply(.preview(JogDisplayContent(deck: 3, color: [0, 255, 255], title: "Sunrise", artist: "Ward", key: "C", bpm: 122,
+                                             playerType: "track")), at: at)
         let jogWindow = DiagnosticsWindow(
             log: log, status: connected, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
             jogSimulator: jog, tab: .jog, scrolls: false
@@ -299,6 +305,17 @@ enum Snapshots {
             tab: .osc, scrolls: false
         )
         writeAppKit(filtered.frame(width: 720, height: 460), to: "\(directory)/diagnostics-osc-log-filtered.png", width: 720)
+        // The user's case (#261): TempoSlider and Cues off, listed above the OSC log as in the panel.
+        let missing = BridgeStatus()
+        missing.bridges = connected.bridges
+        missing.feedback = .listening(port: 9096)
+        missing.syndicateFeedback = .live
+        missing.missingSubscriptions = [.tempoSlider, .cues]
+        let missingWindow = DiagnosticsWindow(
+            log: log, status: missing, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            tab: .osc, scrolls: false
+        )
+        writeAppKit(missingWindow.frame(width: 720, height: 560), to: "\(directory)/diagnostics-osc-log-missing.png", width: 720)
     }
 
     /// The shared button styles (#67): normal, selected (bar + heavier text) and keyboard focus (ring).
@@ -396,6 +413,8 @@ enum Snapshots {
             ("waiting", CaptureController(flow: captureFlow(at: "deck1.play", fed: false), now: 1e6)),
             ("jog", CaptureController(flow: captureFlow(at: "deck1.jog.touch", fed: true), now: 1e6)),
             ("shift", CaptureController(flow: captureFlow(at: "deck1.play.shift", fed: true), now: 1e6)),
+            ("layer-select", CaptureController(flow: captureFlow(at: "layer2.select", fed: true), now: 1e6)),
+            ("layer-play", CaptureController(flow: captureFlow(at: "deck2.play", fed: true), now: 1e6)),
             // Unplugged mid-step (#229): the banner, with End capture.
             ("disconnected", {
                 var flow = captureFlow(at: "deck1.jog.touch", fed: true)
@@ -408,6 +427,30 @@ enum Snapshots {
                 return CaptureController(flow: flow, now: 1e6)
             }()),
             ("done", CaptureController(flow: captureFlow(at: nil, fed: true), now: 1e6)),
+            // The LED test (#187): a lit question, and a pad color question.
+            // The LED test with its flag on, as for the supervised check; "done" above shows it off (the default).
+            ("done-led-offer", CaptureController(flow: captureFlow(at: nil, fed: true, ledTest: true), now: 1e6)),
+            ("led-lit", {
+                var flow = captureFlow(at: nil, fed: true, ledTest: true)
+                flow.startLEDs(scope: .full, at: 1e6)
+                _ = flow.dueSends(at: 1e6)  // Play lit, so the answers are on
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
+            ("led-color", {
+                var flow = captureFlow(at: nil, fed: true, ledTest: true)
+                flow.startLEDs(scope: .full, at: 1e6)
+                // Each answer waits for its probe to go out: let the sends out, 100 ms apart, between answers.
+                var now = 1e6
+                func shown() { while flow.hasPendingSends { _ = flow.dueSends(at: now); now += 0.1 } }
+                shown()
+                while flow.ledProbe?.question != .color {
+                    flow.answerLED(.lit(true), at: now)
+                    shown()
+                }
+                flow.answerLED(.color("red"), at: now)
+                shown()
+                return CaptureController(flow: flow, now: 1e6)
+            }()),
             ("done-note", {
                 var flow = captureFlow(at: nil, fed: true)
                 flow.note = "Firmware 1.3"
@@ -421,8 +464,8 @@ enum Snapshots {
 
     /// The standard list on demo traffic, a step every 10 s from 0, stopped at the prompt `id` (fed its take or not),
     /// or walked to the end when `id` is nil.
-    private static func captureFlow(at id: String?, fed: Bool) -> CaptureFlow {
-        var flow = CaptureFlow(appVersion: "1.2.0")
+    private static func captureFlow(at id: String?, fed: Bool, ledTest: Bool = false) -> CaptureFlow {
+        var flow = CaptureFlow(appVersion: "1.2.0", ledTest: ledTest)
         flow.start(device: DemoCapture.deviceName, ports: DemoCapture.ports, at: 0)
         var now = 0.0
         while let prompt = flow.prompt {
