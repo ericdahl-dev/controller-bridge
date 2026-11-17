@@ -87,4 +87,27 @@ struct JogDisplayBeatSlotTests {
         for beat in [4, 1, 2, 3] { Self.clock(rig, beat) }
         #expect(port.wd == [4, 1, 2, 3].map { JogDisplay.show(slot: $0) })
     }
+
+    @Test("A track load uploads all four again, from the beat now (2); an old-track slot isn't shown on its beat until it's redone")
+    func reloadOnContentChange() throws {
+        let rig = try Rig()
+        let (port, drawn) = Self.attach(rig)
+        Self.clock(rig, 1)
+        rig.coordinator.start()
+        _ = Self.uploadAll(rig, port)
+        Self.clock(rig, 2)
+        port.wd.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        var slots = Self.uploadSlots(port)
+        Self.clock(rig, 3)                        // slot 3 still holds the old track: the screen holds
+        var shown = Self.shows(port)
+        for _ in 0..<4 {
+            Self.answer(rig, port)
+            slots += Self.uploadSlots(port)
+            shown += Self.shows(port)
+        }
+        #expect(slots == [2, 3, 4, 1])
+        #expect(shown == [3])                     // slot 3, once it holds the new track
+        #expect(drawn.contents.suffix(4).allSatisfy { $0.title != nil })
+    }
 }
