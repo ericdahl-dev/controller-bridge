@@ -25,8 +25,10 @@ WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no co
 
 CAPTURE_LD = '<script type="application/ld+json">{"text": "Record it at https://getdeckbridge.app/capture/."}</script>'
 
+APP_LD = '<script type="application/ld+json">{"@type": "SoftwareApplication", "softwareVersion": "1.0.1"}</script>'
+
 GOOD = {
-    "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD,
+    "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD + APP_LD,
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="capture/">record it in your browser</a>'
                             ' <a href="for/lc6000/">DeckBridge for the LC6000</a>'
@@ -96,7 +98,7 @@ class CheckSiteTests(unittest.TestCase):
 
     def test_external_resources_fail_but_external_links_dont(self):
         root = self.site({
-            "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">' + CAPTURE_LD,
+            "index.html": page(head='<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter">' + CAPTURE_LD + APP_LD,
                                body='<img src="//cdn.example.com/a.png" alt=""> <script src="http://x.example/t.js"></script>'
                                     ' <a href="https://testflight.apple.com/join/XXXX">ok</a>'
                                     ' <a href="support/">s</a> <a href="privacy/">p</a> <a href="capture/">c</a>'
@@ -301,6 +303,25 @@ class CheckSiteTests(unittest.TestCase):
                          ["for/lc6000/index.html: its canonical is https://getdeckbridge.app/, "
                           "not https://getdeckbridge.app/for/lc6000/"])
         self.assertEqual(check_site.problems(self.site({"for/lc6000/index.html": own})), [])
+
+    def test_every_deckbridge_version_on_the_site_is_the_apps(self):
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <p>Version 1.0.1 on TestFlight. DeckBridge 1.2 adds capture.</p>'),
+            "llms.txt": GOOD["llms.txt"] + "- Status: version 1.0.1 is on TestFlight. Syndicate's mapping (version 0.3.7).\n",
+        })
+        self.assertEqual(check_site.problems(root), [])
+        stale = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <p>Version 1.0.0 on TestFlight.</p>'),
+            "llms.txt": GOOD["llms.txt"] + "DeckBridge 1.1.0 is out.\n",
+        })
+        self.assertEqual(check_site.problems(stale), [
+            "llms.txt: says DeckBridge 1.1.0, but the app's softwareVersion is 1.0.1",
+            "support/index.html: says DeckBridge 1.0.0, but the app's softwareVersion is 1.0.1",
+        ])
+
+    def test_the_home_page_names_the_apps_version(self):
+        root = self.site({"index.html": GOOD["index.html"].replace(APP_LD, "")})
+        self.assertEqual(check_site.problems(root), ["index.html: the JSON-LD has no SoftwareApplication softwareVersion"])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
