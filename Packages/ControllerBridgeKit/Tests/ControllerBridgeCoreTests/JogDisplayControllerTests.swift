@@ -41,3 +41,54 @@ struct JogDisplayFrontTests {
         #expect(JogDisplayController.front([], previewDeck: nil) == nil)
     }
 }
+
+/// Each deck's needle (#165, the user's pick): its own phase in the bar from DeckFacts' BarRamp at its BPM (else the
+/// master's, else 120), a quarter turn a beat, never more than a quarter past the ramp; a pause holds it.
+@Suite("Jog display controller: needles")
+struct JogDisplayNeedleTests {
+    static func playing(_ deck: Int = 1, bpm: Double?, ramp: Double, at: Double, playing: Bool = true) -> JogDisplayController.Entry {
+        var facts = DeckFacts(deck: deck)
+        facts.playing = playing
+        facts.loaded = true
+        facts.bpm = bpm
+        facts.barRamp = DeckFacts.BarRamp(phase: ramp, at: at)
+        return JogDisplayController.Entry(connected: true, ownsDisplay: true, activeLayer: true, facts: facts)
+    }
+
+    @Test("BarRamp 0 at 120 BPM: 0 at once, 2048 a quarter-second on (an eighth of a turn)")
+    func runsAtTheDeckBPM() {
+        let clock = Rig.FakeClock()
+        let controller = JogDisplayController(clock: clock)
+        controller.observe([Self.playing(bpm: 120, ramp: 0, at: 0)])
+        #expect(controller.needle(0, at: 0) == 0)
+        #expect(controller.needle(0, at: 0.25) == 2048)
+    }
+
+    @Test("No deck BPM: the master's (Header/BPM), else 120")
+    func masterBPMElse120() {
+        let controller = JogDisplayController(clock: Rig.FakeClock())
+        controller.feedback(OSCMessage("/Syndicate/Header/BPM", [.float(60)]))
+        controller.observe([Self.playing(bpm: nil, ramp: 0, at: 0)])
+        #expect(controller.needle(0, at: 0.25) == 1024)   // 60 BPM: a sixteenth of a turn in a quarter-second
+        let fresh = JogDisplayController(clock: Rig.FakeClock())
+        fresh.observe([Self.playing(bpm: nil, ramp: 0, at: 0)])
+        #expect(fresh.needle(0, at: 0.25) == 2048)
+    }
+
+    @Test("Paused, it holds where it was: BarRamp 0, paused a quarter-second on, still 2048 seconds later")
+    func pauseHolds() {
+        let clock = Rig.FakeClock()
+        let controller = JogDisplayController(clock: clock)
+        controller.observe([Self.playing(bpm: 120, ramp: 0, at: 0)])
+        clock.now = 0.25
+        controller.observe([Self.playing(bpm: 120, ramp: 0, at: 0, playing: false)])
+        #expect(controller.needle(0, at: 5) == 2048)
+    }
+
+    @Test("A paused deck's BarRamp sets the needle without running on (a seek, #388)")
+    func pausedRampSets() {
+        let controller = JogDisplayController(clock: Rig.FakeClock())
+        controller.observe([Self.playing(bpm: 120, ramp: 0.5, at: 1, playing: false)])
+        #expect(controller.needle(0, at: 9) == 8192)
+    }
+}
