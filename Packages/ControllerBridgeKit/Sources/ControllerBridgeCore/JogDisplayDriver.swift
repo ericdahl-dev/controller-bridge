@@ -178,9 +178,10 @@ public final class JogDisplayDriver {
         guard beat != lastMasterBeat else { return }
         lastMasterBeat = beat
         onEvent?(.masterBeat(beat))
-        // Beat mode (#215): show the beat's slot, if it holds what's current; otherwise the screen holds.
+        // Beat mode (#215): show the beat's slot, if it holds what's current; otherwise the screen holds. Never in the
+        // middle of an upload: a show between its chunks can spoil it (ack 06). The upload's end shows the beat now.
         let slot = UInt8(beat)
-        guard renderBeat != nil, let current, slotContent[slot] == current else { return }
+        guard renderBeat != nil, upload == nil, let current, slotContent[slot] == current else { return }
         if connected { port?.sendWD(JogDisplay.show(slot: slot)) }
         shownSlot = slot
         onEvent?(.shown(slot: slot))
