@@ -1,0 +1,68 @@
+import Foundation
+@testable import ControllerBridgeCore
+import Testing
+
+/// The master beat lit on the LC6000 itself (#215), at the Coordinator seam: each content goes up four times, into
+/// slots 1–4 with beat 1–4 lit, and each master beat shows its slot. Proven on hardware in #165: a slot swap is one
+/// 14-byte message, clean at 8 a second and more.
+@Suite("Jog display beat slots")
+struct JogDisplayBeatSlotTests {
+    typealias Port = JogDisplayDriverTests.FakePort
+
+    /// What the beat renderer was asked to draw, in order.
+    final class Drawn: @unchecked Sendable {
+        var beats: [Int] = []
+        var contents: [JogDisplayContent] = []
+    }
+
+    static func attach(_ rig: Rig) -> (Port, Drawn) {
+        let port = Port(), drawn = Drawn()
+        let driver = JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1, renderBeat: { content, beat in
+            drawn.beats.append(beat)
+            drawn.contents.append(content)
+            return [UInt8(beat), 0, 0, 255]
+        }) { _ in [0, 0, 0, 255] }
+        rig.coordinator.attachJogDisplay(driver)
+        rig.coordinator.setJogDisplay(enabled: true)
+        return (port, drawn)
+    }
+
+    /// The slot of each upload in `port`'s WD messages: 0E's first payload byte.
+    static func uploadSlots(_ port: Port) -> [UInt8] {
+        port.wd.filter { $0.count > 9 && $0[6] == 0x0E }.map { $0[9] }
+    }
+
+    /// Answers the upload in flight (every ack, then the commit), keeping what the driver sends next.
+    static func answer(_ rig: Rig, _ port: Port) {
+        let acks = port.wd.filter { $0.count > 6 && [0x0C, 0x0D, 0x0E].contains($0[6]) }.count
+        port.wd.removeAll()
+        for _ in 0..<acks { rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted) }
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.committed)
+    }
+
+    /// Runs the four uploads; returns their slots.
+    static func uploadAll(_ rig: Rig, _ port: Port) -> [UInt8] {
+        var slots: [UInt8] = []
+        for _ in 0..<4 {
+            slots += uploadSlots(port)
+            answer(rig, port)
+        }
+        return slots
+    }
+
+    static func clock(_ rig: Rig, _ beat: Int) {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(Int32(beat))]))
+    }
+
+    @Test("A new content goes up four times, into slots 3, 4, 1, 2 with that beat lit: the master's beat (3) first")
+    func fourUploads() throws {
+        let rig = try Rig()
+        let (port, drawn) = Self.attach(rig)
+        Self.clock(rig, 3)
+        rig.coordinator.start()
+        #expect(Self.uploadAll(rig, port) == [3, 4, 1, 2])
+        // The last four drawn are the unit's (the simulator's preview draws before the hello).
+        #expect(Array(drawn.beats.suffix(4)) == [3, 4, 1, 2])
+        #expect(Set(drawn.contents.map(\.deck)) == [1])
+    }
+}

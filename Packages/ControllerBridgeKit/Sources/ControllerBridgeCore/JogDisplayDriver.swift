@@ -77,6 +77,11 @@ public final class JogDisplayDriver {
     private let size: Int
     /// Draws content as RGBA rows, upright; the driver turns and encodes it.
     private let render: (JogDisplayContent) -> [UInt8]
+    /// Draws content with one master beat (1–4) lit (#215). When set, each content goes up four times, into slots 1–4,
+    /// and each master beat shows its slot; when nil, one image alternates between slots 1 and 2.
+    private let renderBeat: ((JogDisplayContent, Int) -> [UInt8])?
+    /// The beats still to upload for the current content, the master's beat first.
+    private var beatQueue: [Int] = []
 
     /// How long an upload may wait for the unit's answers.
     static let timeout = 5.0
@@ -102,11 +107,13 @@ public final class JogDisplayDriver {
     private var upload: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)?
 
     public init(port: (any JogDisplayPort)?, clock: any Clock, log: any LogSink, size: Int = JogImage.size,
+                renderBeat: ((JogDisplayContent, Int) -> [UInt8])? = nil,
                 render: @escaping (JogDisplayContent) -> [UInt8]) {
         self.port = port
         self.clock = clock
         self.log = log
         self.size = size
+        self.renderBeat = renderBeat
         self.render = render
     }
 
@@ -229,9 +236,11 @@ public final class JogDisplayDriver {
     private func fail() {
         upload = nil
         wanted = nil
+        beatQueue = []
     }
 
     private func next() {
+        if renderBeat != nil { return nextBeat() }
         guard upload == nil, let content = wanted, content != current else { return }
         wanted = nil
         current = content
@@ -251,6 +260,31 @@ public final class JogDisplayDriver {
             onEvent?(.shown(slot: slot))
             return
         }
+        send(job, slot: slot, content: content, port: port)
+    }
+
+    /// Beat mode (#215): a new content queues four uploads, the master's beat first; one goes at a time.
+    private func nextBeat() {
+        guard upload == nil, let renderBeat else { return }
+        if let content = wanted, content != current {
+            wanted = nil
+            current = content
+            let first = lastMasterBeat ?? 1
+            beatQueue = (0..<4).map { (first - 1 + $0) % 4 + 1 }
+        }
+        guard let content = current, !beatQueue.isEmpty else { return }
+        let beat = beatQueue.removeFirst()
+        let slot = UInt8(beat)
+        let job = JogDisplay.Upload(image: JogImage.forUnit(rgba: renderBeat(content, beat), width: size, height: size), slot: slot)
+        guard connected, let port else {
+            onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
+            onEvent?(.shown(slot: slot))
+            return nextBeat()
+        }
+        send(job, slot: slot, content: content, port: port)
+    }
+
+    private func send(_ job: JogDisplay.Upload, slot: UInt8, content: JogDisplayContent, port: any JogDisplayPort) {
         upload = (job, slot, 0, false, clock.now)
         for message in job.start + job.body { port.sendWD(message) }
         onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
