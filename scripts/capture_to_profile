@@ -1,0 +1,6 @@
+#!/bin/sh
+# Drafts a controller profile from a capture file (#189). See docs/ADDING-A-CONTROLLER.md.
+#   scripts/capture_to_profile capture.json [--docs facts.json] [--out dir]
+set -eu
+root="$(cd "$(dirname "$0")/.." && pwd)"
+exec swift run --quiet --package-path "$root/Packages/ControllerBridgeKit" capture-to-profile "$@"
