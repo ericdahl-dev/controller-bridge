@@ -31,13 +31,14 @@ struct DraftCheckTests {
         #expect(file?["id"] as? String == "ddj-400")
         let mapping = try JSONSerialization.data(withJSONObject: file?["mapping"] ?? [:])
         #expect(Mapping.problems(in: mapping, whole: true) == [])
-        #expect(draft.problems == [], "\(draft.problems)")
+        // The file with its placeholders: only the LC6000 needle's CC, which a DDJ has no strip for (#310).
+        #expect(draft.problems == ["needle.msb_cc: CC 64 is also browse.select_turn_cc"])
     }
 
     @Test("A draft whose docs set a bad value carries the check's own problem, by key")
     func badDocs() throws {
         let docs = try DocsFacts(json: Data(#"{ "mapping": { "notes": { "key_lock": 300 } } }"#.utf8))
         let draft = ProfileDraft.make(capture: Self.ddj, docs: docs)
-        #expect(draft.problems == ["notes.key_lock: 300 is out of range, expected 0-127"])
+        #expect(draft.problems == ["notes.key_lock: 300 is out of range, expected 0-127", "needle.msb_cc: CC 64 is also browse.select_turn_cc"])
     }
 }

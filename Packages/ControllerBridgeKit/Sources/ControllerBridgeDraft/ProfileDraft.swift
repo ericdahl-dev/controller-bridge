@@ -13,6 +13,9 @@ public struct ProfileDraft: Sendable {
     public var fromDocs: [FromDocs] = []
     /// Where the capture and the docs disagree. The capture's value is kept.
     public var conflicts: [Conflict] = []
+    /// Keys a profile file must have that neither the capture nor the docs gave, filled from the LC6000's mapping so
+    /// the draft loads (#310). Each is for a person to check; the controller-specific ones keep their TODO.
+    public var placeholders: [FromDocs] = []
 
     public struct FromDocs: Equatable, Sendable {
         public var key: String
@@ -47,6 +50,7 @@ public struct ProfileDraft: Sendable {
         draft.shifted(capture)
         draft.merge(docs)
         draft.unknowns()
+        draft.fill()
         return draft
     }
 
@@ -55,7 +59,7 @@ public struct ProfileDraft: Sendable {
     /// What the profile check says about the draft's mapping as a new controller's own profile (#251): its keys
     /// against each other, never against the LC6000's. Empty means it passes as written.
     public var problems: [String] {
-        guard let mapping = profile["mapping"] else { return [] }
+        guard let mapping = file["mapping"] else { return [] }
         return Mapping.problems(in: Data(mapping.text().utf8), whole: true)
     }
 
@@ -163,8 +167,31 @@ public struct ProfileDraft: Sendable {
         }
     }
 
+    /// The profile file to write and load: what the capture and the docs gave (`profile`), then the placeholders.
+    public var file: DraftJSON {
+        var file = profile
+        for placeholder in placeholders { file.set(placeholder.key, placeholder.value) }
+        return file
+    }
+
+    /// Every key a whole profile needs that the draft lacks, from the LC6000's mapping, so the file loads (#310).
+    /// Buttons are never filled (a profile has only its own), nor an absolute jog pair beside a relative jog.
+    private mutating func fill() {
+        guard let data = try? Mapping.defaultMappingJSON(),
+              let text = String(data: data, encoding: .utf8),
+              let defaults = try? DocsFacts(json: Data(#"{"mapping": \#(text)}"#.utf8)) else { return }
+        let relativeJog = profile.value(at: "mapping.jog.relative_cc") != nil
+        let sevenBitPitch = profile.value(at: "mapping.pitch.bits") == .int(7)
+        for (key, value) in defaults.facts where profile.value(at: key) == nil {
+            if key.hasPrefix("mapping.notes."), key != "mapping.notes.pads" { continue }
+            if relativeJog, ["mapping.jog.msb_cc", "mapping.jog.lsb_cc"].contains(key) { continue }
+            if sevenBitPitch, key == "mapping.pitch.lsb_cc" { continue }
+            placeholders.append(FromDocs(key: key, value: value, source: "the LC6000's value, a placeholder"))
+        }
+    }
+
     /// What neither the capture nor the docs set and a controller must say for itself: its other buttons and its
-    /// LEDs. Everything else (OSC, timings, tolerances) inherits the defaults on import.
+    /// LEDs. Everything else a profile file needs (OSC, timings, tolerances) is a listed placeholder (`fill`, #310).
     private mutating func unknowns() {
         guard let data = try? Mapping.defaultMappingJSON(),
               let schema = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
