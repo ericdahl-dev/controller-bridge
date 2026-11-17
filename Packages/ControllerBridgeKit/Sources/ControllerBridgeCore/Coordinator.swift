@@ -251,6 +251,8 @@ public final class Coordinator {
             lastMarkerSent = clock.now
             needlesMoved.removeAll()
         }
+        // Every deck's play state for the simulator, from Syndicate's Playing (#317), not the blinking light below.
+        for index in controllers.indices { driver.deckPlaying(deck: status.controllers[index].deck, controllers[index].bridge.playing) }
         guard let front = jogIndex else { return }
         let bridge = controllers[front].bridge
         driver.playLight(bridge.playing || (bridge.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))

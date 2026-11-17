@@ -384,6 +384,23 @@ struct JogNeedleEventTests {
         #expect(Self.needles(events) == [:])
     }
 
+    @Test("Every deck's play state, from Syndicate's Playing, once and then per change: not the blinking play light (#317)")
+    func deckPlaying() throws {
+        let (rig, _, events) = try Self.started()
+        events.list.removeAll()
+        JogMarkerCoordinatorTests.feed(rig, "Deck/3/Playing", .int(1))
+        JogMarkerCoordinatorTests.feed(rig, "Deck/1/Track", .string("Daybreak"))
+        for t in stride(from: 0.0, through: 2.0, by: 0.25) { JogMarkerCoordinatorTests.tick(rig, at: t) }
+        JogMarkerCoordinatorTests.feed(rig, "Deck/3/Playing", .int(0))
+        for t in stride(from: 2.25, through: 4.0, by: 0.25) { JogMarkerCoordinatorTests.tick(rig, at: t) }
+        let plays = events.list.compactMap { event -> String? in
+            if case .deckPlaying(let deck, let on) = event { return "\(deck) \(on)" }
+            return nil
+        }
+        // The first tick tells the simulator every deck's state; after that, only deck 3's two changes.
+        #expect(plays == ["1 false", "2 false", "3 true", "4 false", "3 false"])
+    }
+
     @Test("Header/Clock is the master beat for every deck's ring, as an event only: nothing is sent for it")
     func masterBeat() throws {
         let (rig, port, events) = try Self.started()

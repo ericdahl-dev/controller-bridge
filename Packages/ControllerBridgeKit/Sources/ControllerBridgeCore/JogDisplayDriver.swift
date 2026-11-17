@@ -51,6 +51,9 @@ public enum JogDisplayEvent: Equatable, Sendable {
     case deckMarker(deck: Int, pitchBend: Int)
     /// The master clock's beat (1-4), the lit ring segment on every deck. Nothing is sent for it (#215 may draw it).
     case masterBeat(Int)
+    /// Whether `deck` is playing, from Syndicate's feedback, reported on change (#317). Nothing is sent for it: the
+    /// unit's play light is `playLight`, which also blinks while a loaded deck is paused.
+    case deckPlaying(deck: Int, playing: Bool)
     /// What a deck's display would show (#221): every deck, live, for the simulator; only the deck in front is
     /// uploaded. Nothing is sent for it.
     case preview(JogDisplayContent)
@@ -88,6 +91,7 @@ public final class JogDisplayDriver {
     private var previews: [Int: JogDisplayContent] = [:]
     private var deckMarkers: [Int: Int] = [:]
     private var lastMasterBeat: Int?
+    private var deckPlays: [Int: Bool] = [:]
     private var drawn: (content: JogDisplayContent, image: [UInt8])?
     private var upload: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)?
 
@@ -152,6 +156,13 @@ public final class JogDisplayDriver {
         guard beat != lastMasterBeat else { return }
         lastMasterBeat = beat
         onEvent?(.masterBeat(beat))
+    }
+
+    /// A deck's play state, reported on change; nothing is sent to the unit.
+    public func deckPlaying(deck: Int, _ playing: Bool) {
+        guard deckPlays[deck] != playing else { return }
+        deckPlays[deck] = playing
+        onEvent?(.deckPlaying(deck: deck, playing: playing))
     }
 
     /// The play light: note 1 on WD ch1, 127 or 0. Only a change goes out.
