@@ -85,6 +85,10 @@ extension Bridge {
         for send in sends {
             switch send {
             case .releasePads: releasePads()
+            case .hold(let index, let path, let press, let release): hold(.pad(index), path, press: press, release: release)
+            case .release(let index): releaseHold(.pad(index))
+            case .osc(let path, let argument): sendDeck(path, argument)
+            case .cueJump(let cue): goToCuePaused(cue)
             }
         }
     }
@@ -94,30 +98,14 @@ extension Bridge {
         for index in mapping.notes.pads.indices { releaseHold(.pad(index)) }
     }
 
-    /// Syndicate's hot cues per deck: its Cues feedback has eight slots. A pad past them has no cue (#311).
-    static let syndicateCues = 8
+    /// Syndicate's hot cues per deck (#311).
+    static let syndicateCues = PadModule.syndicateCues
 
     /// A pad press or release. `index` is 0-based, so hot cue `index + 1`.
     func handlePad(_ index: Int, pressed: Bool) {
         defer { refreshLEDs() }
-        guard pressed else { return releaseHold(.pad(index)) }
-        let cue = Int32(index + 1)
-        switch padMode {
-        case .hotCue:
-            guard index < Self.syndicateCues else { return }
-            // Shift on a stopped deck (#358): go to the cue without playing.
-            if shift, !playing, !playPending { return goToCuePaused(index + 1) }
-            hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
-        case .roll:
-            // The profile's roll sizes (#196); a pad past the list does nothing.
-            let sizes = mapping.pads.rollSizes
-            guard sizes.indices.contains(index) else { return }
-            hold(.pad(index), "SlipLoop/" + sizes[index], press: [.int(1)], release: [.int(0)])
-        case .loop:
-            guard index < Self.syndicateCues else { return }
-            sendDeck("SetCueLoop", .int(cue))
-        case .slicer: break
-        }
+        applyPads(pressed ? padModule.pressed(index, PadModule.Facts(shift: shift, playing: playing, playPending: playPending))
+                          : padModule.released(index))
     }
 
     /// Shift + hot cue pad on a stopped deck (#358, #363): the cue module decides; the Bridge sends.

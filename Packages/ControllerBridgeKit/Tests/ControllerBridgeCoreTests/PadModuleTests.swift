@@ -68,3 +68,39 @@ struct PadModuleModeTests {
         #expect(pads.notes(for: .roll) == Self.lc6000.notes.pads)
     }
 }
+
+@Suite("Pad module: what a press does")
+struct PadModuleActionTests {
+    static let lc6000 = PadModuleModeTests.lc6000
+    static let still = PadModule.Facts(shift: false, playing: true, playPending: false)
+
+    @Test("Hot Cue: hold HotCue n 1, release n 0; a pad past Syndicate's 8 cues does nothing")
+    func hotCue() {
+        let pads = PadModule(mapping: Self.lc6000)
+        #expect(pads.pressed(2, Self.still) == [.hold(2, "HotCue", press: [.int(3), .int(1)], release: [.int(3), .int(0)])])
+        #expect(pads.released(2) == [.release(2)])
+        #expect(pads.pressed(8, Self.still) == [])
+    }
+
+    @Test("Shift on a stopped deck: the cue jump (#358), not a hot cue; playing, or a start pending, it's a hot cue")
+    func shiftStopped() {
+        let pads = PadModule(mapping: Self.lc6000)
+        #expect(pads.pressed(1, PadModule.Facts(shift: true, playing: false, playPending: false)) == [.cueJump(2)])
+        #expect(pads.pressed(1, PadModule.Facts(shift: true, playing: true, playPending: false))
+            == [.hold(1, "HotCue", press: [.int(2), .int(1)], release: [.int(2), .int(0)])])
+        #expect(pads.pressed(1, PadModule.Facts(shift: true, playing: false, playPending: true))
+            == [.hold(1, "HotCue", press: [.int(2), .int(1)], release: [.int(2), .int(0)])])
+    }
+
+    @Test("Roll: hold the pad's slip loop size (#196). Loop: SetCueLoop n. Slicer: nothing")
+    func otherModes() {
+        var pads = PadModule(mapping: Self.lc6000)
+        _ = pads.modeButton(.roll)
+        #expect(pads.pressed(0, Self.still) == [.hold(0, "SlipLoop/ThirtySecond", press: [.int(1)], release: [.int(0)])])
+        #expect(pads.pressed(7, Self.still) == [.hold(7, "SlipLoop/Four", press: [.int(1)], release: [.int(0)])])
+        _ = pads.modeButton(.loop)
+        #expect(pads.pressed(4, Self.still) == [.osc("SetCueLoop", .int(5))])
+        _ = pads.modeButton(.slicer)
+        #expect(pads.pressed(0, Self.still) == [])
+    }
+}

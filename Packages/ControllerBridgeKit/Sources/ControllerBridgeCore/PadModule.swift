@@ -4,7 +4,26 @@ struct PadModule {
     enum Send: Equatable, Sendable {
         /// Let every held pad go (a mode change), so a hot cue or roll never sticks.
         case releasePads
+        /// Hold `path` for pad `index`: `press` now, `release` when the pad (or everything) lets go.
+        case hold(Int, String, press: [OSCArgument], release: [OSCArgument])
+        /// Pad `index` let go.
+        case release(Int)
+        /// A message to this deck: its address after /Syndicate/Deck/N/.
+        case osc(String, OSCArgument)
+        /// Shift + hot cue pad on a stopped deck (#358): go to cue `n` without playing; CueModule decides how.
+        case cueJump(Int)
     }
+
+    /// What a press depends on beyond the pads: Shift, and whether the deck is stopped.
+    struct Facts: Equatable, Sendable {
+        var shift: Bool
+        var playing: Bool
+        var playPending: Bool
+    }
+
+    /// Syndicate's hot cues per deck: its Cues feedback has eight slots. A pad past them has no cue (#311).
+    static let syndicateCues = 8
+    private let rollSizes: [String]
 
     private let pads: Mapping.Pads
     /// `notes.pads`: the notes the pads send in every mode, unless the profile gives each mode its own (#225).
@@ -14,6 +33,7 @@ struct PadModule {
     init(mapping: Mapping) {
         pads = mapping.pads
         padNotes = mapping.notes.pads
+        rollSizes = mapping.pads.rollSizes
     }
 
     /// The bridge's own state across a settings swap (#115): the pad mode.
@@ -34,6 +54,29 @@ struct PadModule {
         mode = mode.next
         return [.releasePads]
     }
+
+    /// Pad `index` (0-based, so hot cue `index + 1`) pressed, in the current mode.
+    func pressed(_ index: Int, _ facts: Facts) -> [Send] {
+        let cue = Int32(index + 1)
+        switch mode {
+        case .hotCue:
+            guard index < Self.syndicateCues else { return [] }
+            // Shift on a stopped deck (#358): go to the cue without playing.
+            if facts.shift, !facts.playing, !facts.playPending { return [.cueJump(index + 1)] }
+            return [.hold(index, "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])]
+        case .roll:
+            // The profile's roll sizes (#196); a pad past the list does nothing.
+            guard rollSizes.indices.contains(index) else { return [] }
+            return [.hold(index, "SlipLoop/" + rollSizes[index], press: [.int(1)], release: [.int(0)])]
+        case .loop:
+            guard index < Self.syndicateCues else { return [] }
+            return [.osc("SetCueLoop", .int(cue))]
+        case .slicer: return []
+        }
+    }
+
+    /// Pad `index` released: whatever it held lets go.
+    func released(_ index: Int) -> [Send] { [.release(index)] }
 
     /// The pad a note plays, and on a profile with notes per mode (#225) the mode that note belongs to.
     func pad(for note: Int) -> (index: Int, mode: PadMode?)? {
