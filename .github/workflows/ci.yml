@@ -44,6 +44,9 @@ jobs:
           python3 -I scripts/test_ci_changes.py
           # The release checklist and What to Test (#165, v1.1): Markdown, so it runs here, where a docs-only change runs.
           python3 -I scripts/test_release_docs.py
+          # APP_REVIEW.md's labels against the app's strings (#29): here, which runs on every pull request, so a
+          # docs-only edit and a Swift rename both run it.
+          python3 -I scripts/test_app_review.py
       - name: Site analytics tests
         run: node --test scripts/test_analytics.mjs scripts/test_capture.mjs
       - name: Site check
@@ -72,7 +75,6 @@ jobs:
           scripts/test-tag-external.sh
           python3 -I scripts/test_ci_profile.py
           python3 -I scripts/test_testflight_distribute.py
-          python3 -I scripts/test_app_review.py
 
   app:
     name: App build (Release, ad-hoc)
