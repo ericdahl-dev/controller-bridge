@@ -30,9 +30,14 @@ extension Bridge {
     }
 
     /// Shift + Pitch Bend: Syndicate's PitchDown / PitchUp triggers, one semitone per press (User Guide 14.6). Syndicate
-    /// applies them only with the deck's P (key lock) on.
+    /// applies them only with the deck's P (key lock) on, so key lock goes on first, every press: it may have been
+    /// turned off in Syndicate itself, which DeckBridge doesn't hear (the user's pick, #377).
     private func transpose(_ address: String, _ pressed: Bool) {
-        if pressed { sendDeck(address, .int(1)) }
+        guard pressed else { return }
+        keyLockOn = true
+        sendDeck("PitchPreserve", .int(1))
+        sendDeck(address, .int(1))
+        refreshLEDs()
     }
 
     func shiftButton(_ pressed: Bool) {
