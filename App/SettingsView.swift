@@ -386,7 +386,7 @@ struct SettingsView: View {
             get: { picker.selected },
             set: { id in
                 if id == Self.notFoundTag {
-                    model.captureDevice = picker.device
+                    model.captureRequest.device = picker.device
                     openWindow(id: CaptureWindow.id)
                     // Nothing was chosen: redraw the menu so it shows the saved choice again, not this item.
                     profileMenuRedraw += 1

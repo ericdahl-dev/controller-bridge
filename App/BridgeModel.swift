@@ -102,15 +102,19 @@ final class BridgeModel {
     /// Quit: release everything held in Syndicate, then call `done`. Calls it after one second at the latest, so a
     /// stuck engine can't stop the app from quitting.
     /// The Diagnostics window opened or closed: only while it's open does the engine build anything for it.
-    func setDiagnostics(open: Bool) { producer?.diagnostics(open: open) }
+    func setDiagnostics(open: Bool) {
+        producer?.diagnostics(open: open)
+        jogSimulator.feed.setVisible(open)
+    }
     func startLEDSweep(delay: Double) { producer?.ledSweep(delay: delay) }
     func stopLEDSweep() { producer?.stopLEDSweep() }
     /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
     func setJogPreviewDeck(_ deck: Int?) { producer?.setJogPreviewDeck(deck) }
     /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.
     func setDemo(_ on: Bool) { producer?.demo(on: on) }
-    /// The device the capture window should preselect when it next opens (#200).
-    var captureDevice: String?
+    /// The device the capture window should preselect (#200): read when it opens, or at once if it's already open
+    /// (#316), so it never lingers for a later open.
+    let captureRequest = CaptureRequest()
 
     /// Pauses (a source) or gives back (nil) a controller while the capture window records it (#186).
     func setCapture(source: MIDIEndpoint.ID?) { producer?.setCapture(source: source) }
@@ -378,4 +382,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.quit { sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }
+}
+
+/// A device for the capture window to preselect (#200, #316), observed so an open window sees it too.
+@MainActor @Observable
+final class CaptureRequest {
+    var device: String?
 }
