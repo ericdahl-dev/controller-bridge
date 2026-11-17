@@ -17,15 +17,15 @@ struct DraftDecodesTests {
         #expect(profile.mapping.notes.pads == Array(32...39))
     }
 
-    @Test("A DDJ-like draft says why it doesn't load yet: the LC6000's needle placeholder (CC 64) is its browse knob")
+    @Test("A DDJ-like draft decodes: with no needle step, the needle section is left out, not an LC6000 placeholder (#341)")
     func ddj() throws {
-        // A DDJ-400 has no needle strip, and a profile can't say so yet: the needle is required (a Core follow-up).
         let draft = ProfileDraft.make(capture: DraftCheckTests.ddj)
-        #expect(draft.problems == ["needle.msb_cc: CC 64 is also browse.select_turn_cc"])
-        #expect(throws: MappingError.invalid(["needle.msb_cc: CC 64 is also browse.select_turn_cc"])) {
-            try ControllerProfile(decoding: Data(draft.file.text().utf8))
-        }
-        #expect(draft.profile.value(at: "mapping.notes.back") == nil)
+        #expect(draft.problems == [])
+        let profile = try ControllerProfile(decoding: Data(draft.file.text().utf8))
+        #expect(profile.mapping.needle == nil)
+        #expect(profile.mapping.notes.buttons["play"] == 11)
+        #expect(!draft.placeholders.contains { $0.key.hasPrefix("mapping.needle.") })
+        #expect(draft.todos.contains { $0.key == "mapping.needle" })
     }
 
     @Test("Each placeholder is listed with the LC6000 value it holds, and its TODO stays")
@@ -56,8 +56,9 @@ struct DraftControllerKeyTodoTests {
     @Test("roll_sizes, jog.require_touch and needle.require_touch are TODOs with placeholders", arguments: [
         "mapping.pads.roll_sizes", "mapping.jog.require_touch", "mapping.needle.require_touch",
     ])
-    func todo(_ key: String) {
-        let draft = ProfileDraft.make(capture: DraftCheckTests.ddj)
+    func todo(_ key: String) throws {
+        // The LC6000 demo capture has a jog and a needle step but nothing on these (a DDJ has no needle at all, #341).
+        let draft = ProfileDraft.make(capture: try #require(DraftLC6000Tests.walked()))
         #expect(draft.todos.contains { $0.key == key })
         #expect(draft.placeholders.contains { $0.key == key })
     }

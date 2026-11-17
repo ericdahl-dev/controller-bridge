@@ -193,8 +193,12 @@ public struct ProfileDraft: Sendable {
               let defaults = try? DocsFacts(json: Data(#"{"mapping": \#(text)}"#.utf8)) else { return }
         let relativeJog = profile.value(at: "mapping.jog.relative_cc") != nil
         let sevenBitPitch = profile.value(at: "mapping.pitch.bits") == .int(7)
+        // A control the draft has nothing for is left out, not filled (#341): the section is optional, as for a
+        // controller without one, and its TODO says so.
+        let absent = ["needle", "jog", "pitch", "browse"].filter { profile.value(at: "mapping.\($0)") == nil }
         for (key, value) in defaults.facts where profile.value(at: key) == nil {
             if key.hasPrefix("mapping.notes."), key != "mapping.notes.pads" { continue }
+            if absent.contains(where: { key.hasPrefix("mapping.\($0).") }) { continue }
             if relativeJog, ["mapping.jog.msb_cc", "mapping.jog.lsb_cc"].contains(key) { continue }
             if sevenBitPitch, key == "mapping.pitch.lsb_cc" { continue }
             placeholders.append(FromDocs(key: key, value: value, source: "the LC6000's value, a placeholder"))

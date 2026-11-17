@@ -30,6 +30,8 @@ struct DraftReportPlaceholderTests {
         let text = DraftReport.text(ProfileDraft.make(capture: DraftCheckTests.ddj))
         #expect(text.contains("## Placeholders from the LC6000 (check each)\n"))
         #expect(text.contains("- `mapping.leds.ring` = 40\n"))
-        #expect(text.contains("- `mapping.needle.msb_cc` = 64\n"))
+        #expect(text.contains("- `mapping.osc.port` = 9090\n"))
+        // No needle step on a DDJ: the section is left out, not a placeholder (#341).
+        #expect(!text.contains("- `mapping.needle.msb_cc` ="))
     }
 }
