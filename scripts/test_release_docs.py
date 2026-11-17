@@ -37,6 +37,11 @@ class ReleaseChecklist(unittest.TestCase):
         self.assertIn("[external]", doc)
         self.assertIn("## 1.1.0", doc)  # the ready-to-paste CHANGELOG block
 
+    def test_site_step_links_the_held_pr(self):
+        doc = read("docs/RELEASE-1.1.md")
+        site = doc[doc.index("## 8. Site"):doc.index("## 9.")]
+        self.assertIn("https://github.com/ericdahl-dev/deckbridge/pull/300", site)
+
 
 class WhatToTest(unittest.TestCase):
     def setUp(self):
