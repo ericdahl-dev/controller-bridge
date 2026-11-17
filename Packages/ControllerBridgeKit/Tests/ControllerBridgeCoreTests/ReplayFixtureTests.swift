@@ -13,9 +13,10 @@ struct ReplayFixtureTests {
         var steps: [Step]
     }
 
-    static let fixtures: [URL] = (try? FileManager.default.contentsOfDirectory(
-        at: Bundle.module.resourceURL!.appendingPathComponent("Resources/Fixtures"), includingPropertiesForKeys: nil
-    ).filter { $0.pathExtension == "json" }.sorted { $0.path < $1.path }) ?? []
+    /// Found through Bundle's own lookup, as ProfileTests finds test-pad.json: the resource bundle's layout differs
+    /// between a local build and CI, so a path built from resourceURL found nothing there.
+    static let fixtures: [URL] = (Bundle.module.urls(forResourcesWithExtension: "json", subdirectory: "Resources/Fixtures") ?? [])
+        .sorted { $0.path < $1.path }
 
     static func event(_ hex: String) -> MIDIEvent? {
         let b = hex.split(separator: " ").compactMap { UInt8($0, radix: 16) }
