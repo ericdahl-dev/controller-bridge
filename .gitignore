@@ -13,3 +13,4 @@ dist/
 # taste-skill working files: only the waivers are kept
 website/.taste-skill/*
 !website/.taste-skill/waivers.json
+build-rel/
