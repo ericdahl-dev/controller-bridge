@@ -62,3 +62,57 @@ public struct StreamSampler: Sendable {
         return count > 0 ? " (+\(count) skipped)" : ""
     }
 }
+
+/// The trace as a plain-text file an agent can read directly (#395): lines appended to `name` in `directory`; when a
+/// line would take it past `cap` bytes, `name` becomes `name.1`, `.1` becomes `.2`, and so on, keeping `keep` files.
+/// Thread-safe; the handle stays open between lines.
+public final class RollingLogFile: @unchecked Sendable {
+    public let url: URL
+    private let directory: URL
+    private let name: String
+    private let cap: Int
+    private let keep: Int
+    private let lock = NSLock()
+    private var handle: FileHandle?
+    private var size = 0
+
+    public init(directory: URL, name: String = "deckbridge.log", cap: Int = 20_000_000, keep: Int = 3) {
+        self.directory = directory
+        self.name = name
+        self.cap = cap
+        self.keep = max(1, keep)
+        url = directory.appendingPathComponent(name)
+    }
+
+    deinit { try? handle?.close() }
+
+    public func append(_ line: String) {
+        let data = Data((line + "\n").utf8)
+        lock.lock()
+        defer { lock.unlock() }
+        if handle == nil { open() }
+        if size > 0, size + data.count > cap { roll() }
+        guard let handle else { return }
+        handle.write(data)
+        size += data.count
+    }
+
+    private func open() {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: url.path) { FileManager.default.createFile(atPath: url.path, contents: nil) }
+        handle = try? FileHandle(forWritingTo: url)
+        size = Int((try? handle?.seekToEnd()) ?? 0)
+    }
+
+    private func roll() {
+        try? handle?.close()
+        handle = nil
+        let manager = FileManager.default
+        func numbered(_ n: Int) -> URL { n == 0 ? url : directory.appendingPathComponent("\(name).\(n)") }
+        try? manager.removeItem(at: numbered(keep - 1))
+        for n in stride(from: keep - 2, through: 0, by: -1) where manager.fileExists(atPath: numbered(n).path) {
+            try? manager.moveItem(at: numbered(n), to: numbered(n + 1))
+        }
+        open()
+    }
+}
