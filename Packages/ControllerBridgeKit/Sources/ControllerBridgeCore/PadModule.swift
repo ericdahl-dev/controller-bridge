@@ -192,3 +192,39 @@ struct PadModule {
         return modeNotes.hotcue + modeNotes.roll + modeNotes.loop + modeNotes.slicer
     }
 }
+
+/// The Bridge's LED caches (#383 slice 5d): the last velocity sent to each LED, so an unchanged LED is never sent
+/// twice. Pads on their own channel (#224) are kept apart: a pad's note can be a button's on another channel. The
+/// Bridge keeps the output; this says whether a write goes out.
+struct LEDCache: Equatable, Sendable {
+    struct Lit: Equatable, Sendable {
+        var note: Int
+        var velocity: UInt8
+    }
+
+    private var buttons: [Int: UInt8] = [:]
+    private var pads: [Int: UInt8] = [:]
+
+    /// Whether `velocity` on `note` should go out: true (and remembered) when it isn't what the LED shows already.
+    mutating func write(_ note: Int, _ velocity: UInt8, onPads: Bool) -> Bool {
+        if onPads {
+            guard pads[note] != velocity else { return false }
+            pads[note] = velocity
+        } else {
+            guard buttons[note] != velocity else { return false }
+            buttons[note] = velocity
+        }
+        return true
+    }
+
+    /// Forget what every LED shows, so the next paint sends them all.
+    mutating func flush() {
+        buttons.removeAll()
+        pads.removeAll()
+    }
+
+    /// What one cache shows, in note order.
+    func shown(onPads: Bool) -> [Lit] {
+        (onPads ? pads : buttons).keys.sorted().map { Lit(note: $0, velocity: (onPads ? pads : buttons)[$0] ?? 0) }
+    }
+}

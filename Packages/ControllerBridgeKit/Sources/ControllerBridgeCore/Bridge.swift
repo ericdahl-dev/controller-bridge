@@ -151,11 +151,10 @@ final class Bridge {
     /// none until the capture ends and it repaints.
     var ledsCaptured = false
 
-    /// The last velocity sent to each LED note, so an unchanged LED is never sent twice.
-    private var ledCache: [Int: UInt8] = [:]
-    /// The same for pad LEDs on the pads' own channel (#224), kept apart: a pad's note can be a button's on another
-    /// channel.
-    private var padLEDCache: [Int: UInt8] = [:]
+    /// The last velocity sent to each LED, buttons and pads on their own channel (#224) apart, so an unchanged LED is
+    /// never sent twice (#383).
+    private var ledCache = LEDCache()
+
     /// The pads' MIDI channel, 0-15 (#224): the deck's unless the profile gives the pads their own.
     let padChannel: UInt8
     /// The channel the pads send on with Shift held, 0-15 (#324), when the hardware does Shift itself; nil otherwise.
@@ -207,8 +206,7 @@ final class Bridge {
     func becameActiveLayer() {
         layerShown = true
         rearmPickup()
-        ledCache.removeAll()
-        padLEDCache.removeAll()
+        ledCache.flush()
         refreshLEDs()
     }
 
@@ -217,8 +215,7 @@ final class Bridge {
         feedbackStale = stale
         rearmPickup()
         rearmMixer()
-        ledCache.removeAll()
-        padLEDCache.removeAll()
+        ledCache.flush()
         mixerModule.forgetMeterShown()   // shown again on the next tick, on what may be a new port (#320)
         refreshLEDs()
     }
@@ -411,8 +408,7 @@ final class Bridge {
 
     /// Clears the LED cache and repaints every LED from the current state, as after an LED sweep.
     func repaintLEDs() {
-        ledCache.removeAll()
-        padLEDCache.removeAll()
+        ledCache.flush()
         // The meter shows again on its next tick (#320).
         mixerModule.forgetMeterShown()
         refreshLEDs()
@@ -424,19 +420,18 @@ final class Bridge {
         guard enabled != ledsEnabled else { return }
         if enabled {
             ledsEnabled = true
-            ledCache.removeAll()
-            padLEDCache.removeAll()
+            ledCache.flush()
             mixerModule.forgetMeterShown()
             refreshLEDs()
         } else {
             // A button goes to the profile's off (#194); a pad or the ring to no color.
             let colorNotes = Set(mapping.notes.pads + [mapping.leds.ring] + [PadMode.hotCue, .roll, .loop, .slicer].flatMap(padNotes))
-            for (note, velocity) in ledCache.sorted(by: { $0.key < $1.key }) {
-                let off = colorNotes.contains(note) ? Self.off : offLevel
-                if velocity != off { led(note, off) }
+            for lit in ledCache.shown(onPads: false) {
+                let off = colorNotes.contains(lit.note) ? Self.off : offLevel
+                if lit.velocity != off { led(lit.note, off) }
             }
-            for (note, velocity) in padLEDCache.sorted(by: { $0.key < $1.key }) where velocity != Self.off {
-                padLED(note, Self.off)
+            for lit in ledCache.shown(onPads: true) where lit.velocity != Self.off {
+                padLED(lit.note, Self.off)
             }
             // The VU meter too (#320).
             if let meter = mapping.mixer?.meter, let shown = mixerModule.meterShownValue, shown != 0, ledCC(UInt8(meter.cc), 0) {
@@ -456,8 +451,7 @@ final class Bridge {
     func led(_ note: Int, _ velocity: UInt8) {
         // During an LED sweep (#26) the bridge's own writes wait; the sweep ends with a repaint.
         // A deck layer the controller isn't showing writes nothing: the unit shows one layer at a time (#79).
-        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, ledCache[note] != velocity else { return }
-        ledCache[note] = velocity
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, ledCache.write(note, velocity, onPads: false) else { return }
         guard let output else { return }
         do {
             try output.send(.noteOn(channel: ledChannel ?? channel, note: UInt8(note), velocity: velocity))
@@ -478,8 +472,7 @@ final class Bridge {
     /// A pad's LED (#224): on the pads' own channel when the profile gives one, else like any other LED.
     func padLED(_ note: Int, _ velocity: UInt8) {
         guard mapping.pads.channel != nil else { return led(note, velocity) }
-        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, padLEDCache[note] != velocity else { return }
-        padLEDCache[note] = velocity
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, ledCache.write(note, velocity, onPads: true) else { return }
         guard let output else { return }
         do { try output.send(.noteOn(channel: padChannel, note: UInt8(note), velocity: velocity)) } catch { outputFailed = true }
     }

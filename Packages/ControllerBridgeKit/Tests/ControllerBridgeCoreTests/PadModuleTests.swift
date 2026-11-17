@@ -151,3 +151,51 @@ struct PadModuleColorTests {
         #expect(pads.cues == [0, 0, 0, 0, 0, 0, 0, 0])
     }
 }
+
+/// The LED caches (#383 slice 5d): an unchanged LED is never sent twice; pads on their own channel (#224) are their own
+/// cache, since a pad's note can be a button's on another channel.
+@Suite("LED cache")
+struct LEDCacheTests {
+    @Test("A new velocity goes out; the same again doesn't; another one does")
+    func writes() {
+        var cache = LEDCache()
+        var out: [Bool] = []
+        out.append(cache.write(1, 127, onPads: false))
+        out.append(cache.write(1, 127, onPads: false))
+        out.append(cache.write(1, 0, onPads: false))
+        #expect(out == [true, false, true])
+    }
+
+    @Test("Pads and buttons are separate: note 1 on the pads' channel isn't note 1's button")
+    func separate() {
+        var cache = LEDCache()
+        var out: [Bool] = []
+        out.append(cache.write(1, 48, onPads: false))
+        out.append(cache.write(1, 48, onPads: true))
+        out.append(cache.write(1, 48, onPads: true))
+        #expect(out == [true, true, false])
+    }
+
+    @Test("A flush forgets everything, so the next writes all go out (a repaint)")
+    func flush() {
+        var cache = LEDCache()
+        _ = cache.write(1, 127, onPads: false)
+        _ = cache.write(32, 48, onPads: true)
+        cache.flush()
+        var out: [Bool] = []
+        out.append(cache.write(1, 127, onPads: false))
+        out.append(cache.write(32, 48, onPads: true))
+        #expect(out == [true, true])
+    }
+
+    @Test("What each cache shows, note order, for turning the LEDs off")
+    func shown() {
+        var cache = LEDCache()
+        _ = cache.write(9, 1, onPads: false)
+        _ = cache.write(3, 127, onPads: false)
+        _ = cache.write(33, 0, onPads: true)
+        _ = cache.write(32, 48, onPads: true)
+        #expect(cache.shown(onPads: false) == [LEDCache.Lit(note: 3, velocity: 127), LEDCache.Lit(note: 9, velocity: 1)])
+        #expect(cache.shown(onPads: true) == [LEDCache.Lit(note: 32, velocity: 48), LEDCache.Lit(note: 33, velocity: 0)])
+    }
+}
