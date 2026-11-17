@@ -510,7 +510,6 @@ enum Snapshots {
     }
 }
 
-#endif
 
 /// A clock the snapshot moves by hand, so the demo runs the same every time.
 final class SnapshotClock: ControllerBridgeCore.Clock, @unchecked Sendable {
@@ -521,3 +520,5 @@ final class SnapshotClock: ControllerBridgeCore.Clock, @unchecked Sendable {
 struct SnapshotLog: LogSink {
     func log(_ line: String) {}
 }
+
+#endif

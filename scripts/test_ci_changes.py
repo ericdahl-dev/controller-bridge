@@ -26,6 +26,11 @@ class NeedsMacTests(unittest.TestCase):
             "scripts/test_analytics.mjs", "scripts/test_capture.mjs",
             "README.md", "CHANGELOG.md", "docs/research/controllers.md"]))
 
+    def test_the_domain_docs_and_their_check_skip_the_mac_jobs(self):
+        self.assertFalse(ci_changes.needs_mac([
+            "GLOSSARY.md", "docs/adr/0001-native-swift-menu-bar-app.md",
+            "scripts/check_domain_docs.py", "scripts/test_check_domain_docs.py"]))
+
     def test_workflow_and_release_script_changes_run_the_mac_jobs(self):
         for path in [".github/workflows/ci.yml", "scripts/ci_profile.py", "scripts/smoke.sh", "project.yml",
                      ".github/pull_request_template.md"]:

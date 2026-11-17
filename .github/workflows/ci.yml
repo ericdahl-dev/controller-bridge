@@ -47,6 +47,9 @@ jobs:
           # APP_REVIEW.md's labels against the app's strings (#29): here, which runs on every pull request, so a
           # docs-only edit and a Swift rename both run it.
           python3 -I scripts/test_app_review.py
+          # The domain docs (GLOSSARY.md, docs/adr): every term still used, every ADR numbered, dated and linked.
+          python3 -I scripts/test_check_domain_docs.py
+          python3 -I scripts/check_domain_docs.py
       - name: Site analytics tests
         run: node --test scripts/test_analytics.mjs scripts/test_capture.mjs
       - name: Site check
