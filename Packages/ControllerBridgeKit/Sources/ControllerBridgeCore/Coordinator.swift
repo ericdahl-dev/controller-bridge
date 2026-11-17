@@ -519,6 +519,7 @@ public final class Coordinator {
             controller.bridge.jogPosition = nil
             // The capture sweeps the pitch fader, so it waits for pickup after, instead of jumping the tempo.
             controller.bridge.rearmPickup()
+            controller.bridge.rearmMixer()   // and the mixer's faders and knobs (#321)
         }
     }
 

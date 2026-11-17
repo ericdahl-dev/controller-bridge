@@ -211,6 +211,7 @@ final class Bridge {
     func start(stale: Bool = false) {
         feedbackStale = stale
         rearmPickup()
+        rearmMixer()
         ledCache.removeAll()
         padLEDCache.removeAll()
         refreshLEDs()
