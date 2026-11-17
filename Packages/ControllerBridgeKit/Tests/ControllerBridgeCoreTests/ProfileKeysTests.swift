@@ -119,6 +119,46 @@ struct ProfileKeysTests {
         }
     }
 
+    /// Every path in a document as a key pattern (list items as `[]`, each list's first item only).
+    static func patterns(_ value: OrderedJSON, _ path: String = "") -> [String] {
+        switch value {
+        case .object(let pairs):
+            return (path.isEmpty ? [] : [path]) + pairs.flatMap { patterns($0.value, path.isEmpty ? $0.key : "\(path).\($0.key)") }
+        case .array(let items):
+            return [path] + (items.first.map { patterns($0, path + "[]") } ?? [])
+        default:
+            return [path]
+        }
+    }
+
+    @Test("Every path in the LC6000's mapping has a table entry, with an LC6000 value")
+    func everyLC6000PathDeclared() {
+        let paths = Self.patterns(Self.lc6000)
+        #expect(paths.filter { ProfileKeys.key($0) == nil } == [])
+        #expect(paths.filter { ProfileKeys.key($0)?.lc6000 == nil } == [])
+    }
+
+    @Test("Every entry with an LC6000 value is in its mapping; every optional one is a key the checker takes")
+    func everyEntryReal() {
+        let paths = Set(Self.patterns(Self.lc6000))
+        for key in ProfileKeys.all where key.lc6000 != nil {
+            #expect(paths.contains(key.path), "\(key.path)")
+        }
+        for key in ProfileKeys.all where key.lc6000 == nil {
+            let (json, path) = Self.document(key.path, key.kind == .object ? .object([]) : key.kind == .list ? .array([]) : .null)
+            #expect(!Mapping.problems(in: json).contains("\(path): unknown key"), "\(key.path)")
+        }
+    }
+
+    @Test("A key the table doesn't have is an unknown key")
+    func undeclaredIsUnknown() {
+        for path in ["notes.dance", "mixer.crossfader", "notes.shifted.pads", "pads.mode_notes.jump", "midi.layers[].color"] {
+            #expect(ProfileKeys.key(path) == nil, "\(path)")
+            let (json, concrete) = Self.document(path, .number(1, isInteger: true))
+            #expect(Mapping.problems(in: json).contains("\(concrete): unknown key"), "\(path)")
+        }
+    }
+
     /// The value at a key pattern in a document: a list item's `[]` is its first item.
     static func value(at pattern: String, in document: OrderedJSON) -> OrderedJSON? {
         var current: OrderedJSON? = document
