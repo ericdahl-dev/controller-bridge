@@ -30,6 +30,7 @@ public struct Engine {
         var diagnosticsOpen = false
         // Settings changes made during the demo wait for the real controller.
         var waiting: [PipeEvent] = []
+        var waitingCommands: [Coordinator.Command] = []
         var active: Coordinator { demo?.coordinator ?? coordinator }
         var status: CoordinatorStatus { demo?.status ?? coordinator.status }
 
@@ -98,6 +99,16 @@ public struct Engine {
             case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setControllers, .setProfiles, .resync,
                  .setJogDisplay, .setProfileChoices:
                 if demo == nil { apply(event) } else { waiting.append(event) }
+            // Every command goes where its routing says (#386); the Engine never names one.
+            case .command(let command):
+                switch command.routing {
+                case .waitsForDemo: if demo == nil { coordinator.apply(command) } else { waitingCommands.append(command) }
+                case .real: coordinator.apply(command)
+                case .active: active.apply(command)
+                case .realAndDemo:
+                    coordinator.apply(command)
+                    demo?.coordinator.apply(command)
+                }
             case .demo(let on):
                 if on, demo == nil, let makeDemo {
                     coordinator.stop()
@@ -112,6 +123,8 @@ public struct Engine {
                     demo = nil
                     for change in waiting { apply(change) }
                     waiting.removeAll()
+                    for command in waitingCommands { coordinator.apply(command) }
+                    waitingCommands.removeAll()
                     setDiagnostics(coordinator, open: diagnosticsOpen)
                     coordinator.start()
                 }

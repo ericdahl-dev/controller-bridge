@@ -36,6 +36,8 @@ public enum PipeEvent: Equatable, Sendable {
     case jogDisplayReply([UInt8])
     /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
     case setJogPreviewDeck(Int?)
+    /// A change the app asks of the Coordinator (#386), routed by the Engine from `command.routing`.
+    case command(Coordinator.Command)
     /// Quit: release everything and end the loop. Always the last event.
     case stop
 }
@@ -59,6 +61,8 @@ public struct EventPipe: Sendable {
         let continuation: AsyncStream<PipeEvent>.Continuation
 
         public func midi(_ event: MIDIEvent, source: MIDIEndpoint.ID) { continuation.yield(.midi(event, source: source)) }
+        /// Any Coordinator command (#386), in order with everything else sent.
+        public func send(_ command: Coordinator.Command) { continuation.yield(.command(command)) }
         public func udp(_ datagram: [UInt8]) { continuation.yield(.udp(datagram)) }
         public func tick() { continuation.yield(.tick) }
         public func devicesChanged() { continuation.yield(.devicesChanged) }
