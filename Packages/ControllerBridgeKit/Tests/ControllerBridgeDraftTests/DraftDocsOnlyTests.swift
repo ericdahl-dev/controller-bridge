@@ -50,4 +50,11 @@ struct DraftDocsOnlyTests {
         #expect(text.contains("from the docs alone"))
         #expect(!text.contains("The capture wins"))
     }
+
+    @Test("A mixer the docs filled has no 'not captured yet' TODO")
+    func mixerFromDocs() throws {
+        let draft = ProfileDraft.make(device: "DDJ-400", docs: try Self.docs(
+            #"{ "mapping": { "mixer": { "cue_note": 84 } }, "sources": { "mapping.mixer.cue_note": "FLX4 list p.2" } }"#))
+        #expect(!draft.todos.contains { $0.key == "mapping.mixer" })
+    }
 }

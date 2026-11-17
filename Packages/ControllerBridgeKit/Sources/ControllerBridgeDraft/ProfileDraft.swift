@@ -266,7 +266,9 @@ public struct ProfileDraft: Sendable {
         if profile.value(at: "mapping.needle.require_touch") == nil {
             todo("mapping.needle.require_touch", "Whether the needle strip should act only while touched: true if it sends a touch note (needle.touch_note).")
         }
-        todo("mapping.mixer", "Mixer controls (mapping.mixer, #207) aren't captured yet. Note the faders, EQ, filter, cue/mute/solo and VU meter from the MIDI chart.")
+        if profile.value(at: "mapping.mixer") == nil {
+            todo("mapping.mixer", "Mixer controls (mapping.mixer, #207) aren't captured yet. Note the faders, EQ, filter, cue/mute/solo and VU meter from the MIDI chart.")
+        }
     }
 
     /// Steps repeated with Shift held. The shifted control is the step's first (the held Shift note is already left out).
