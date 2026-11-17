@@ -125,4 +125,33 @@ struct ShiftCuePausedTests {
         Self.shiftPad(rig, 33)
         #expect(Self.seek(rig) != nil, "Q off again: a silent seek, \(rig.osc.sent)")
     }
+
+    /// Learns cue 2 at 29.96 s with quantize off, and leaves the deck stopped.
+    static func learnCue2(_ rig: Rig) {
+        shiftPad(rig, 33)
+        feed(rig, "Playing", 1)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Position", [.float(30.02)]))
+        feed(rig, "Playing", 0)
+        rig.osc.sent.removeAll()
+    }
+
+    @Test("A new track forgets the cue times and the quantize flag: its cue 2 is tapped and learned again")
+    func newTrackForgets() throws {
+        let rig = try Self.started()
+        Self.loadTrack(rig)
+        Self.learnCue2(rig)
+        Self.loadTrack(rig, title: "another")
+        Self.shiftPad(rig, 33)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/Cue2", [.int(1)])])
+    }
+
+    @Test("The same track's TrackInfo again (a Resend) keeps what was learned")
+    func resendKeeps() throws {
+        let rig = try Self.started()
+        Self.loadTrack(rig)
+        Self.learnCue2(rig)
+        Self.loadTrack(rig)
+        Self.shiftPad(rig, 33)
+        #expect(Self.seek(rig) != nil)
+    }
 }

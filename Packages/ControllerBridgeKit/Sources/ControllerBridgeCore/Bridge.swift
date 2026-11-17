@@ -347,6 +347,7 @@ final class Bridge {
             loaded = value
             if loaded { rearmPickup() }
             if !loaded {
+                forgetCues()
                 // The track is gone: forget its cues, where it was and how long it was.
                 cues = [Int](repeating: 0, count: mapping.notes.pads.count)
                 progress = nil
@@ -371,7 +372,10 @@ final class Bridge {
                 if message.arguments.indices.contains(index), case .string(let value) = message.arguments[index] { return value }
                 return ""
             }
+            let previous = track
             track = (text(0), text(1), text(2), message.arguments[3].number ?? 0, text(7))
+            // Another track: what Shift + pad learned was about the last one (#358). A Resend of the same keeps it.
+            if previous?.title != text(0) || previous?.artist != text(1) { forgetCues() }
             return
         case "position":
             if let cue = learningCue, playing, let seconds = message.arguments.first?.number { learnCue(cue, at: seconds) }

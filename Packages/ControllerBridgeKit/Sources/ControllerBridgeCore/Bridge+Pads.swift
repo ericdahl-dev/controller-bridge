@@ -157,6 +157,14 @@ extension Bridge {
         cueTimes[cue] = max(0, seconds - Self.launchReportLead)
     }
 
+    /// A new track, or none: its cue times and quantize are unknown again.
+    func forgetCues() {
+        cueTimes = [:]
+        learningCue = nil
+        quantizeOn = nil
+        pendingCuePause = nil
+    }
+
     // MARK: LEDs
 
     func padLEDs() {
