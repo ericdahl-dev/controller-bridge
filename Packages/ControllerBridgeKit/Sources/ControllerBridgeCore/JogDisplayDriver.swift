@@ -120,7 +120,10 @@ public final class JogDisplayDriver {
     private func traceReply(_ bytes: [UInt8]) {
         guard let trace else { return }
         var text = "WD in "
-        if bytes.count > 9, bytes[0] == 0xF0, Array(bytes[1...3]) == [0x00, 0x02, 0x0B] {
+        if bytes.count > 4, Array(bytes[0...1]) == [0xF0, 0x7E], Array(bytes[3...4]) == [0x06, 0x02] {
+            // A universal identity reply carries the unit's serial number in ASCII; users attach the trace to issues.
+            text += "identity reply (serial redacted)"
+        } else if bytes.count > 9, bytes[0] == 0xF0, Array(bytes[1...3]) == [0x00, 0x02, 0x0B] {
             text += String(format: "cmd=0x%02X", bytes[6])
             let length = Int(bytes[7]) << 7 | Int(bytes[8])
             if length > 0, bytes.count > 9 { text += String(format: " status=0x%02X", bytes[9]) }
