@@ -112,8 +112,9 @@ final class BridgeModel {
     func setJogPreviewDeck(_ deck: Int?) { producer?.setJogPreviewDeck(deck) }
     /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.
     func setDemo(_ on: Bool) { producer?.demo(on: on) }
-    /// The device the capture window should preselect when it next opens (#200).
-    var captureDevice: String?
+    /// The device the capture window should preselect (#200): read when it opens, or at once if it's already open
+    /// (#316), so it never lingers for a later open.
+    let captureRequest = CaptureRequest()
 
     /// Pauses (a source) or gives back (nil) a controller while the capture window records it (#186).
     func setCapture(source: MIDIEndpoint.ID?) { producer?.setCapture(source: source) }
@@ -381,4 +382,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.quit { sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }
+}
+
+/// A device for the capture window to preselect (#200, #316), observed so an open window sees it too.
+@MainActor @Observable
+final class CaptureRequest {
+    var device: String?
 }
