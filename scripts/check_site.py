@@ -301,12 +301,46 @@ def check_capture_prompts(root, app_prompts):
     return []
 
 
+# A DeckBridge version on the site (#v1.1): "Version 1.0.1", "version 1.0.1 is on TestFlight", "DeckBridge 1.0.1". Three
+# parts only, so a planned "DeckBridge 1.2" is free, and not in parentheses, so "Syndicate's mapping (version 0.3.7)" is.
+VERSION_MENTION = re.compile(r"(?:\b[Vv]ersion|\bDeckBridge) (\d+\.\d+\.\d+)(?![\d.]|\s*\))")
+
+
+def app_version(root):
+    """The home page JSON-LD's SoftwareApplication softwareVersion: the one version the site may name."""
+    path = os.path.join(root, HOME)
+    if not os.path.isfile(path):
+        return None
+    page = Page()
+    with open(path, encoding="utf-8") as f:
+        page.feed(f.read())
+    def find(node):
+        if isinstance(node, dict):
+            if node.get("@type") == "SoftwareApplication" and isinstance(node.get("softwareVersion"), str):
+                return node["softwareVersion"]
+            return next((v for v in map(find, node.values()) if v), None)
+        if isinstance(node, list):
+            return next((v for v in map(find, node) if v), None)
+        return None
+    for block in page.json_ld:
+        try:
+            version = find(json.loads(block))
+        except ValueError:
+            continue
+        if version:
+            return version
+    return None
+
+
 def problems(root, app_prompts=None):
     """`app_prompts`: the app's capture prompt list (#190), which the site's capture/prompts.json must equal byte for
     byte; None skips the check (a site checked on its own)."""
     files = sorted(os.path.relpath(os.path.join(d, f), root).replace(os.sep, "/")
                    for d, _, names in os.walk(root) for f in names)
     out = [f"{page}: missing" for page in PAGES + ROOT_FILES if page not in files]
+    app_version = globals()["app_version"](root)
+    if HOME in files and not app_version:
+        out.append(f"{HOME}: the JSON-LD has no SoftwareApplication softwareVersion")
     size = 0
     for file in files:
         path = os.path.join(root, file)
@@ -320,6 +354,9 @@ def problems(root, app_prompts=None):
             out += company_problems(file, text)
             if PLACEHOLDER.search(text):
                 out.append(f"{file}: still has a TODO(user) TestFlight placeholder")
+            if app_version:
+                for mentioned in sorted(set(VERSION_MENTION.findall(text)) - {app_version}):
+                    out.append(f"{file}: says DeckBridge {mentioned}, but the app's softwareVersion is {app_version}")
             if file.endswith(".html"):
                 out += check_page(root, file, text)
         elif file.endswith(".css"):

@@ -28,7 +28,7 @@ WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no co
 
 CAPTURE_LD = '<script type="application/ld+json">{"text": "Record it at https://getdeckbridge.app/capture/."}</script>'
 
-PRICE_LD = ('<script type="application/ld+json">{"@graph": [{"@type": "SoftwareApplication", '
+PRICE_LD = ('<script type="application/ld+json">{"@graph": [{"@type": "SoftwareApplication", "softwareVersion": "1.0.1", '
             '"offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}, {"@type": "FAQPage", "mainEntity": '
             '[{"@type": "Question", "name": "How much does DeckBridge cost?", "acceptedAnswer": {"@type": "Answer", '
             '"text": "DeckBridge is free."}}]}]}</script>')
@@ -357,6 +357,24 @@ class CheckSiteTests(unittest.TestCase):
             found = [line for line in lines if line.startswith(row)]
             self.assertEqual(len(found), 1, row)
             self.assertIn("Use Global", found[0], row)
+    def test_every_deckbridge_version_on_the_site_is_the_apps(self):
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <p>Version 1.0.1 on TestFlight. DeckBridge 1.2 adds capture.</p>'),
+            "llms.txt": GOOD["llms.txt"] + "- Status: version 1.0.1 is on TestFlight. Syndicate's mapping (version 0.3.7).\n",
+        })
+        self.assertEqual(check_site.problems(root), [])
+        stale = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <p>Version 1.0.0 on TestFlight.</p>'),
+            "llms.txt": GOOD["llms.txt"] + "DeckBridge 1.1.0 is out.\n",
+        })
+        self.assertEqual(check_site.problems(stale), [
+            "llms.txt: says DeckBridge 1.1.0, but the app's softwareVersion is 1.0.1",
+            "support/index.html: says DeckBridge 1.0.0, but the app's softwareVersion is 1.0.1",
+        ])
+
+    def test_the_home_page_names_the_apps_version(self):
+        root = self.site({"index.html": GOOD["index.html"].replace('"softwareVersion": "1.0.1", ', "")})
+        self.assertEqual(check_site.problems(root), ["index.html: the JSON-LD has no SoftwareApplication softwareVersion"])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
