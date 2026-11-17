@@ -81,10 +81,13 @@ extension Mapping {
     /// an LED may share its button's note.
     private static func uses(_ merged: OrderedJSON) -> (notes: [(String, Double)], ccs: [(String, Double)]) {
         var notes: [(String, Double)] = [], ccs: [(String, Double)] = []
+        // With per-mode pad notes (#225), the pads send those; notes.pads only counts them (#322).
+        let hasModeNotes = merged["pads"]?["mode_notes"] != nil
         for path in leafPaths(merged) {
             guard case .number(let n, _)? = value(at: path, in: merged) else { continue }
             let pattern = path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
-            if pattern.hasPrefix("notes.") || pattern == "needle.touch_note" || mixerNotes.map({ "mixer.\($0)" }).contains(pattern) {
+            if pattern == "notes.pads[]", hasModeNotes { continue }
+            if pattern.hasPrefix("notes.") || pattern.hasPrefix("pads.mode_notes.") || pattern == "needle.touch_note" || mixerNotes.map({ "mixer.\($0)" }).contains(pattern) {
                 notes.append((path, n))
             } else if ["jog.msb_cc", "jog.lsb_cc", "pitch.msb_cc", "pitch.lsb_cc", "needle.msb_cc", "needle.lsb_cc", "browse.select_turn_cc",
                        "browse.auto_loop_size_cc", "jog.relative_cc", "jog.relative_edge_cc"].contains(pattern)
@@ -101,7 +104,9 @@ extension Mapping {
         let (notes, ccs) = uses(merged)
         let (deck, pads) = channels(merged)
         // A note can arrive on the pads' channels or the deck's (#251): two notes collide only where those meet.
-        let noteChannels = notes.map { (path: $0.0, n: $0.1, channels: $0.0.hasPrefix("notes.pads[") ? pads : deck) }
+        let noteChannels = notes.map { use in
+            (path: use.0, n: use.1, channels: use.0.hasPrefix("notes.pads[") || use.0.hasPrefix("pads.mode_notes.") ? pads : deck)
+        }
         let anyChannel = ccs.map { (path: $0.0, n: $0.1, channels: deck) }
         let layers = layerChannels(merged).map { (path: $0.0, n: $0.1, channels: Set([0.0])) }
         var out: [String] = []

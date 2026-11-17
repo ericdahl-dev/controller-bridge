@@ -64,6 +64,19 @@ struct PadChannelCoordinatorTests {
         #expect(rig.osc.sent == [])
     }
 
+    @Test("With the pads on their own channel, a pad note equal to a button's on the deck's channel is the button: Play plays (#322)")
+    func sharedNumberOtherChannel() throws {
+        // A DDJ-like profile: pad 1 is note 1 on channel 8, Play is note 1 on channel 1. The check allows it (#251).
+        let rig = try Self.started(#"{ "pads": { "channel": 8 }, "notes": { "pads": [1, 33, 34, 35, 36, 37, 38, 39] } }"#)
+        Self.press(rig, 1, channel: 1)
+        #expect(rig.osc.sent.map(\.address).contains("/Syndicate/Deck/1/PlayPause"))
+        #expect(!rig.osc.sent.map(\.address).contains("/Syndicate/Deck/1/HotCue"))
+        rig.osc.sent.removeAll()
+        Self.press(rig, 1, channel: 8)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(1), .int(1)]),
+                                 OSCMessage("/Syndicate/Deck/1/HotCue", [.int(1), .int(0)])])
+    }
+
     @Test("Pad LEDs go out on channel 8 and button LEDs stay on 1: pad 1 red (48) on 8, Hot Cue's button (27) full on 1")
     func ledsOnTheirChannels() throws {
         let rig = try Self.started(Self.ch8)
