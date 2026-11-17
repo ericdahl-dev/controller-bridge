@@ -156,3 +156,42 @@ struct MainCueTests {
         #expect(rig.osc.sent == [], "the old track's cue point is gone")
     }
 }
+
+/// The user's MIDI Monitor sequence (#360): CUE, PLAY, then Shift + CUE, all note 2 with the app's Shift (note 26).
+@Suite("Main CUE, the user's sequence")
+struct MainCueSequenceTests {
+    /// CUE on the stopped deck at 0 s (it previews, then returns), then PLAY.
+    static func cueThenPlay(_ rig: Rig) {
+        MainCueTests.position(rig, 0)
+        MainCueTests.tap(rig, 2)
+        MainCueTests.feed(rig, "Playing", 1)
+        MainCueTests.position(rig, 0.5)
+        MainCueTests.feed(rig, "Playing", 0)
+        MainCueTests.position(rig, 0)
+        MainCueTests.tap(rig, 1)
+        MainCueTests.feed(rig, "Playing", 1)
+        MainCueTests.position(rig, 3)
+    }
+
+    @Test("Shift + CUE while playing: Syndicate's Cue, pressed and released")
+    func whilePlaying() throws {
+        let rig = try MainCueTests.started()
+        Self.cueThenPlay(rig)
+        rig.osc.sent.removeAll()
+        MainCueTests.shiftCue(rig)
+        #expect(rig.osc.sent == [MainCueTests.cueDown, MainCueTests.cueUp])
+    }
+
+    @Test("Paused with PLAY at 9 s: Shift + CUE seeks to 0 s, with quantize None")
+    func pausedAway() throws {
+        let rig = try MainCueTests.started()
+        Self.cueThenPlay(rig)
+        MainCueTests.position(rig, 9)
+        MainCueTests.tap(rig, 1)
+        MainCueTests.feed(rig, "Playing", 0)
+        rig.osc.sent.removeAll()
+        MainCueTests.shiftCue(rig)
+        #expect(rig.osc.sent == [MainCueTests.quantizeNone, OSCMessage("/Syndicate/Deck/1/WaveformSeek", [.float(0)]),
+                                 MainCueTests.quantizeGlobal])
+    }
+}
