@@ -82,6 +82,9 @@ public final class JogDisplayDriver {
     private let renderBeat: ((JogDisplayContent, Int) -> [UInt8])?
     /// The beats still to upload for the current content, the master's beat first.
     private var beatQueue: [Int] = []
+    /// Failed tries per beat slot for the current content: a stalled upload is tried again, up to `beatTries` in all.
+    private var beatFailures: [Int: Int] = [:]
+    static let beatTries = 3
     /// What each beat slot holds on the unit now: a slot is shown on its beat only if it holds the current content.
     private var slotContent: [UInt8: JogDisplayContent] = [:]
 
@@ -223,7 +226,7 @@ public final class JogDisplayDriver {
             upload = running
         case .refused(let status):
             log.log("The jog display refused the image (ack \(String(format: "%02X", status))); it keeps what it showed")
-            fail()
+            fail(running)
             onEvent?(.failed(refusal: status))
         case .committed where running.finished:
             stored(running)
@@ -264,17 +267,30 @@ public final class JogDisplayDriver {
         } else if let running = upload, clock.now - running.startedAt >= Self.timeout {
             log.log("The jog display didn't answer the upload to slot \(running.slot) (\(running.acks) of "
                     + "\(running.upload.expectedAcks) acks); it keeps what it showed")
-            fail()
+            fail(running)
             onEvent?(.failed(refusal: nil))
         }
         if upload == nil { next() }
     }
 
     /// The upload is over without a show: what's shown stays, and nothing retries until the content changes.
-    private func fail() {
+    private func fail(_ running: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)) {
         upload = nil
-        wanted = nil
-        beatQueue = []
+        guard renderBeat != nil else {
+            wanted = nil
+            beatQueue = []
+            return
+        }
+        // Beat mode: a stalled slot (seen after a deck change, 1 of 3 acks) is tried again, then given up on; the other
+        // slots still go up, so the ring keeps stepping.
+        let beat = Int(running.slot)
+        let failures = (beatFailures[beat] ?? 0) + 1
+        beatFailures[beat] = failures
+        if failures < Self.beatTries {
+            beatQueue.insert(beat, at: 0)
+        } else {
+            log.log("The jog display gave up on slot \(beat) after \(Self.beatTries) tries")
+        }
     }
 
     private func next() {
@@ -307,6 +323,7 @@ public final class JogDisplayDriver {
         if let content = wanted, content != current {
             wanted = nil
             current = content
+            beatFailures = [:]
             let first = lastMasterBeat ?? 1
             beatQueue = (0..<4).map { (first - 1 + $0) % 4 + 1 }
         }

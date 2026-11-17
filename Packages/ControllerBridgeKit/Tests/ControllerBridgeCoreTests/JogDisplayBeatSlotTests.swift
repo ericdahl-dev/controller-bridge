@@ -176,4 +176,92 @@ struct JogDisplayBeatSlotTests {
         rig.coordinator.jogDisplayReply(JogDisplayDriverTests.committed)   // slot 2 stored: beat 1's slot comes back
         #expect(Self.shows(port).first == 1)
     }
+
+    @Test("After a layer change, the new deck's four go up and each master beat shows its slot again")
+    func beatsAfterLayerChange() throws {
+        let rig = try Rig()
+        let (port, drawn) = Self.attach(rig)
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
+        ))
+        Self.clock(rig, 1)
+        _ = Self.uploadAll(rig, port)
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        let slots = Self.uploadAll(rig, port)
+        #expect(slots.count == 4)
+        #expect(drawn.contents.suffix(4).allSatisfy { $0.deck == 2 })
+        port.wd.removeAll()
+        for beat in [2, 3, 4, 1] { Self.clock(rig, beat) }
+        #expect(Self.shows(port) == [2, 3, 4, 1])
+    }
+
+    @Test("A layer change while the master plays, with the new deck's TrackInfo arriving mid-upload: once the uploads settle, every beat shows its slot")
+    func beatsAfterLayerChangeWhilePlaying() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
+        ))
+        Self.clock(rig, 1)
+        _ = Self.uploadAll(rig, port)
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        var beat = 1
+        var rounds = 0
+        // Answer uploads as they come, a master beat between each, and deck 2's track arriving after the first.
+        while !Self.uploadSlots(port).isEmpty, rounds < 20 {
+            Self.answer(rig, port)
+            beat = beat % 4 + 1
+            Self.clock(rig, beat)
+            if rounds == 0 { rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2, title: "Night Drive")) }
+            rounds += 1
+        }
+        port.wd.removeAll()
+        var expected: [UInt8] = []
+        for _ in 0..<4 { beat = beat % 4 + 1; expected.append(UInt8(beat)); Self.clock(rig, beat) }
+        #expect(Self.shows(port) == expected)
+    }
+
+    @Test("A beat upload that stalls (1 of 3 acks, seen on hardware after a deck change) is tried again, the rest still go up, and every beat shows")
+    func stalledUploadRetried() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        Self.clock(rig, 1)
+        rig.coordinator.start()
+        Self.answer(rig, port)                    // slot 1 stored; slot 2 on the wire
+        port.wd.removeAll()
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted)   // 1 of 3 acks, then nothing
+        rig.clock.now += 5
+        rig.coordinator.tick()
+        #expect(Self.uploadSlots(port) == [2])   // slot 2 again
+        var slots: [UInt8] = [2]
+        for _ in 0..<3 {
+            Self.answer(rig, port)
+            slots += Self.uploadSlots(port)
+        }
+        #expect(slots == [2, 3, 4])
+        Self.answer(rig, port)
+        port.wd.removeAll()
+        for beat in [2, 3, 4, 1] { Self.clock(rig, beat) }
+        #expect(Self.shows(port) == [2, 3, 4, 1])
+    }
+
+    @Test("A slot that stalls three times in a row is given up on, logged, and the rest still go up: no endless retries")
+    func stalledUploadGivenUp() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        Self.clock(rig, 1)
+        rig.coordinator.start()
+        Self.answer(rig, port)                    // slot 1 stored; slot 2 on the wire
+        var tries = 0
+        while Self.uploadSlots(port) == [2], tries < 10 {
+            tries += 1
+            port.wd.removeAll()
+            rig.clock.now += 5
+            rig.coordinator.tick()
+        }
+        #expect(tries == 3)
+        #expect(Self.uploadSlots(port) == [3])
+    }
 }
