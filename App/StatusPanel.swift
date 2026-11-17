@@ -57,13 +57,15 @@ extension BridgeStatus {
                                         followsLayers: $0.followsLayers)
         }
         let first = entries.first
-        return BridgeState(
+        var state = BridgeState(
             controller: first?.controller ?? .notConnected, feedback: feedback, deck: first?.deck ?? deck,
             stopped: problem != nil, lastDropout: lastDropoutTime, master: self.controller?.master == true, demo: demo,
             lastEvent: first?.lastEvent, others: Array(entries.dropFirst()), stopReason: stopReason,
             followsLayers: first?.followsLayers ?? false, missingSubscriptions: missingSubscriptions.map { MissingSubscription(name: $0.syndicateName, breaks: $0.breaks) },
             requiredSubscriptions: requiredSubscriptions.map(\.syndicateName)
         )
+        state.otherHost = otherHost
+        return state
     }
 
     /// The panel's controller state, by the tested mapping in Presentation (#91).
