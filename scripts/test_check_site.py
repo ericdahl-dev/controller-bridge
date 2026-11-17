@@ -32,6 +32,8 @@ GOOD = {
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD,
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="capture/">record it in your browser</a>'
+                            ' <ul data-controllers><li data-controller="Denon DJ LC6000 PRIME" data-status="supported">'
+                            'Denon DJ LC6000 PRIME</li></ul>'
                             ' <a href="for/lc6000/">DeckBridge for the LC6000</a>'
                             ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
@@ -103,6 +105,8 @@ class CheckSiteTests(unittest.TestCase):
                                body='<img src="//cdn.example.com/a.png" alt=""> <script src="http://x.example/t.js"></script>'
                                     ' <a href="https://testflight.apple.com/join/XXXX">ok</a>'
                                     ' <a href="support/">s</a> <a href="privacy/">p</a> <a href="capture/">c</a>'
+                                    ' <ul data-controllers><li data-controller="Denon DJ LC6000 PRIME" data-status="supported">'
+                                    'x</li></ul>'
                                     ' <a href="for/lc6000/">l</a>'),
             "style.css": '@import url("https://fonts.example/x.css"); body { background: url(https://x.example/bg.png); }',
         })
@@ -319,8 +323,22 @@ class CheckSiteTests(unittest.TestCase):
             '[{"name": "LC6000 PRIME", "maker": "Denon DJ"}, {"name": "DDJ-400", "maker": "Pioneer DJ", "status": "soon"}]'})),
             ['controllers.json[1]: status "soon" isn\'t one of supported, in progress'])
 
+    def test_the_home_page_lists_exactly_controllers_json(self):
+        drifted = GOOD["index.html"].replace('data-controller="Denon DJ LC6000 PRIME"', 'data-controller="Denon DJ LC6000"')
+        self.assertEqual(check_site.problems(self.site({"index.html": drifted})), [
+            "index.html: its controller list (Denon DJ LC6000: supported) isn't controllers.json's "
+            "(Denon DJ LC6000 PRIME: supported)",
+        ])
+        missing = GOOD["index.html"].replace('<ul data-controllers><li data-controller="Denon DJ LC6000 PRIME" '
+                                             'data-status="supported">Denon DJ LC6000 PRIME</li></ul>', "")
+        self.assertEqual(check_site.problems(self.site({"index.html": missing})), [
+            "index.html: its controller list (none) isn't controllers.json's (Denon DJ LC6000 PRIME: supported)",
+        ])
+
     def test_an_in_progress_controller_is_allowed(self):
-        root = self.site({"controllers.json":
+        home = GOOD["index.html"].replace("</ul>", '<li data-controller="Pioneer DJ DDJ-400" data-status="in progress">'
+                                                    'Pioneer DJ DDJ-400, in progress</li></ul>')
+        root = self.site({"index.html": home, "controllers.json":
             '[{"name": "LC6000 PRIME", "maker": "Denon DJ"}, {"name": "DDJ-400", "maker": "Pioneer DJ", "status": "in progress"}]'})
         self.assertEqual(check_site.problems(root), [])
 

@@ -69,6 +69,7 @@ class Page(HTMLParser):
         self.untracked_mailto = []  # href of every mailto: link without a data-track
         self.no_alt = []  # src of every <img> without an alt attribute
         self.json_ld = []  # the text of each <script type="application/ld+json">
+        self.controllers = []  # (data-controller, data-status) of each element that names one (#201), in order
         self._in = None
         self._ld = None
 
@@ -92,6 +93,8 @@ class Page(HTMLParser):
             self.refs.append((attrs["href"], not rels or not set(rels) <= LINK_RELS))
         if tag == "script" and (attrs.get("type") or "").strip().lower() == "application/ld+json":
             self._ld = []
+        if attrs.get("data-controller") is not None:
+            self.controllers.append((attrs["data-controller"], attrs.get("data-status") or ""))
         if tag == "img" and "alt" not in attrs:
             self.no_alt.append(attrs.get("src") or "")
         if attrs.get("src") is not None:
@@ -268,6 +271,21 @@ def load_controllers(root):
     return entries, out
 
 
+def described(pairs):
+    return ", ".join(f"{name}: {status}" for name, status in pairs) or "none"
+
+
+def check_home_controllers(root, controllers):
+    """The home page lists exactly controllers.json, in order, with each status (#201)."""
+    wanted = [(f"{c['maker']} {c['name']}", c.get("status", "supported")) for c in controllers]
+    page = Page()
+    with open(os.path.join(root, HOME), encoding="utf-8") as f:
+        page.feed(f.read())
+    if page.controllers != wanted:
+        return [f"{HOME}: its controller list ({described(page.controllers)}) isn't {CONTROLLERS}'s ({described(wanted)})"]
+    return []
+
+
 def problems(root, app_prompts=None):
     """`app_prompts`: the app's capture prompt list (#190), which the site's capture/prompts.json must equal byte for
     byte; None skips the check (a site checked on its own)."""
@@ -276,6 +294,8 @@ def problems(root, app_prompts=None):
     out = [f"{page}: missing" for page in PAGES + ROOT_FILES if page not in files]
     controllers, controller_problems = load_controllers(root)
     out += controller_problems
+    if not controller_problems and HOME in files:
+        out += check_home_controllers(root, controllers)
     size = 0
     for file in files:
         path = os.path.join(root, file)
