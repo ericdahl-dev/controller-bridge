@@ -6,6 +6,9 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
     case playing, playPending, loaded, progress, tempoSlider, cues, sync, loop
     /// The deck's phase in the bar, for the jog display's needle (#165). Asked for only while the display is on.
     case barRamp
+    /// The mixer's (#207), asked for only by a profile with those controls. Their checkbox names are from Syndicate's
+    /// feedback addresses; the screen's own labels are unconfirmed.
+    case mixerVolume, mixerTrim, mixerEQ, mixerFilter, mixerButtons, mixerMeter
 
     /// Its checkboxes, each as Syndicate's OSC Feedback screen labels it (#261: the user's screenshot shows
     /// TempoSlider and TempoSliderEnabled as two boxes, and BPM and Sync). Position/Progress is unconfirmed.
@@ -20,6 +23,25 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .sync: ["BPM", "Sync"]
         case .loop: ["Loop"]
         case .barRamp: ["BarRamp"]
+        case .mixerVolume: ["Volume"]
+        case .mixerTrim: ["Trim"]
+        case .mixerEQ: ["Low", "Mid", "High"]
+        case .mixerFilter: ["cut", "res", "width"]
+        case .mixerButtons: ["Mute", "Solo", "Cue"]
+        case .mixerMeter: ["Meter"]
+        }
+    }
+
+    /// The mixer values that prove a mixer subscription on (#207); empty for a deck one.
+    var mixerValues: [MixerValue] {
+        switch self {
+        case .mixerVolume: [.volume]
+        case .mixerTrim: [.trim]
+        case .mixerEQ: [.eqLow, .eqMid, .eqHigh]
+        case .mixerFilter: [.filterCut, .filterRes, .filterWidth]
+        case .mixerButtons: [.mute, .solo, .cue]
+        case .mixerMeter: [.meter]
+        default: []
         }
     }
 
@@ -28,10 +50,20 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
 
     /// The subscriptions a profile needs, the only ones asked for and judged (#211). Every profile needs these eight
     /// today; mixer and player-type ones (#207, #210) join when a profile uses them.
-    public static func required(for mapping: Mapping) -> [Subscription] { always }
+    public static func required(for mapping: Mapping) -> [Subscription] {
+        guard let mixer = mapping.mixer else { return always }
+        let uses: [(Subscription, Bool)] = [
+            (.mixerVolume, mixer.volume != nil), (.mixerTrim, mixer.trim != nil),
+            (.mixerEQ, mixer.eqLow != nil || mixer.eqMid != nil || mixer.eqHigh != nil),
+            (.mixerFilter, mixer.filter != nil || mixer.filterRes != nil || mixer.filterWidth != nil),
+            (.mixerButtons, mixer.cueNote != nil || mixer.muteNote != nil || mixer.soloNote != nil),
+            (.mixerMeter, mixer.meter != nil),
+        ]
+        return always + uses.filter(\.1).map(\.0)
+    }
 
     /// The eight every profile needs, in the guide's order. BarRamp joins only while the jog display is on (#165).
-    public static let always: [Subscription] = allCases.filter { $0 != .barRamp }
+    public static let always: [Subscription] = [.playing, .playPending, .loaded, .progress, .tempoSlider, .cues, .sync, .loop]
 
     /// What goes wrong without it, to follow "<name> is off: ".
     public var breaks: String {
@@ -45,6 +77,12 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .sync: "the Sync LED doesn't follow the deck"
         case .loop: "the loop LEDs don't follow the deck"
         case .barRamp: "the jog display's needle doesn't follow the deck"
+        case .mixerVolume: "the channel fader can jump"
+        case .mixerTrim: "the trim knob can jump"
+        case .mixerEQ: "the EQ knobs can jump"
+        case .mixerFilter: "the filter knob can jump"
+        case .mixerButtons: "the cue, mute and solo LEDs don't follow the mixer"
+        case .mixerMeter: "the VU meters stay dark"
         }
     }
 
@@ -61,6 +99,7 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .sync: ["sync", "bpm"]
         case .loop: ["loop"]
         case .barRamp: ["barramp"]
+        default: []
         }
     }
 }
@@ -94,7 +133,13 @@ struct SubscriptionCheck: Equatable {
             missing = [.loaded]
             return
         }
+        // Mixer values come for every channel, loaded or not (#207 capture): any channel's proves one on.
+        let mixer = Set(messages.compactMap { message -> MixerValue? in
+            guard let at = message.address.range(of: "/Mixer/", options: .caseInsensitive) else { return nil }
+            return MixerOSC.parse(message.address, root: String(message.address[..<at.lowerBound]) + "/")?.value
+        })
         missing = required.filter { subscription in
+            if !subscription.mixerValues.isEmpty { return mixer.isDisjoint(with: subscription.mixerValues) }
             // Loaded is what marks a deck loaded, judged above.
             guard subscription != .loaded else { return false }
             return loaded.contains { deck in !subscription.values.contains { (values[deck] ?? []).contains($0) } }
