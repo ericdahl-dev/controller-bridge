@@ -132,7 +132,7 @@ extension Bridge {
     }
 
     private func jog(counts: Int, needsTouch: Bool = true) {
-        guard counts != 0, platterTouched || !mapping.jog.requireTouch || !needsTouch else { return }
+        guard let wheel = mapping.jog, counts != 0, platterTouched || !wheel.requireTouch || !needsTouch else { return }
         jogCountsPending += counts
         lastJogTime = clock.now
         if playing {
@@ -143,17 +143,17 @@ extension Bridge {
             return
         }
         // The check keeps these positive; a hand-built mapping with 0 mustn't trap (#92).
-        let countsPerRev = Double(mapping.jog.countsPerRev)
+        let countsPerRev = Double(wheel.countsPerRev)
         guard countsPerRev > 0 else { return }
         let revolutions = Double(counts) / countsPerRev
         // Paused: move the playhead.
         if let duration, let position = progress {
-            let moved = min(1, max(0, position + revolutions * mapping.jog.seekSecondsPerRev / duration))
+            let moved = min(1, max(0, position + revolutions * wheel.seekSecondsPerRev / duration))
             progress = moved
             sendDeck("WaveformSeek", .float(Float(moved)))
         } else {
             // No track length: skip whole beats, keeping the remainder for the next turn.
-            let countsPerBeat = Int((countsPerRev / mapping.jog.beatsPerRev).rounded())
+            let countsPerBeat = Int((countsPerRev / wheel.beatsPerRev).rounded())
             guard countsPerBeat > 0 else { return }
             seekCountRemainder += counts
             let beats = seekCountRemainder / countsPerBeat
@@ -169,7 +169,7 @@ extension Bridge {
     }
 
     func tick() {
-        if bendDirection != 0, clock.now - lastJogTime >= Double(mapping.jog.bendReleaseMs) / 1000 {
+        if let wheel = mapping.jog, bendDirection != 0, clock.now - lastJogTime >= Double(wheel.bendReleaseMs) / 1000 {
             endBend()
         }
         timingTick()

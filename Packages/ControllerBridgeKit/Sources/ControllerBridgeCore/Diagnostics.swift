@@ -75,9 +75,10 @@ extension Mapping {
             return notes.buttons.first { $0.value == note }?.key ?? DiagnosticEvent.unmapped
         case .controlChange(_, let controller, _):
             let cc = Int(controller)
-            let jogNames: [(Int, String)] = switch jog.mode {
+            let jogNames: [(Int, String)] = switch jog?.mode {
             case .absolute(let msb, let lsb): [(msb, "jog_msb"), (lsb, "jog_lsb")]
             case .relative(let cc, let edge): [(cc, "jog_relative")] + (edge.map { [($0, "jog_relative_edge")] } ?? [])
+            case nil: []
             }
             let named: [(Int, String)] = jogNames
               + (pitch.map { [($0.msbCC, "pitch_msb"), ($0.bits == 14 ? $0.lsbCC ?? -1 : -1, "pitch_lsb")] } ?? [])

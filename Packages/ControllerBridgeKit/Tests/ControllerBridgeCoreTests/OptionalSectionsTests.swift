@@ -89,3 +89,40 @@ struct OptionalPitchTests {
         #expect(pitch.bits == 14 && pitch.msbCC == 8 && pitch.lsbCC == 40)
     }
 }
+
+/// No jog wheel (#341): the section left out, its CCs and touch do nothing, and the demo skips its nudge.
+@Suite("Optional jog")
+struct OptionalJogTests {
+    @Test("No jog: the profile loads, and the LC6000's jog CCs (17 and 49) send nothing while playing")
+    func noJog() throws {
+        let profile = try OptionalSectionsTests.profile(without: ["jog"])
+        #expect(profile.mapping.jog == nil)
+        let rig = OptionalSectionsTests.rig(profile)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        rig.osc.sent.removeAll()
+        for (msb, lsb) in [(UInt8(7), UInt8(100)), (7, 120)] {
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 17, value: msb), source: Rig.lc6000.id)
+            rig.coordinator.midi(.controlChange(channel: 0, controller: 49, value: lsb), source: Rig.lc6000.id)
+        }
+        rig.clock.now = 1
+        rig.coordinator.tick()
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("The demo runs a profile with no jog: no nudge is ever sent")
+    func demo() throws {
+        let clock = Rig.FakeClock()
+        let session = DemoSession(profile: try OptionalSectionsTests.profile(without: ["jog"]), clock: clock,
+                                  log: Rig.FakeLog(), ledOutput: Rig.FakeOutput())
+        session.start()
+        for _ in 0..<900 { clock.now += 0.01; session.tick() }
+        #expect(session.sentToSyndicate.contains { $0.address.hasSuffix("/PlayPause") }, "the demo still ran")
+        #expect(!session.sentToSyndicate.contains { $0.address.hasSuffix("/PhaseBend") })
+    }
+
+    @Test("The LC6000 still has its jog: the 17/49 pair, 3600 counts a turn")
+    func lc6000Jog() throws {
+        let jog = try #require(try Mapping.bundledDefault().jog)
+        #expect(jog.mode == .absolute(msbCC: 17, lsbCC: 49) && jog.countsPerRev == 3600)
+    }
+}

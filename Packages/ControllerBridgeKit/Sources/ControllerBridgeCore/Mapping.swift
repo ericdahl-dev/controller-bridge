@@ -9,7 +9,8 @@ public struct Mapping: Equatable, Sendable, Codable {
     public var midi: MIDI
     public var osc: OSC
     public var deck: Deck
-    public var jog: Jog
+    /// The jog wheel; nil on a controller without one (#341).
+    public var jog: Jog?
     /// The pitch fader; nil on a controller without one (#341).
     public var pitch: Pitch?
     /// The Needle Drop strip; nil on a controller without one (#341).
@@ -33,7 +34,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         midi = try c.decode(MIDI.self, forKey: .midi)
         osc = try c.decode(OSC.self, forKey: .osc)
         deck = try c.decode(Deck.self, forKey: .deck)
-        jog = try c.decode(Jog.self, forKey: .jog)
+        jog = try c.decodeIfPresent(Jog.self, forKey: .jog)
         pitch = try c.decodeIfPresent(Pitch.self, forKey: .pitch)
         needle = try c.decodeIfPresent(Needle.self, forKey: .needle)
         browse = try c.decodeIfPresent(Browse.self, forKey: .browse)
