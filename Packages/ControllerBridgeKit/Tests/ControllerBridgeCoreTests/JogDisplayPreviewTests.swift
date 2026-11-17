@@ -120,7 +120,7 @@ struct JogDisplayPreviewPipeTests {
         let (rig, take) = try JogDisplayPreviewNoControllerTests.rig()
         _ = take()
         let pipe = EventPipe()
-        pipe.producer.setJogPreviewDeck(4)
+        pipe.producer.send(.setJogPreviewDeck(4))
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
         #expect(JogDisplayPreviewNoControllerTests.decks(take()) == [4])

@@ -27,7 +27,7 @@ struct EngineTests {
         coordinator.start()
         let pipe = EventPipe()
 
-        pipe.producer.setProfileChoices(["Mystery DJ 2": "denon-lc6000-prime"])
+        pipe.producer.send(.setProfileChoices(["Mystery DJ 2": "denon-lc6000-prime"]))
         pipe.producer.finish()
         await Engine(coordinator: coordinator, log: log).run(pipe.events)
 
@@ -41,10 +41,10 @@ struct EngineTests {
         rig.osc.sent.removeAll()
         let pipe = EventPipe()
 
-        pipe.producer.setCapture(source: Rig.lc6000.id)
+        pipe.producer.send(.setCapture(source: Rig.lc6000.id))
         pipe.producer.midi(.noteOn(channel: 0, note: 1, velocity: 127), source: Rig.lc6000.id)
         pipe.producer.midi(.noteOff(channel: 0, note: 1, velocity: 0), source: Rig.lc6000.id)
-        pipe.producer.setCapture(source: nil)
+        pipe.producer.send(.setCapture(source: nil))
         pipe.producer.midi(.noteOn(channel: 0, note: 2, velocity: 127), source: Rig.lc6000.id)
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
@@ -220,8 +220,8 @@ struct EngineTests {
         let seen = SeenDiagnostics()
 
         pipe.producer.diagnostics(open: true)
-        pipe.producer.ledSweep(delay: 0.6)
-        pipe.producer.stopLEDSweep()
+        pipe.producer.send(.ledSweep(delay: 0.6))
+        pipe.producer.send(.stopLEDSweep)
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log, onDiagnostic: { seen.append($0) }).run(pipe.events)
 
@@ -294,7 +294,7 @@ struct EngineTests {
         rig.osc.sent.removeAll()
         let pipe = EventPipe()
         pipe.producer.demo(on: true)
-        pipe.producer.setDeck(2, controller: 0)
+        pipe.producer.send(.setDeck(2, controller: 0))
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log, makeDemo: Self.demoMaker(rig)).run(pipe.events)
         #expect(rig.osc.sent == [])
@@ -302,7 +302,7 @@ struct EngineTests {
 
         let back = EventPipe()
         back.producer.demo(on: true)
-        back.producer.setDeck(2, controller: 0)
+        back.producer.send(.setDeck(2, controller: 0))
         back.producer.demo(on: false)
         back.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log, makeDemo: Self.demoMaker(rig)).run(back.events)
@@ -337,9 +337,9 @@ struct EngineTests {
         rig.osc.sent.removeAll()
         let pipe = EventPipe()
 
-        pipe.producer.setDeck(2, controller: 0)
-        pipe.producer.setDevices(input: Rig.lc6000, output: Rig.lc6000Out, controller: 0)
-        pipe.producer.setLEDs(enabled: false)
+        pipe.producer.send(.setDeck(2, controller: 0))
+        pipe.producer.send(.setDevices(input: Rig.lc6000, output: Rig.lc6000Out, controller: 0))
+        pipe.producer.send(.setLEDs(enabled: false))
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
 
@@ -357,10 +357,10 @@ struct EngineTests {
         rig.coordinator.start()
         let pipe = EventPipe()
 
-        pipe.producer.setControllers([
+        pipe.producer.send(.setControllers([
             ControllerSettings(deck: 1, input: nil, output: nil),
             ControllerSettings(deck: 2, input: nil, output: nil),
-        ])
+        ]))
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
 
@@ -376,7 +376,7 @@ struct EngineTests {
         mapping.notes.buttons["play"] = 60
         let pipe = EventPipe()
 
-        pipe.producer.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)])
+        pipe.producer.send(.setProfiles([ControllerProfile(id: "custom", name: "Custom mapping", deviceHints: ["LC6000"], mapping: mapping)]))
         pipe.producer.midi(.noteOn(channel: 0, note: 60, velocity: 127), source: Rig.lc6000.id)
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
@@ -393,7 +393,7 @@ struct EngineTests {
         let pipe = EventPipe()
         let seen = Seen()
 
-        pipe.producer.setProfiles([ControllerProfile(id: "custom", name: "My LC6000", deviceHints: ["LC6000"], mapping: mapping)])
+        pipe.producer.send(.setProfiles([ControllerProfile(id: "custom", name: "My LC6000", deviceHints: ["LC6000"], mapping: mapping)]))
         pipe.producer.demo(on: true)
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { seen.append($0) }, makeDemo: Self.demoMaker(rig))

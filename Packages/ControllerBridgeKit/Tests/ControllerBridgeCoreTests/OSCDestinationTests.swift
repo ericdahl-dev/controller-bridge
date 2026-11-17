@@ -189,7 +189,7 @@ struct OSCDestinationTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))   // the start Resend was answered
         rig.osc.sent.removeAll()
         let pipe = EventPipe()
-        pipe.producer.resync()
+        pipe.producer.send(.resync)
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Feedback/Resend", [.int(1)])])

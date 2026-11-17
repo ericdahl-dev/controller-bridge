@@ -108,10 +108,10 @@ final class BridgeModel {
         producer?.diagnostics(open: open)
         jogSimulator.feed.setVisible(open)
     }
-    func startLEDSweep(delay: Double) { producer?.ledSweep(delay: delay) }
-    func stopLEDSweep() { producer?.stopLEDSweep() }
+    func startLEDSweep(delay: Double) { producer?.send(.ledSweep(delay: delay)) }
+    func stopLEDSweep() { producer?.send(.stopLEDSweep) }
     /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
-    func setJogPreviewDeck(_ deck: Int?) { producer?.setJogPreviewDeck(deck) }
+    func setJogPreviewDeck(_ deck: Int?) { producer?.send(.setJogPreviewDeck(deck)) }
     /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.
     func setDemo(_ on: Bool) { producer?.demo(on: on) }
     /// The device the capture window should preselect (#200): read when it opens, or at once if it's already open
@@ -119,7 +119,7 @@ final class BridgeModel {
     let captureRequest = CaptureRequest()
 
     /// Pauses (a source) or gives back (nil) a controller while the capture window records it (#186).
-    func setCapture(source: MIDIEndpoint.ID?) { producer?.setCapture(source: source) }
+    func setCapture(source: MIDIEndpoint.ID?) { producer?.send(.setCapture(source: source)) }
 
     /// The panel's deck picker (#66): only that controller's deck changes, through the same path as Settings, so a
     /// held control is released on the old deck first.
@@ -225,18 +225,18 @@ final class BridgeModel {
         guard let producer else { return }
         if new.controllers != old.controllers {
             // A controller following its own layers runs as one entry per layer (#79).
-            producer.setControllers(ControllerSettings.expanded(new.controllers, layers: layers))
+            producer.send(.setControllers(ControllerSettings.expanded(new.controllers, layers: layers)))
             status.deck = new.controllers[0].deck
         }
         status.oscPort = new.syndicatePort
-        if new.ledsEnabled != old.ledsEnabled { producer.setLEDs(enabled: new.ledsEnabled) }
+        if new.ledsEnabled != old.ledsEnabled { producer.send(.setLEDs(enabled: new.ledsEnabled)) }
         if new.appearance != old.appearance { NSApplication.shared.appearance = new.appearance.nsAppearance }
         if new.followSyndicateDeckColors != old.followSyndicateDeckColors || new.customDeckColors != old.customDeckColors {
-            producer.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors)
+            producer.send(.setDeckColors(followSyndicate: new.followSyndicateDeckColors, custom: new.customDeckColors))
         }
-        if new.ringColors != old.ringColors { producer.setRingColors(new.ringColors) }
-        if new.profileChoices != old.profileChoices { producer.setProfileChoices(new.profileChoices) }
-        if new.jogDisplay != old.jogDisplay { producer.setJogDisplay(enabled: new.jogDisplay) }
+        if new.ringColors != old.ringColors { producer.send(.setRingColors(new.ringColors)) }
+        if new.profileChoices != old.profileChoices { producer.send(.setProfileChoices(new.profileChoices)) }
+        if new.jogDisplay != old.jogDisplay { producer.send(.setJogDisplay(enabled: new.jogDisplay)) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
 
@@ -304,7 +304,7 @@ final class BridgeModel {
             resolver: SystemHostResolver(), open: { ip, port in try UDPSink(ipv4: ip, port: port) }, clock: SystemClock()
         )
         let resyncProducer = pipe.producer
-        osc.onReady = { resyncProducer.resync() }
+        osc.onReady = { resyncProducer.send(.resync) }
         osc.onSendFailure = { [weak osc] in Task { await osc?.reresolve() } }
         self.osc = osc
         connectOSC(host: settings.syndicateHost, port: settings.syndicatePort)
@@ -328,11 +328,11 @@ final class BridgeModel {
             )
         }
         // The saved deck colors (#123), queued behind the Coordinator's start.
-        pipe.producer.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors)
-        pipe.producer.setRingColors(settings.ringColors)
+        pipe.producer.send(.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors))
+        pipe.producer.send(.setRingColors(settings.ringColors))
         // Profiles chosen by hand (#200): a device only they name connects now.
-        pipe.producer.setProfileChoices(settings.profileChoices)
-        pipe.producer.setJogDisplay(enabled: settings.jogDisplay)
+        pipe.producer.send(.setProfileChoices(settings.profileChoices))
+        pipe.producer.send(.setJogDisplay(enabled: settings.jogDisplay))
 
     }
 
@@ -350,7 +350,7 @@ final class BridgeModel {
         do { try MappingStore.save(data) } catch { return ["Couldn't save the mapping: \(error.localizedDescription)"] }
         library = next
         status.mappingInUse = next.inUse
-        producer?.setProfiles(next.profiles)
+        producer?.send(.setProfiles(next.profiles))
         return []
     }
 
@@ -368,7 +368,7 @@ final class BridgeModel {
         next.reset()
         library = next
         status.mappingInUse = next.inUse
-        producer?.setProfiles(next.profiles)
+        producer?.send(.setProfiles(next.profiles))
         return nil
     }
 }
