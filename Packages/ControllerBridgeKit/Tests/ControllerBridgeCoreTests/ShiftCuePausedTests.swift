@@ -88,4 +88,22 @@ struct ShiftCuePausedTests {
         Self.feed(rig, "Playing", 1)
         #expect(rig.osc.sent == [], "a seek arms no pause")
     }
+
+    static let hotCue2 = [OSCMessage("/Syndicate/Deck/1/HotCue", [.int(2), .int(1)]),
+                          OSCMessage("/Syndicate/Deck/1/HotCue", [.int(2), .int(0)])]
+
+    @Test("Q on, cue known: Shift + pad is a normal hot cue (a seek would snap to the grid and the user wants it to play)")
+    func quantizeOnKnownCue() throws {
+        let rig = try Self.started()
+        Self.loadTrack(rig)
+        Self.shiftPad(rig, 33)
+        Self.feed(rig, "PlayPending", 1)
+        Self.feed(rig, "Playing", 1)
+        Self.feed(rig, "PlayPending", 0)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Position", [.float(30.02)]))
+        Self.feed(rig, "Playing", 0)
+        rig.osc.sent.removeAll()
+        Self.shiftPad(rig, 33)
+        #expect(rig.osc.sent == Self.hotCue2)
+    }
 }

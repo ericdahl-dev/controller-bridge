@@ -109,8 +109,10 @@ extension Bridge {
         switch padMode {
         case .hotCue:
             guard index < Self.syndicateCues else { return }
-            // Shift on a stopped deck (#358): go to the cue without playing.
-            if shift, !playing, !playPending { return goToCuePaused(index + 1) }
+            // Shift on a stopped deck (#358): go to the cue without playing. With quantize on, once a launch has
+            // shown it and the cue is known, it's a hot cue (the user's pick): a seek would snap to the grid.
+            let knownQuantized = quantizeOn == true && cueTimes[index + 1] != nil
+            if shift, !playing, !playPending, !knownQuantized { return goToCuePaused(index + 1) }
             hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
         case .roll:
             // The profile's roll sizes (#196); a pad past the list does nothing.
