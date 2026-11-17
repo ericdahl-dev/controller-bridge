@@ -13,7 +13,8 @@ public struct Mapping: Equatable, Sendable, Codable {
     public var pitch: Pitch
     /// The Needle Drop strip; nil on a controller without one (#341).
     public var needle: Needle?
-    public var browse: Browse
+    /// The browse knob; nil on a controller without one (#341).
+    public var browse: Browse?
     public var notes: Notes
     public var leds: LEDs
     /// What the pads play beyond their notes (#196): the roll each pad plays in Roll mode.
@@ -34,7 +35,7 @@ public struct Mapping: Equatable, Sendable, Codable {
         jog = try c.decode(Jog.self, forKey: .jog)
         pitch = try c.decode(Pitch.self, forKey: .pitch)
         needle = try c.decodeIfPresent(Needle.self, forKey: .needle)
-        browse = try c.decode(Browse.self, forKey: .browse)
+        browse = try c.decodeIfPresent(Browse.self, forKey: .browse)
         notes = try c.decode(Notes.self, forKey: .notes)
         leds = try c.decode(LEDs.self, forKey: .leds)
         pads = try c.decodeIfPresent(Pads.self, forKey: .pads) ?? Pads()

@@ -38,3 +38,23 @@ struct OptionalSectionsTests {
         #expect(needle.msbCC == 64 && needle.lsbCC == 65 && needle.touchNote == 70)
     }
 }
+
+/// No browse knob (#341): the section left out, its CCs do nothing.
+@Suite("Optional browse")
+struct OptionalBrowseTests {
+    @Test("No browse: the profile loads, and the LC6000's browse CCs (6 and 3) send nothing")
+    func noBrowse() throws {
+        let profile = try OptionalSectionsTests.profile(without: ["browse"])
+        #expect(profile.mapping.browse == nil)
+        let rig = OptionalSectionsTests.rig(profile)
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 6, value: 1), source: Rig.lc6000.id)
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 3, value: 1), source: Rig.lc6000.id)
+        #expect(rig.osc.sent == [])
+    }
+
+    @Test("The LC6000 still has its browse knob: select CC 6, auto loop size CC 3")
+    func lc6000Browse() throws {
+        let browse = try #require(try Mapping.bundledDefault().browse)
+        #expect(browse.selectTurnCC == 6 && browse.autoLoopSizeCC == 3)
+    }
+}

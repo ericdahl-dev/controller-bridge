@@ -195,8 +195,10 @@ final class Bridge {
             ccNames[needle.msbCC] = "needle_msb"
             ccNames[needle.lsbCC] = "needle_lsb"
         }
-        ccNames[mapping.browse.selectTurnCC] = "select_turn"
-        ccNames[mapping.browse.autoLoopSizeCC] = "auto_loop_size"
+        if let browse = mapping.browse {
+            ccNames[browse.selectTurnCC] = "select_turn"
+            ccNames[browse.autoLoopSizeCC] = "auto_loop_size"
+        }
         self.ccNames = ccNames
     }
 

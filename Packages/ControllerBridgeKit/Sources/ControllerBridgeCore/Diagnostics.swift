@@ -81,8 +81,8 @@ extension Mapping {
             }
             let named: [(Int, String)] = jogNames + [
                 (pitch.msbCC, "pitch_msb"), (pitch.bits == 14 ? pitch.lsbCC ?? -1 : -1, "pitch_lsb"),
-                (browse.selectTurnCC, "select_turn"), (browse.autoLoopSizeCC, "auto_loop_size"),
-            ] + (needle.map { [($0.msbCC, "needle_msb"), ($0.lsbCC, "needle_lsb")] } ?? [])
+            ] + (browse.map { [($0.selectTurnCC, "select_turn"), ($0.autoLoopSizeCC, "auto_loop_size")] } ?? [])
+              + (needle.map { [($0.msbCC, "needle_msb"), ($0.lsbCC, "needle_lsb")] } ?? [])
             return named.first { $0.0 == cc }?.1 ?? DiagnosticEvent.unmapped
         }
     }
