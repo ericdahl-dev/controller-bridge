@@ -44,6 +44,9 @@ jobs:
           python3 -I scripts/test_ci_changes.py
           # The release checklist and What to Test (#165, v1.1): Markdown, so it runs here, where a docs-only change runs.
           python3 -I scripts/test_release_docs.py
+          # APP_REVIEW.md's labels against the app's strings (#29): here, which runs on every pull request, so a
+          # docs-only edit and a Swift rename both run it.
+          python3 -I scripts/test_app_review.py
           # The domain docs (GLOSSARY.md, docs/adr): every term still used, every ADR numbered, dated and linked.
           python3 -I scripts/test_check_domain_docs.py
           python3 -I scripts/check_domain_docs.py

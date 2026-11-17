@@ -34,7 +34,9 @@ struct JogSimulatorState: Sendable {
                 needleLimiters[deck] = limiter
             // The master clock's beat: the lit segment on every deck (#165).
             case .masterBeat(let beat): sim.apply(.masterBeat(beat))
-            case .playLight(let on): sim.apply(.playing(on))
+            // The unit's play light blinks while paused (#317): the words come from each deck's play state instead.
+            case .playLight: break
+            case .deckPlaying(let deck, let playing): sim.apply(.playing(deck: deck, playing))
             // Every deck's content, live (#221): the simulator draws all of them, not only the one uploaded.
             case .preview(let content): contents[content.deck] = content
             }

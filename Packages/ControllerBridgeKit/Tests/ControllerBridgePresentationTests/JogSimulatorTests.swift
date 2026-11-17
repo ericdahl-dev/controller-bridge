@@ -125,17 +125,19 @@ struct JogSimulatorTests {
         #expect(sim.status(deck: 1).readout(timeZone: Self.utc) == "Slot 2 · 14,812 bytes · 12:04:31 · Accepted")
     }
 
-    @Test("Each deck has its own needle (the user's pick, #165); the play light belongs to the deck in front")
+    @Test("Each deck has its own needle (the user's pick, #165) and its own play state, front or not (#317)")
     func needlesPerDeck() {
         var sim = JogSimulator()
         sim.apply(.connected)
         sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 100, at: Self.noon))
         sim.apply(.marker(deck: 1, pitchBend: 4096))
         sim.apply(.marker(deck: 3, pitchBend: 8192))
-        sim.apply(.playing(true))
+        sim.apply(.playing(deck: 3, true))
         #expect(sim.marker(deck: 1) == 4096)
         #expect(sim.marker(deck: 3) == 8192)
-        #expect(sim.playing(deck: 1))
+        #expect(!sim.playing(deck: 1))
+        #expect(sim.playing(deck: 3))
+        sim.apply(.playing(deck: 3, false))
         #expect(!sim.playing(deck: 3))
     }
 

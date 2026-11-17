@@ -27,6 +27,7 @@ final class BridgeStatus {
     /// LED subscriptions a loaded deck's answer lacked (#150).
     var missingSubscriptions: [Subscription] = []
     /// What the controllers' profiles need, for the setup guide (#211).
+    // The eight every profile needs until the Coordinator says (BarRamp joins only with the jog display on, #165).
     var requiredSubscriptions: [Subscription] = Subscription.always
     /// The last time Syndicate's feedback stopped, for the menu.
     var lastDropout: String?

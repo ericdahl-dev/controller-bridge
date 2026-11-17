@@ -384,11 +384,87 @@ struct JogNeedleEventTests {
         #expect(Self.needles(events) == [:])
     }
 
+    @Test("Every deck's play state, from Syndicate's Playing, once and then per change: not the blinking play light (#317)")
+    func deckPlaying() throws {
+        let (rig, _, events) = try Self.started()
+        events.list.removeAll()
+        JogMarkerCoordinatorTests.feed(rig, "Deck/3/Playing", .int(1))
+        JogMarkerCoordinatorTests.feed(rig, "Deck/1/Track", .string("Daybreak"))
+        for t in stride(from: 0.0, through: 2.0, by: 0.25) { JogMarkerCoordinatorTests.tick(rig, at: t) }
+        JogMarkerCoordinatorTests.feed(rig, "Deck/3/Playing", .int(0))
+        for t in stride(from: 2.25, through: 4.0, by: 0.25) { JogMarkerCoordinatorTests.tick(rig, at: t) }
+        let plays = events.list.compactMap { event -> String? in
+            if case .deckPlaying(let deck, let on) = event { return "\(deck) \(on)" }
+            return nil
+        }
+        // The first tick tells the simulator every deck's state; after that, only deck 3's two changes.
+        #expect(plays == ["1 false", "2 false", "3 true", "4 false", "3 false"])
+    }
+
     @Test("Header/Clock is the master beat for every deck's ring, as an event only: nothing is sent for it")
     func masterBeat() throws {
         let (rig, port, events) = try Self.started()
         JogMarkerCoordinatorTests.feed(rig, "Header/Clock", .int(3))
         #expect(events.list.contains(.masterBeat(3)))
         #expect(port.wd == [])
+    }
+
+    // MARK: Whose display (#305)
+
+    @Test("No WD port: no hello, no upload, nothing waited on; once the port appears, hello")
+    func noWDPort() throws {
+        let rig = try Rig()
+        let (port, _) = JogDisplayCoordinatorTests.attach(rig)
+        port.isAttached = false
+        rig.coordinator.start()
+        for step in 1...40 { rig.clock.now = Double(step) * 0.5; rig.coordinator.tick() }
+        #expect(port.controller == [])
+        #expect(port.wd == [])
+        #expect(!rig.log.lines.contains { $0.contains("didn't answer") })
+        port.isAttached = true
+        rig.coordinator.devicesChanged()
+        #expect(port.controller == JogDisplay.hello)
+    }
+
+    @Test("Two controllers, the LC6000 unplugged and plugged back: goodbye, then hello again, though the other stayed")
+    func replugWithAnotherController() throws {
+        let rig = try Rig()
+        let (port, _) = JogDisplayCoordinatorTests.attach(rig)
+        let iac = MIDIEndpoint(id: 1000, name: "IAC Bus 1")
+        rig.coordinator.start()
+        rig.coordinator.setControllers([
+            ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out, followLayers: false),
+            ControllerSettings(deck: 2, input: iac, output: nil, followLayers: false),
+        ])
+        port.controller.removeAll()
+        rig.midi.sources.removeAll { $0.id == Rig.lc6000.id }
+        port.isAttached = false
+        rig.coordinator.devicesChanged()
+        #expect(port.controller == [JogDisplay.goodbye])
+        rig.midi.sources.append(Rig.lc6000)
+        port.isAttached = true
+        rig.coordinator.devicesChanged()
+        #expect(port.controller == [JogDisplay.goodbye] + JogDisplay.hello)
+    }
+
+    @Test("With another controller first, the display shows the deck of the controller whose profile owns the WD port")
+    func showsTheOwnersDeck() throws {
+        let testPad = try ControllerProfile(decoding: ProfileTests.testPadFile())
+        let pad = MIDIEndpoint(id: 1004, name: "TP-1 Pad")
+        let lc6000 = MIDIEndpoint(id: 1001, name: "DENON LC6000 PRIME")
+        let wd = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME WD")
+        let rig = ProfileMatchingTests.ProfileRig(profiles: try ControllerProfile.bundled() + [testPad], sources: [pad, lc6000, wd])
+        let port = JogDisplayCoordinatorTests.Port(), shown = JogDisplayCoordinatorTests.Shown()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: Rig.FakeClock(), log: rig.log, size: 1) { content in
+            shown.contents.append(content)
+            return [UInt8(content.deck), 0, 0, 255]
+        })
+        rig.coordinator.start()
+        rig.coordinator.setControllers([
+            ControllerSettings(deck: 1, input: pad, output: nil, followLayers: false),
+            ControllerSettings(deck: 2, input: lc6000, output: nil, followLayers: false),
+        ])
+        rig.coordinator.setJogDisplay(enabled: true)
+        #expect(shown.contents.last?.deck == 2)
     }
 }

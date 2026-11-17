@@ -127,7 +127,8 @@ public struct JogSimulator: Equatable, Sendable {
         case marker(deck: Int, pitchBend: Int)
         /// The master clock's beat (1-4): the lit ring segment on every deck.
         case masterBeat(Int)
-        case playing(Bool)
+        /// Whether `deck` is playing, from Syndicate's feedback (#317): not the play light, which blinks while paused.
+        case playing(deck: Int, Bool)
     }
 
     private struct Upload: Equatable, Sendable {
@@ -158,8 +159,7 @@ public struct JogSimulator: Equatable, Sendable {
             if let front { uploads[front]?.accepted = false }
         case .marker(let deck, let pitchBend): markers[deck] = pitchBend
         case .masterBeat(let beat): master = beat
-        case .playing(let on):
-            if let front { plays[front] = on }
+        case .playing(let deck, let on): plays[deck] = on
         }
     }
 
@@ -185,7 +185,7 @@ public struct JogSimulator: Equatable, Sendable {
     /// The deck's last marker pitch bend (0 until one arrives), for `JogMarkerAngle.degrees(pitchBend:)`.
     public func marker(deck: Int) -> Int { markers[deck] ?? 0 }
 
-    /// Whether the deck's play light is on.
+    /// Whether the deck is playing, as Syndicate reports it.
     public func playing(deck: Int) -> Bool { plays[deck] ?? false }
 
     /// The marker as the renderer takes it (#238): turns clockwise from 12 o'clock.

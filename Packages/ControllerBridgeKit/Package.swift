@@ -35,6 +35,8 @@ let package = Package(
         // Capture and Core. The capture wins over the docs; whatever neither knows is a TODO, never a guess.
         .target(name: "ControllerBridgeDraft", dependencies: ["ControllerBridgeCapture", "ControllerBridgeCore"]),
         // scripts/capture_to_profile: the draft tool's command line, a thin shell over ControllerBridgeDraft.
+        // scripts/appstore_screenshots.sh: frames a Debug snapshot for the Mac App Store, a thin shell over AppStoreFrame.
+        .executableTarget(name: "appstore-frames", dependencies: ["ControllerBridgeRender"]),
         .executableTarget(name: "capture-to-profile", dependencies: ["ControllerBridgeDraft", "ControllerBridgeCapture"]),
         .testTarget(name: "ControllerBridgeDraftTests", dependencies: ["ControllerBridgeDraft", "ControllerBridgeCapture", "ControllerBridgeCore"]),
     ]
