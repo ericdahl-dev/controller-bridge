@@ -54,6 +54,38 @@ public struct ProfileDraft: Sendable {
         return draft
     }
 
+    /// A draft from the docs alone (#280), before any owner has captured the controller: the identity from the device
+    /// name, the docs' keys with their sources, and a TODO for the owner's capture for everything else.
+    public static func make(device: String, docs: DocsFacts) -> ProfileDraft {
+        var draft = ProfileDraft(profile: .object([]), todos: [])
+        draft.set("id", .string(slug(device)))
+        draft.set("name", .string(device))
+        draft.set("device_hints", .array([.string(device)]))
+        draft.set("exclude_hints", .array([]))
+        draft.set("mapping.midi.input", .string(device))
+        draft.set("mapping.midi.output", .string(device))
+        // Noise notes come only from a capture's hands-off step.
+        draft.set("mapping.midi.ignore_notes", .array([]))
+        draft.todo("mapping.midi.ignore_notes", "Notes the controller sends by itself (a heartbeat) come from the owner's capture: its hands-off step.")
+        draft.merge(docs)
+        let capturable: [(key: String, what: String)] = [
+            ("mapping.midi.channel", "the deck's channel"), ("mapping.notes.pads", "the hot cue pads' notes"),
+            ("mapping.midi.layers", "the deck layers' channels"), ("mapping.jog", "the jog's messages"),
+            ("mapping.notes.platter_touch", "the platter's touch note"), ("mapping.pitch", "the pitch fader's CCs and direction"),
+            ("mapping.needle", "the needle strip"), ("mapping.browse.select_turn_cc", "the browse knob's CC"),
+            ("mapping.midi.encoder_format", "the relative encoder format"),
+        ]
+        for (key, what) in capturable where draft.profile.value(at: key) == nil {
+            draft.todo(key, "Not in the docs. The owner's capture, or MIDI Monitor, gives \(what). Leave it out if the controller has no such control.")
+        }
+        if draft.profile.value(at: "mapping.jog.counts_per_rev") == nil {
+            draft.todo("mapping.jog.counts_per_rev", "Not in the docs. In the owner's capture or MIDI Monitor: mark the platter, turn it exactly once, and count.")
+        }
+        draft.unknowns()
+        draft.fill()
+        return draft
+    }
+
     mutating func set(_ path: String, _ value: DraftJSON) { profile.set(path, value) }
 
     /// What the profile check says about the draft's mapping as a new controller's own profile (#251): its keys
