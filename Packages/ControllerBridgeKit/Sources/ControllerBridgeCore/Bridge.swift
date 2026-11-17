@@ -135,13 +135,9 @@ final class Bridge {
     /// A quantized start is waiting for the beat.
     var playPending = false
     /// Shift + hot cue pad on a stopped deck (#358): the cue tapped, and when, waiting for Syndicate's Playing 1 to
-    /// pause it. Syndicate has no jump-without-play input, and a pause sent before the launch cancels the jump.
-    var pendingCuePause: (cue: Int, armedAt: Double, quantized: Bool)?
-    /// Whether this deck's last launch from stopped waited for the beat (PlayPending first): quantize on. Syndicate
-    /// doesn't report quantize itself (#358). Nil until a launch is seen.
-    var quantizeOn: Bool?
-    /// A launch from stopped is waiting for the beat (PlayPending 1 while stopped).
-    var launchWaited = false
+    /// pause it, with the deck's quantize forced to None until then (#363). Syndicate has no jump-without-play input,
+    /// and a pause sent before the launch cancels the jump.
+    var pendingCuePause: (cue: Int, armedAt: Double)?
     /// Where each hot cue sits, in seconds, learned from a Shift + pad launch (#358): Syndicate never sends cue times.
     var cueTimes: [Int: Double] = [:]
     /// The cue just launched by Shift + pad, whose time the next Position gives.
@@ -327,19 +323,11 @@ final class Bridge {
         let value = message.arguments.first?.isTrue ?? false
         switch key {
         case "playing":
-            let wasPlaying = playing
             playing = value
-            // Any launch from stopped shows whether quantize is on: PlayPending came first, or it didn't (#358).
-            if value, !wasPlaying {
-                quantizeOn = launchWaited
-                launchWaited = false
-            }
             if value { cueLaunched() }
             if !playing, bendDirection != 0 { endBend() }
         case "playpending":
             playPending = value
-            if value, !playing { launchWaited = true }
-            if value, pendingCuePause != nil { pendingCuePause?.quantized = true }
         case "temposlider":
             guard let reported = message.arguments.first?.number else { return }
             tempoReported(reported)
