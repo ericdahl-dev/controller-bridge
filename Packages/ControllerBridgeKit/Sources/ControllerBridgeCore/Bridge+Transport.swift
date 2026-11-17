@@ -3,6 +3,8 @@
 
 extension Bridge {
     func play(_ pressed: Bool) {
+        // Play wins over a Shift + pad tap still waiting to be paused (#358).
+        if pressed { pendingCuePause = nil }
         if pressed { sendDeck("PlayPause", .int(1)) }
     }
 

@@ -109,6 +109,10 @@ extension Bridge {
         switch padMode {
         case .hotCue:
             guard index < Self.syndicateCues else { return }
+            // Shift on a stopped deck (#358): go to the cue without playing. With quantize on, once a launch has
+            // shown it and the cue is known, it's a hot cue (the user's pick): a seek would snap to the grid.
+            let knownQuantized = quantizeOn == true && cueTimes[index + 1] != nil
+            if shift, !playing, !playPending, !knownQuantized { return goToCuePaused(index + 1) }
             hold(.pad(index), "HotCue", press: [.int(cue), .int(1)], release: [.int(cue), .int(0)])
         case .roll:
             // The profile's roll sizes (#196); a pad past the list does nothing.
@@ -120,6 +124,54 @@ extension Bridge {
             sendDeck("SetCueLoop", .int(cue))
         case .slicer: break
         }
+    }
+
+    /// Syndicate's first Position after a launch is this far past the cue (the live check on #358: 0.06 s, every run).
+    static let launchReportLead = 0.06
+    /// WaveformSeek lands this far before the time it's asked for (the live check on #358: 0.10 s, every seek).
+    static let seekLands = 0.10
+    /// How long a Shift + pad tap waits for its launch before the pause is dropped.
+    static let cuePauseTimeout = 4.0
+
+    /// Goes to cue `cue` on the stopped deck. Known (and quantize off), a WaveformSeek there, which is silent. Otherwise
+    /// it taps the cue, and `cueLaunched` pauses it once Syndicate reports it playing, learning where it is.
+    func goToCuePaused(_ cue: Int) {
+        // A second press before the launch: the user wants it to play from the cue, so the pause is dropped.
+        if pendingCuePause != nil {
+            pendingCuePause = nil
+            return
+        }
+        if quantizeOn == false, let time = cueTimes[cue], let duration, duration > 0 {
+            return sendDeck("WaveformSeek", .float(Float((time + Self.seekLands) / duration)))
+        }
+        sendDeck("Cue\(cue)", .int(1))
+        pendingCuePause = (cue, clock.now, false)
+    }
+
+    /// Syndicate reports the deck playing: if it's the cue tapped by `goToCuePaused`, pause it there. With quantize
+    /// on the pause would come late enough to be heard (#358, the user: "not OK with Q on"), so it plays, as a hot cue.
+    func cueLaunched() {
+        guard let pending = pendingCuePause else { return }
+        pendingCuePause = nil
+        // A launch long after the press isn't the pad's.
+        guard clock.now - pending.armedAt <= Self.cuePauseTimeout else { return }
+        quantizeOn = pending.quantized
+        learningCue = pending.cue
+        if !pending.quantized { sendDeck("Playing", .int(0)) }
+    }
+
+    /// The first Position after a Shift + pad launch: where cue `cue` sits.
+    func learnCue(_ cue: Int, at seconds: Double) {
+        learningCue = nil
+        cueTimes[cue] = max(0, seconds - Self.launchReportLead)
+    }
+
+    /// A new track, or none: its cue times and quantize are unknown again.
+    func forgetCues() {
+        cueTimes = [:]
+        learningCue = nil
+        quantizeOn = nil
+        pendingCuePause = nil
     }
 
     // MARK: LEDs

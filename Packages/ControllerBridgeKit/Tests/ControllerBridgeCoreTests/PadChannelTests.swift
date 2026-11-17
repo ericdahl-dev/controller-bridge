@@ -266,26 +266,29 @@ struct ShiftedPadChannelMappingTests {
     }
 }
 
-/// The Coordinator seam (#324). DeckBridge gives Shift no meaning on a pad yet, so a Shift pad plays as its pad;
-/// before this, the DDJ-400's Shift pads did nothing at all.
+/// The Coordinator seam (#324). On a playing deck a Shift pad plays as its pad (on a stopped one it goes to the cue,
+/// paused: #358, ShiftCuePausedTests); before #324, the DDJ-400's Shift pads did nothing at all.
 @Suite("Shifted pad channel at the Coordinator")
 struct ShiftedPadChannelCoordinatorTests {
     static func hotCues(_ rig: Rig) -> [String] { PadChannelInheritanceTests.hotCues(rig) }
 
-    @Test("A pad on the shifted channel (9) is that pad with Shift, the same as Shift held and the pad on 8")
+    @Test("A pad on the shifted channel (9) is that pad with Shift, the same as Shift held and the pad on 8 (deck playing)")
     func shiftedChannel() throws {
         let override = #"{ "pads": { "channel": 8, "shifted_channel": 9 } }"#
         let viaShift = try PadChannelCoordinatorTests.started(override)
+        viaShift.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
         viaShift.coordinator.midi(.noteOn(channel: 0, note: 26, velocity: 127), source: Rig.lc6000.id)   // Shift
         viaShift.osc.sent.removeAll()
         PadChannelCoordinatorTests.press(viaShift, 32, channel: 8)
         let shifted = try PadChannelCoordinatorTests.started(override)
+        shifted.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]))
+        shifted.osc.sent.removeAll()
         PadChannelCoordinatorTests.press(shifted, 32, channel: 9)
         #expect(shifted.osc.sent == viaShift.osc.sent)
         #expect(Self.hotCues(shifted) == ["/Syndicate/Deck/1/HotCue"])
     }
 
-    @Test("Per layer: deck 2's Shift pads on 11 bring layer 2 to the front and play deck 2")
+    @Test("Per layer: deck 2's Shift pads on 11 bring layer 2 to the front and play deck 2 (deck playing)")
     func perLayer() throws {
         let layers = [Mapping.Layer(channel: 1, deck: 1, padChannel: 8, shiftedPadChannel: 9),
                       Mapping.Layer(channel: 2, deck: 2, padChannel: 10, shiftedPadChannel: 11)]
@@ -293,6 +296,8 @@ struct ShiftedPadChannelCoordinatorTests {
             { "midi": { "layers": [ { "channel": 1, "deck": 1, "pad_channel": 8, "shifted_pad_channel": 9 },
                                     { "channel": 2, "deck": 2, "pad_channel": 10, "shifted_pad_channel": 11 } ] } }
             """#, layers: layers)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Playing", [.int(1)]))
+        rig.osc.sent.removeAll()
         PadChannelCoordinatorTests.press(rig, 32, channel: 11)
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, true])
         #expect(Self.hotCues(rig) == ["/Syndicate/Deck/2/HotCue"])
