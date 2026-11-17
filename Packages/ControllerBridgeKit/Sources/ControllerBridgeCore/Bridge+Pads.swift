@@ -136,10 +136,10 @@ extension Bridge {
     func goToCuePaused(_ cue: Int) {
         // A second press before the launch: the user wants it to play from the cue, so the pause is dropped.
         if pendingCuePause != nil { return endCueJump() }
-        sendDeck("Quantize", .int(1))
+        overrideQuantize(.cueJump)
         if let time = cueTimes[cue], let duration, duration > 0 {
             sendDeck("WaveformSeek", .float(Float(time / duration)))
-            return sendDeck("Quantize", .int(0))
+            return restoreQuantize(.cueJump)
         }
         sendDeck("Cue\(cue)", .int(1))
         pendingCuePause = (cue, clock.now)
@@ -153,7 +153,7 @@ extension Bridge {
         pendingCuePause = nil
         learningCue = pending.cue
         sendDeck("Playing", .int(0))
-        sendDeck("Quantize", .int(0))
+        restoreQuantize(.cueJump)
     }
 
     /// Drops a Shift + pad tap still waiting for its launch, and puts the deck's quantize back to Use Global. Every way
@@ -161,7 +161,7 @@ extension Bridge {
     func endCueJump() {
         guard pendingCuePause != nil else { return }
         pendingCuePause = nil
-        sendDeck("Quantize", .int(0))
+        restoreQuantize(.cueJump)
     }
 
     /// The tick: a tap whose launch never came puts quantize back after the timeout.
