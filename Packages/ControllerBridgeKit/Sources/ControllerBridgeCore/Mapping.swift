@@ -9,10 +9,14 @@ public struct Mapping: Equatable, Sendable, Codable {
     public var midi: MIDI
     public var osc: OSC
     public var deck: Deck
-    public var jog: Jog
-    public var pitch: Pitch
-    public var needle: Needle
-    public var browse: Browse
+    /// The jog wheel; nil on a controller without one (#341).
+    public var jog: Jog?
+    /// The pitch fader; nil on a controller without one (#341).
+    public var pitch: Pitch?
+    /// The Needle Drop strip; nil on a controller without one (#341).
+    public var needle: Needle?
+    /// The browse knob; nil on a controller without one (#341).
+    public var browse: Browse?
     public var notes: Notes
     public var leds: LEDs
     /// What the pads play beyond their notes (#196): the roll each pad plays in Roll mode.
@@ -30,10 +34,10 @@ public struct Mapping: Equatable, Sendable, Codable {
         midi = try c.decode(MIDI.self, forKey: .midi)
         osc = try c.decode(OSC.self, forKey: .osc)
         deck = try c.decode(Deck.self, forKey: .deck)
-        jog = try c.decode(Jog.self, forKey: .jog)
-        pitch = try c.decode(Pitch.self, forKey: .pitch)
-        needle = try c.decode(Needle.self, forKey: .needle)
-        browse = try c.decode(Browse.self, forKey: .browse)
+        jog = try c.decodeIfPresent(Jog.self, forKey: .jog)
+        pitch = try c.decodeIfPresent(Pitch.self, forKey: .pitch)
+        needle = try c.decodeIfPresent(Needle.self, forKey: .needle)
+        browse = try c.decodeIfPresent(Browse.self, forKey: .browse)
         notes = try c.decode(Notes.self, forKey: .notes)
         leds = try c.decode(LEDs.self, forKey: .leds)
         pads = try c.decodeIfPresent(Pads.self, forKey: .pads) ?? Pads()

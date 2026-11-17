@@ -12,7 +12,7 @@ extension Bridge {
     }
 
     private func sendPitch() {
-        let pitch = mapping.pitch
+        guard let pitch = mapping.pitch else { return }
         // A 7-bit fader is one CC (#195); the LC6000's is an MSB/LSB pair.
         let t = pitch.bits == 7
             ? tempoSlider(from7Bit: pitchMSBValue, invert: pitch.invert, deadZone: pitch.deadZone)
@@ -53,7 +53,7 @@ extension Bridge {
     func tempoReported(_ value: Double) {
         reportedTempo = value
         tempoWaitUntil = nil
-        let tolerance = mapping.pitch.pickupTolerance
+        let tolerance = mapping.pitch?.pickupTolerance ?? 0
         let isEcho = lastTempo.map { abs($0 - value) <= tolerance } == true
             || recentTempoSends.contains { clock.now - $0.time <= Self.echoWindow && abs($0.value - value) <= tolerance }
         if !isEcho { rearmPickup() }
@@ -61,7 +61,7 @@ extension Bridge {
 
     /// Dim while the fader waits to be picked up, so it can be caught by feel; otherwise full at the center.
     var pitchCenterVelocity: UInt8 {
-        if mapping.pitch.pickup, pickupArmed, reportedTempo != nil { return dimLevel }
+        if mapping.pitch?.pickup == true, pickupArmed, reportedTempo != nil { return dimLevel }
         return lastTempo == 0 ? fullLevel : offLevel
     }
 
@@ -76,14 +76,14 @@ extension Bridge {
     /// the reported value or moves across it. With no report yet there is nothing to meet, so the fader passes
     /// through, except just after a deck switch, when it waits for the new deck's report (`tempoWaitUntil`).
     private func pickedUp(at position: Double) -> Bool {
-        guard mapping.pitch.pickup, pickupArmed else { return true }
+        guard let pitch = mapping.pitch, pitch.pickup, pickupArmed else { return true }
         guard let reported = reportedTempo else {
             if let until = tempoWaitUntil, clock.now < until { return false }
             return true
         }
         let previous = faderPosition
         faderPosition = position
-        let near = abs(position - reported) <= mapping.pitch.pickupTolerance
+        let near = abs(position - reported) <= pitch.pickupTolerance
         let crossed = previous.map { ($0 - reported) * (position - reported) < 0 } ?? false
         guard near || crossed else { return false }
         pickupArmed = false
@@ -99,7 +99,7 @@ extension Bridge {
     /// The strip's 14-bit position (#103), as a seek across the whole track. Sent when the LSB arrives, so an MSB on
     /// its own never seeks to a half-updated place.
     func needleLSB(_ value: UInt8) {
-        guard needleTouched || !mapping.needle.requireTouch else { return }
+        guard let needle = mapping.needle, needleTouched || !needle.requireTouch else { return }
         let position = join14Bit(msb: needleMSBValue, lsb: value)
         sendDeck("WaveformSeek", .float(Float(Double(position) / 16383)))
     }
@@ -132,7 +132,7 @@ extension Bridge {
     }
 
     private func jog(counts: Int, needsTouch: Bool = true) {
-        guard counts != 0, platterTouched || !mapping.jog.requireTouch || !needsTouch else { return }
+        guard let wheel = mapping.jog, counts != 0, platterTouched || !wheel.requireTouch || !needsTouch else { return }
         jogCountsPending += counts
         lastJogTime = clock.now
         if playing {
@@ -143,17 +143,17 @@ extension Bridge {
             return
         }
         // The check keeps these positive; a hand-built mapping with 0 mustn't trap (#92).
-        let countsPerRev = Double(mapping.jog.countsPerRev)
+        let countsPerRev = Double(wheel.countsPerRev)
         guard countsPerRev > 0 else { return }
         let revolutions = Double(counts) / countsPerRev
         // Paused: move the playhead.
         if let duration, let position = progress {
-            let moved = min(1, max(0, position + revolutions * mapping.jog.seekSecondsPerRev / duration))
+            let moved = min(1, max(0, position + revolutions * wheel.seekSecondsPerRev / duration))
             progress = moved
             sendDeck("WaveformSeek", .float(Float(moved)))
         } else {
             // No track length: skip whole beats, keeping the remainder for the next turn.
-            let countsPerBeat = Int((countsPerRev / mapping.jog.beatsPerRev).rounded())
+            let countsPerBeat = Int((countsPerRev / wheel.beatsPerRev).rounded())
             guard countsPerBeat > 0 else { return }
             seekCountRemainder += counts
             let beats = seekCountRemainder / countsPerBeat
@@ -169,7 +169,7 @@ extension Bridge {
     }
 
     func tick() {
-        if bendDirection != 0, clock.now - lastJogTime >= Double(mapping.jog.bendReleaseMs) / 1000 {
+        if let wheel = mapping.jog, bendDirection != 0, clock.now - lastJogTime >= Double(wheel.bendReleaseMs) / 1000 {
             endBend()
         }
         timingTick()

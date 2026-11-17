@@ -235,7 +235,7 @@ public final class Coordinator {
         for index in controllers.indices where controllers[index].bridge.jogCountsPending != 0 {
             let bridge = controllers[index].bridge
             jogNeedles[index, default: JogMarker()].platter(
-                counts: bridge.jogCountsPending, countsPerRev: bridge.mapping.jog.countsPerRev, at: clock.now,
+                counts: bridge.jogCountsPending, countsPerRev: bridge.mapping.jog?.countsPerRev ?? 0, at: clock.now,
                 touched: bridge.platterTouched
             )
             needlesMoved.insert(index)

@@ -259,7 +259,7 @@ struct ContinuousTests {
     @Test("A hand-built mapping with 0 counts per turn doesn't crash a paused jog: it moves nothing (#92)")
     func zeroCountsPerRev() throws {
         var mapping = try Mapping.bundledDefault()
-        mapping.jog.countsPerRev = 0
+        mapping.jog?.countsPerRev = 0
         let rig = try Rig()
         let coordinator = Coordinator(mapping: mapping, midi: rig.midi, osc: rig.osc, clock: rig.clock, log: rig.log)
         coordinator.start()

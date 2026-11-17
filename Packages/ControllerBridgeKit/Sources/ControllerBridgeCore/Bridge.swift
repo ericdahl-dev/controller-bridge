@@ -188,21 +188,28 @@ final class Bridge {
         buttonNames = Dictionary(mapping.notes.buttons.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         shiftedNames = Dictionary(mapping.notes.shifted.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
         var ccNames: [Int: String] = [:]
-        switch mapping.jog.mode {
+        switch mapping.jog?.mode {
         case .absolute(let msb, let lsb):
             ccNames[msb] = "jog_msb"
             ccNames[lsb] = "jog_lsb"
         case .relative(let cc, let edge):
             ccNames[cc] = "jog_relative"
             if let edge { ccNames[edge] = "jog_relative_edge" }
+        case nil:
+            // No jog wheel (#341): nothing to listen for.
+            break
         }
-        ccNames[mapping.pitch.msbCC] = "pitch_msb"
+        if let pitch = mapping.pitch { ccNames[pitch.msbCC] = "pitch_msb" }
         // A 7-bit fader has no LSB, even if a merged mapping still names one (#195).
-        if mapping.pitch.bits == 14, let lsb = mapping.pitch.lsbCC { ccNames[lsb] = "pitch_lsb" }
-        ccNames[mapping.needle.msbCC] = "needle_msb"
-        ccNames[mapping.needle.lsbCC] = "needle_lsb"
-        ccNames[mapping.browse.selectTurnCC] = "select_turn"
-        ccNames[mapping.browse.autoLoopSizeCC] = "auto_loop_size"
+        if let pitch = mapping.pitch, pitch.bits == 14, let lsb = pitch.lsbCC { ccNames[lsb] = "pitch_lsb" }
+        if let needle = mapping.needle {
+            ccNames[needle.msbCC] = "needle_msb"
+            ccNames[needle.lsbCC] = "needle_lsb"
+        }
+        if let browse = mapping.browse {
+            ccNames[browse.selectTurnCC] = "select_turn"
+            ccNames[browse.autoLoopSizeCC] = "auto_loop_size"
+        }
         self.ccNames = ccNames
     }
 
@@ -278,7 +285,7 @@ final class Bridge {
     private func handleNote(_ note: Int, pressed: Bool) {
         if mixerNote(note, pressed: pressed) { return }
         if padChannel == channel, padNote(note, pressed: pressed) { return }
-        if note == mapping.needle.touchNote {
+        if let needle = mapping.needle, note == needle.touchNote {
             needleTouched = pressed
             return
         }

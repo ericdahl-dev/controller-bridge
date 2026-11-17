@@ -75,14 +75,15 @@ extension Mapping {
             return notes.buttons.first { $0.value == note }?.key ?? DiagnosticEvent.unmapped
         case .controlChange(_, let controller, _):
             let cc = Int(controller)
-            let jogNames: [(Int, String)] = switch jog.mode {
+            let jogNames: [(Int, String)] = switch jog?.mode {
             case .absolute(let msb, let lsb): [(msb, "jog_msb"), (lsb, "jog_lsb")]
             case .relative(let cc, let edge): [(cc, "jog_relative")] + (edge.map { [($0, "jog_relative_edge")] } ?? [])
+            case nil: []
             }
-            let named: [(Int, String)] = jogNames + [
-                (pitch.msbCC, "pitch_msb"), (pitch.bits == 14 ? pitch.lsbCC ?? -1 : -1, "pitch_lsb"), (needle.msbCC, "needle_msb"), (needle.lsbCC, "needle_lsb"),
-                (browse.selectTurnCC, "select_turn"), (browse.autoLoopSizeCC, "auto_loop_size"),
-            ]
+            let named: [(Int, String)] = jogNames
+              + (pitch.map { [($0.msbCC, "pitch_msb"), ($0.bits == 14 ? $0.lsbCC ?? -1 : -1, "pitch_lsb")] } ?? [])
+              + (browse.map { [($0.selectTurnCC, "select_turn"), ($0.autoLoopSizeCC, "auto_loop_size")] } ?? [])
+              + (needle.map { [($0.msbCC, "needle_msb"), ($0.lsbCC, "needle_lsb")] } ?? [])
             return named.first { $0.0 == cc }?.1 ?? DiagnosticEvent.unmapped
         }
     }

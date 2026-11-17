@@ -104,18 +104,19 @@ enum DemoScript {
     static func steps(for mapping: Mapping) -> [Step] {
         let channel = UInt8(clamping: mapping.midi.channel - 1)
         let play = UInt8(clamping: mapping.notes.buttons["play"] ?? 0)
-        let pitch = UInt8(clamping: mapping.pitch.msbCC)
         var steps = [
             Step(at: 0.5, event: .noteOn(channel: channel, note: play, velocity: 127)),
             Step(at: 0.6, event: .noteOff(channel: channel, note: play, velocity: 0)),
         ]
-        // The pitch fader from center (0x40) up a quarter (0x50), in five moves.
-        for (index, msb) in [UInt8(0x40), 0x44, 0x48, 0x4C, 0x50].enumerated() {
+        // The pitch fader from center (0x40) up a quarter (0x50), in five moves; none on a controller without one.
+        let pitch = UInt8(clamping: mapping.pitch?.msbCC ?? 0)
+        let pitchMoves: [UInt8] = mapping.pitch == nil ? [] : [0x40, 0x44, 0x48, 0x4C, 0x50]
+        for (index, msb) in pitchMoves.enumerated() {
             steps.append(Step(at: 1.0 + Double(index) * 0.25, event: .controlChange(channel: channel, controller: pitch, value: msb)))
         }
         // The jog, the platter position counting up 8 at a time as a slow forward turn does (#103): a nudge while
         // playing. The first position is only the starting point.
-        switch mapping.jog.mode {
+        switch mapping.jog?.mode {
         case .absolute(let msb, let lsb):
             let (jogMSB, jogLSB) = (UInt8(clamping: msb), UInt8(clamping: lsb))
             for (index, position) in stride(from: 100, through: 140, by: 8).enumerated() {
@@ -130,6 +131,9 @@ enum DemoScript {
                 steps.append(Step(at: 3.0 + Double(index) * 0.05,
                                   event: .controlChange(channel: channel, controller: UInt8(clamping: cc), value: forward)))
             }
+        case nil:
+            // No jog wheel (#341): no nudge.
+            break
         }
         steps += [
             Step(at: 6.0, event: .noteOn(channel: channel, note: play, velocity: 127)),
