@@ -19,7 +19,10 @@ enum BridgeHost {
         // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe. Always attached:
         // with no WD port, or with the switch off, it only previews, for the Diagnostics simulator (#221).
         let jogEvents = jogSink(jogSimulator)
-        let driver = JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log) { content in
+        // Beat mode (#215): each content goes up four times, one per lit master beat, and each beat shows its slot.
+        let driver = JogDisplayDriver(port: jogDisplay, clock: SystemClock(), log: log, renderBeat: { content, beat in
+            JogDisplayRenderer.uploadImage(content, litBeat: beat)
+        }) { content in
             JogDisplayRenderer.uploadImage(content)
         }
         driver.onEvent = jogEvents
