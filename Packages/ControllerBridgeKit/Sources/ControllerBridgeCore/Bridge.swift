@@ -132,25 +132,16 @@ final class Bridge {
     var playing = false
     /// A quantized start is waiting for the beat.
     var playPending = false
-    /// Shift + hot cue pad on a stopped deck (#358): the cue tapped, and when, waiting for Syndicate's Playing 1 to
-    /// pause it, with the deck's quantize forced to None until then (#363). Syndicate has no jump-without-play input,
-    /// and a pause sent before the launch cancels the jump.
-    var pendingCuePause: (cue: Int, armedAt: Double)?
     /// Who needs this deck's quantize off right now (#366): the cue jump, the paused jog's seeks, return to cue.
     var quantizeOverride = QuantizeOverride()
     /// The debug trace (#395), from the Coordinator.
     var trace: TraceSink?
-    /// Where each hot cue sits, in seconds, learned from a Shift + pad launch (#358): Syndicate never sends cue times.
-    var cueTimes: [Int: Double] = [:]
-    /// The cue just launched by Shift + pad, whose time the next Position gives.
-    var learningCue: Int?
     /// The main CUE (#360): held, pressed with Shift (handled by the bridge, not Syndicate), where the deck last was,
     /// where the cue point is (Syndicate never reports it), and until when a stop after CUE-while-playing gives it.
+    /// The hot-cue jump and the main cue point (#383).
+    var cueMemory = CueModule()
     var cueDown = false
     var shiftCueDown = false
-    var lastPosition: Double?
-    var mainCue: Double?
-    var mainCueSettlesUntil: Double?
     /// The deck's latest BarRamp, for DeckFacts (#383).
     var barRamp: DeckFacts.BarRamp?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
@@ -344,8 +335,7 @@ final class Bridge {
         switch key {
         case "playing":
             playing = value
-            if value { cueLaunched() }
-            if !value { mainCueStopped() }
+            applyCues(cueMemory.playingChanged(value, now: clock.now))
             if !playing, bendDirection != 0 { endBend() }
         case "playpending":
             playPending = value
@@ -392,8 +382,7 @@ final class Bridge {
             return
         case "position":
             guard let seconds = message.arguments.first?.number else { return }
-            if let cue = learningCue, playing { learnCue(cue, at: seconds) }
-            positionReported(seconds)
+            cueMemory.positionReported(seconds, playing: playing, now: clock.now)
             return
         case "progress":
             progress = message.arguments.first?.number

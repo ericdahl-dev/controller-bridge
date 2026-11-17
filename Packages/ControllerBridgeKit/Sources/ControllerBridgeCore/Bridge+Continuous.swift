@@ -191,7 +191,7 @@ extension Bridge {
         }
         timingTick()
         meterTick()
-        cueJumpTick()
+        applyCues(cueMemory.tick(now: clock.now))
         seekQuantizeTick()
     }
 

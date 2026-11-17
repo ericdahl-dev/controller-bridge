@@ -38,8 +38,8 @@ struct DeckLifecycleTests {
     func cueJumpDropped(_ exit: DeckExit) throws {
         let (bridge, _) = try Self.bridge()
         bridge.goToCuePaused(1)
-        #expect(bridge.pendingCuePause != nil)
+        #expect(bridge.cueMemory.isJumpPending)
         bridge.end(exit)
-        #expect(bridge.pendingCuePause == nil)
+        #expect(!bridge.cueMemory.isJumpPending)
     }
 }
