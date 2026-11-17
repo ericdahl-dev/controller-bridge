@@ -59,6 +59,32 @@ struct ChannelAwareCheckTests {
         #expect(Self.problems(data) == [])
     }
 
+    /// Per-mode pad notes (#225), DDJ-like: each mode's eight pads on their own notes.
+    static func modeNotes(_ mapping: inout [String: Any], hotcue: [Int] = Array(0...7), roll: [Int] = Array(112...119),
+                          channel: Int? = nil) {
+        var pads = mapping["pads"] as! [String: Any]
+        pads["mode_notes"] = ["hotcue": hotcue, "roll": roll, "loop": Array(96...103), "slicer": Array(32...39)]
+        if let channel { pads["channel"] = channel }
+        mapping["pads"] = pads
+    }
+
+    @Test("Mode notes are checked (#322): two modes can't share a note; notes.pads is only their count then")
+    func modeNotesShared() throws {
+        let clean = try Self.profile { Self.ddjNotes(&$0); Self.modeNotes(&$0) }
+        #expect(Self.problems(clean) == [], "hotcue equal to notes.pads is fine: with mode_notes, notes.pads only counts the pads")
+        let shared = try Self.profile { Self.ddjNotes(&$0); Self.modeNotes(&$0, roll: [0] + Array(113...119)) }
+        #expect(Self.problems(shared) == ["pads.mode_notes.hotcue[0]: note 0 is also pads.mode_notes.roll[0]"])
+    }
+
+    @Test("A mode note equal to a button's collides on a shared channel, not when the pads have their own (#322)")
+    func modeNotesAndButtons() throws {
+        let hotcue = [11] + Array(1...7)   // hot cue pad 1 is note 11, like Play
+        let shared = try Self.profile { Self.ddjNotes(&$0); Self.modeNotes(&$0, hotcue: hotcue) }
+        #expect(Self.problems(shared) == ["pads.mode_notes.hotcue[0]: note 11 is also notes.play"])
+        let own = try Self.profile { Self.ddjNotes(&$0); Self.modeNotes(&$0, hotcue: hotcue, channel: 8) }
+        #expect(Self.problems(own) == [])
+    }
+
     @Test("The LC6000 is unchanged: the bundled profile loads, and an import that reuses Back's note is still refused")
     func lc6000() throws {
         #expect(try ControllerProfile.bundled().count == 1)
