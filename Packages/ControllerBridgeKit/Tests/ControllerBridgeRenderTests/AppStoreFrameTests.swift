@@ -83,3 +83,26 @@ struct AppStoreFrameImageTests {
         #expect(band.contains { $0[0] > 200 && $0[1] > 200 && $0[2] > 200 }, "caption text drawn")
     }
 }
+
+/// The frame's ground matches the shot's own background (#29), read from its top-left corner, so a dark or light
+/// shot sits on its own color.
+@Suite("App Store frame ground")
+struct AppStoreFrameGroundTests {
+    @Test("The top-left pixel, not another: green there on a red 4×4 shot gives green")
+    func topLeft() throws {
+        let context = CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 16,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        context.setFillColor(CGColor(srgbRed: 0, green: 1, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: 3, width: 1, height: 1))     // CoreGraphics' y 3 is the image's top row
+        let ground = try #require(AppStoreFrame.ground(of: context.makeImage()!))
+        #expect(ground.components?.prefix(3).map { ($0 * 255).rounded() } == [0, 255, 0])
+    }
+
+    @Test("A red shot's ground is red")
+    func sampled() throws {
+        let ground = try #require(AppStoreFrame.ground(of: AppStoreFrameImageTests.red()))
+        #expect(ground.components?.prefix(3).map { ($0 * 255).rounded() } == [255, 0, 0])
+    }
+}

@@ -66,3 +66,17 @@ extension AppStoreFrame {
         return context.makeImage()
     }
 }
+
+extension AppStoreFrame {
+    /// The shot's background: the sRGB color of its top-left pixel, where every snapshot shows only its ground.
+    public static func ground(of shot: CGImage) -> CGColor? {
+        var pixel = [UInt8](repeating: 0, count: 4)
+        guard let context = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        // The 1×1 context shows the shot's top-left pixel: the shot drawn with that pixel at its origin.
+        context.interpolationQuality = .none
+        context.draw(shot, in: CGRect(x: 0, y: -CGFloat(shot.height) + 1, width: CGFloat(shot.width), height: CGFloat(shot.height)))
+        return CGColor(srgbRed: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255, blue: CGFloat(pixel[2]) / 255, alpha: 1)
+    }
+}
