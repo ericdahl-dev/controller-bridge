@@ -81,6 +81,23 @@ struct JogSimulatorTests {
         #expect(sim.card(deck: 1, timeZone: Self.utc) == "Refused by the LC6000\nSlot 1 · 980 bytes · 12:04:31 · Refused")
     }
 
+    @Test("Closed, the feed keeps the state but asks for no hop; opening asks once; open, one hop at a time (#318)")
+    func visibleFeed() {
+        var feed = VisibleFeed()
+        var hops: [Bool] = []
+        hops.append(feed.changed())            // Diagnostics closed: nothing to hop for
+        hops.append(feed.changed())
+        hops.append(feed.setVisible(true))     // opening publishes the latest once
+        hops.append(feed.changed())            // that publish is still pending
+        feed.published()
+        hops.append(feed.changed())            // the next change hops
+        hops.append(feed.changed())            // and the ones before it lands ride along
+        feed.published()
+        hops.append(feed.setVisible(false))
+        hops.append(feed.changed())
+        #expect(hops == [false, false, true, false, true, false, false, false])
+    }
+
     static let noon = Date(timeIntervalSince1970: 1_763_294_671)  // 12:04:31 UTC
 
     @Test("Before the unit answers, every deck reads Not connected; once connected, Nothing uploaded yet")

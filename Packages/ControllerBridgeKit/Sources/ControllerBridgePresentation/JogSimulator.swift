@@ -195,3 +195,29 @@ public struct JogSimulator: Equatable, Sendable {
     /// pick). The needle is the deck's own phase, so the two together are a sync check. None before the clock runs.
     public func litBeat(deck: Int) -> Int? { master }
 }
+
+/// When a fast stream should hop to the window (#318): never while the window is closed (the state still updates,
+/// off the main actor), once on opening, and while open at most one hop pending, which carries every change made
+/// before it lands.
+public struct VisibleFeed: Sendable {
+    private var visible = false
+    private var pending = false
+
+    public init() {}
+
+    /// The state changed: true to schedule a hop now.
+    public mutating func changed() -> Bool {
+        guard visible, !pending else { return false }
+        pending = true
+        return true
+    }
+
+    /// The hop landed: the window has the latest state.
+    public mutating func published() { pending = false }
+
+    /// The window opened or closed: true to hop once now, with the state as it is.
+    public mutating func setVisible(_ on: Bool) -> Bool {
+        visible = on
+        return on ? changed() : false
+    }
+}

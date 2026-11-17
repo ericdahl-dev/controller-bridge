@@ -101,7 +101,10 @@ final class BridgeModel {
     /// Quit: release everything held in Syndicate, then call `done`. Calls it after one second at the latest, so a
     /// stuck engine can't stop the app from quitting.
     /// The Diagnostics window opened or closed: only while it's open does the engine build anything for it.
-    func setDiagnostics(open: Bool) { producer?.diagnostics(open: open) }
+    func setDiagnostics(open: Bool) {
+        producer?.diagnostics(open: open)
+        jogSimulator.feed.setVisible(open)
+    }
     func startLEDSweep(delay: Double) { producer?.ledSweep(delay: delay) }
     func stopLEDSweep() { producer?.stopLEDSweep() }
     /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
