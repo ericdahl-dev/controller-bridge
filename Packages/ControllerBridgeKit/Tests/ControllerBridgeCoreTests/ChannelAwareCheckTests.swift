@@ -99,6 +99,33 @@ struct ChannelAwareCheckTests {
         #expect(Self.problems(own) == [])
     }
 
+    @Test("Shift pads on a deck's channel collide with its buttons; on their own channel they don't (#343)")
+    func shiftedPadChannel() throws {
+        func profile(shifted: Int) throws -> Data {
+            try Self.profile { mapping in
+                Self.ddjNotes(&mapping, pads: [11, 1, 2, 3, 4, 5, 6, 7])      // pad 1 is note 11, like Play
+                var pads = mapping["pads"] as! [String: Any]
+                pads["channel"] = 8
+                pads["shifted_channel"] = shifted
+                mapping["pads"] = pads
+            }
+        }
+        #expect(Self.problems(try profile(shifted: 1)) == ["notes.play: note 11 is also notes.pads[0]"])
+        #expect(Self.problems(try profile(shifted: 9)) == [])
+    }
+
+    @Test("Per layer, the Shift pads' channel follows the same rule as pad_channel (#343)")
+    func layerShiftedPadChannel() throws {
+        let data = try Self.profile { mapping in
+            Self.ddjNotes(&mapping, pads: [11, 1, 2, 3, 4, 5, 6, 7])
+            var midi = mapping["midi"] as! [String: Any]
+            midi["layers"] = [["channel": 1, "deck": 1, "pad_channel": 8, "shifted_pad_channel": 9],
+                              ["channel": 2, "deck": 2, "pad_channel": 10, "shifted_pad_channel": 2]]
+            mapping["midi"] = midi
+        }
+        #expect(Self.problems(data) == ["notes.play: note 11 is also notes.pads[0]"])
+    }
+
     @Test("The LC6000 is unchanged: the bundled profile loads, and an import that reuses Back's note is still refused")
     func lc6000() throws {
         #expect(try ControllerProfile.bundled().count == 1)
