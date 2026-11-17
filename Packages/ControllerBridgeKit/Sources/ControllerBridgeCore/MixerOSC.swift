@@ -1,7 +1,9 @@
 // Syndicate's mixer over OSC (#207). The feedback addresses are from a real Resend capture (on #207).
 //
-// PROVISIONAL: the input addresses are assumed to be the feedback addresses until the spike on #207 confirms them.
-// If they differ, this table is the only place to change.
+// The input addresses are the feedback addresses, confirmed on Syndicate by the #207 spike (2026-11-17): Volume,
+// EQ Low, filter cut and Mute each set the value (0-1; Mute a 0/1 switch) and echoed it back, as User Guide 14.9 says.
+// Not yet confirmed: Cue, which did nothing in the spike (perhaps no headphone output was set up). If an address
+// turns out different, this table is the only place to change.
 
 /// One of a mixer channel's values.
 public enum MixerValue: CaseIterable, Equatable, Sendable {
