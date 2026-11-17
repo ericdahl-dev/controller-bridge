@@ -125,17 +125,19 @@ extension Mapping {
     }
 
     /// The channels the deck's buttons arrive on (midi.channel and every layer's) and the pads' (pads.channel, or each
-    /// layer's pad_channel, else the deck's) (#224, #251).
+    /// layer's pad_channel, else the deck's; pads.channel only when no layer sets its own) (#224, #251, #323).
     private static func channels(_ merged: OrderedJSON) -> (deck: Set<Double>, pads: Set<Double>) {
         func number(_ value: OrderedJSON?) -> Double? { if case .number(let n, _)? = value { n } else { nil } }
         var deck = Set([number(merged["midi"]?["channel"]) ?? 1])
         var pads: Set<Double> = []
         let padChannel = number(merged["pads"]?["channel"])
         if case .array(let layers)? = merged["midi"]?["layers"], !layers.isEmpty {
+            // As the Coordinator runs them (#323): once a layer sets a pad channel, the top-level one isn't inherited.
+            let anyOwn = layers.contains { number($0["pad_channel"]) != nil }
             for layer in layers {
                 guard let channel = number(layer["channel"]) else { continue }
                 deck.insert(channel)
-                pads.insert(number(layer["pad_channel"]) ?? padChannel ?? channel)
+                pads.insert(number(layer["pad_channel"]) ?? (anyOwn ? channel : padChannel ?? channel))
             }
         }
         if pads.isEmpty { pads = padChannel.map { [$0] } ?? deck }

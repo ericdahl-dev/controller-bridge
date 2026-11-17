@@ -125,6 +125,43 @@ struct PadChannelLayersTests {
     }
 }
 
+/// #323: the top-level pads.channel and each layer's pad_channel. A layer that sets none inherits the top-level one only
+/// when no layer sets its own; and a pad on a layer's pad channel brings that layer to the front.
+@Suite("Pad channel: layers and the top-level value")
+struct PadChannelInheritanceTests {
+    static func layered(_ override: String, layers: [Mapping.Layer]) throws -> Rig {
+        let rig = try Rig(override: override)
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: layers
+        ))
+        rig.osc.sent.removeAll()
+        return rig
+    }
+
+    static func hotCues(_ rig: Rig) -> [String] {
+        rig.osc.sent.filter { $0.address.hasSuffix("/HotCue") && $0.arguments.last == .int(1) }.map(\.address)
+    }
+
+    /// pads.channel 8, and only layer 2 sets its own (10).
+    static let mixed = #"""
+        { "pads": { "channel": 8 },
+          "midi": { "layers": [ { "channel": 1, "deck": 1 }, { "channel": 2, "deck": 2, "pad_channel": 10 },
+                                { "channel": 3, "deck": 3 }, { "channel": 4, "deck": 4 } ] } }
+        """#
+    static let mixedLayers = [
+        Mapping.Layer(channel: 1, deck: 1), Mapping.Layer(channel: 2, deck: 2, padChannel: 10),
+        Mapping.Layer(channel: 3, deck: 3), Mapping.Layer(channel: 4, deck: 4),
+    ]
+
+    @Test("When a layer sets its own pad channel, the others don't inherit pads.channel: one press on 8 fires no deck")
+    func noInheritanceWhenMixed() throws {
+        let rig = try Self.layered(Self.mixed, layers: Self.mixedLayers)
+        PadChannelCoordinatorTests.press(rig, 32, channel: 8)
+        #expect(Self.hotCues(rig) == [])
+    }
+}
+
 /// The LC6000 is unchanged by #224: no pad channel, so its pads play and light on the deck's channel.
 @Suite("Pad channel: the LC6000 unchanged")
 struct PadChannelLC6000Tests {

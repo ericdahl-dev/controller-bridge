@@ -857,9 +857,11 @@ public final class Coordinator {
         mapping.deck.number = status.controllers[index].deck
         if let channel = controllers[index].channel {
             mapping.midi.channel = channel
-            // A deck layer's pads may have their own channel (#224).
-            if let padChannel = profile.mapping.midi.layers.first(where: { $0.channel == channel })?.padChannel {
-                mapping.pads.channel = padChannel
+            // A deck layer's pads may have their own channel (#224). Once any layer sets one, a layer that doesn't has its
+            // pads on its own channel: the top-level pads.channel is only for profiles whose layers set none (#323).
+            let layers = profile.mapping.midi.layers
+            if let layer = layers.first(where: { $0.channel == channel }), layer.padChannel != nil || layers.contains(where: { $0.padChannel != nil }) {
+                mapping.pads.channel = layer.padChannel
             }
         }
         let bridge = makeBridge( mapping)
