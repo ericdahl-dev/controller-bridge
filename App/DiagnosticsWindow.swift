@@ -166,6 +166,13 @@ struct DiagnosticsWindow: View {
                 .buttonStyle(PillButtonStyle(small: true))
                 .keyboardShortcut("k", modifiers: .command)
                 .accessibilityLabel("Clear the \(tab.rawValue)")
+            #if DEBUG
+            // The debug trace file (#395): agents read it directly; the path is in the tooltip and the log.
+            Button("Reveal log file") { NSWorkspace.shared.activateFileViewerSelecting([DebugTrace.shared.fileURL]) }
+                .buttonStyle(PillButtonStyle(kind: .quiet, small: true))
+                .help(DebugTrace.shared.fileURL.path)
+                .accessibilityLabel("Reveal the debug log file in Finder")
+            #endif
         }
     }
 

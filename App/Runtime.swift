@@ -16,6 +16,10 @@ enum BridgeHost {
         events: AsyncStream<PipeEvent>
     ) async {
         let coordinator = Coordinator(profiles: profiles, midi: midi, osc: osc, clock: SystemClock(), log: log)
+        #if DEBUG
+        // Everything an agent needs, to os_log and Library/Logs/DeckBridge (#395). Set before start, so ports trace too.
+        coordinator.trace = DebugTrace.shared.sink
+        #endif
         // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe. Always attached:
         // with no WD port, or with the switch off, it only previews, for the Diagnostics simulator (#221).
         let jogEvents = jogSink(jogSimulator)
@@ -25,7 +29,16 @@ enum BridgeHost {
         }) { content in
             JogDisplayRenderer.uploadImage(content)
         }
+        #if DEBUG
+        driver.trace = DebugTrace.shared.sink
+        let trace = DebugTrace.shared.sink
+        driver.onEvent = { event in
+            trace(.jogDisplay, "event \(event)")
+            jogEvents(event)
+        }
+        #else
         driver.onEvent = jogEvents
+        #endif
         coordinator.attachJogDisplay(driver)
         // Straight onto the saved devices, decks, layers and LEDs switch: nothing unchosen, even for a moment (#105).
         coordinator.start(controllers: controllers, ledsEnabled: ledsEnabled)
@@ -61,6 +74,9 @@ enum BridgeHost {
     /// outside any actor: a closure written in main-actor code and called on the engine's task traps (#14 spike).
     private nonisolated static func statusSink(_ status: BridgeStatus) -> @Sendable (CoordinatorStatus) -> Void {
         { coordinatorStatus in
+            #if DEBUG
+            DebugTrace.shared.status(coordinatorStatus)
+            #endif
             Task { @MainActor in
                 status.bridges = coordinatorStatus.controllers
                 status.devices = coordinatorStatus.devices
