@@ -144,7 +144,7 @@ final class Bridge {
     /// An LED sweep (#26) owns the controller's LEDs.
     var ledsHeld = false
     /// The mixer section's state (#207): pair halves, what was sent, what Syndicate reported, and the meter.
-    var mixerState = MixerState()
+    var mixerModule = MixerModule()
     /// The capture window is recording this controller (#186, #187): its LEDs are the LED test's, so the bridge paints
     /// none until the capture ends and it repaints.
     var ledsCaptured = false
@@ -221,7 +221,7 @@ final class Bridge {
         rearmMixer()
         ledCache.removeAll()
         padLEDCache.removeAll()
-        mixerState.meterShown = nil   // shown again on the next tick, on what may be a new port (#320)
+        mixerModule.forgetMeterShown()   // shown again on the next tick, on what may be a new port (#320)
         refreshLEDs()
     }
 
@@ -416,7 +416,7 @@ final class Bridge {
         ledCache.removeAll()
         padLEDCache.removeAll()
         // The meter shows again on its next tick (#320).
-        mixerState.meterShown = nil
+        mixerModule.forgetMeterShown()
         refreshLEDs()
     }
 
@@ -428,7 +428,7 @@ final class Bridge {
             ledsEnabled = true
             ledCache.removeAll()
             padLEDCache.removeAll()
-            mixerState.meterShown = nil
+            mixerModule.forgetMeterShown()
             refreshLEDs()
         } else {
             // A button goes to the profile's off (#194); a pad or the ring to no color.
@@ -441,8 +441,8 @@ final class Bridge {
                 padLED(note, Self.off)
             }
             // The VU meter too (#320).
-            if let meter = mapping.mixer?.meter, let shown = mixerState.meterShown, shown != 0, ledCC(UInt8(meter.cc), 0) {
-                mixerState.meterShown = nil
+            if let meter = mapping.mixer?.meter, let shown = mixerModule.meterShownValue, shown != 0, ledCC(UInt8(meter.cc), 0) {
+                mixerModule.forgetMeterShown()
             }
             ledsEnabled = false
         }
