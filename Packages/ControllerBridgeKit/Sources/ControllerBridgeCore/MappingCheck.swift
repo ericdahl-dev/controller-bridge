@@ -52,13 +52,15 @@ extension Mapping {
                 let childPath = path.isEmpty ? pair.key : "\(path).\(pair.key)"
                 guard let given = schema[pair.key] ?? optionalKey(childPath) else { return nil }
                 let expected = alternative(pair.value, at: childPath) ?? given
-                guard kindProblem(pair.value, expected: expected) == nil else { return nil }
+                guard kindProblem(pair.value, expected: kind(at: childPath, value: pair.value, schema: given)) == nil else { return nil }
                 return (pair.key, known(pair.value, schema: expected, path: childPath))
             })
         case let (.array(items), .array(schemaItems)):
             guard let element = schemaItems.first else { return value }
             // Null, not dropped, so the other items keep their indices.
-            return .array(items.map { kindProblem($0, expected: element) == nil ? $0 : .null })
+            return .array(items.enumerated().map { index, item in
+                kindProblem(item, expected: kind(at: "\(path)[\(index)]", value: item, schema: element)) == nil ? item : .null
+            })
         default:
             return value
         }
@@ -187,9 +189,12 @@ extension Mapping {
     /// The default mapping body, the schema every import is checked against.
     public static func defaultMappingJSON() throws -> Data { try defaultJSON() }
 
+    /// A generic walker over the key table (#382): each value's kind, then its range, choices or length, come from the
+    /// table; `schema` (the LC6000's body, or the profile's being changed, #94) only says which keys are there, with
+    /// the table's optional keys besides.
     private static func walk(_ value: OrderedJSON, schema given: OrderedJSON, path: String, into out: inout [String]) {
         let schema = alternative(value, at: path) ?? given
-        if let problem = kindProblem(value, expected: schema) {
+        if let problem = kindProblem(value, expected: kind(at: path, value: value, schema: given)) {
             out.append("\(path): \(problem)")
             return
         }
@@ -253,27 +258,38 @@ extension Mapping {
         return example(pattern)
     }
 
+    /// The kind a value at `path` must have: the color table's other form when it's that, else the key table's, else
+    /// (the mapping itself, at the root) the schema's.
+    private static func kind(at path: String, value: OrderedJSON, schema: OrderedJSON) -> OrderedJSON {
+        alternative(value, at: path) ?? (path.isEmpty ? nil : example(keyPattern(path))) ?? schema
+    }
+
     /// A path with each list index written `[]`, as the key table has it.
     static func keyPattern(_ path: String) -> String {
         path.replacingOccurrences(of: #"\[\d+\]"#, with: "[]", options: .regularExpression)
     }
 
-    /// An example value of the key's kind, with an object's children and a list's item from the table.
-    static func example(_ pattern: String) -> OrderedJSON? {
+    /// An example value of the key's kind, with an object's children and a list's item from the table; built once.
+    static func example(_ pattern: String) -> OrderedJSON? { examples[pattern] }
+    private static let examples: [String: OrderedJSON] = Dictionary(
+        ProfileKeys.all.compactMap { key in buildExample(key.path).map { (key.path, $0) } }, uniquingKeysWith: { first, _ in first }
+    )
+
+    private static func buildExample(_ pattern: String) -> OrderedJSON? {
         guard let key = ProfileKeys.key(pattern) else { return nil }
         switch key.kind {
         case .wholeNumber: return .number(0, isInteger: true)
         case .number: return .number(0, isInteger: false)
         case .bool: return .bool(false)
         case .text: return .string("")
-        case .list: return .array(example(pattern + "[]").map { [$0] } ?? [])
+        case .list: return .array(buildExample(pattern + "[]").map { [$0] } ?? [])
         case .object:
             let children = ProfileKeys.all.filter { child in
                 child.path.hasPrefix(pattern + ".") && !child.path.dropFirst(pattern.count + 1).contains(".")
                     && !child.path.hasSuffix("[]")
             }
             return .object(children.compactMap { child in
-                example(child.path).map { (String(child.path.dropFirst(pattern.count + 1)), $0) }
+                buildExample(child.path).map { (String(child.path.dropFirst(pattern.count + 1)), $0) }
             })
         }
     }
