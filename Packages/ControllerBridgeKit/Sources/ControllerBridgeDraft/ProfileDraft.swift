@@ -16,6 +16,8 @@ public struct ProfileDraft: Sendable {
     /// Keys a profile file must have that neither the capture nor the docs gave, filled from the LC6000's mapping so
     /// the draft loads (#310). Each is for a person to check; the controller-specific ones keep their TODO.
     public var placeholders: [FromDocs] = []
+    /// False for a draft from the docs alone (#280), before any capture.
+    public var fromCapture = true
 
     public struct FromDocs: Equatable, Sendable {
         public var key: String
@@ -49,6 +51,39 @@ public struct ProfileDraft: Sendable {
         draft.browse(capture)
         draft.shifted(capture)
         draft.merge(docs)
+        draft.unknowns()
+        draft.fill()
+        return draft
+    }
+
+    /// A draft from the docs alone (#280), before any owner has captured the controller: the identity from the device
+    /// name, the docs' keys with their sources, and a TODO for the owner's capture for everything else.
+    public static func make(device: String, docs: DocsFacts) -> ProfileDraft {
+        var draft = ProfileDraft(profile: .object([]), todos: [])
+        draft.fromCapture = false
+        draft.set("id", .string(slug(device)))
+        draft.set("name", .string(device))
+        draft.set("device_hints", .array([.string(device)]))
+        draft.set("exclude_hints", .array([]))
+        draft.set("mapping.midi.input", .string(device))
+        draft.set("mapping.midi.output", .string(device))
+        // Noise notes come only from a capture's hands-off step.
+        draft.set("mapping.midi.ignore_notes", .array([]))
+        draft.todo("mapping.midi.ignore_notes", "Notes the controller sends by itself (a heartbeat) come from the owner's capture: its hands-off step.")
+        draft.merge(docs)
+        let capturable: [(key: String, what: String)] = [
+            ("mapping.midi.channel", "the deck's channel"), ("mapping.notes.pads", "the hot cue pads' notes"),
+            ("mapping.midi.layers", "the deck layers' channels"), ("mapping.jog", "the jog's messages"),
+            ("mapping.notes.platter_touch", "the platter's touch note"), ("mapping.pitch", "the pitch fader's CCs and direction"),
+            ("mapping.needle", "the needle strip"), ("mapping.browse.select_turn_cc", "the browse knob's CC"),
+            ("mapping.midi.encoder_format", "the relative encoder format"),
+        ]
+        for (key, what) in capturable where draft.profile.value(at: key) == nil {
+            draft.todo(key, "Not in the docs. The owner's capture, or MIDI Monitor, gives \(what). Leave it out if the controller has no such control.")
+        }
+        if draft.profile.value(at: "mapping.jog.counts_per_rev") == nil {
+            draft.todo("mapping.jog.counts_per_rev", "Not in the docs. In the owner's capture or MIDI Monitor: mark the platter, turn it exactly once, and count.")
+        }
         draft.unknowns()
         draft.fill()
         return draft
@@ -198,6 +233,8 @@ public struct ProfileDraft: Sendable {
         let absent = ["needle", "jog", "pitch", "browse"].filter { profile.value(at: "mapping.\($0)") == nil }
         for (key, value) in defaults.facts where profile.value(at: key) == nil {
             if key.hasPrefix("mapping.notes."), key != "mapping.notes.pads" { continue }
+            // Optional and controller-specific: the LC6000's layer note would read as a layer switch elsewhere (#280).
+            if key == "mapping.midi.layer_note" { continue }
             if absent.contains(where: { key.hasPrefix("mapping.\($0).") }) { continue }
             if relativeJog, ["mapping.jog.msb_cc", "mapping.jog.lsb_cc"].contains(key) { continue }
             if sevenBitPitch, key == "mapping.pitch.lsb_cc" { continue }
@@ -229,7 +266,9 @@ public struct ProfileDraft: Sendable {
         if profile.value(at: "mapping.needle.require_touch") == nil {
             todo("mapping.needle.require_touch", "Whether the needle strip should act only while touched: true if it sends a touch note (needle.touch_note).")
         }
-        todo("mapping.mixer", "Mixer controls (mapping.mixer, #207) aren't captured yet. Note the faders, EQ, filter, cue/mute/solo and VU meter from the MIDI chart.")
+        if profile.value(at: "mapping.mixer") == nil {
+            todo("mapping.mixer", "Mixer controls (mapping.mixer, #207) aren't captured yet. Note the faders, EQ, filter, cue/mute/solo and VU meter from the MIDI chart.")
+        }
     }
 
     /// Steps repeated with Shift held. The shifted control is the step's first (the held Shift note is already left out).
