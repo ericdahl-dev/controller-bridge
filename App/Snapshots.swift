@@ -296,6 +296,32 @@ enum Snapshots {
             jogSimulator: jog, tab: .jog, scrolls: false
         )
         writeAppKit(jogWindow.frame(width: 720, height: 460), to: "\(directory)/diagnostics-jog-display-live.png", width: 720)
+        // The jog display simulator from the demo itself (#29): the demo runs 2.3 s on a test clock, mid-bar, and its
+        // preview driver's events feed the pane, as in the app with Demo controller on.
+        let demoJog = JogSimulatorLog()
+        let demoClock = SnapshotClock()
+        let session = DemoSession(profile: try! ControllerProfile.bundled()[0], clock: demoClock, log: SnapshotLog(),
+                                  ledOutput: DroppedMIDIOutput())
+        let preview = JogDisplayDriver(port: nil, clock: demoClock, log: SnapshotLog()) { JogDisplayRenderer.uploadImage($0) }
+        preview.onEvent = { demoJog.apply($0, at: at.addingTimeInterval(demoClock.now)) }
+        session.coordinator.attachJogDisplay(preview)
+        session.start()
+        while demoClock.now < 2.3 {
+            demoClock.now += 0.01
+            session.tick()
+        }
+        demoJog.tick(at.addingTimeInterval(demoClock.now + 1))
+        session.stop()
+        let demoStatus = BridgeStatus()
+        demoStatus.bridges = [ControllerStatus(deck: 1, connected: true, profile: "Denon LC6000 PRIME")]
+        demoStatus.feedback = .listening(port: 9096)
+        demoStatus.syndicateFeedback = .live
+        demoStatus.demo = true
+        let demoWindow = DiagnosticsWindow(
+            log: log, status: demoStatus, sweeping: false, setOpen: { _ in }, startSweep: { _ in }, stopSweep: {},
+            jogSimulator: demoJog, tab: .jog, scrolls: false
+        )
+        writeAppKit(demoWindow.frame(width: 720, height: 460), to: "\(directory)/diagnostics-jog-display-demo.png", width: 720)
         // The OSC log filtered to deck 1, received only, and paused (#218).
         log.deck = 1
         log.direction = .received
@@ -482,6 +508,17 @@ enum Snapshots {
         }
         return flow
     }
+}
+
+
+/// A clock the snapshot moves by hand, so the demo runs the same every time.
+final class SnapshotClock: ControllerBridgeCore.Clock, @unchecked Sendable {
+    var now: Double = 0
+}
+
+/// The snapshot's demo logs nowhere.
+struct SnapshotLog: LogSink {
+    func log(_ line: String) {}
 }
 
 #endif

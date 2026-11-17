@@ -71,6 +71,8 @@ public final class DemoSession {
         if syndicate.playing, now + 1e-9 >= nextBeat {
             beat = beat % 4 + 1
             syndicate.queue(OSCMessage(syndicate.root + "Header/Clock", [.int(beat)]))
+            // The deck's own phase in the bar, for the jog display's needle (#165): it plays in time with the master.
+            syndicate.queue(OSCMessage(syndicate.deckRoot + "BarRamp", [.float(Float(beat - 1) / 4)]))
             nextBeat = now + 0.5
         }
         coordinator.tick()
@@ -141,6 +143,7 @@ enum DemoScript {
 final class DemoSyndicate: OSCSender, @unchecked Sendable {
     let root: String
     private let deck: String
+    var deckRoot: String { deck }
     private(set) var received: [OSCMessage] = []
     private var replies: [OSCMessage] = []
     private(set) var playing = false
@@ -157,6 +160,10 @@ final class DemoSyndicate: OSCSender, @unchecked Sendable {
         case (root + "Feedback/Resend").lowercased():
             replies += [
                 OSCMessage(deck + "Loaded", [.int(1)]),
+                // A made-up track for the jog display preview (#29): never a real song's title.
+                OSCMessage(deck + "TrackInfo", [.string("Demo Track"), .string("DeckBridge"), .string("Am"), .float(120), .float(180),
+                                                .int(90), .int(360), .string("track")]),
+                OSCMessage(deck + "BPM", [.float(120)]),
                 OSCMessage(deck + "Playing", [.int(playing ? 1 : 0)]),
                 OSCMessage(deck + "TempoSliderEnabled", [.int(1)]),
                 OSCMessage(deck + "TempoSlider", [.float(tempo)]),
