@@ -130,7 +130,7 @@ extension Mapping {
     }
 
     /// The channels the deck's buttons arrive on (midi.channel and every layer's) and the pads' (pads.channel, or each
-    /// layer's pad_channel, else the deck's; pads.channel only when no layer sets its own) (#224, #251, #323).
+    /// layer's pad_channel, else the deck's; pads.channel only when no layer sets its own; and the Shift pads' channels) (#224, #251, #323, #343).
     private static func channels(_ merged: OrderedJSON) -> (deck: Set<Double>, pads: Set<Double>) {
         func number(_ value: OrderedJSON?) -> Double? { if case .number(let n, _)? = value { n } else { nil } }
         var deck = Set([number(merged["midi"]?["channel"]) ?? 1])
@@ -146,6 +146,14 @@ extension Mapping {
             }
         }
         if pads.isEmpty { pads = padChannel.map { [$0] } ?? deck }
+        // The Shift pads' channels (#324, #343): the pads' notes arrive there too. The top-level one only when no layer
+        // sets its own, as for pad_channel.
+        let shifted = number(merged["pads"]?["shifted_channel"])
+        if case .array(let layers)? = merged["midi"]?["layers"], layers.contains(where: { number($0["shifted_pad_channel"]) != nil }) {
+            for layer in layers { if let channel = number(layer["shifted_pad_channel"]) { pads.insert(channel) } }
+        } else if let shifted {
+            pads.insert(shifted)
+        }
         return (deck, pads)
     }
 
