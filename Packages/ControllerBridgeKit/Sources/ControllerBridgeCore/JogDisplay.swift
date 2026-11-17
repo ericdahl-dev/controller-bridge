@@ -71,9 +71,12 @@ public enum JogDisplay {
         /// Each body message but the first (the 0A) is acked.
         public var expectedAcks: Int { body.count - 1 }
 
-        public init(image: [UInt8], slot: UInt8) {
+        /// `showing`: a slot to show while this one goes up (the loading graphic, #165), with the ring and needle; nil
+        /// leads with djay's blank (index 06). Either way the unit accepts the upload (on hardware).
+        public init(image: [UInt8], slot: UInt8, showing: UInt8? = nil) {
             start = [[0x90, 0x01, 0x00]]
-            var body = [JogDisplay.frame(0x0A, [0x01, 0x00, 0x06, 0x0D]), JogDisplay.frame(0x0C, JogDisplay.u21(image.count))]
+            let lead = showing.map { JogDisplay.show(slot: $0) } ?? JogDisplay.frame(0x0A, [0x01, 0x00, 0x06, 0x0D])
+            var body = [lead, JogDisplay.frame(0x0C, JogDisplay.u21(image.count))]
             for offset in stride(from: 0, to: image.count, by: JogDisplay.chunk) {
                 let piece = Array(image[offset..<min(offset + JogDisplay.chunk, image.count)])
                 body.append(JogDisplay.frame(0x0D, JogDisplay.u21(offset) + JogDisplay.bits7(piece)))

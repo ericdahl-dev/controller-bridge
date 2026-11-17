@@ -65,6 +65,14 @@ struct JogDisplayUploadTests {
         #expect(upload.show == JogDisplay.show(slot: 2))
     }
 
+    @Test("An upload can lead with a slot to show while it goes up (the loading graphic in slot 5, on hardware) instead of the blank")
+    func leadsWithLoading() {
+        let upload = JogDisplay.Upload(image: [1, 2, 3], slot: 2, showing: 5)
+        #expect(upload.body.first == [0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10, 0x0A, 0x00, 0x04, 0x0D, 0x00, 0x05, 0x0D, 0xF7])
+        #expect(Array(upload.body.dropFirst()) == Array(JogDisplay.Upload(image: [1, 2, 3], slot: 2).body.dropFirst()))
+        #expect(upload.expectedAcks == 3)
+    }
+
     @Test("14,333 bytes is two 0D chunks: 14,332 bytes at offset 0 (length 0x7F7F), then 1 byte (0xAB → 55 40) at 14,332")
     func twoChunks() {
         let upload = JogDisplay.Upload(image: [UInt8](repeating: 0xAB, count: 14333), slot: 1)
