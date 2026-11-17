@@ -160,6 +160,31 @@ struct PadChannelInheritanceTests {
         PadChannelCoordinatorTests.press(rig, 32, channel: 8)
         #expect(Self.hotCues(rig) == [])
     }
+
+    @Test("A pad on a layer's own pad channel brings that layer to the front: ch10 is layer 2's, so deck 2 plays")
+    func padBringsItsLayer() throws {
+        let rig = try Self.layered(Self.mixed, layers: Self.mixedLayers)
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, false, false, false])
+        PadChannelCoordinatorTests.press(rig, 32, channel: 10)
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, true, false, false])
+        #expect(Self.hotCues(rig) == ["/Syndicate/Deck/2/HotCue"])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Cues", [.int(1), .string("c1")]))
+        #expect(PadChannelCoordinatorTests.led(rig, 32, channel: 10) == 48, "deck 2's pads light, now that it's in front")
+    }
+
+    @Test("On a pad channel every layer shares (pads.channel only), a pad plays the deck in front, not all four")
+    func sharedPadChannelPlaysTheFront() throws {
+        let layers = (1...4).map { Mapping.Layer(channel: $0, deck: $0) }
+        let rig = try Self.layered(#"""
+            { "pads": { "channel": 8 },
+              "midi": { "layers": [ { "channel": 1, "deck": 1 }, { "channel": 2, "deck": 2 },
+                                    { "channel": 3, "deck": 3 }, { "channel": 4, "deck": 4 } ] } }
+            """#, layers: layers)
+        LayersTests.note(rig, channel: 3, 51, 127)       // layer 3 in front
+        rig.osc.sent.removeAll()
+        PadChannelCoordinatorTests.press(rig, 32, channel: 8)
+        #expect(Self.hotCues(rig) == ["/Syndicate/Deck/3/HotCue"])
+    }
 }
 
 /// The LC6000 is unchanged by #224: no pad channel, so its pads play and light on the deck's channel.
