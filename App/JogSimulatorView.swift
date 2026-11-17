@@ -94,7 +94,8 @@ private struct JogDeckPreview: View {
     let sim: JogSimulator
 
     var body: some View {
-        let onUnit = sim.front == deck
+        let onUnit = sim.onUnit(deck: deck)
+        let card = sim.card(deck: deck)
         let litBeat = sim.litBeat(deck: deck)
         let summary = JogDeckSummary(deck: deck, title: content.title, key: content.key, bpm: content.bpm, beat: litBeat)
         VStack(spacing: Theme.Step.x2) {
@@ -113,8 +114,8 @@ private struct JogDeckPreview: View {
                 Text(sim.playing(deck: deck) ? "Playing" : "Paused")
                     .font(Theme.ui(12)).foregroundStyle(Theme.text)
             }
-            // The deck the unit shows (the one followed) carries the readout; the others are previews only.
-            Text(onUnit ? "On the LC6000\n" + sim.status(deck: deck).readout() : "Not on the LC6000 now")
+            // What really reached the unit (#318): the deck it shows carries the readout; a preview says so.
+            Text(card)
                 .font(Theme.data(10))
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(onUnit ? Theme.text : Theme.caption)
@@ -126,7 +127,7 @@ private struct JogDeckPreview: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(summary.spoken)
-        .accessibilityValue(onUnit ? "On the LC6000. " + sim.status(deck: deck).readout() : "Not on the LC6000 now")
+        .accessibilityValue(card.replacingOccurrences(of: "\n", with: ". "))
     }
 
     /// The renderer's RGBA (198×198, premultiplied, top row first) as an image.

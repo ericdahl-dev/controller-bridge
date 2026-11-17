@@ -57,6 +57,30 @@ struct JogSimulatorTests {
     // The simulator's state from the display driver's events (#221), mapped by the App one to one.
 
     static let utc = TimeZone(identifier: "UTC")!
+    @Test("The card's words say what really reached the unit (#318): a preview never reads On the LC6000")
+    func cardWords() {
+        var sim = JogSimulator()
+        // Previewing (no LC6000, or the switch off): the driver still uploads to itself, so deck 1 is in front.
+        sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 100, at: Self.noon))
+        sim.apply(.shown(slot: 1))
+        #expect(!sim.onUnit(deck: 1))
+        #expect(sim.card(deck: 1, timeZone: Self.utc) == "Preview only: not on an LC6000")
+        #expect(sim.card(deck: 3, timeZone: Self.utc) == "Preview only: not on an LC6000")
+
+        sim.apply(.connected)
+        sim.apply(.uploadStarted(slot: 2, deck: 1, bytes: 14_812, at: Self.noon))
+        #expect(sim.onUnit(deck: 1))
+        #expect(sim.card(deck: 1, timeZone: Self.utc) == "Sending to the LC6000")
+        sim.apply(.shown(slot: 2))
+        #expect(sim.card(deck: 1, timeZone: Self.utc) == "Shown on the LC6000\nSlot 2 · 14,812 bytes · 12:04:31 · Accepted")
+        #expect(!sim.onUnit(deck: 3))
+        #expect(sim.card(deck: 3, timeZone: Self.utc) == "Not on the LC6000 now")
+
+        sim.apply(.uploadStarted(slot: 1, deck: 1, bytes: 980, at: Self.noon))
+        sim.apply(.failed)
+        #expect(sim.card(deck: 1, timeZone: Self.utc) == "Refused by the LC6000\nSlot 1 · 980 bytes · 12:04:31 · Refused")
+    }
+
     static let noon = Date(timeIntervalSince1970: 1_763_294_671)  // 12:04:31 UTC
 
     @Test("Before the unit answers, every deck reads Not connected; once connected, Nothing uploaded yet")

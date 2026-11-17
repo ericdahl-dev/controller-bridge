@@ -170,6 +170,18 @@ public struct JogSimulator: Equatable, Sendable {
         return .uploaded(slot: upload.slot, bytes: upload.bytes, at: upload.at, accepted: accepted)
     }
 
+    /// Whether the unit really shows this deck: connected, and the deck's upload is the latest. A preview (no
+    /// LC6000, or the switch off) uploads only to itself, so it never counts (#318).
+    public func onUnit(deck: Int) -> Bool { connected && front == deck }
+
+    /// The words under a deck's preview (#318), literal for each case.
+    public func card(deck: Int, timeZone: TimeZone = .current) -> String {
+        guard connected else { return "Preview only: not on an LC6000" }
+        guard front == deck, let upload = uploads[deck] else { return "Not on the LC6000 now" }
+        guard let accepted = upload.accepted else { return "Sending to the LC6000" }
+        return (accepted ? "Shown on the LC6000\n" : "Refused by the LC6000\n") + status(deck: deck).readout(timeZone: timeZone)
+    }
+
     /// The deck's last marker pitch bend (0 until one arrives), for `JogMarkerAngle.degrees(pitchBend:)`.
     public func marker(deck: Int) -> Int { markers[deck] ?? 0 }
 
