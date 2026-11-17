@@ -13,7 +13,8 @@ annotated tag's message:
     git tag -a v1.0.3 -m "Release 1.0.3 [external]"
 
 To send out a build that's already uploaded, run the Release workflow by hand with its version and build number and
-**external** ticked. A lightweight tag, or a message without the marker, is always internal only.
+**external** ticked. Run by hand, a build keeps the What to Test it was uploaded with; tick **replace_what_to_test** to
+give it this branch's text instead (#312). A lightweight tag, or a message without the marker, is always internal only.
 
 ---
 
