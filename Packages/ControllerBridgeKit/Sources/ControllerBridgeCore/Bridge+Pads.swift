@@ -44,52 +44,48 @@ extension Bridge {
     func padModeButton(_ mode: PadMode) -> (Bool) -> Void {
         { pressed in
             guard pressed else { return }
-            self.releasePads()
-            self.padMode = mode
+            self.applyPads(self.padModule.modeButton(mode))
             self.refreshLEDs()
         }
     }
 
-    /// The one cycling mode button (#198), for a profile whose `pads.mode_select` is "cycle"; with the LC6000's four
-    /// buttons it does nothing. Like a mode button, it first releases any held pad.
+    /// The one cycling mode button (#198); with the LC6000's four buttons it does nothing.
     func padModeCycle(_ pressed: Bool) {
-        guard pressed, mapping.pads.modeSelect == .cycle else { return }
-        releasePads()
-        padMode = padMode.next
+        guard pressed else { return }
+        let sends = padModule.cycle()
+        guard !sends.isEmpty else { return }
+        applyPads(sends)
         refreshLEDs()
-    }
-
-    /// The pad a note plays, and on a profile with notes per mode (#225) the mode that note belongs to.
-    func pad(for note: Int) -> (index: Int, mode: PadMode?)? {
-        guard let modeNotes = mapping.pads.modeNotes else {
-            return mapping.notes.pads.firstIndex(of: note).map { ($0, nil) }
-        }
-        let lists: [(PadMode, [Int])] = [(.hotCue, modeNotes.hotcue), (.roll, modeNotes.roll), (.loop, modeNotes.loop),
-                                         (.slicer, modeNotes.slicer)]
-        for (mode, notes) in lists { if let index = notes.firstIndex(of: note) { return (index, mode) } }
-        return nil
     }
 
     /// A pad note in. A note from another mode's list (#225) switches to that mode first, letting held pads go, as
     /// a mode button does.
     func padNote(_ note: Int, pressed: Bool) -> Bool {
-        guard let (index, mode) = pad(for: note) else { return false }
-        if let mode, mode != padMode, pressed {
-            releasePads()
-            padMode = mode
+        let index: Int
+        if pressed {
+            guard let press = padModule.press(note: note) else { return false }
+            applyPads(press.sends)
+            index = press.index
+        } else {
+            guard let pad = padModule.pad(for: note) else { return false }
+            index = pad.index
         }
         handlePad(index, pressed: pressed)
         return true
     }
 
-    /// The notes the pads send and light in `mode`: that mode's list (#225), or `notes.pads` for every mode.
-    func padNotes(for mode: PadMode) -> [Int] {
-        guard let modeNotes = mapping.pads.modeNotes else { return mapping.notes.pads }
-        return switch mode {
-        case .hotCue: modeNotes.hotcue
-        case .roll: modeNotes.roll
-        case .loop: modeNotes.loop
-        case .slicer: modeNotes.slicer
+    /// The pad a note plays (#225).
+    func pad(for note: Int) -> (index: Int, mode: PadMode?)? { padModule.pad(for: note) }
+
+    /// The notes the pads send and light in `mode` (#225).
+    func padNotes(for mode: PadMode) -> [Int] { padModule.notes(for: mode) }
+
+    /// Does what the pad module asks.
+    func applyPads(_ sends: [PadModule.Send]) {
+        for send in sends {
+            switch send {
+            case .releasePads: releasePads()
+            }
         }
     }
 
@@ -154,12 +150,8 @@ extension Bridge {
         cycleButtonLED()
         // With notes per mode (#225), the current mode's notes carry the colors and the other modes' go dark.
         for (note, velocity) in zip(padNotes(for: padMode), padColors()) { padLED(note, velocity) }
-        if let modeNotes = mapping.pads.modeNotes {
-            let lit = Set(padNotes(for: padMode))
-            for note in modeNotes.hotcue + modeNotes.roll + modeNotes.loop + modeNotes.slicer where !lit.contains(note) {
-                padLED(note, Self.off)
-            }
-        }
+        let lit = Set(padNotes(for: padMode))
+        for note in padModule.allModeNotes where !lit.contains(note) { padLED(note, Self.off) }
         ringLED()
     }
 

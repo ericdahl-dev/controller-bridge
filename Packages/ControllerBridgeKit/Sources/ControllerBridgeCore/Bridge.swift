@@ -79,7 +79,9 @@ final class Bridge {
 
     // Controller state.
     var shift = false
-    var padMode = PadMode.hotCue
+    /// The pads (#383): the mode and which note plays which pad.
+    lazy var padModule = PadModule(mapping: mapping)
+    var padMode: PadMode { padModule.mode }
     var held = HeldControls()
     var keyLockOn = false
     /// The deck colors the ring shows (#122); a setting can replace the defaults (#123).

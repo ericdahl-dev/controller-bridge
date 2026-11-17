@@ -42,6 +42,6 @@ extension Bridge {
     func carryOwnState(from old: Bridge) {
         keyLockOn = old.keyLockOn
         slipOn = old.slipOn
-        padMode = old.padMode
+        padModule.carry(from: old.padModule)
     }
 }
