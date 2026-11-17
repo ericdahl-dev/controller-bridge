@@ -13,6 +13,8 @@ struct FeedbackHealth {
     private var lastFeedbackAt: Double?
     /// When the last Resend went out, while it waits for an answer. Any feedback is the answer.
     private var resendSentAt: Double?
+    /// The answer to the last Resend (#150): when it went out, and what arrived within its window.
+    private var answer: (sentAt: Double, messages: [OSCMessage])?
 
     enum Event: Equatable, Sendable {
         /// No answer to a Resend: show idle for Syndicate's state until it's back.
@@ -25,6 +27,15 @@ struct FeedbackHealth {
         /// Send /Syndicate/Feedback/Resend.
         var resend = false
         var event: Event?
+        /// The answer window closed: what it held shows which subscriptions are on.
+        var verdict: Verdict?
+        /// This message proves Syndicate sends deck data, so "no deck data" is wrong now.
+        var deckDataProven = false
+    }
+
+    struct Verdict: Equatable, Sendable {
+        var noDeckData: Bool
+        var missing: [Subscription]
     }
 
     init(quiet: Double, answerWindow: Double) {
@@ -34,6 +45,14 @@ struct FeedbackHealth {
 
     /// Any feedback message.
     mutating func messageArrived(_ message: OSCMessage, at now: Double) -> Output {
+        answer?.messages.append(message)
+        let proven = SubscriptionCheck.provesSubscriptions(message.address)
+        var output = arrived(at: now)
+        output.deckDataProven = proven
+        return output
+    }
+
+    private mutating func arrived(at now: Double) -> Output {
         let wasStale = feedback == .stale
         // An answer to a Resend still in its answer window is the full state already.
         let answering = resendSentAt.map { now - $0 < answerWindow } ?? false
@@ -59,6 +78,12 @@ struct FeedbackHealth {
             resendSentAt = nil
             output.resend = requestResend(at: now) || output.resend
         }
+        // Once a Resend's answer window closes, what the answer held shows which subscriptions are on (#150).
+        if let answer, now - answer.sentAt >= answerWindow {
+            self.answer = nil
+            output.verdict = SubscriptionCheck(answer: answer.messages, required: required)
+                .map { Verdict(noDeckData: $0.noDeckData, missing: $0.missing) }
+        }
         return output
     }
 
@@ -66,6 +91,7 @@ struct FeedbackHealth {
     mutating func requestResend(at now: Double) -> Bool {
         guard resendSentAt == nil else { return false }
         resendSentAt = now
+        answer = (now, [])
         return true
     }
 
