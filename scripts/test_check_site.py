@@ -8,9 +8,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_site
 
 
-def page(title="DeckBridge", description="A bridge.", body="", head=""):
+FOOTER = '<footer><span>Not affiliated with Untitled Audio Syndicate Ltd. or Denon DJ.</span></footer>'
+
+
+def page(title="DeckBridge", description="A bridge.", body="", head="", footer=FOOTER):
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{title}</title>'
-            f'<meta name="description" content="{description}">{head}</head><body>{body}</body></html>')
+            f'<meta name="description" content="{description}">{head}</head><body>{body}{footer}</body></html>')
 
 
 def sitemap(*locs):
@@ -25,7 +28,10 @@ WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no co
 
 CAPTURE_LD = '<script type="application/ld+json">{"text": "Record it at https://getdeckbridge.app/capture/."}</script>'
 
-APP_LD = '<script type="application/ld+json">{"@type": "SoftwareApplication", "softwareVersion": "1.0.1"}</script>'
+APP_LD = ('<script type="application/ld+json">{"@graph": [{"@type": "SoftwareApplication", "softwareVersion": "1.0.1", '
+          '"offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}, {"@type": "FAQPage", "mainEntity": '
+          '[{"@type": "Question", "name": "How much does DeckBridge cost?", "acceptedAnswer": {"@type": "Answer", '
+          '"text": "DeckBridge is free."}}]}]}</script>')
 
 GOOD = {
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD + APP_LD,
@@ -349,8 +355,35 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(good), [])
 
     def test_the_home_page_names_the_apps_version(self):
-        root = self.site({"index.html": GOOD["index.html"].replace(APP_LD, "")})
+        root = self.site({"index.html": GOOD["index.html"].replace('"softwareVersion": "1.0.1", ', "")})
         self.assertEqual(check_site.problems(root), ["index.html: the JSON-LD has no SoftwareApplication softwareVersion"])
+    def test_the_price_and_the_faq_answer_agree(self):
+        paid = GOOD["index.html"].replace('"price": "0"', '"price": "9.99"')
+        self.assertEqual(check_site.problems(self.site({"index.html": paid})), [
+            'index.html: the JSON-LD offers 9.99 USD, but its answer to "How much does DeckBridge cost?" doesn\'t say 9.99'])
+        not_free = GOOD["index.html"].replace("DeckBridge is free.", "Pricing hasn't been announced.")
+        self.assertEqual(check_site.problems(self.site({"index.html": not_free})), [
+            'index.html: the JSON-LD offers it free, but its answer to "How much does DeckBridge cost?" doesn\'t say free'])
+        no_offer = GOOD["index.html"].replace(', "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}', "")
+        self.assertEqual(check_site.problems(self.site({"index.html": no_offer})), [
+            "index.html: the SoftwareApplication JSON-LD has no offers (price and priceCurrency)"])
+
+    def test_the_company_is_always_untitled_audio_syndicate_ltd(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a> <p>Syndicate, by Untitled Audio.</p>'),
+                          "llms.txt": GOOD["llms.txt"] + "- Made by Untitled Audio Syndicate, not us.\n"})
+        self.assertEqual(check_site.problems(root), [
+            'llms.txt: names "Untitled Audio" without "Syndicate Ltd."',
+            'support/index.html: names "Untitled Audio" without "Syndicate Ltd."',
+        ])
+
+    def test_every_page_footer_carries_the_disclaimer(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a>', footer="<footer></footer>")})
+        self.assertEqual(check_site.problems(root), ['support/index.html: the footer doesn\'t name "Untitled Audio Syndicate Ltd."'])
+
+    def test_the_readme_names_the_company_in_full(self):
+        readme = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "README.md")
+        with open(readme, encoding="utf-8") as f:
+            self.assertEqual(check_site.company_problems("README.md", f.read()), [])
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})

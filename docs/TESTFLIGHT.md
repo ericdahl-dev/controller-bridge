@@ -17,18 +17,21 @@ To send out a build that's already uploaded, run the Release workflow by hand wi
 
 ---
 
-DeckBridge 1.0.1 has a new look that matches getdeckbridge.app. The controller works as in 1.0; this build is about the
-app's windows. Please try:
+DeckBridge 1.1.0 shows the deck on the LC6000's jog display. Please try:
 
-- The new look: open the menu-bar panel, Diagnostics and the setup guide. Is everything readable? Does anything look
-  cut off or out of place?
-- Settings in four tabs: Controller, Decks, Syndicate and General. Click through them, and try ⌘1 to ⌘4.
-- A refused Apply: on the Syndicate tab, clear the Host, switch to another tab, and click Apply. Settings should open
-  the Syndicate tab, point at the Host field and say what's wrong.
-- A tall tab: add a second controller on the Controller tab. The tab should scroll, with Apply and Revert staying at
-  the bottom.
-- Light and dark mode: in Settings › General, set Appearance to Light, then Dark, then Match macOS, clicking Apply
-  each time. Every window should follow, and the text should stay easy to read.
-- Your set as usual: transport, hot cues, jog, the pitch fader, and the LEDs on all four deck layers.
+- The jog display: in Settings › Controller, turn on "Show the deck on the jog display". The screen should show the deck
+  in front, in its color, with the track's title, artist and key · BPM. Load a track, then a long title. Is it upright
+  and easy to read?
+- The needle: play a deck. The needle should go round once per bar, in time, and the lit segment should follow the
+  master beat. Pause: the play light blinks. Turn the platter: the needle follows.
+- Deck layers: switch to deck 2 with Shift + deck select. The screen should redraw as deck 2.
+- Off and back: turn the switch off (the unit's own screen comes back), then on. Unplug and replug. Quit DeckBridge: the
+  unit goes back to its own screen.
+- Without the unit: open Diagnostics › Jog display. It previews every deck's screen live, even with no LC6000.
+- Subscriptions: if Syndicate's OSC Feedback subscriptions aren't all on, the panel lists each missing one and what it
+  breaks. With the jog display on, BarRamp is on that list.
+- Help add a controller: in Settings › Controller, choose "Controller not found?" from the Controller menu (or try it
+  with the demo controller). Walk a few steps, then end the capture and save the file.
+- Your set as usual: transport, hot cues, jog, the pitch fader and the LEDs on all four deck layers.
 
-Tell us about anything that looks wrong, reads badly, or behaves differently from 1.0.
+Tell us what you see on the display, and anything that looks wrong or behaves differently from 1.0.2.
