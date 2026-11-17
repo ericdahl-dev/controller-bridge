@@ -474,8 +474,8 @@ struct SettingsView: View {
                 Button("Reset to default") { settings.wrappedValue.customDeckColors = .defaults }
                     .buttonStyle(PillButtonStyle(kind: .quiet))
             }
-            // #363: the jump turns the deck's quantize off and back to Use Global; Syndicate doesn't say what it was.
-            hint("Shift + a hot cue pad on a stopped deck jumps to the cue at once. For the jump, DeckBridge turns that deck's quantize off in Syndicate, then sets it to Use Global, so a deck's own quantize setting is reset.")
+            // #363, #366: the jump and paused seeks turn the deck's quantize off and back to Use Global; Syndicate doesn't say what it was.
+            hint("Shift + a hot cue pad on a stopped deck jumps to the cue at once, and the jog and Needle Drop seek a paused deck exactly. For those moves DeckBridge turns that deck's quantize off in Syndicate, then sets it to Use Global, so a deck's own quantize setting is reset.")
         }
     }
 

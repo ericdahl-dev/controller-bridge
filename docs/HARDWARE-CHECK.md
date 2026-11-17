@@ -42,7 +42,7 @@ check: do the action, then confirm the expected result. If any line fails, file 
 | 3.3 | Shift + Censor, twice | First press latches reverse on, the second turns it off |
 | 3.4 | Move the pitch fader off center, then Shift + Key Lock | Tempo resets to 0; the fader does nothing until it reaches the center |
 | 3.5 | Shift + Browse press | Enter in Syndicate's browser |
-| 3.6 | Shift + Pitch Bend | Nothing happens (Syndicate has no OSC route for the pitch range) |
+| 3.6 | Shift + Pitch Bend − / + | Key lock turns on (its LED lights), and the deck's key goes down or up a semitone per press; the tempo doesn't change |
 
 ## 4. Pads
 

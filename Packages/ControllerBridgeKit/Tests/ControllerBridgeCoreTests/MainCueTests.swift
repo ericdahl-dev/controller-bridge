@@ -53,7 +53,7 @@ struct MainCueTests {
         return value
     }
 
-    @Test("PLAY while CUE is held: Playing 1, not the PlayPause toggle, then the release")
+    @Test("PLAY while CUE is held: Playing 1, not the PlayPause toggle, and no Cue release, which would return (the user's test of Cue 0)")
     func playLatchesPreview() throws {
         let rig = try Self.started()
         TransportTests.press(rig, 2)
@@ -61,7 +61,20 @@ struct MainCueTests {
         TransportTests.press(rig, 1)
         TransportTests.release(rig, 1)
         TransportTests.release(rig, 2)
-        #expect(rig.osc.sent == [Self.cueDown, OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)]), Self.cueUp])
+        #expect(rig.osc.sent == [Self.cueDown, OSCMessage("/Syndicate/Deck/1/Playing", [.int(1)])])
+        rig.coordinator.stop()
+        #expect(!rig.osc.sent.contains(Self.cueUp), "quitting doesn't send it either")
+    }
+
+    @Test("After a latched preview, the next CUE is a plain hold again")
+    func cueAfterLatch() throws {
+        let rig = try Self.started()
+        TransportTests.press(rig, 2)
+        TransportTests.press(rig, 1)
+        TransportTests.release(rig, 2)
+        rig.osc.sent.removeAll()
+        Self.tap(rig, 2)
+        #expect(rig.osc.sent == [Self.cueDown, Self.cueUp])
     }
 
     @Test("PLAY without CUE held is still the PlayPause toggle")

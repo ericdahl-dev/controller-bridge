@@ -236,8 +236,14 @@ public final class JogDisplayDriver {
         upload = nil
         if renderBeat != nil {
             if let current { slotContent[running.slot] = current }
-            // Only the slot for the beat now goes on screen; the others wait for their beat.
-            if Int(running.slot) == (lastMasterBeat ?? 1) { showSlot(running) }
+            // Each upload starts by showing blank (slot 6), so the beat now's slot goes back on screen after every one,
+            // once it holds what's current; the others wait for their beat.
+            let beat = UInt8(lastMasterBeat ?? 1)
+            if let current, slotContent[beat] == current {
+                port?.sendWD(JogDisplay.show(slot: beat))
+                shownSlot = beat
+                onEvent?(.shown(slot: beat))
+            }
         } else {
             showSlot(running)
         }

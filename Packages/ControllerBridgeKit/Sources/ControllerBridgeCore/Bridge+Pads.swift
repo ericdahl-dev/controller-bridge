@@ -178,6 +178,7 @@ extension Bridge {
     /// A new track, or none: its cue times are unknown again.
     func forgetCues() {
         endCueJump()
+        restoreAllQuantize()
         cueTimes = [:]
         mainCue = nil
         mainCueSettlesUntil = nil

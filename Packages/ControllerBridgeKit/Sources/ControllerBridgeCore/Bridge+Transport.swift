@@ -6,8 +6,13 @@ extension Bridge {
         // Play wins over a Shift + pad tap still waiting to be paused (#358).
         guard pressed else { return }
         endCueJump()
-        // PLAY while CUE is held keeps the preview playing once CUE is let go, as on a CDJ (#360): set, not toggled.
-        if cueDown { return sendDeck("Playing", .int(1)) }
+        restoreQuantize(.jogSeek)
+        // PLAY while CUE is held keeps the preview playing once CUE is let go, as on a CDJ (#360): set, not toggled,
+        // and Syndicate never gets the Cue release, which would take it back to the cue point (the user's test).
+        if cueDown {
+            _ = held.take(.cue)
+            return sendDeck("Playing", .int(1))
+        }
         sendDeck("PlayPause", .int(1))
     }
 
@@ -19,22 +24,25 @@ extension Bridge {
         if pressed { sendDeck("TempoMaster", .int(1)) }
     }
 
-    /// Pitch Bend − (#114): nudges the tempo down while held.
+    /// Pitch Bend − (#114): nudges the tempo down while held. With Shift, it transposes down a semitone (#377).
     func pitchMinus(_ pressed: Bool) {
-        if shift { pitchRange(pressed) } else { holdButton(.phaseMinus, "PhaseMinus", pressed: pressed) }
+        if shift { transpose("PitchDown", pressed) } else { holdButton(.phaseMinus, "PhaseMinus", pressed: pressed) }
     }
 
-    /// Pitch Bend + (#114): nudges the tempo up while held.
+    /// Pitch Bend + (#114): nudges the tempo up while held. With Shift, it transposes up a semitone (#377).
     func pitchPlus(_ pressed: Bool) {
-        if shift { pitchRange(pressed) } else { holdButton(.phasePlus, "PhasePlus", pressed: pressed) }
+        if shift { transpose("PitchUp", pressed) } else { holdButton(.phasePlus, "PhasePlus", pressed: pressed) }
     }
 
-    /// Shift + Pitch Bend is the LC6000's pitch range. Syndicate has no OSC route for the slider's range, so it sends
-    /// nothing and says so once in the log (#114).
-    private func pitchRange(_ pressed: Bool) {
-        guard pressed, !pitchRangeNoted else { return }
-        pitchRangeNoted = true
-        notices.append("Pitch range (Shift + Pitch Bend) isn't available in Syndicate")
+    /// Shift + Pitch Bend: Syndicate's PitchDown / PitchUp triggers, one semitone per press (User Guide 14.6). Syndicate
+    /// applies them only with the deck's P (key lock) on, so key lock goes on first, every press: it may have been
+    /// turned off in Syndicate itself, which DeckBridge doesn't hear (the user's pick, #377).
+    private func transpose(_ address: String, _ pressed: Bool) {
+        guard pressed else { return }
+        keyLockOn = true
+        sendDeck("PitchPreserve", .int(1))
+        sendDeck(address, .int(1))
+        refreshLEDs()
     }
 
     func shiftButton(_ pressed: Bool) {

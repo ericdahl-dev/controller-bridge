@@ -348,6 +348,16 @@ class CheckSiteTests(unittest.TestCase):
         for words in ("Hot Cue", "stopped", "Use Global"):
             self.assertIn(words, rows[0])
 
+    def test_the_readme_says_paused_seeks_reset_quantize(self):
+        # Paused jog and needle seeks hold quantize at None, then Use Global (#366): their README rows say so.
+        readme = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "README.md")
+        with open(readme, encoding="utf-8") as f:
+            lines = f.readlines()
+        for row in ("| Jog while paused", "| Needle Drop strip"):
+            found = [line for line in lines if line.startswith(row)]
+            self.assertEqual(len(found), 1, row)
+            self.assertIn("Use Global", found[0], row)
+
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
         self.assertEqual(check_site.problems(root), ["img/Syndicate_logo.png: looks like another company's logo",
