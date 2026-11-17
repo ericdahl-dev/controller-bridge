@@ -160,4 +160,20 @@ struct JogDisplayBeatSlotTests {
         }
         #expect(lastShow == 2)
     }
+
+    @Test("A beat never shows a slot in the middle of an upload (a show between the chunks can spoil it: ack 06); it waits for the upload to be stored")
+    func noShowMidUpload() throws {
+        let rig = try Rig()
+        let (port, _) = Self.attach(rig)
+        Self.clock(rig, 1)
+        rig.coordinator.start()
+        Self.answer(rig, port)               // slot 1 stored and shown; slot 2's upload is now on the wire
+        let acks = port.wd.filter { $0.count > 6 && [0x0C, 0x0D, 0x0E].contains($0[6]) }.count
+        port.wd.removeAll()
+        for beat in [2, 3, 4, 1] { Self.clock(rig, beat) }   // the bar comes round to beat 1, whose slot is ready
+        #expect(port.wd.filter { $0.count > 11 && $0[6] == 0x0A && $0[9] == 0x0D } == [])
+        for _ in 0..<acks { rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted) }
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.committed)   // slot 2 stored: beat 1's slot comes back
+        #expect(Self.shows(port).first == 1)
+    }
 }
