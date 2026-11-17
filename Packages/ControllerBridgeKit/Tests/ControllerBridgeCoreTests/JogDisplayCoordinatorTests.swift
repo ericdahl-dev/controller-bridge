@@ -311,7 +311,7 @@ struct JogDisplayPipeTests {
         rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1) { _ in [0, 0, 0, 255] })
         rig.coordinator.start()
         let pipe = EventPipe()
-        pipe.producer.setJogDisplay(enabled: true)
+        pipe.producer.send(.setJogDisplay(enabled: true))
         pipe.producer.jogDisplayReply(JogDisplayDriverTests.refused)
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)

@@ -29,30 +29,12 @@ public struct Engine {
         var demo: DemoSession?
         var diagnosticsOpen = false
         // Settings changes made during the demo wait for the real controller.
-        var waiting: [PipeEvent] = []
         var waitingCommands: [Coordinator.Command] = []
         var active: Coordinator { demo?.coordinator ?? coordinator }
         var status: CoordinatorStatus { demo?.status ?? coordinator.status }
 
         func setDiagnostics(_ target: Coordinator, open: Bool) {
             if open, let sink = onDiagnostic { target.diagnostics = { sink($0) } } else { target.diagnostics = nil }
-        }
-
-        func apply(_ event: PipeEvent) {
-            switch event {
-            case .setDeck(let deck, let controller): coordinator.setDeck(deck, controller: controller)
-            case .setDevices(let input, let output, let controller):
-                coordinator.setDevices(input: input, output: output, controller: controller)
-            case .setLEDs(let enabled): coordinator.setLEDs(enabled: enabled)
-            case .setDeckColors(let follow, let custom): coordinator.setDeckColors(followSyndicate: follow, custom: custom)
-            case .setRingColors(let mode): coordinator.setRingColors(mode)
-            case .resync: coordinator.resync()
-            case .setControllers(let entries): coordinator.setControllers(entries)
-            case .setProfiles(let profiles): coordinator.setProfiles(profiles)
-            case .setProfileChoices(let choices): coordinator.setProfileChoices(choices)
-            case .setJogDisplay(let enabled): coordinator.setJogDisplay(enabled: enabled)
-            default: break
-            }
         }
 
         var reported = status
@@ -86,19 +68,8 @@ public struct Engine {
             case .diagnostics(let open):
                 diagnosticsOpen = open
                 setDiagnostics(active, open: open)
-            // A real device is captured, so the real Coordinator pauses it, demo or not.
-            case .setCapture(let source): coordinator.setCapture(source: source)
-            case .ledSweep(let delay): active.startLEDSweep(delay: delay)
-            case .stopLEDSweep: active.stopLEDSweep()
             // The real unit's display answers the real Coordinator, demo or not.
             case .jogDisplayReply(let bytes): coordinator.jogDisplayReply(bytes)
-            // The preview's deck (#221) holds for the real controller and the demo alike.
-            case .setJogPreviewDeck(let deck):
-                coordinator.setJogPreviewDeck(deck)
-                demo?.coordinator.setJogPreviewDeck(deck)
-            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setControllers, .setProfiles, .resync,
-                 .setJogDisplay, .setProfileChoices:
-                if demo == nil { apply(event) } else { waiting.append(event) }
             // Every command goes where its routing says (#386); the Engine never names one.
             case .command(let command):
                 switch command.routing {
@@ -121,8 +92,6 @@ public struct Engine {
                 } else if !on, let session = demo {
                     session.stop()
                     demo = nil
-                    for change in waiting { apply(change) }
-                    waiting.removeAll()
                     for command in waitingCommands { coordinator.apply(command) }
                     waitingCommands.removeAll()
                     setDiagnostics(coordinator, open: diagnosticsOpen)
