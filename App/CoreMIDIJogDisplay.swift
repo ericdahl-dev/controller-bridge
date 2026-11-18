@@ -2,6 +2,8 @@
 // Kit through JogDisplayPort; the hardware check covers this. SysEx goes out as UMP SysEx7 at USB speed, as djay sends
 // it (#168); the WD port's answers are reassembled and go into the pipe, in order with everything else.
 import CoreMIDI
+import Foundation
+import os
 import ControllerBridgeCore
 import Synchronization
 
@@ -14,6 +16,12 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
 
     private let output: MIDIPortRef
     private let input: MIDIPortRef
+    /// Every send goes out here, in order, off the Engine's loop (#422): a unit that stops reading mid-upload once held
+    /// a send for 4.4 s, which froze OSC and MIDI along with it.
+    private let sends = DispatchQueue(label: "dev.ericdahl.ControllerBridge.jog-display-send", qos: .userInitiated)
+    private static let logger = Logger(subsystem: "dev.ericdahl.ControllerBridge", category: "jog-display")
+    /// A send slower than this is logged: what a stall looks like from here.
+    private static let slowSend: Double = 0.1
     private let listening = Mutex<MIDIUniqueID?>(nil)
 
     /// Makes the ports on the app's MIDI client. Must run on the main thread, as the client was.
@@ -45,13 +53,25 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
     /// The WD port is there now (#305): without it, nothing is sent and no upload is waited on.
     var isAttached: Bool { Self.find(sources: false, hint: Self.wdHint) != nil }
 
-    func sendController(_ bytes: [UInt8]) { send(bytes, hint: Self.controllerHint) }
+    func sendController(_ bytes: [UInt8]) {
+        sends.async { self.send(bytes, hint: Self.controllerHint) }
+    }
+
     func sendWD(_ bytes: [UInt8]) {
-        listen()
-        send(bytes, hint: Self.wdHint)
+        sends.async {
+            self.listen()
+            self.send(bytes, hint: Self.wdHint)
+        }
     }
 
     private func send(_ bytes: [UInt8], hint: String) {
+        let started = ProcessInfo.processInfo.systemUptime
+        defer {
+            let took = ProcessInfo.processInfo.systemUptime - started
+            if took >= Self.slowSend {
+                Self.logger.error("Slow send to \(hint, privacy: .public): \(bytes.count) bytes took \(Int(took * 1000)) ms")
+            }
+        }
         guard let destination = Self.find(sources: false, hint: hint) else { return }
         let words: [[UInt32]] = bytes.first == 0xF0 ? UMP.sysex7(bytes) : [[UMP.voice(bytes)]]
         // At most 512 packets a list, about 4 KB of SysEx: big enough to be fast, small enough for any buffer.
