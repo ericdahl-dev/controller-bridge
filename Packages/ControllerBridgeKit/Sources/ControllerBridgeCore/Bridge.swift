@@ -88,6 +88,11 @@ final class Bridge {
     var deckColors = DeckColors.defaults
     /// Vivid or exact ring and held-pad colors (#151).
     var ringColors = RingColors.vivid
+    /// The ring stays dark while the jog display uploads (#422): lit through an LED repaint, it makes the unit drop
+    /// uploads. The Coordinator sets it from the display; the ring shows its color again when it's released.
+    var ringHeld = false {
+        didSet { if ringHeld != oldValue { ringLED() } }
+    }
     /// The address of a Reverse latched on with Shift + Censor (#114), so release-all turns it off on that deck.
     var latchedReverse: String?
     /// Lines for the log, taken by the Coordinator after each event (#114).

@@ -35,7 +35,7 @@ extension Bridge {
         if let pulse = lastPulseTime, let beat = lastClockTime, clock.now - beat <= Self.clockTimeout {
             lit = lit && clock.now - pulse < Double(mapping.leds.pulseMs) / 1000
         }
-        led(mapping.leds.ring, lit ? ringVelocity(ringColor) : Self.off)
+        led(mapping.leds.ring, lit && !ringHeld ? ringVelocity(ringColor) : Self.off)
     }
 
     /// Vivid or exact (#151): the ring and pads repaint.
