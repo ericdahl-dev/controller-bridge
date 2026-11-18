@@ -82,7 +82,7 @@ public enum ProfileKeys {
     static let buttons: [(String, Int)] = [
         ("play", 1), ("cue", 2), ("beat_jump_back", 3), ("beat_jump_forward", 4), ("track_prev", 5), ("track_next", 6),
         ("censor", 7), ("loop_in", 8), ("loop_out", 9), ("auto_loop", 10), ("back", 16), ("forward", 17),
-        ("select_press", 18), ("vinyl", 19), ("sync", 20), ("master", 21), ("key_lock", 22), ("slip", 23),
+        ("select_press", 18), ("vinyl", 19), ("sync", 20), ("master", 21), ("key_lock", 22), ("deck_select", 23),
         ("pitch_minus", 24), ("pitch_plus", 25), ("shift", 26), ("mode_hotcue", 27), ("mode_roll", 28),
         ("mode_slicer", 29), ("mode_loop", 30),
     ]
@@ -181,6 +181,8 @@ public enum ProfileKeys {
         // A relative jog (#204).
         ProfileKey("jog.relative_cc", .wholeNumber, nil, range: cc),
         ProfileKey("jog.relative_edge_cc", .wholeNumber, nil, range: cc),
+        // Slip, which the LC6000 maps to deck select instead (#420).
+        ProfileKey("notes.slip", .wholeNumber, nil, range: note),
         // One cycling pad-mode button (#198), and its LED's velocity per mode.
         ProfileKey("notes.mode_cycle", .wholeNumber, nil, range: note),
         ProfileKey("pads.mode_cycle_velocities", .object, nil),
@@ -198,7 +200,7 @@ public enum ProfileKeys {
     ] } + [
         // Shift done in hardware (#226): a button's own note with Shift held.
         ProfileKey("notes.shifted", .object, nil, fallback: "{}"),
-    ] + (buttons.map(\.0) + ["platter_touch", "param_back", "param_forward"]).map {
+    ] + (buttons.map(\.0) + ["slip", "platter_touch", "param_back", "param_forward"]).map {
         ProfileKey("notes.shifted.\($0)", .wholeNumber, nil, range: note)
     } + [
         // The mixer (#207): the LC6000 has none.
