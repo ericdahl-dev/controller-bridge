@@ -87,7 +87,7 @@ Checked on hardware (2026-11-15, see #12 and #103):
   button pressed with Shift held, for that press only, so Shift + Beat Jump Back still jumps a bar. Keys are the
   profile's button names, and each note is checked like any other (0–127, not another button's). Left out or empty
   (the LC6000), the app works Shift out from the Shift button, and nothing extra is saved.
-- `notes.deck_select` (#420): `23` on the LC6000, its Slip button (Syndicate has no slip mode). On a controller
+- `notes.deck_select` (#420): `23` on the LC6000, its Slip button; Syndicate's slip mode is turned on and off in Syndicate itself. On a controller
   that follows its layers, a plain press moves to the next layer, 1 → 2 → 3 → 4 → 1, as Shift + deck select does on
   the unit itself, and sends no OSC. The unit's own layer doesn't move, so its next Shift + deck select steps from
   where the unit was, and DeckBridge follows that. With Follow controller layers off, it does nothing. `notes.slip`
