@@ -66,7 +66,7 @@ The **Setup guide** button in the panel, and **Setup Guide…** in Settings, sho
 
 ## Four decks from one LC6000
 
-The LC6000 has four deck layers: **Shift + deck select** steps through them, and the bridge follows. Layer N drives Syndicate deck N, so one unit plays all four decks. On its own the LC6000 keeps every control on MIDI channel 1 and only signals the layer; the bridge sends those controls to the active layer's deck. (Another DJ app can switch it to one channel per layer until it restarts; the bridge follows that too, but quit those apps first.)
+The LC6000 has four deck layers: **Shift + deck select** steps through them, and the bridge follows. A plain **Slip** press, with no Shift, steps them too (#420); that moves only the bridge, not the unit's own layer. Layer N drives Syndicate deck N, so one unit plays all four decks. On its own the LC6000 keeps every control on MIDI channel 1 and only signals the layer; the bridge sends those controls to the active layer's deck. (Another DJ app can switch it to one channel per layer until it restarts; the bridge follows that too, but quit those apps first.)
 
 - **Switching layers:** anything held on the old layer is released on its deck, and the LEDs repaint from the new deck's state.
 - **Pitch fader:** all layers share the one fader, so on the new layer it waits until it meets that deck's tempo (pickup), and the tempo doesn't jump.
