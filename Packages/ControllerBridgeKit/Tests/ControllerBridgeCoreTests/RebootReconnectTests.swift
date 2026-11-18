@@ -44,4 +44,27 @@ struct RebootReconnectTests {
         #expect(Set(after.compactMap { if case .noteOn(_, let note, _) = $0 { note } else { nil } }).isSuperset(of: painted))
         #expect(after.last { if case .noteOn(_, 40, _) = $0 { true } else { false } } == .noteOn(channel: 0, note: 40, velocity: 0))
     }
+
+    @Test("Following layers on layer 3, then removed and back: the unit's next layer signal (layer 2) makes layer 2 active")
+    func layerRelearned() throws {
+        let rig = try LayersTests.layered()
+        LayersTests.switchLayer(rig, from: 1, to: 3)
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, false, true, false])
+        rig.coordinator.devicesChanged(removed: [Rig.lc6000.id])
+        LayersTests.note(rig, channel: 2, 51, 127)   // the unit came back on layer 2 (power-on deck select)
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [false, true, false, false])
+    }
+
+    @Test("A device change that removed nothing: no LEDs sent again and no hello, as before #429")
+    func nothingRemoved() throws {
+        let (rig, port) = try JogDisplayRingHoldTests.owned()
+        rig.coordinator.setJogDisplay(enabled: true)
+        for _ in 0..<4 { JogDisplayRingHoldTests.answer(rig, port) }
+        port.controller.removeAll()
+        let out = try #require(rig.midi.outputs[JogDisplayRingHoldTests.lc6000.id + 1000])
+        out.sent.removeAll()
+        rig.coordinator.devicesChanged()
+        #expect(port.controller.isEmpty)
+        #expect(out.sent.isEmpty)
+    }
 }
