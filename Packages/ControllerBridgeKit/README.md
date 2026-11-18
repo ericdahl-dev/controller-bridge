@@ -87,6 +87,11 @@ Checked on hardware (2026-11-15, see #12 and #103):
   button pressed with Shift held, for that press only, so Shift + Beat Jump Back still jumps a bar. Keys are the
   profile's button names, and each note is checked like any other (0–127, not another button's). Left out or empty
   (the LC6000), the app works Shift out from the Shift button, and nothing extra is saved.
+- `notes.deck_select` (#420): `23` on the LC6000, its Slip button (Syndicate has no slip mode). On a controller
+  that follows its layers, a plain press moves to the next layer, 1 → 2 → 3 → 4 → 1, as Shift + deck select does on
+  the unit itself, and sends no OSC. The unit's own layer doesn't move, so its next Shift + deck select steps from
+  where the unit was, and DeckBridge follows that. With Follow controller layers off, it does nothing. `notes.slip`
+  (optional) toggles Syndicate's `CueSlip` on a controller that maps it.
 - `leds.mirror_shifted` (#226): `false` on the LC6000. On a controller whose shifted note has its own LED, `true`
   lights it with its button's state.
 - `pads.mode_select` (#198): `buttons` on the LC6000, whose four buttons (`mode_hotcue`, `mode_roll`, `mode_loop`,
@@ -191,7 +196,7 @@ equal to the table.
 - `notes.sync`: a whole number; 0–127; LC6000 `20`
 - `notes.master`: a whole number; 0–127; LC6000 `21`
 - `notes.key_lock`: a whole number; 0–127; LC6000 `22`
-- `notes.slip`: a whole number; 0–127; LC6000 `23`
+- `notes.deck_select`: a whole number; 0–127; LC6000 `23`
 - `notes.pitch_minus`: a whole number; 0–127; LC6000 `24`
 - `notes.pitch_plus`: a whole number; 0–127; LC6000 `25`
 - `notes.shift`: a whole number; 0–127; LC6000 `26`
@@ -234,6 +239,7 @@ equal to the table.
 - `leds.color_table[].value`: a whole number; 0–127; optional
 - `jog.relative_cc`: a whole number; 0–127; optional
 - `jog.relative_edge_cc`: a whole number; 0–127; optional
+- `notes.slip`: a whole number; 0–127; optional
 - `notes.mode_cycle`: a whole number; 0–127; optional
 - `pads.mode_cycle_velocities`: an object; optional
 - `pads.mode_cycle_velocities.hotcue`: a whole number; 0–127; optional
@@ -271,7 +277,7 @@ equal to the table.
 - `notes.shifted.sync`: a whole number; 0–127; optional
 - `notes.shifted.master`: a whole number; 0–127; optional
 - `notes.shifted.key_lock`: a whole number; 0–127; optional
-- `notes.shifted.slip`: a whole number; 0–127; optional
+- `notes.shifted.deck_select`: a whole number; 0–127; optional
 - `notes.shifted.pitch_minus`: a whole number; 0–127; optional
 - `notes.shifted.pitch_plus`: a whole number; 0–127; optional
 - `notes.shifted.shift`: a whole number; 0–127; optional
@@ -279,6 +285,7 @@ equal to the table.
 - `notes.shifted.mode_roll`: a whole number; 0–127; optional
 - `notes.shifted.mode_slicer`: a whole number; 0–127; optional
 - `notes.shifted.mode_loop`: a whole number; 0–127; optional
+- `notes.shifted.slip`: a whole number; 0–127; optional
 - `notes.shifted.platter_touch`: a whole number; 0–127; optional
 - `notes.shifted.param_back`: a whole number; 0–127; optional
 - `notes.shifted.param_forward`: a whole number; 0–127; optional
