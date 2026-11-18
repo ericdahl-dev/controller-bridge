@@ -69,4 +69,49 @@ struct JogDisplayRingHoldTests {
         driver.disconnect()
         #expect(!driver.uploading)
     }
+
+    static let lc6000 = MIDIEndpoint(id: 1001, name: "DENON LC6000 PRIME")
+    static let wd = MIDIEndpoint(id: 1005, name: "DENON LC6000 PRIME WD")
+
+    /// The LC6000 with its WD port, so its profile owns the display, and a beat-mode driver on a fake port; deck 1 loaded.
+    static func owned() throws -> (ProfileMatchingTests.ProfileRig, Port) {
+        let rig = ProfileMatchingTests.ProfileRig(profiles: try ControllerProfile.bundled(), sources: [lc6000, wd])
+        let port = Port()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: Rig.FakeClock(), log: rig.log, size: 1,
+                                                          renderBeat: { _, beat in [UInt8(beat), 0, 0, 255] }) { _ in [0, 0, 0, 255] })
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        return (rig, port)
+    }
+
+    /// Every velocity sent to the ring (note 40) on the LC6000's output, in order.
+    static func ring(_ rig: ProfileMatchingTests.ProfileRig) -> [UInt8] {
+        let out = rig.midi.outputs[lc6000.id + 1000]?.sent ?? []
+        return out.compactMap { if case .noteOn(_, 40, let velocity) = $0 { velocity } else { nil } }
+    }
+
+    /// Answers the upload in flight through the Coordinator, as the app's pipe does.
+    static func answer(_ rig: ProfileMatchingTests.ProfileRig, _ port: Port) {
+        let acks = port.wd.filter { $0.count > 6 && [0x0C, 0x0D, 0x0E].contains($0[6]) }.count
+        port.wd.removeAll()
+        for _ in 0..<acks { rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted) }
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.committed)
+    }
+
+    @Test("Turning the display on: the ring goes to 0 while the four uploads run, and nothing lights it until they're done; then its deck color")
+    func ringHeldWhileUploading() throws {
+        let (rig, port) = try Self.owned()
+        let lit = try #require(Self.ring(rig).last)
+        #expect(lit > 0)   // loaded: the ring shows deck 1's color
+        let before = Self.ring(rig).count
+        rig.coordinator.setJogDisplay(enabled: true)
+        var during: [UInt8] = []
+        for _ in 0..<4 {
+            during = Array(Self.ring(rig).dropFirst(before))
+            #expect(during.last == 0)
+            #expect(!during.contains { $0 > 0 })
+            Self.answer(rig, port)
+        }
+        #expect(Self.ring(rig).last == lit)
+    }
 }

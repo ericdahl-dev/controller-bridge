@@ -36,6 +36,9 @@ final class JogDisplayController {
         }
     }
 
+    /// Whether the display is taking images now (#422).
+    var uploading: Bool { driver?.uploading ?? false }
+
     /// Drives the display from now on.
     func attach(_ driver: JogDisplayDriver) {
         self.driver = driver

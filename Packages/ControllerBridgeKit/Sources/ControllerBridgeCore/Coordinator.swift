@@ -185,6 +185,15 @@ public final class Coordinator {
     /// A message from the jog display's WD port: the unit's answers to an upload.
     public func jogDisplayReply(_ bytes: [UInt8]) {
         jogController.reply(bytes)
+        holdRing()
+    }
+
+    /// The ring of the controller that owns the display stays dark while the display uploads (#422).
+    private func holdRing() {
+        let held = jogController.uploading
+        for (index, entry) in jogEntries.enumerated() where entry.ownsDisplay {
+            controllers[index].bridge.ringHeld = held
+        }
     }
 
     /// What the jog display knows of each controller entry: plain values and the Bridge's DeckFacts (#383).
@@ -202,6 +211,7 @@ public final class Coordinator {
 
     private func updateJogDisplay() {
         jogController.refresh(jogEntries, color: { self.deckColors[$0] })
+        holdRing()
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -454,6 +464,7 @@ public final class Coordinator {
         runSweep()
         for bridge in bridges { bridge.tick() }
         jogController.tick(jogEntries)
+        holdRing()
         checkLiveness()
         disconnectFailedOutputs()
     }
