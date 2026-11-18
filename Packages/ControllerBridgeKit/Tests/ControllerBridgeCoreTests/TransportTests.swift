@@ -223,15 +223,17 @@ struct TransportTests {
         ])
     }
 
-    @Test("Slip toggles on each press: CueSlip 1, then 0, and its LED follows")
+    @Test("On a profile that maps Slip (the LC6000 doesn't, #420), it toggles on each press: CueSlip 1, then 0, and its LED follows")
     func slipToggles() throws {
-        let rig = try Self.started()
-        #expect(rig.leds[23] == 1)
-        Self.press(rig, 23)
-        Self.release(rig, 23)
-        #expect(rig.leds[23] == 127)
-        Self.press(rig, 23)
-        #expect(rig.leds[23] == 1)
+        let rig = try Rig(override: #"{ "notes": { "slip": 99 } }"#)
+        rig.coordinator.start()
+        rig.osc.sent.removeAll()
+        #expect(rig.leds[99] == 1)
+        Self.press(rig, 99)
+        Self.release(rig, 99)
+        #expect(rig.leds[99] == 127)
+        Self.press(rig, 99)
+        #expect(rig.leds[99] == 1)
         #expect(rig.osc.sent == [
             OSCMessage("/Syndicate/Deck/1/CueSlip", [.int(1)]),
             OSCMessage("/Syndicate/Deck/1/CueSlip", [.int(0)]),

@@ -82,7 +82,7 @@
       "sync": 20,
       "master": 21,
       "key_lock": 22,
-      "slip": 23,
+      "deck_select": 23,
       "pitch_minus": 24,
       "pitch_plus": 25,
       "shift": 26,
