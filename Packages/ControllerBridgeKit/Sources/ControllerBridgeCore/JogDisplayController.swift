@@ -36,6 +36,9 @@ final class JogDisplayController {
         }
     }
 
+    /// Whether the driver has said hello to a unit.
+    var connected: Bool { driver?.connected ?? false }
+
     /// Whether the display is taking images now (#422).
     var uploading: Bool { driver?.uploading ?? false }
 

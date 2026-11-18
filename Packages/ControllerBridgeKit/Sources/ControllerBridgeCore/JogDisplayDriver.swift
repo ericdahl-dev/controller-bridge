@@ -144,7 +144,8 @@ public final class JogDisplayDriver {
     /// skips while still showing the image (#165).
     static let commitGrace = 0.3
 
-    private var connected = false
+    /// Whether it has said hello to a unit (#165); the Coordinator repaints the LEDs after the hello (#426).
+    public private(set) var connected = false
     /// Whether the hello went out and no goodbye since.
     public var isConnected: Bool { connected }
     /// The last marker and play light sent, so only changes go out.

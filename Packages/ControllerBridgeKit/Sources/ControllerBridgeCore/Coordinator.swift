@@ -210,8 +210,14 @@ public final class Coordinator {
     }
 
     private func updateJogDisplay() {
+        let wasConnected = jogController.connected
         jogController.refresh(jogEntries, color: { self.deckColors[$0] })
         holdRing()
+        // The hello goes to the Controller port, where the LEDs are: paint them again after it (#426).
+        guard !wasConnected, jogController.connected else { return }
+        for (index, entry) in jogEntries.enumerated() where entry.ownsDisplay && controllers[index].bridge.layerShown {
+            controllers[index].bridge.repaintLEDs()
+        }
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
