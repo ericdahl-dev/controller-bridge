@@ -244,19 +244,22 @@ public final class Coordinator {
         requestResend()
     }
 
-    /// The MIDI devices changed. Re-reads them, connecting controllers that appeared.
-    public func devicesChanged() {
+    /// The MIDI devices changed. Re-reads them, connecting controllers that appeared. `removed` is every endpoint
+    /// CoreMIDI removed since the last change, even one already back (#429): a unit power-cycled quickly comes back
+    /// with the same ids but in standalone state, so its controllers reconnect as if unplugged and plugged in again.
+    public func devicesChanged(removed: Set<MIDIEndpoint.ID> = []) {
         refreshDevices()
         for index in controllers.indices {
             if let source = controllers[index].source {
-                if !midiSystem.sources.contains(where: { $0.id == source.id }) {
+                if !midiSystem.sources.contains(where: { $0.id == source.id }) || removed.contains(source.id) {
                     disconnect(index, reason: .unplugged)
                 } else if controllers[index].bridge.output == nil {
                     // Its input connected before its output port appeared (#148): open the port now and paint into it.
                     openOutput(index, for: source, profile: controllers[index].profile)
                     if controllers[index].bridge.output != nil { controllers[index].bridge.repaintLEDs() }
                 }
-            } else if connect(index) {
+            }
+            if controllers[index].source == nil, connect(index) {
                 controllers[index].bridge.start()
                 requestResend()
             }
