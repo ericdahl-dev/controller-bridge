@@ -517,6 +517,14 @@ public final class Coordinator {
             }
             return (event, nil)
         }
+        // A plain deck select (#420): the bridge steps to the next layer itself; the unit's own layer stays put.
+        if let note, Int(note) == controllers[first].bridge.mapping.notes.buttons["deck_select"] {
+            if velocity > 0, let at = layers.firstIndex(of: current) {
+                let target = layers[(at + 1) % layers.count]
+                activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
+            }
+            return (event, nil)
+        }
         let onPads = layers.filter {
             let bridge = controllers[$0].bridge
             return (bridge.padChannel == channel && bridge.padChannel != bridge.channel) || bridge.shiftedPadChannel == channel
