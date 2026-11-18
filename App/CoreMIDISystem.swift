@@ -42,14 +42,15 @@ final class CoreMIDISystem: MIDISystem {
         self.onChange = onChange
         // A device came or went: refresh the names, and let the Coordinator re-read the devices (#20). Through the pipe,
         // so it stays in order behind the MIDI already queued from that device.
-        relay.set { [weak self] in
+        // What was removed rides along (#429): a unit power-cycled quickly is back before the Coordinator looks.
+        relay.set { [weak self] removed in
             self?.pruneRemovedSources()
-            producer.devicesChanged()
+            producer.devicesChanged(removed: removed)
         }
     }
 
-    var sources: [MIDIEndpoint] { (0..<MIDIGetNumberOfSources()).map { Self.endpoint(MIDIGetSource($0)) } }
-    var destinations: [MIDIEndpoint] { (0..<MIDIGetNumberOfDestinations()).map { Self.endpoint(MIDIGetDestination($0)) } }
+    var sources: [MIDIEndpoint] { (0..<MIDIGetNumberOfSources()).map { relay.remember(MIDIGetSource($0)) } }
+    var destinations: [MIDIEndpoint] { (0..<MIDIGetNumberOfDestinations()).map { relay.remember(MIDIGetDestination($0)) } }
 
     func connect(source: MIDIEndpoint) throws {
         let ref = try Self.find(source)
@@ -91,7 +92,11 @@ final class CoreMIDISystem: MIDISystem {
     private nonisolated static func notifyBlock(_ relay: ChangeRelay) -> MIDINotifyBlock {
         { notification in
             switch notification.pointee.messageID {
-            case .msgObjectAdded, .msgObjectRemoved, .msgSetupChanged: relay.fire()
+            case .msgObjectRemoved:
+                let child = UnsafeRawPointer(notification).assumingMemoryBound(to: MIDIObjectAddRemoveNotification.self).pointee.child
+                relay.removed(child)
+                relay.fire()
+            case .msgObjectAdded, .msgSetupChanged: relay.fire()
             default: break
             }
         }
@@ -146,11 +151,40 @@ struct CoreMIDIOutput: MIDIOutput {
     }
 }
 
-/// Lets the notify block, made before `self` exists, reach the system once it does.
+/// Lets the notify block, made before `self` exists, reach the system once it does. It also keeps the endpoints removed
+/// since the last change (#429), by unique id: a removed endpoint may no longer answer, so its id comes from the last
+/// time it was listed.
 final class ChangeRelay: Sendable {
-    private let action = Mutex<(@Sendable () -> Void)?>(nil)
-    func set(_ action: @escaping @Sendable () -> Void) { self.action.withLock { $0 = action } }
-    func fire() { action.withLock { $0 }?() }
+    private let action = Mutex<(@Sendable (Set<MIDIUniqueID>) -> Void)?>(nil)
+    private let known = Mutex<[MIDIObjectRef: MIDIUniqueID]>([:])
+    private let removedIDs = Mutex<Set<MIDIUniqueID>>([])
+
+    func set(_ action: @escaping @Sendable (Set<MIDIUniqueID>) -> Void) { self.action.withLock { $0 = action } }
+
+    /// The endpoint as the Kit sees it, remembering its id for a later removal.
+    func remember(_ ref: MIDIEndpointRef) -> MIDIEndpoint {
+        var id: MIDIUniqueID = 0
+        MIDIObjectGetIntegerProperty(ref, kMIDIPropertyUniqueID, &id)
+        var name: Unmanaged<CFString>?
+        MIDIObjectGetStringProperty(ref, kMIDIPropertyDisplayName, &name)
+        known.withLock { $0[ref] = id }
+        return MIDIEndpoint(id: id, name: (name?.takeRetainedValue() as String?) ?? "MIDI \(id)")
+    }
+
+    /// An object CoreMIDI removed: an endpoint we listed, by the id it had then, or one whose id still reads. Anything
+    /// else (another device, an object we never listed) is ignored, so unplugging something unrelated can't make a
+    /// controller reconnect and release what it holds.
+    func removed(_ object: MIDIObjectRef) {
+        var id: MIDIUniqueID = 0
+        let read = MIDIObjectGetIntegerProperty(object, kMIDIPropertyUniqueID, &id) == noErr
+        guard let removed = known.withLock({ $0[object] }) ?? (read ? id : nil) else { return }
+        removedIDs.withLock { _ = $0.insert(removed) }
+    }
+
+    func fire() {
+        let removed = removedIDs.withLock { ids in defer { ids = [] }; return ids }
+        action.withLock { $0 }?(removed)
+    }
 }
 
 private func check(_ call: String, _ status: OSStatus) throws {
