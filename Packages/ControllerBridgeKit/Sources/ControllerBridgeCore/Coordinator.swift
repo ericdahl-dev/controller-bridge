@@ -249,6 +249,13 @@ public final class Coordinator {
     /// with the same ids but in standalone state, so its controllers reconnect as if unplugged and plugged in again.
     public func devicesChanged(removed: Set<MIDIEndpoint.ID> = []) {
         refreshDevices()
+        // The display's WD port removed and back: the unit forgot it was a host, so goodbye now and hello below.
+        let hints = controllers.flatMap(\.profile.excludeHints).map { $0.lowercased() }
+        if midiSystem.sources.contains(where: { source in
+            removed.contains(source.id) && hints.contains { source.name.lowercased().contains($0) }
+        }) {
+            jogController.disconnect()
+        }
         for index in controllers.indices {
             if let source = controllers[index].source {
                 if !midiSystem.sources.contains(where: { $0.id == source.id }) || removed.contains(source.id) {

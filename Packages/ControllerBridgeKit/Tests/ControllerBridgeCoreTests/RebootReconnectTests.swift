@@ -25,4 +25,23 @@ struct RebootReconnectTests {
         #expect(Self.ledNotes(rig).isSuperset(of: painted))
         #expect(rig.coordinator.status.controllers.first?.connected == true)
     }
+
+    @Test("The display's WD port removed and back: goodbye, then hello and fresh uploads; the LEDs repainted after, the ring at 0")
+    func displayReconnects() throws {
+        let (rig, port) = try JogDisplayRingHoldTests.owned()
+        rig.coordinator.setJogDisplay(enabled: true)
+        for _ in 0..<4 { JogDisplayRingHoldTests.answer(rig, port) }
+        port.controller.removeAll()
+        port.wd.removeAll()
+        let out = try #require(rig.midi.outputs[JogDisplayRingHoldTests.lc6000.id + 1000])
+        let painted = Set(out.sent.compactMap { if case .noteOn(_, let note, _) = $0 { note } else { nil } })
+        out.sent.removeAll()
+        rig.coordinator.devicesChanged(removed: [JogDisplayRingHoldTests.wd.id])
+        #expect(port.controller.first == JogDisplay.goodbye)
+        #expect(port.controller.contains(JogDisplay.hello.last ?? []))
+        #expect(port.wd.contains { $0.count > 6 && $0[6] == 0x0C })   // an upload started
+        let after = rig.midi.outputs[JogDisplayRingHoldTests.lc6000.id + 1000]?.sent ?? []
+        #expect(Set(after.compactMap { if case .noteOn(_, let note, _) = $0 { note } else { nil } }).isSuperset(of: painted))
+        #expect(after.last { if case .noteOn(_, 40, _) = $0 { true } else { false } } == .noteOn(channel: 0, note: 40, velocity: 0))
+    }
 }
