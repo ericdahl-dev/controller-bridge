@@ -119,6 +119,20 @@ struct LayersTests {
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/2/PlayPause", [.int(1)])])
     }
 
+    @Test("With Follow controller layers off, a plain deck select does nothing: no OSC, and Play stays on the entry's deck")
+    func deckSelectNotFollowing() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.setControllers([ControllerSettings(deck: 3, input: Rig.lc6000, output: Rig.lc6000Out, followLayers: false)])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Playing", [.int(0)]))
+        rig.osc.sent.removeAll()
+        Self.deckSelect(rig)
+        #expect(rig.osc.sent == [])
+        Self.note(rig, channel: 1, 1, 127)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/3/PlayPause", [.int(1)])])
+        #expect(rig.coordinator.status.controllers.map(\.deck) == [3])
+    }
+
     @Test("Leaving a layer releases what was held on its deck, once, at the note 51 handover; Play on ch2 then goes to deck 2")
     func switchReleasesHolds() throws {
         let rig = try Self.layered()
