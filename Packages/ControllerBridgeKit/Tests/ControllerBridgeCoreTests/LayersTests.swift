@@ -78,6 +78,19 @@ struct LayersTests {
         rig.coordinator.midi(.noteOn(channel: channel - 1, note: note, velocity: velocity), source: Rig.lc6000.id)
     }
 
+    @Test("Deck select back onto the same layer (#426): the unit's deck-select mode cleared its LEDs, so they all go out again")
+    func sameLayerRepaints() throws {
+        let rig = try Self.layered()
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        let painted = Set(output.sent.compactMap { if case .noteOn(_, let note, _) = $0 { note } else { nil } })
+        output.sent.removeAll()
+        Self.note(rig, channel: 16, 55, 127)   // the unit's deck-select mode: pads 1-4 blink
+        Self.note(rig, channel: 1, 51, 127)    // pad 1 picked: layer 1, already the active one
+        Self.off(rig, channel: 16, 55)
+        let again = Set(output.sent.compactMap { if case .noteOn(_, let note, _) = $0 { note } else { nil } })
+        #expect(again.isSuperset(of: painted))
+    }
+
     @Test("Shift + deck select from layer 1 to 2, then a control on ch2: layer 2 is the active one")
     func activeLayer() throws {
         let rig = try Self.layered()

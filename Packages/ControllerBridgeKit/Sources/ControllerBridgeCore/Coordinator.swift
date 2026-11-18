@@ -210,8 +210,14 @@ public final class Coordinator {
     }
 
     private func updateJogDisplay() {
+        let wasConnected = jogController.connected
         jogController.refresh(jogEntries, color: { self.deckColors[$0] })
         holdRing()
+        // The hello goes to the Controller port, where the LEDs are: paint them again after it (#426).
+        guard !wasConnected, jogController.connected else { return }
+        for (index, entry) in jogEntries.enumerated() where entry.ownsDisplay && controllers[index].bridge.layerShown {
+            controllers[index].bridge.repaintLEDs()
+        }
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -523,8 +529,13 @@ public final class Coordinator {
         let layerChannel = { (index: Int) in self.controllers[index].bridge.mapping.midi.channel }
         let current = layers.first { status.controllers[$0].activeLayer } ?? first
         if let note, Int(note) == controllers[first].bridge.mapping.midi.layerNote {
-            if velocity > 0, let target = layers.first(where: { layerChannel($0) == Int(channel) + 1 }), target != current {
-                activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
+            if velocity > 0, let target = layers.first(where: { layerChannel($0) == Int(channel) + 1 }) {
+                if target != current {
+                    activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
+                } else {
+                    // Deck select back onto the same layer (#426): the unit's deck-select mode cleared its LEDs.
+                    controllers[target].bridge.repaintLEDs()
+                }
             }
             return (event, nil)
         }
