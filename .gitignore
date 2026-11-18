@@ -15,3 +15,7 @@ dist/
 website/.taste-skill/*
 !website/.taste-skill/waivers.json
 build-rel/
+
+# Vendor firmware updaters and images (copyrighted): keep local, never commit
+docs/research/*.dmg
+*.dfu
