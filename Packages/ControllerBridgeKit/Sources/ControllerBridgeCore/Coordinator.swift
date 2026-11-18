@@ -562,8 +562,9 @@ public final class Coordinator {
         }
         status.controllers[target].activeLayer = true
         controllers[target].bridge.ledChannel = multiChannel || controllers[target].bridge.mapping.midi.channel == 1 ? nil : 0
-        controllers[target].bridge.becameActiveLayer()
+        // The display first, so its uploads hold the ring before the repaint could light it (#422).
         updateJogDisplay()
+        controllers[target].bridge.becameActiveLayer()
     }
 
     /// Where a layer's LEDs go; repaints there if it moved.

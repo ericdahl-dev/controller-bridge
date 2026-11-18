@@ -114,4 +114,27 @@ struct JogDisplayRingHoldTests {
         }
         #expect(Self.ring(rig).last == lit)
     }
+
+    @Test("A layer switch to deck 2: no ring lit from the switch until deck 2's four uploads are done; then deck 2's color")
+    func layerSwitchHoldsRing() throws {
+        let (rig, port) = try Self.owned()
+        let out = MIDIEndpoint(id: Self.lc6000.id + 1000, name: Self.lc6000.name)
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Self.lc6000, output: out)], layers: LayersTests.lc6000Layers))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        rig.coordinator.setJogDisplay(enabled: true)
+        for _ in 0..<4 { Self.answer(rig, port) }
+        #expect(rig.coordinator.status.controllers.count == 4)   // one entry per layer
+        let before = Self.ring(rig).count
+        // The unit's layer handover to layer 2: note 51 at 0 on ch1, then 127 on ch2.
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: Self.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: Self.lc6000.id)
+        for _ in 0..<4 {
+            let since = Array(Self.ring(rig).dropFirst(before))
+            #expect(!since.contains { $0 > 0 })
+            Self.answer(rig, port)
+        }
+        #expect((Self.ring(rig).last ?? 0) > 0)
+    }
 }
