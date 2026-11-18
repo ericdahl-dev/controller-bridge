@@ -19,3 +19,4 @@ build-rel/
 # Vendor firmware updaters and images (copyrighted): keep local, never commit
 docs/research/*.dmg
 *.dfu
+docs/research/*.pdf
