@@ -180,6 +180,12 @@ public final class JogDisplayDriver {
     /// Whether a unit's WD port is there to show on (#305).
     public var attached: Bool { port?.isAttached == true }
 
+    /// Whether images are going up to the unit now (#422): one in flight, or more of the content's slots still to go.
+    public var uploading: Bool {
+        guard connected else { return false }
+        return upload != nil || !beatQueue.isEmpty || loadingPending
+    }
+
     /// The unit is attached: say hello as a host, then show what's wanted. With no port it stays a preview.
     public func connect() {
         guard !connected, let port else { return }
