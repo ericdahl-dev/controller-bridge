@@ -39,4 +39,34 @@ struct JogDisplayRingHoldTests {
         #expect(during == [true, true, true, true])
         #expect(!driver.uploading)
     }
+
+    @Test("A unit that never answers: still uploading while slots are retried, not once every slot is given up on")
+    func givenUp() throws {
+        let rig = try Rig()
+        let port = Port()
+        let driver = Self.driver(rig, port)
+        driver.connect()
+        driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        // Each of the 4 slots is tried 3 times, 5 s each: 60 s in all.
+        for second in 1...59 {
+            rig.clock.now = Double(second)
+            driver.tick()
+        }
+        #expect(driver.uploading)
+        rig.clock.now = 61
+        driver.tick()
+        #expect(!driver.uploading)
+    }
+
+    @Test("Disconnected mid-upload: not uploading")
+    func disconnected() throws {
+        let rig = try Rig()
+        let port = Port()
+        let driver = Self.driver(rig, port)
+        driver.connect()
+        driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        #expect(driver.uploading)
+        driver.disconnect()
+        #expect(!driver.uploading)
+    }
 }
