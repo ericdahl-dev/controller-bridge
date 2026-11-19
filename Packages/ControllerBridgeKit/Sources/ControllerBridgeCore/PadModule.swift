@@ -119,8 +119,10 @@ struct PadModule {
                 // Held: brighter in its own color, exact (no vivid rounding with the color message).
                 return held.contains(index) ? Self.brightest(color) : color
             }
-        default:
-            return Array(repeating: [0, 0, 0], count: cues.count)
+        // As `velocities`: Loop on the pads with a cue, Roll on the pads with a roll size (#311), Slicer off.
+        case .loop: return cues.map { $0 == 0 ? [0, 0, 0] : leds.loopPadColor }
+        case .roll: return cues.indices.map { $0 < rollSizes.count ? leds.rollPadColor : [0, 0, 0] }
+        case .slicer: return Array(repeating: [0, 0, 0], count: cues.count)
         }
     }
 

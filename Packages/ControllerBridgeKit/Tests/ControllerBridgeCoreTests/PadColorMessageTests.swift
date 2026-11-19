@@ -55,4 +55,19 @@ struct PadColorMessageTests {
         PadsTests.up(rig, 32)
         #expect(Self.shows(output, 32) == "color 100 50 25")
     }
+
+    @Test("Roll, Loop and Slicer pads use their mode colors exactly, and go off where the table goes off")
+    func modeColors() throws {
+        let rig = try Self.loaded()
+        Self.cues(rig, [2, 4, 0, 0, 0, 0, 0, 0])
+        let output = try Ring.output(rig)
+        PadsTests.press(rig, 28)   // Roll: every pad with a roll size (the LC6000's 8), in the roll color 255, 140, 0
+        #expect((32...39).map { Self.shows(output, UInt8($0)) } == Array(repeating: "color 127 70 0", count: 8))
+        PadsTests.press(rig, 30)   // Loop: the pads with a cue, in the loop color 0, 255, 0; the rest off
+        #expect(Self.shows(output, 32) == "color 0 127 0")
+        #expect(Self.shows(output, 33) == "color 0 127 0")
+        #expect(Self.shows(output, 34) == "color 0 0 0")
+        PadsTests.press(rig, 29)   // Slicer: off, as with the table
+        #expect((32...39).map { Self.shows(output, UInt8($0)) } == Array(repeating: "color 0 0 0", count: 8))
+    }
 }
