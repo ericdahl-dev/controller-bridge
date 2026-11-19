@@ -69,4 +69,53 @@ struct MIDISendQueueTests {
         midi.queue.drain()
         #expect(midi.blocking.sent.last { $0.contains("note: 1,") } == "\(MIDIEvent.noteOn(channel: 0, note: 1, velocity: 127))")
     }
+
+    @Test("A port whose send hasn't returned within the bound is stuck: later sends to it are dropped, and said once")
+    func stuck() throws {
+        let inner = BlockingOutput()
+        final class Notices: @unchecked Sendable {
+            let lock = NSLock()
+            var names: [String] = []
+        }
+        let notices = Notices()
+        let queue = MIDISendQueue(label: "test", stuckAfter: 0.05) { name in notices.lock.withLock { notices.names.append(name) } }
+        let output = queue.output(inner, name: "LC6000")
+        try output.send(.noteOn(channel: 0, note: 1, velocity: 1))   // in flight, blocked
+        Thread.sleep(forTimeInterval: 0.1)
+        for note in 2...5 { try output.send(.noteOn(channel: 0, note: UInt8(note), velocity: 1)) }
+        #expect(notices.lock.withLock { notices.names } == ["LC6000"])
+        inner.release()
+        queue.drain()
+        #expect(inner.sent.count == 1)   // only the one in flight; the rest were dropped
+    }
+
+    @Test("A stuck port that sends again is no longer stuck: a reopened output starts fresh")
+    func recovers() throws {
+        let queue = MIDISendQueue(label: "test", stuckAfter: 0.05) { _ in }
+        let stuckOne = BlockingOutput()
+        let first = queue.output(stuckOne, name: "LC6000")
+        try first.send(.noteOn(channel: 0, note: 1, velocity: 1))
+        Thread.sleep(forTimeInterval: 0.1)
+        stuckOne.release()
+        queue.drain()
+        let fresh = BlockingOutput()
+        fresh.release()
+        let second = queue.output(fresh, name: "LC6000")
+        try second.send(.noteOn(channel: 0, note: 2, velocity: 1))
+        queue.drain()
+        #expect(fresh.sent.count == 1)
+    }
+
+    @Test("The backlog is bounded: past it the oldest LED writes are dropped, never the newest")
+    func bounded() throws {
+        let inner = BlockingOutput()
+        let queue = MIDISendQueue(label: "test", backlog: 4)
+        let output = queue.output(inner)
+        try output.send(.noteOn(channel: 0, note: 0, velocity: 1))   // in flight
+        Thread.sleep(forTimeInterval: 0.02)
+        for note in 1...10 { try output.send(.noteOn(channel: 0, note: UInt8(note), velocity: 1)) }
+        inner.release()
+        queue.drain()
+        #expect(inner.sent == [0, 7, 8, 9, 10].map { "\(MIDIEvent.noteOn(channel: 0, note: UInt8($0), velocity: 1))" })
+    }
 }
