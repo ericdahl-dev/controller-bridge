@@ -81,14 +81,17 @@ public final class JogDisplayDriver {
     /// that deck's own slots (#424), and each master beat shows the front deck's slot; when nil, one image alternates
     /// between slots 1 and 2.
     private let renderBeat: ((JogDisplayContent, Int) -> [UInt8])?
-    /// The last slot the unit can show (its firmware drops a show above 15; it stores 16).
-    static let lastSlot = 15
+    /// The unit's display firmware (#425): Denon's shows slots 1-15 (it drops a show above 15, though it stores 16);
+    /// a unit flashed with the slot 16 patch shows all 16. Changing it uploads, or stops using, deck 4's fourth beat.
+    public var displayFirmware = DisplayFirmware.denon {
+        didSet { if displayFirmware != oldValue, upload == nil { next() } }
+    }
     /// Deck N's beat B lives in slot (N - 1) × 4 + B (#424), so every deck's images stay on the unit and a deck switch
-    /// is one show. Nil past the last slot: deck 4's beat 4, where its screen holds.
-    static func slot(deck: Int, beat: Int) -> UInt8? {
+    /// is one show. Nil past the last slot the firmware shows: on Denon's, deck 4's beat 4, where its screen holds.
+    func slot(deck: Int, beat: Int) -> UInt8? {
         guard (1...4).contains(deck), (1...4).contains(beat) else { return nil }
         let slot = (deck - 1) * 4 + beat
-        return slot <= lastSlot ? UInt8(slot) : nil
+        return slot <= displayFirmware.showableSlots ? UInt8(slot) : nil
     }
     /// Every deck's content to keep on the unit, the front deck's too.
     private var contents: [Int: JogDisplayContent] = [:]
@@ -236,12 +239,12 @@ public final class JogDisplayDriver {
     }
 
     private func forgetFailures(deck: Int) {
-        for beat in 1...4 { if let slot = Self.slot(deck: deck, beat: beat) { beatFailures[slot] = nil } }
+        for beat in 1...4 { if let slot = slot(deck: deck, beat: beat) { beatFailures[slot] = nil } }
     }
 
     /// The front deck's slot for the beat now, on screen if it holds the deck's content.
     private func showFrontBeat() {
-        guard let current, let slot = Self.slot(deck: current.deck, beat: lastMasterBeat ?? 1), slotContent[slot] == current else { return }
+        guard let current, let slot = slot(deck: current.deck, beat: lastMasterBeat ?? 1), slotContent[slot] == current else { return }
         if connected { sendWD(JogDisplay.show(slot: slot)) }
         screenSlot = slot
         onEvent?(.shown(slot: slot))
@@ -257,7 +260,7 @@ public final class JogDisplayDriver {
         for content in decks {
             for offset in 0..<4 {
                 let beat = (first - 1 + offset) % 4 + 1
-                guard let slot = Self.slot(deck: content.deck, beat: beat), slotContent[slot] != content,
+                guard let slot = slot(deck: content.deck, beat: beat), slotContent[slot] != content,
                       (beatFailures[slot] ?? 0) < Self.beatTries else { continue }
                 return (content, beat, slot)
             }
@@ -436,7 +439,7 @@ public final class JogDisplayDriver {
             let first = lastMasterBeat ?? 1
             for offset in 0..<4 {
                 let beat = (first - 1 + offset) % 4 + 1
-                guard let slot = Self.slot(deck: content.deck, beat: beat) else { continue }
+                guard let slot = slot(deck: content.deck, beat: beat) else { continue }
                 let job = JogDisplay.Upload(image: JogImage.forUnit(rgba: renderBeat(content, beat), width: size, height: size), slot: slot)
                 onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
                 onEvent?(.shown(slot: slot))
