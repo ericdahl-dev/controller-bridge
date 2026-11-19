@@ -35,8 +35,8 @@ struct DisplayFirmwareReferenceTests {
     /// Slack for another Mac's rasterizer: CI's macOS draws text edges up to about 40 levels off this renderer's on
     /// a developer's Mac, and nothing else. So most pixels must be within a few levels, a bounded number of text edge
     /// pixels may be further off, and none by more than `cap`. A design change (a color, a size, a shape) moves far
-    /// more pixels than the budget.
-    static let close = 3, budget = 400, cap = 64
+    /// more pixels than the budget. Measured on CI (macos-26): worst 41, at most 51 pixels over 3; locally all exact.
+    static let close = 3, budget = 150, cap = 64
 
     @Test("Each reference is what the renderer draws now", arguments: references.map(\.file))
     func referenceIsCurrent(file: String) throws {
