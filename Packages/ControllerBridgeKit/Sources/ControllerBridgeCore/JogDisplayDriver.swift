@@ -27,9 +27,11 @@ public struct JogDisplayContent: Equatable, Sendable {
     public var bpm: Double?
     /// "track", "empty", or what a clip or sequencer says (#209).
     public var playerType: String?
+    /// Syndicate's feedback has stopped (#464): the display shows the waiting look, our logo, instead of stale values.
+    public var stale: Bool
 
     public init(deck: Int, color: [Int], title: String? = nil, artist: String? = nil, key: String? = nil, bpm: Double? = nil,
-                playerType: String? = nil) {
+                playerType: String? = nil, stale: Bool = false) {
         self.deck = deck
         self.color = color
         self.title = title
@@ -37,6 +39,7 @@ public struct JogDisplayContent: Equatable, Sendable {
         self.key = key
         self.bpm = bpm
         self.playerType = playerType
+        self.stale = stale
     }
 }
 
