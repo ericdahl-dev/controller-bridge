@@ -6,7 +6,7 @@ import Testing
 /// else, OSC from Syndicate included. Sends go through one serial queue, in order, and return at once.
 @Suite("MIDI send queue")
 struct MIDISendQueueTests {
-    /// An output whose sends block until `release` is signalled, recording what got through in order.
+    /// An output whose sends block until `release` is signaled, recording what got through in order.
     final class BlockingOutput: MIDIOutput, @unchecked Sendable {
         let gate = DispatchSemaphore(value: 0)
         private let lock = NSLock()
