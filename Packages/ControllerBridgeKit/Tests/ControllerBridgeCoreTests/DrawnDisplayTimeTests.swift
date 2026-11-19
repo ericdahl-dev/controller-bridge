@@ -125,3 +125,22 @@ struct DrawnDisplayTimeFlowTests {
         #expect(Self.times(port).isEmpty)
     }
 }
+
+@Suite("Drawn display: time's subscriptions")
+struct DrawnDisplayTimeSubscriptionTests {
+    typealias Handshake = DrawnDisplayHandshakeTests
+
+    /// The LC6000's profile already needs Position and TrackInfo (the jog's seeks, the ring), so a missing one is
+    /// reported whether the unit draws or not.
+    @Test("The LC6000 needs Position and TrackInfo, drawing or not")
+    func required() throws {
+        let (rig, _, _) = try Handshake.rig(.custom)
+        #expect(Set<Subscription>([.progress, .loaded]).isSubset(of: Set(rig.coordinator.status.requiredSubscriptions)))
+    }
+
+    @Test("What each breaks names the jog display's time")
+    func breaks() {
+        #expect(Subscription.progress.breaks.contains("the jog display's time stands still"))
+        #expect(Subscription.loaded.breaks.contains("the jog display shows no track length or time left"))
+    }
+}
