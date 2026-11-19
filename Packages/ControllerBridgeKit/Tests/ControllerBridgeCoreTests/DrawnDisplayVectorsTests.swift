@@ -29,17 +29,19 @@ struct DrawnDisplayVectorsTests {
         case "state": return .state(DrawnDisplay.State(rawValue: UInt8(fields["flags"] as! Int)))
         case "beat": return .beat(fields["beat"] as! Int)
         case "needle": return .needle(fields["angle"] as! Int)
+        case "text":
+            return DrawnDisplay.TextField(rawValue: UInt8(fields["field"] as! Int))
+                .map { .text($0, fields["text"] as! String) }
+        case "tempo": return .tempo(tenths: fields["tenths"] as! Int)
         default: return nil
         }
     }
 
     @Test("Every host message in the file encodes to its bytes, and the file has begin, end, capability and deck")
     func hostMessagesEncode() {
-        // Text and tempo (#458) have no Swift encoder yet: agent1's host side drops this skip when it lands.
-        let entries = (Self.file["messages"] as! [[String: Any]]).filter {
-            $0["direction"] as? String != "unit" && !["text", "tempo"].contains($0["kind"] as? String ?? "")
-        }
-        #expect(Set(entries.map { $0["kind"] as! String }).isSuperset(of: ["begin", "end", "capability", "deck", "state", "beat", "needle"]))
+        let entries = (Self.file["messages"] as! [[String: Any]]).filter { $0["direction"] as? String != "unit" }
+        #expect(Set(entries.map { $0["kind"] as! String }).isSuperset(of: ["begin", "end", "capability", "deck", "state", "beat", "needle",
+                                                                          "text", "tempo"]))
         for entry in entries {
             let message = Self.message(entry)
             #expect(message != nil, "\(entry["name"]!): unknown kind")
