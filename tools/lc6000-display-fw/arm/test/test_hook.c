@@ -303,3 +303,6 @@ const test_case all_tests[] = {
     { "garbage with the magic but a bad check word is fresh state", garbage_with_the_magic_but_a_bad_check_word_is_fresh_state },
     { 0, 0 },
 };
+
+/// The shared harness also walks agent3's drawing table; the hook's tests have none of their own.
+const test_case draw_tests[] = { { 0, 0 } };
