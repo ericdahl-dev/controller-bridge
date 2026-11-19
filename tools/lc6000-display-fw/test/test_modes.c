@@ -34,6 +34,8 @@ static void a_deck_after_end_draws_nothing(void) {
 
 void a_malformed_deck_is_ignored(void);
 void a_malformed_begin_is_ignored(void);
+void the_length_and_the_f7_are_checked_against_the_bytes_received(void);
+void the_settings_flash_commands_are_never_acted_on(void);
 void an_oversized_message_is_ignored(void);
 void random_bytes_change_nothing(void);
 
@@ -50,6 +52,9 @@ const test_case all_tests[] = {
     { "a deck after end draws nothing", a_deck_after_end_draws_nothing },
     { "a malformed deck is ignored", a_malformed_deck_is_ignored },
     { "a malformed begin is ignored", a_malformed_begin_is_ignored },
+    { "the length and the F7 are checked against the bytes received",
+      the_length_and_the_f7_are_checked_against_the_bytes_received },
+    { "the settings flash commands are never acted on", the_settings_flash_commands_are_never_acted_on },
     { "an oversized message is ignored", an_oversized_message_is_ignored },
     { "random bytes change nothing", random_bytes_change_nothing },
     { "a capability ask gets the answer", a_capability_ask_gets_the_answer },

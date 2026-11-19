@@ -81,6 +81,7 @@ struct JogDisplaySlotCacheTests {
     func customFirmwareGivesDeckFourItsFourthBeat() throws {
         let (driver, port) = try Self.cached()
         driver.displayFirmware = .custom
+        driver.reply(JogDisplayDriverTests.refused)   // the slot 16 patch doesn't draw (#456): images
         driver.show(Self.content(4))
         #expect(Self.settle(driver, port) == [13, 14, 15, 16])
         port.wd.removeAll()
@@ -94,6 +95,7 @@ struct JogDisplaySlotCacheTests {
         driver.show(Self.content(4))
         _ = Self.settle(driver, port)
         driver.displayFirmware = .custom
+        driver.reply(JogDisplayDriverTests.refused)   // the slot 16 patch doesn't draw (#456): images
         #expect(Self.settle(driver, port) == [16])
         driver.displayFirmware = .denon
         port.wd.removeAll()
@@ -157,6 +159,9 @@ struct JogDisplaySlotCacheTests {
         pipe.producer.send(.setDisplayFirmware(.custom))
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        // Custom firmware is asked whether it draws (#456); this unit refuses, so it shows images.
+        #expect(port.wd.contains(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes))
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.refused)
         #expect(Self.uploadSlots(port) == [16])
     }
 }

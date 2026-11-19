@@ -84,7 +84,11 @@ public final class JogDisplayDriver {
     /// The unit's display firmware (#425): Denon's shows slots 1-15 (it drops a show above 15, though it stores 16);
     /// a unit flashed with the slot 16 patch shows all 16. Changing it uploads, or stops using, deck 4's fourth beat.
     public var displayFirmware = DisplayFirmware.denon {
-        didSet { if displayFirmware != oldValue, upload == nil { next() } }
+        didSet {
+            guard displayFirmware != oldValue else { return }
+            if connected { handshakeAgain() }
+            if upload == nil { next() }
+        }
     }
     /// Deck N's beat B lives in slot (N - 1) × 4 + B (#424), so every deck's images stay on the unit and a deck switch
     /// is one show. Nil past the last slot the firmware shows: on Denon's, deck 4's beat 4, where its screen holds.
@@ -152,6 +156,29 @@ public final class JogDisplayDriver {
     /// skips while still showing the image (#165).
     static let commitGrace = 0.3
 
+    /// How the unit shows the deck (#456): images (Denon's firmware, or custom that didn't answer), waiting for the
+    /// custom firmware's answer to the capability question, or drawing the screen itself from small messages.
+    enum Mode: Equatable {
+        case images
+        case asking(since: Double)
+        case drawn(version: Int)
+    }
+    private(set) var mode = Mode.images
+    /// The firmware found (#456): nil before the hello and while asking.
+    var found: DisplayFound? {
+        guard connected else { return nil }
+        switch mode {
+        case .asking: return nil
+        case .drawn(let version): return .customDrawn(version: version)
+        case .images: return displayFirmware == .custom ? .customImages : .denon
+        }
+    }
+    /// How long custom firmware has to answer the capability question: a USB round trip is milliseconds, and half a
+    /// second costs less than two image uploads (#456).
+    static let answerTimeout = 0.5
+    /// The last deck message sent in drawn mode, so only a change goes out.
+    private var lastDeck: [UInt8]?
+
     /// Whether it has said hello to a unit (#165); the Coordinator repaints the LEDs after the hello (#426).
     public private(set) var connected = false
     /// Whether the hello went out and no goodbye since.
@@ -191,7 +218,7 @@ public final class JogDisplayDriver {
 
     /// Whether images are going up to the unit now (#422): one in flight, or more of the content's slots still to go.
     public var uploading: Bool {
-        guard connected else { return false }
+        guard connected, mode == .images else { return false }
         return upload != nil || (renderBeat != nil && nextJob() != nil)
     }
 
@@ -208,6 +235,13 @@ public final class JogDisplayDriver {
         lastMarker = nil
         lastPlayLight = nil
         for message in JogDisplay.hello { sendController(message) }
+        // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
+        mode = .images
+        lastDeck = nil
+        if displayFirmware == .custom {
+            mode = .asking(since: clock.now)
+            sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
+        }
         onEvent?(.connected)
         next()
     }
@@ -215,6 +249,9 @@ public final class JogDisplayDriver {
     /// The unit is going away, or the app is quitting: goodbye, so it returns to standalone.
     public func disconnect() {
         guard connected else { return }
+        // Drawn mode ends first, so the unit's own screen comes back (#456).
+        if case .drawn(let version) = mode { sendWD(DrawnDisplay.Message.end(version: version).bytes) }
+        mode = .images
         connected = false
         upload = nil
         lastMarker = nil
@@ -319,6 +356,12 @@ public final class JogDisplayDriver {
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
         traceReply(bytes)
+        if case .asking = mode, let version = DrawnDisplay.answer(bytes) {
+            return draw(version: min(version, DrawnDisplay.version))
+        }
+        // A refusal (ack 06) ends the wait at once. Denon's firmware never sends one for this command: it says nothing,
+        // so the timeout is its path (#466).
+        if case .asking = mode, upload == nil, case .refused = JogDisplay.Reply(bytes) { return showImages() }
         guard var running = upload, let reply = JogDisplay.Reply(bytes) else { return }
         switch reply {
         case .accepted where !running.finished:
@@ -363,6 +406,7 @@ public final class JogDisplayDriver {
 
     /// Times out a silent upload; starts the next one.
     public func tick() {
+        if case .asking(let since) = mode, clock.now - since >= Self.answerTimeout - 1e-9 { showImages() }
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)
         } else if let running = upload, clock.now - running.startedAt >= Self.timeout {
@@ -390,7 +434,57 @@ public final class JogDisplayDriver {
         }
     }
 
+    /// Settings' firmware changed while connected (#456): Custom asks the unit; Denon's ends drawn mode, and the deck
+    /// in front goes up as images.
+    private func handshakeAgain() {
+        if case .drawn(let version) = mode {
+            sendWD(DrawnDisplay.Message.end(version: version).bytes)
+            if wanted == nil { wanted = current }
+            current = nil
+        }
+        mode = .images
+        lastDeck = nil
+        if displayFirmware == .custom {
+            mode = .asking(since: clock.now)
+            sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
+        }
+    }
+
+    /// No drawing firmware answered (#456): images, as on Denon's, until the next connect.
+    private func showImages() {
+        mode = .images
+        log.log("The jog display didn't answer as custom firmware that draws; it shows images")
+        next()
+    }
+
+    /// The unit draws (#456): begin, then the deck in front.
+    private func draw(version: Int) {
+        mode = .drawn(version: version)
+        sendWD(DrawnDisplay.Message.begin(version: version).bytes)
+        if wanted == nil { wanted = current }
+        current = nil
+        next()
+    }
+
+    /// Drawn mode: the deck in front as one deck message, sent only when it changes.
+    private func nextDrawn() {
+        guard let content = wanted else { return }
+        wanted = nil
+        current = content
+        let color = content.color.count == 3 ? content.color : [255, 255, 255]
+        let deck = DrawnDisplay.Message.deck(number: content.deck, color: color,
+                                             player: DrawnDisplay.Player(playerType: content.playerType)).bytes
+        guard deck != lastDeck else { return }
+        lastDeck = deck
+        sendWD(deck)
+    }
+
     private func next() {
+        switch mode {
+        case .asking: return
+        case .drawn: return connected ? nextDrawn() : ()
+        case .images: break
+        }
         if renderBeat != nil { return nextBeat() }
         guard upload == nil, let content = wanted, content != current else { return }
         wanted = nil
