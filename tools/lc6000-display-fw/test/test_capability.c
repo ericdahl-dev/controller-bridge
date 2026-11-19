@@ -14,20 +14,20 @@ static int replied(const char *hex) {
 void a_capability_ask_gets_the_answer(void) {
     fresh(&unit, &rec);
     feed(&unit, "F0 00 02 0B 7F 10 20 00 02 00 01 F7");
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(replied("F0 00 02 0B 01 10 20 00 02 00 01 F7"));
 }
 
 void a_newer_host_gets_our_version(void) {
     fresh(&unit, &rec);
     feed(&unit, "F0 00 02 0B 7F 10 20 00 02 00 05 F7");
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(replied("F0 00 02 0B 01 10 20 00 02 00 01 F7"));
 }
 
 void a_capability_ask_with_version_0_gets_no_answer(void) {
     fresh(&unit, &rec);
     feed(&unit, "F0 00 02 0B 7F 10 20 00 02 00 00 F7");
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.sends == 0);
 }

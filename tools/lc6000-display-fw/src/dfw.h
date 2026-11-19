@@ -41,6 +41,16 @@ typedef struct {
     dfw_deck_state deck;
     /// The state message's flags: bit 0 loaded, 1 playing, 2 play pending, 3 cue held, 4 loop on, 5 feedback stale.
     uint8_t flags;
+    /// The master clock's beat, 1-4, or 0 with none (#459); the deck's needle, 0-16383 for a turn from 12 o'clock.
+    uint8_t beat;
+    uint16_t needle;
+    /// Whether a needle message has come since begin: until one does, no marker is drawn.
+    uint8_t needle_heard;
+    /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
+    uint32_t heard;
+    /// The clock at the tick that is drawing, for anything drawn over time.
+    uint32_t now_ms;
+    uint8_t silent;
     uint8_t dirty;
     /// The back buffer, DFW_SIZE * DFW_SIZE pixels, owned by the caller: on the unit it lives in SDRAM (#466).
     dfw_pixel *frame;
@@ -52,7 +62,10 @@ void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame);
 void dfw_set_frame(dfw_unit *unit, dfw_pixel *frame);
 /// One whole display message, F0 through F7. Only copies it; the tick acts on it.
 void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length);
-/// The draw tick: acts on the waiting messages, then presents a frame if something changed.
-void dfw_tick(dfw_unit *unit);
+/// The draw tick: acts on the waiting messages, then presents a frame if something changed. `now_ms` is a
+/// millisecond clock that may wrap (on the unit, the HAL tick).
+void dfw_tick(dfw_unit *unit, uint32_t now_ms);
+/// Whether the display shows the waiting look: the host says feedback stopped, or nothing came for 3 s.
+int dfw_stale(const dfw_unit *unit);
 
 #endif

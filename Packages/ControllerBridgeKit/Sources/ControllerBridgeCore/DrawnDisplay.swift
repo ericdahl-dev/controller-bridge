@@ -72,6 +72,10 @@ public enum DrawnDisplay {
         /// The deck in front: its number (1-4), color [r, g, b] (0-255 each) and what it holds.
         case deck(number: Int, color: [Int], player: Player)
         case state(State)
+        /// The master clock's beat, 1-4; 0 with no master clock (#459).
+        case beat(Int)
+        /// The deck's place in its bar, 0-16383 for a turn clockwise from 12 o'clock: the pitch-bend needle's scale.
+        case needle(Int)
 
         /// The SysEx frame for the WD port.
         public var bytes: [UInt8] {
@@ -86,6 +90,9 @@ public enum DrawnDisplay {
                         return [UInt8(value >> 7), UInt8(value & 0x7F)]
                     } + [player.rawValue])
             case .state(let state): DrawnDisplay.frame(0x07, [state.rawValue])
+            case .beat(let beat): DrawnDisplay.frame(0x08, [UInt8(min(max(beat, 0), 4))])
+            case .needle(let angle):
+                DrawnDisplay.frame(0x09, [UInt8(angle >> 7 & 0x7F), UInt8(angle & 0x7F)])
             }
         }
     }

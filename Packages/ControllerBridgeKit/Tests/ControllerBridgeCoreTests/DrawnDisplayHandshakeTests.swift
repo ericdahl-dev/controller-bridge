@@ -65,7 +65,7 @@ struct DrawnDisplayHandshakeTests {
         let (rig, port, _) = try Self.rig(.custom)
         rig.coordinator.jogDisplayReply(Self.answer)
         let drawn = Self.drawn(port)
-        #expect(drawn.count == 4)   // the question, begin, the deck and (#464) the state
+        #expect(drawn.count == 5)   // the question, begin, the deck, (#464) the state and (#459) the beat
         #expect(drawn.dropFirst().first == DrawnDisplay.Message.begin(version: 1).bytes)
         let deck = drawn.first { $0[9] == 0x03 }
         #expect(deck?[10] == 1 && deck?[17] == DrawnDisplay.Player.empty.rawValue)

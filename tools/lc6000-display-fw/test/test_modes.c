@@ -12,14 +12,14 @@ static void begin_then_deck_presents_a_frame(void) {
     fresh(&unit, &rec);
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 1);
 }
 
 static void a_deck_before_begin_draws_nothing(void) {
     fresh(&unit, &rec);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 0);
 }
 
@@ -28,7 +28,7 @@ static void a_deck_after_end_draws_nothing(void) {
     feed(&unit, BEGIN_V1);
     feed(&unit, END_V1);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 0);
 }
 
@@ -58,7 +58,7 @@ static void an_end_before_the_tick_draws_nothing(void) {
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
     feed(&unit, END_V1);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 0);
 }
 
@@ -66,7 +66,7 @@ static void a_state_before_any_deck_draws_nothing(void) {
     fresh(&unit, &rec);
     feed(&unit, BEGIN_V1);
     feed(&unit, STATE_LOADED);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 0);
 }
 
@@ -74,16 +74,26 @@ static void a_second_begin_doesnt_redraw_the_old_deck(void) {
     fresh(&unit, &rec);
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     feed(&unit, END_V1);
     feed(&unit, BEGIN_V1);
     feed(&unit, STATE_LOADED);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 1);
 }
 
 void the_state_flags_decode(void);
 void a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored(void);
+
+void begin_while_drawing_changes_nothing(void);
+void a_deck_clears_the_deck_flags_but_not_stale(void);
+void an_unchanged_heartbeat_presents_nothing(void);
+
+void three_seconds_of_silence_is_stale(void);
+void any_message_clears_the_silence(void);
+void garbage_doesnt_count_as_a_message(void);
+void the_clock_wrapping_isnt_silence(void);
+void the_stale_flag_is_stale_too(void);
 
 const test_case all_tests[] = {
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
@@ -111,5 +121,13 @@ const test_case all_tests[] = {
     { "the state flags decode", the_state_flags_decode },
     { "a state with the reserved bit or a wrong length is ignored",
       a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored },
+    { "begin while drawing changes nothing", begin_while_drawing_changes_nothing },
+    { "a deck clears the deck flags but not stale", a_deck_clears_the_deck_flags_but_not_stale },
+    { "an unchanged heartbeat presents nothing", an_unchanged_heartbeat_presents_nothing },
+    { "three seconds of silence is stale", three_seconds_of_silence_is_stale },
+    { "any message clears the silence", any_message_clears_the_silence },
+    { "garbage doesn't count as a message", garbage_doesnt_count_as_a_message },
+    { "the clock wrapping isn't silence", the_clock_wrapping_isnt_silence },
+    { "the stale flag is stale too", the_stale_flag_is_stale_too },
     { 0, 0 },
 };

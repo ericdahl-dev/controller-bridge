@@ -121,8 +121,9 @@ static int band_matches(const ref_case *c, band which) {
 }
 
 static void draw_case(const ref_case *c) {
-    dfw_deck_state deck = { c->number, c->r, c->g, c->b, c->player };
-    dfw_draw(frame, &deck);
+    static dfw_unit unit;
+    unit.deck = (dfw_deck_state){ c->number, c->r, c->g, c->b, c->player };
+    dfw_draw(frame, &unit);
 }
 
 static void outside_the_bands_is_plain_ground(void) {
@@ -165,7 +166,9 @@ static void every_pixel_is_written_whatever_the_deck(void) {
     static const dfw_deck_state decks[] = { { 0, 1, 2, 3, 0 }, { 255, 9, 9, 9, 255 }, { 5, 0, 0, 0, 6 }, { 2, 255, 0, 0, 1 } };
     for (size_t d = 0; d < sizeof decks / sizeof decks[0]; d++) {
         for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = 0xDEADBEEFu;
-        dfw_draw(frame, &decks[d]);
+        static dfw_unit unit;
+        unit.deck = decks[d];
+        dfw_draw(frame, &unit);
         int unwritten = 0;
         for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) unwritten += (frame[i] & 0xFF000000u) != 0;
         CHECK(unwritten == 0);
@@ -180,13 +183,73 @@ static void begin_then_deck_presents_the_reference(void) {
     fresh(&unit, &rec);
     feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
     feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");   // deck 2, red, track
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 1);
     const ref_case *c = &cases[0];
     CHECK(load_reference(c->file));
     memcpy(frame, rec.last, sizeof frame);
     CHECK(band_matches(c, RING));
     CHECK(band_matches(c, HEADER));
+}
+
+/// The waiting look (#464), compared over the whole frame: our logo is all of it. The limits are the header's: the
+/// logo is curves and a turned capsule, anti-aliased like the chip.
+#define STALE_REF "test/ref/stale.ppm"
+#define STALE_BUDGET 64
+
+static int stale_matches(void) {
+    int loose = 0, over_cap = 0, worst = 0;
+    for (int i = 0; i < DFW_SIZE * DFW_SIZE; i++) {
+        int d = channel_diff(frame[i], reference[i]);
+        if (d > worst) worst = d;
+        if (d > HEADER_CLOSE) loose++;
+        if (d > CAP) over_cap++;
+    }
+    fprintf(stderr, "    stale: worst %d, %d over %d (budget %d), %d over %d\n", worst, loose, HEADER_CLOSE, STALE_BUDGET,
+            over_cap, CAP);
+    return over_cap == 0 && loose <= STALE_BUDGET;
+}
+
+static void stale_draws_the_logo(void) {
+    static dfw_unit stale_unit;
+    stale_unit.deck = (dfw_deck_state){ 2, 255, 0, 0, 1 };
+    stale_unit.flags = 0x21;   // loaded, feedback stale
+    CHECK(load_reference(STALE_REF));
+    dfw_draw(frame, &stale_unit);
+    CHECK(stale_matches());
+}
+
+static void three_silent_seconds_present_the_logo(void) {
+    fresh(&unit, &rec);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");
+    dfw_tick(&unit, 0);
+    dfw_tick(&unit, 3000);
+    CHECK(rec.presents == 2);
+    CHECK(load_reference(STALE_REF));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(stale_matches());
+}
+
+/// The state's feedback-stale bit (#464): set, the presented frame is the logo; cleared, it's the deck again.
+static void the_stale_flag_draws_the_logo_and_fresh_feedback_clears_it(void) {
+    fresh(&unit, &rec);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");   // deck 2, red, track
+    dfw_tick(&unit, 0);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 21 F7");                         // loaded, feedback stale
+    dfw_tick(&unit, 100);
+    CHECK(rec.presents == 2);
+    CHECK(load_reference(STALE_REF));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(stale_matches());
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 01 F7");                         // loaded, fresh
+    dfw_tick(&unit, 200);
+    CHECK(rec.presents == 3);
+    CHECK(load_reference(cases[0].file));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(band_matches(&cases[0], RING));
+    CHECK(band_matches(&cases[0], HEADER));
 }
 
 const test_case draw_tests[] = {
@@ -201,5 +264,9 @@ const test_case draw_tests[] = {
     { "every pixel is written whatever the deck", every_pixel_is_written_whatever_the_deck },
     { "every reference has the ring and header to compare", every_reference_has_the_ring_and_header_to_compare },
     { "begin then deck presents the reference", begin_then_deck_presents_the_reference },
+    { "stale draws the logo", stale_draws_the_logo },
+    { "three silent seconds present the logo", three_silent_seconds_present_the_logo },
+    { "the stale flag draws the logo and fresh feedback clears it",
+      the_stale_flag_draws_the_logo_and_fresh_feedback_clears_it },
     { 0, 0 },
 };

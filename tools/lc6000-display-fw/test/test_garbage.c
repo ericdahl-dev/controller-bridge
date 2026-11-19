@@ -12,7 +12,7 @@ static int presents_after_begin(const char *bad) {
     fresh(&unit, &rec);
     feed(&unit, BEGIN_V1);
     feed(&unit, bad);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     return rec.presents;
 }
 
@@ -51,7 +51,7 @@ void a_malformed_begin_is_ignored(void) {
     fresh(&unit, &rec);
     feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 00 F7");   // version 0
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 0);
 }
 
@@ -64,7 +64,7 @@ void an_oversized_message_is_ignored(void) {
     big[sizeof big - 1] = 0xF7;
     dfw_message(&unit, big, sizeof big);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 1);   // the good deck after it still lands
 }
 
@@ -84,9 +84,9 @@ void random_bytes_change_nothing(void) {
         }
         if (round % 2 && length >= sizeof header) memcpy(bytes, header, sizeof header);
         dfw_message(&unit, bytes, length);
-        if (round % 7 == 0) dfw_tick(&unit);
+        if (round % 7 == 0) dfw_tick(&unit, 0);
     }
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 0);
     CHECK(rec.sends == 0);
 }
