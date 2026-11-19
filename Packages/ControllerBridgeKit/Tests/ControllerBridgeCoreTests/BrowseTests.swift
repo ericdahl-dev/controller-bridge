@@ -229,4 +229,49 @@ struct BrowseTests {
         Self.turn(rig, cc: 6, 0x40)
         #expect(rig.osc.sent == Array(repeating: OSCMessage("/Syndicate/Browser/Up", [.int(1)]), count: 64))
     }
+
+    // #479: the knob is printed SELECT / ZOOM. With Shift held each click zooms the deck in front's waveform.
+
+    static func shiftDown(_ rig: Rig) {
+        rig.coordinator.midi(.noteOn(channel: 0, note: 26, velocity: 127), source: Rig.lc6000.id)
+    }
+
+    @Test("Shift + Select turn zooms the waveform: WaveformZoomIn 1 per clockwise click, WaveformZoomOut 1 per counter-clockwise; no browsing")
+    func shiftTurnZooms() throws {
+        let rig = try Self.startedRig()
+        Self.shiftDown(rig)
+        rig.osc.sent.removeAll()
+        Self.turn(rig, cc: 6, 0x02)
+        Self.turn(rig, cc: 6, 0x7F)
+        #expect(rig.osc.sent == [
+            OSCMessage("/Syndicate/Deck/1/WaveformZoomIn", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/WaveformZoomIn", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/WaveformZoomOut", [.int(1)]),
+        ])
+    }
+
+    @Test("The zoom follows the deck in front (the mapping's deck)")
+    func shiftTurnZoomsTheDeck() throws {
+        let mapping = try Mapping.bundledDefault(overriddenBy: Data(#"{ "deck": { "number": 3 } }"#.utf8))
+        let osc = Rig.FakeOSC()
+        let coordinator = Coordinator(
+            mapping: mapping,
+            midi: Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out]),
+            osc: osc, clock: Rig.FakeClock(), log: Rig.FakeLog()
+        )
+        coordinator.start()
+        coordinator.midi(.noteOn(channel: 0, note: 26, velocity: 127), source: Rig.lc6000.id)
+        osc.sent.removeAll()
+        coordinator.midi(.controlChange(channel: 0, controller: 6, value: 0x01), source: Rig.lc6000.id)
+        #expect(osc.sent == [OSCMessage("/Syndicate/Deck/3/WaveformZoomIn", [.int(1)])])
+    }
+
+    @Test("Shift + Select press is still Enter")
+    func shiftPressStillEnters() throws {
+        let rig = try Self.startedRig()
+        Self.shiftDown(rig)
+        rig.osc.sent.removeAll()
+        Self.press(rig, 18)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Browser/Enter", [.int(1)])])
+    }
 }

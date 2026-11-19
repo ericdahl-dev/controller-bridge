@@ -34,13 +34,13 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 | Shift + Pitch Bend − / + | Transposes the deck down or up a semitone (`PitchDown` / `PitchUp`, once per press). It turns the deck's key lock (P) on first, since Syndicate transposes only with it on |
 | Param ◀ ▶ | `BeatSkip ∓1` |
 | Browse knob turn and press (Shift for Enter), Back, Forward, Track ◀ ▶ | `Browser/Up`, `Browser/Down`, `Browser/L{deck}`, `Back`, `Enter` |
-| Vinyl | Nothing yet; its light shows a press |
+| Shift + browse knob turn (ZOOM) | Zooms the deck in front's waveform, one step per click: `WaveformZoomIn` 1 clockwise, `WaveformZoomOut` 1 counter-clockwise |
 
 **LEDs:**
 - Play, Cue, Sync and Master follow Syndicate's state. Play blinks while a quantized start is pending.
 - Key Lock, Shift and the pad-mode buttons show the bridge's own state. Censor is lit while Reverse is on, held or latched with Shift.
 - The pitch arrows by the fader show pickup: while the fader waits to meet Syndicate's tempo, the arrow pointing the way to move it is lit, and both go out when it catches. No arrow is lit while the deck's tempo slider is disabled (a synced follower) or no track is loaded.
-- Buttons with no state of their own are lit dim so the panel reads in the dark, and full while held: Beat Jump, Track ◀ ▶, Pitch Bend − / +, Param ◀ ▶, Vinyl, the browse knob's ring and the deck select button.
+- Buttons with no state of their own are lit dim so the panel reads in the dark, and full while held: Beat Jump, Track ◀ ▶, Pitch Bend − / +, Param ◀ ▶, the browse knob's ring and the deck select button. Vinyl is lit the same way, and also full while its seek mode is on.
 - Pads show your hot cues in Syndicate's cue colors, quantized to the LC6000's 64-color table. A held pad lights brighter.
 - The platter ring lights when a track is loaded, in its deck's color, the same as the deck's badge in the app, so switching layers changes it. On the LC6000 it shows the exact color through Denon's own color message; turn off **Exact colors on the LC6000** in Settings to go back to the 64-color table. Deck colors follow Syndicate's cue palette (slots 1, 3, 5 and 7, under CUE COLORS) as you change it, or set your own under **Settings › Decks**. It can also pulse on each beat or on the downbeat.
 
