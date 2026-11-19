@@ -17,7 +17,7 @@ struct MeterBallistics: Sendable {
         self.fallTime = fallTime
     }
 
-    /// What's shown, 0...1 (above 1.0 is clip, shown as 1.0).
+    /// What's shown, 0...1: a place on the meter (MeterScale's), full being the red at clip.
     private(set) var level = 0.0
     private(set) var peak = 0.0
 
@@ -28,7 +28,7 @@ struct MeterBallistics: Sendable {
     private var peakSet = (level: 0.0, at: 0.0)
     private var lastStep: Double?
 
-    /// A level from Syndicate.
+    /// A place on the meter, 0...1 (MeterScale.position of Syndicate's level).
     mutating func sample(_ value: Double, at time: Double) {
         let clipped = min(max(value, 0), 1)
         pending = max(pending ?? 0, clipped)

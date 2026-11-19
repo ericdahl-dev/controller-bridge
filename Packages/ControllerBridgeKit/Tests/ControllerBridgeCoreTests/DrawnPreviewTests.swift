@@ -79,7 +79,7 @@ struct DrawnPreviewTests {
     }
 
     /// #582: one implementation of the meter's ballistics for the unit and the preview.
-    @Test("The preview's meter has the same ballistics as the unit's: 1.0, then 0.05 s of fall, 114 with the peak held")
+    @Test("The preview's meter has the same ballistics and scale as the unit's: 1.0 (0 dB), then 0.05 s of fall, 96 with the peak held at 109")
     func previewMeterBallistics() throws {
         let (rig, _, take) = try Self.unit()
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
@@ -91,7 +91,7 @@ struct DrawnPreviewTests {
         rig.clock.now = 0.1
         rig.coordinator.tick()
         let meter = Self.drawnPreviews(take()).last { $0.deck?.number == 1 }?.meter
-        #expect(meter?.level == 114 && meter?.peak == 127)
+        #expect(meter?.level == 96 && meter?.peak == 109)
     }
 
     @Test("When the unit answers, every deck's drawn preview goes at once, even with nothing new about it")
