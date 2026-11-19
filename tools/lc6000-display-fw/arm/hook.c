@@ -56,7 +56,7 @@ void hook_command(hook_state *state, const hook_stock *stock, uint8_t cmd, const
     state->stock = stock;
     uint8_t op = msg[9];
     if (op == OP_CAPABILITY || op == OP_BEGIN) ensure_frame(state, stock);
-    if (op == OP_BEGIN && !state->unit.frame) return;  // no frame: stay in stock mode
+    // A begin with no frame is still passed on: dfw then presents nothing, so the screen stays stock's.
     dfw_message(&state->unit, msg, total);
 }
 

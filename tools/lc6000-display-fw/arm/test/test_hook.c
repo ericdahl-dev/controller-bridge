@@ -124,6 +124,7 @@ void begin_with_no_frame_allocates_it(void) {
 }
 
 void begin_after_a_failed_allocation_stays_in_stock_mode(void) {
+    // begin is passed on (agent3, #491): with no frame dfw presents nothing, so the screen is never taken.
     cold_boot();
     chip.malloc_fails = 1;
     deliver(0, BEGIN_V1);
@@ -131,8 +132,7 @@ void begin_after_a_failed_allocation_stays_in_stock_mode(void) {
     deliver(0, BEGIN_V1);
     tick();
     CHECK(chip.mallocs == 1);
-    CHECK(state.unit.drawn == 0);
-    CHECK(rec.presents == 0);
+    CHECK(rec.presents == 0 && chip.hides == 0);
 }
 
 void a_repeated_begin_never_allocates_again(void) {
