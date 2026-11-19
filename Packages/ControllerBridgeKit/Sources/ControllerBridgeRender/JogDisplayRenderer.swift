@@ -24,17 +24,6 @@ public enum JogDisplayRenderer {
         }
     }
 
-    /// The loading graphic (#165): design B's ground and unlit ring, no deck info, and "Loading…" in the middle. It
-    /// goes into slot 5 once per connect, and shows while a new card's beat slots upload, instead of a black screen.
-    public static func loadingImage() -> [UInt8] {
-        drawing { context in
-            context.setFillColor(background)
-            context.fill(CGRect(x: 0, y: 0, width: 198, height: 198))
-            ring(litBeat: nil, in: context)
-            line("Loading…", font: "Geist-Medium", size: 18, lineHeight: 1.1, top: 99 - 18 * 1.1 / 2, color: caption, in: context)
-        }
-    }
-
     /// RGBA rows of a 198×198 image, drawn with a top-left origin and y down, as the rows are stored and the design measures.
     private static func drawing(_ body: (CGContext) -> Void) -> [UInt8] {
         _ = fontsRegistered
