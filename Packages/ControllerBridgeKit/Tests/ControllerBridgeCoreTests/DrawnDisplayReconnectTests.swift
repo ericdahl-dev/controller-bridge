@@ -19,4 +19,36 @@ struct DrawnDisplayReconnectTests {
         #expect(Handshake.drawn(port).last == DrawnDisplay.Message.state([]).bytes)
         #expect(!port.wd.contains(where: Handshake.isUpload))
     }
+
+    /// The unit power-cycled quickly (#429): its WD port removed and back with the same id.
+    static func replug(_ rig: ProfileMatchingTests.ProfileRig) {
+        rig.coordinator.devicesChanged(removed: [JogDisplayRingHoldTests.wd.id, JogDisplayRingHoldTests.lc6000.id])
+    }
+
+    @Test("WD removed and back while drawing: hello, the question, and on the answer begin and the full state again; no upload")
+    func replugDrawsAgain() throws {
+        let (rig, port, _) = try Handshake.rig(.custom)
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        port.wd.removeAll(); port.controller.removeAll()
+        Self.replug(rig)
+        #expect(port.controller.suffix(2) == JogDisplay.hello)
+        #expect(Self.ops(port).last == 0x00)
+        port.wd.removeAll()
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        #expect(Self.ops(port) == [0x01, 0x03, 0x07])
+        #expect(!port.wd.contains(where: Handshake.isUpload))
+    }
+
+    @Test("Replugged on Denon's firmware (no answer): images after half a second, as on a first connect")
+    func replugOnDenon() throws {
+        let (rig, port, clock) = try Handshake.rig(.custom)
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        Self.replug(rig)
+        port.wd.removeAll()
+        clock.now = 0.5
+        rig.coordinator.tick()
+        #expect(Handshake.uploadSlots(port) == [1])
+        #expect(Self.ops(port).isEmpty)
+        #expect(rig.coordinator.status.displayFound?.label == "Custom (images)")
+    }
 }
