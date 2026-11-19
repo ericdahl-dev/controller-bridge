@@ -236,6 +236,70 @@ class DeviceListTests(DrawnPlanTests):
         self.assertEqual(unit.run(self.plan()), ("done",))
 
 
+
+def options(rdp=0xAA, half=0x0FFF):
+    return bytes([0xEC, rdp]) + b"\xff" * 6 + bytes([half & 0xFF, half >> 8]) + b"\xff" * 6
+
+
+class RefusalTests(DrawnPlanTests):
+    """Each refusal stops the run; one before the first write writes nothing (#567)."""
+
+    def refused(self, expect, writes=(), **unit):
+        unit.setdefault("app", self.current_element)
+        app = unit.pop("app")
+        fake = FakeUnit(self.dir.name, app, **unit)
+        end = fake.run(self.plan())
+        self.assertEqual(end[0], "stop", fake.log)
+        self.assertIn(expect, end[1])
+        self.assertEqual(fake.writes, list(writes))
+        return fake
+
+    def test_read_protection_on_stops_before_any_write(self):
+        self.refused("read protection is on", options=options(rdp=0xBB))
+
+    def test_a_write_protected_upper_sector_stops_before_any_write(self):
+        self.refused("sector 9", options=options(half=0x0FFF & ~(1 << 9)))
+
+    def test_a_wrong_word_for_b_writes_nothing(self):
+        self.refused("not FLASH", words={"word_upper": "flash"})
+
+    def test_a_wrong_word_for_the_image_writes_only_b(self):
+        self.refused("not FLASH", writes=["upper"], words={"word_app": "yes"})
+
+    def test_no_probe_without_the_phrase_stops_before_update_mode(self):
+        fake = self.refused("not NO PROBE", answers={"probe": "n"}, words={"no_probe": "y"})
+        self.assertNotIn("update-mode", self.kinds(fake))
+
+    def test_no_probe_with_the_phrase_goes_on(self):
+        fake = FakeUnit(self.dir.name, self.current_element, answers={"probe": "n"})
+        self.assertEqual(fake.run(self.plan()), ("done",))
+
+    def test_the_files_swapped_stop_before_anything_is_sent(self):
+        self.upper, self.owner = self.owner, self.upper
+        # B's file given as the owner's image fails its own check first; either way, nothing is sent.
+        fake = self.refused("Nothing was sent")
+        self.assertEqual(fake.log[0][0], "stop")
+
+    def test_a_chip_not_holding_the_image_it_runs_now_stops_before_any_write(self):
+        other = bytearray(self.current_element)
+        other[0x100] ^= 1
+        self.refused("doesn't hold the image it runs now", app=bytes(other))
+
+    def test_something_else_in_the_upper_flash_stops_before_any_write(self):
+        upper = bytearray(b"\xff" * UPPER_SIZE)
+        upper[0x40000] = 0
+        self.refused("Nothing is written over it", upper=bytes(upper))
+
+    def test_not_ready_stops_before_anything_is_sent(self):
+        for key in ("both_true", "all_true"):
+            with self.subTest(key):
+                fake = self.refused("Not ready", answers={key: "n"})
+                self.assertNotIn("update-mode", self.kinds(fake))
+
+    def test_a_display_not_like_stock_after_the_power_cycle_stops(self):
+        self.refused("doesn't look like stock", writes=["upper", "app"], answers={"stock_look": "n"})
+
+
 class FreshnessTests(DrawnPlanTests):
     """A plan file never lets stale facts authorize a write (#567): each write rests on its own read, made in this run
     after update mode was entered."""
