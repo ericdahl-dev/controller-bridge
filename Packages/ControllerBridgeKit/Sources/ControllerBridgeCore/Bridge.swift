@@ -411,7 +411,7 @@ final class Bridge {
             cueMemory.positionReported(seconds, playing: playing, now: clock.now)
             return
         case "progress":
-            jogModule.progressReported(message.arguments.first?.number)
+            jogModule.progressReported(message.arguments.first?.number, duration: duration, now: clock.now)
             return
         default: return
         }
