@@ -63,7 +63,8 @@ jobs:
     # The drawn jog display's C code (#457), built natively with the runner's cc and tested with no hardware and no
     # vendor data: message bytes in, frames and replies out. Cheap on Linux, so it runs on every change.
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The Arm toolchain download takes a few minutes on its own, so 5 minutes timed out before any test ran (#467).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Display firmware tests
@@ -73,7 +74,8 @@ jobs:
       - name: Arm toolchain and emulator
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi
+          # The block is freestanding: no newlib or libstdc++, which add about 500 MB as recommended packages.
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi binutils-arm-none-eabi
           arm-none-eabi-gcc --version | head -1
           python3 -m venv "$RUNNER_TEMP/fw"
           "$RUNNER_TEMP/fw/bin/pip" install unicorn
