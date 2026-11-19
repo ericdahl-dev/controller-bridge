@@ -69,6 +69,52 @@ struct RingColorMessageTests {
         #expect(try Self.colors(rig).last == [127, 0, 0])
     }
 
+    @Test("The ring held dark while the jog display uploads (#422): off as a color message, then its exact color again")
+    func heldWhileUploading() throws {
+        let (rig, port) = try JogDisplayRingHoldTests.owned()
+        rig.coordinator.setColorMessages(true)
+        let output = try #require(rig.midi.outputs[JogDisplayRingHoldTests.lc6000.id + 1000])
+        output.sent.removeAll()   // the note-on from before the color message was on
+        func ring() -> [[UInt8]] { output.colors.filter { $0.note == 40 }.map { [$0.red, $0.green, $0.blue] } }
+        let lit = try #require(ring().last)
+        #expect(lit != [0, 0, 0])
+        let before = ring().count
+        rig.coordinator.setJogDisplay(enabled: true)
+        for _ in 0..<4 {
+            let during = Array(ring().dropFirst(before))
+            #expect(during.last == [0, 0, 0])
+            #expect(!during.contains { $0 != [0, 0, 0] })
+            JogDisplayRingHoldTests.answer(rig, port)
+        }
+        #expect(ring().last == lit)
+        #expect(!output.sent.contains { if case .noteOn(_, 40, let v) = $0 { v > 0 } else { false } })
+    }
+
+    @Test("LEDs off turns the ring off with a color message; LEDs on brings its exact color back")
+    func ledsSwitch() throws {
+        let rig = try Self.exact(deck: 2)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        let lit = try #require(try Self.colors(rig).last)
+        rig.coordinator.setLEDs(enabled: false)
+        #expect(try Self.colors(rig).last == [0, 0, 0])
+        rig.coordinator.setLEDs(enabled: true)
+        #expect(try Self.colors(rig).last == lit)
+    }
+
+    @Test("After an LED sweep, whose note-ons override the unit's colors, the ring's color message goes out again")
+    func afterSweep() throws {
+        let rig = try Self.exact(deck: 1)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        let lit = try #require(try Self.colors(rig).last)
+        rig.clock.now = 100
+        rig.coordinator.startLEDSweep()
+        let output = try Self.output(rig)
+        output.colors.removeAll()
+        DiagnosticsTests.tick(rig, at: 1000)
+        #expect(!rig.coordinator.isSweeping)
+        #expect(try Self.colors(rig).last == lit)
+    }
+
     @Test("With no track the ring is off, as a color message of 0, 0, 0")
     func noTrack() throws {
         let rig = try Self.exact(deck: 2)

@@ -465,6 +465,10 @@ final class Bridge {
             for lit in ledCache.shown(onPads: true) where lit.velocity != Self.off {
                 padLED(lit.note, Self.off)
             }
+            // The color-message LEDs (#530): each lit one off with its own message.
+            for (note, rgb) in colorCache.sorted(by: { $0.key < $1.key }) where rgb != [0, 0, 0] {
+                if let message = colorMessageEncoder?.message(note: Int(note), rgb: [0, 0, 0]) { colorLED(message) }
+            }
             // The VU meter too (#320).
             if let meter = mapping.mixer?.meter, let shown = mixerModule.meterShownValue, shown != 0, ledCC(UInt8(meter.cc), 0) {
                 mixerModule.forgetMeterShown()
