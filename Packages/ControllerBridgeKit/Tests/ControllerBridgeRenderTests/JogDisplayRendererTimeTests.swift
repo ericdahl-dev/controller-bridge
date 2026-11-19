@@ -50,4 +50,32 @@ struct JogDisplayRendererTimeTests {
         #expect(Self.image((elapsed: 0, length: 165)) != Self.image((elapsed: 1, length: 165)))
         #expect(Self.image((elapsed: 200, length: 165)) == Self.image((elapsed: 165, length: 165)))
     }
+
+    static func at(_ image: [UInt8], _ x: Int, _ y: Int) -> [UInt8] { JogDisplayRendererTests.pixel(image, x: x, y: y) }
+
+    /// The progress ring (r 96–98): filled in the deck colour clockwise from 12, the rest a dark track. Points mid-band
+    /// (r ≈ 97): (115, 3) at 10°, (196, 98) at 90°, (98, 196) at 180°, (1, 98) at 270°.
+    @Test("Halfway: the ring is lit in the deck colour to 6 o'clock, dark after")
+    func progressHalfway() {
+        let image = Self.image((elapsed: 60, length: 120))
+        #expect(JogDisplayRendererTests.near(Self.at(image, 115, 3), 0xFF0000))
+        #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0xFF0000))
+        #expect(JogDisplayRendererTests.near(Self.at(image, 1, 98), 0x2C2C2C))
+    }
+
+    @Test("At the start the whole ring is the dark track; at the end it is all lit")
+    func progressEnds() {
+        let start = Self.image((elapsed: 0, length: 120)), end = Self.image((elapsed: 120, length: 120))
+        for (x, y) in [(115, 3), (196, 98), (98, 196), (1, 98)] {
+            #expect(JogDisplayRendererTests.near(Self.at(start, x, y), 0x2C2C2C))
+            #expect(JogDisplayRendererTests.near(Self.at(end, x, y), 0xFF0000))
+        }
+    }
+
+    @Test("The ring stays in its band, clear of the beat ring (r 95) and inside the image's edge")
+    func progressBand() {
+        let ring = Self.changed(Self.image(nil), Self.image((elapsed: 60, length: 120))).filter { Self.radius($0) >= 90 }
+        #expect(!ring.isEmpty)
+        #expect(ring.allSatisfy { Self.radius($0) > 95 && Self.radius($0) < 99 })
+    }
 }

@@ -22,7 +22,7 @@ public enum JogDisplayRenderer {
         drawing { context in
             draw(content, litBeat: litBeat, in: context)
             if let meter, !content.stale { drawMeter(level: meter.level, peak: meter.peak, in: context) }
-            if let time, time.length > 0, !content.stale { drawTime(elapsed: time.elapsed, length: time.length, in: context) }
+            if let time, time.length > 0, !content.stale { drawTime(elapsed: time.elapsed, length: time.length, deckColor: color(content.color), in: context) }
             if let marker { drawMarker(turns: marker, in: context) }
         }
     }
@@ -59,6 +59,8 @@ public enum JogDisplayRenderer {
     /// Track time (#460): the remaining time's size and the middle of its line box, under key/BPM. The largest that
     /// keeps "-99:59" inside the text-safe circle with a gap under key/BPM; the user asked for about 18, which reaches r 83.
     static let timeSize: CGFloat = 14, timeCenterY: CGFloat = 169
+    /// The progress ring, just outside the beat ring: 1 px clear of it (r 95) and of the image's edge (r 99).
+    static let progressInner: CGFloat = 96, progressOuter: CGFloat = 98
     /// The peak tick's width, in degrees.
     static let meterTick: CGFloat = 2
     static let meterYellow = rgb(0xFFD400), meterClip = rgb(0xFF3B30), meterPeak = rgb(0xFFFFFF)
@@ -214,8 +216,12 @@ public enum JogDisplayRenderer {
     }
 
     /// Track time (#460): the time left, "-m:ss" (minutes past 59 stay minutes), in the slot under key/BPM. Seconds.
-    private static func drawTime(elapsed: Int, length: Int, in context: CGContext) {
-        let left = max(length - max(elapsed, 0), 0)
+    /// Around the edge, the progress ring: the deck colour clockwise from 12 o'clock, the rest a dark track.
+    private static func drawTime(elapsed: Int, length: Int, deckColor: CGColor, in context: CGContext) {
+        let elapsed = min(max(elapsed, 0), length), left = length - elapsed
+        band(inner: progressInner, outer: progressOuter, from: 0, to: 360, color: beatOff, in: context)
+        band(inner: progressInner, outer: progressOuter, from: 0, to: 360 * CGFloat(elapsed) / CGFloat(length),
+             color: deckColor, in: context)
         let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, timeSize, nil)
         draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: text), font: font,
              centerX: center, centerY: timeCenterY, in: context)
@@ -241,12 +247,19 @@ public enum JogDisplayRenderer {
 
     /// The meter band between fractions `from` and `to` of the arc (0 its bottom), filled in `color`.
     private static func meterArc(from: CGFloat, to: CGFloat, color: CGColor, in context: CGContext) {
+        band(inner: meterInner, outer: meterOuter, from: meterFrom + meterSpan * from, to: meterFrom + meterSpan * to,
+             color: color, in: context)
+    }
+
+    /// The band between radii `inner` and `outer`, from `from` to `to` degrees clockwise from 12 o'clock, in `color`.
+    private static func band(inner: CGFloat, outer: CGFloat, from: CGFloat, to: CGFloat, color: CGColor,
+                             in context: CGContext) {
         guard to > from else { return }
-        // Degrees clockwise from 12 o'clock; on screen (y down) that's CoreGraphics angle − 90°, growing clockwise.
-        let start = (meterFrom + meterSpan * from - 90) * .pi / 180, end = (meterFrom + meterSpan * to - 90) * .pi / 180
+        // On screen (y down) that's CoreGraphics angle − 90°, growing clockwise.
+        let start = (from - 90) * .pi / 180, end = (to - 90) * .pi / 180
         let path = CGMutablePath()
-        path.addArc(center: CGPoint(x: center, y: center), radius: meterOuter, startAngle: start, endAngle: end, clockwise: false)
-        path.addArc(center: CGPoint(x: center, y: center), radius: meterInner, startAngle: end, endAngle: start, clockwise: true)
+        path.addArc(center: CGPoint(x: center, y: center), radius: outer, startAngle: start, endAngle: end, clockwise: false)
+        path.addArc(center: CGPoint(x: center, y: center), radius: inner, startAngle: end, endAngle: start, clockwise: true)
         path.closeSubpath()
         context.addPath(path)
         context.setFillColor(color)
