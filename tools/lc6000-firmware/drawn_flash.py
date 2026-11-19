@@ -135,6 +135,30 @@ def options(args):
     print("ok (read protection off, level 0; sectors 8-11 writable; one bank)")
 
 
+NO_PROBE = "NO PROBE"
+
+NO_PROBE_RISK = f"""Without an ST-Link probe (#433), one failure has no way back over USB:
+  If the new image starts but can't take the update-mode message, the jog display stays dark until a probe is
+  connected. Denon's updater and this wizard both need that message to reach the display chip.
+What makes that unlikely (from the code and the emulator, not yet from your unit):
+  - Our code runs only after our own first message: with no host, the image behaves like stock.
+  - Stock's own update-mode message is handled before our hook.
+  - Every write is read back and compared before the power cycle.
+Even then, the top panel and the rest of the unit keep working: only the jog display would be affected.
+Type {NO_PROBE} to go on without a probe; anything else stops here."""
+
+
+def no_probe_risk(_args):
+    print(NO_PROBE_RISK)
+
+
+def no_probe(args):
+    """Goes on without a probe only on the whole phrase, typed (#468)."""
+    if args.typed.strip() != NO_PROBE:
+        raise dfupatch.Refused(f"you typed {args.typed.strip()!r}, not {NO_PROBE}: stopping before anything is sent")
+    print(f"ok ({NO_PROBE}: going on without a probe)")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Checks for the drawn flash: files and reads, never the unit.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -154,6 +178,11 @@ def main(argv=None):
     bytes_ = commands.add_parser("options", help="judge a read of the option bytes at 0x1FFFC000 (16 bytes)")
     bytes_.add_argument("read")
     bytes_.set_defaults(run=options)
+    risk = commands.add_parser("no-probe-risk", help="what flashing without an ST-Link risks, in plain words")
+    risk.set_defaults(run=no_probe_risk)
+    phrase = commands.add_parser("no-probe", help="goes on without a probe only on the typed phrase NO PROBE")
+    phrase.add_argument("typed")
+    phrase.set_defaults(run=no_probe)
     args = parser.parse_args(argv)
     try:
         args.run(args)
