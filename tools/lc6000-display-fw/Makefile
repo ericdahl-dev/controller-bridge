@@ -32,7 +32,8 @@ arm-test: $(BUILD)/hook-tests $(BUILD)/frame-dump
 	$(MAKE) ARM_BUILD=$(BUILD)/arm-stub ARM_DRAW=stub $(BUILD)/arm-stub/block.bin $(BUILD)/arm-stub/upper.bin
 	ARM_BUILD=$(BUILD)/arm-stub $(PYTHON) -I arm/test/test_block.py
 
-# The block tests need the `unicorn` package (pip install unicorn): `make arm-test PYTHON=path/to/venv/python`.
+# The block tests need the `unicorn` package, as CI pins it (pip install unicorn==2.1.4):
+# `make arm-test PYTHON=path/to/venv/python`. Without it the tests fail at the import; nothing is skipped.
 PYTHON ?= python3
 
 $(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
