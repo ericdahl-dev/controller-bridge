@@ -546,6 +546,9 @@ public final class Coordinator {
     ///   (pads.channel only), it plays the layer in front. Neither is the multi-channel state.
     /// Returns the event as the layers should see it: a ch1 control re-addressed to the active layer's channel; and,
     /// for a pad, the one layer that handles it.
+    /// `layerHandover`'s `only` for an event no layer handles: only controllers that don't follow layers get it.
+    private static let noLayer = -1
+
     private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) -> (MIDIEvent, only: Int?) {
         let layers = controllers.indices.filter { controllers[$0].source?.id == source && controllers[$0].followsLayers }
         guard let first = layers.first else { return (event, nil) }
@@ -573,7 +576,9 @@ public final class Coordinator {
                 let target = layers[(at + 1) % layers.count]
                 activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
             }
-            return (event, nil)
+            // No layer handles the note itself. Its light stays at its idle level, sent with the new layer's repaint:
+            // the unit showed no brighter level for it on a press (#480), so a press sends it nothing.
+            return (event, Self.noLayer)
         }
         let onPads = layers.filter {
             let bridge = controllers[$0].bridge

@@ -7,9 +7,15 @@ extension Bridge {
     static let pressLitButtons = ["beat_jump_back", "beat_jump_forward", "track_prev", "track_next", "select_press",
                                   "vinyl", "pitch_minus", "pitch_plus", "param_back", "param_forward"]
 
-    /// Each one's light: full while held, else idle. Vinyl's is also full while its seek mode is on (#540).
+    /// Lit at their idle level only, never full: the deck select button (#477). On the unit a press showed no brighter
+    /// level (it seems to own that light while the button is down; #480's live check), so a press sends it nothing.
+    static let idleLitButtons = ["deck_select"]
+
+    /// Each one's light: full while held, else idle; the idle-only ones idle. Vinyl's is also full while its seek
+    /// mode is on (#540).
     func pressLitLEDs() {
         for name in Self.pressLitButtons { buttonLED(name, on: pressLitOn(name)) }
+        for name in Self.idleLitButtons { buttonLED(name, on: false) }
     }
 
     private func pressLitOn(_ name: String) -> Bool {
