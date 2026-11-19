@@ -144,7 +144,8 @@ final class JogDisplayController {
         guard let front else { return }
         let facts = entries[front].facts
         meterTick(deck: facts.deck, driver: driver)
-        driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending)
+        driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending, loop: facts.looping,
+                         cue: facts.cueHeld)
         driver.playLight(facts.playing || (facts.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
     }
 
