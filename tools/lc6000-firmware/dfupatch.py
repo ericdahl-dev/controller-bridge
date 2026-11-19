@@ -236,13 +236,44 @@ def verify(args):
     print(f"ok: trailer CRC 0x{crc:08X} over {covered:#x} bytes; a no-op patch reproduces the file bit for bit")
 
 
+def bl_target(at, code):
+    """The target of a 4-byte Thumb-2 `bl` at `at`, or None if `code` isn't one (the inverse of thumb_bl)."""
+    if len(code) != 4:
+        return None
+    first, second = struct.unpack("<HH", code)
+    if first & 0xF800 != 0xF000 or second & 0xD000 != 0xD000:
+        return None
+    s = (first >> 10) & 1
+    i1 = 1 - (((second >> 13) & 1) ^ s)
+    i2 = 1 - (((second >> 11) & 1) ^ s)
+    offset = (s << 24) | (i1 << 23) | (i2 << 22) | ((first & 0x3FF) << 12) | ((second & 0x7FF) << 1)
+    if s:
+        offset -= 1 << 25
+    return at + 4 + offset
+
+
+def refuse_calls_into_empty_padding(image, edits):
+    """A call into the padding while it's still 0xFF faults on the chip under a valid CRC, before any way back over
+    USB (#434, #467): the hook must never go out without our block."""
+    for at, _, new in edits:
+        target = bl_target(at, new)
+        if target is None or not PAD_START <= target < PAD_END:
+            continue
+        offset = target - image.address
+        if image.element[offset:offset + 2] == b"\xff\xff":
+            raise Refused(f"the call at 0x{at:08X} goes to 0x{target:08X} in empty padding: place our block "
+                          "in the same image (build_owner_image.py), never the hook alone")
+
+
 def apply(args):
     if inside(args.output, repository_root()):
         raise Refused("write the patched image outside the repository: patched images are never committed")
     if os.path.exists(args.output):
         raise Refused(f"{args.output} already exists; not overwriting it")
-    out = patch(read(args.input), read(args.patch, "r"))
+    patch_text = read(args.patch, "r")
+    out = patch(read(args.input), patch_text)
     image = parse(out)
+    refuse_calls_into_empty_padding(image, parse_patch(patch_text))
     with open(args.output, "xb") as f:
         f.write(out)
     if chip(image.element) == "tp":

@@ -321,6 +321,21 @@ class CommandLineTests(unittest.TestCase):
         self.assertIn("old bytes", err)
         self.assertFalse(os.path.exists(output))
 
+    def test_apply_refuses_a_call_into_empty_padding_and_writes_nothing(self):
+        # A BL into the 0xFF padding with no block there faults on the chip with a valid CRC: no USB way back (#467).
+        element = bytearray(full_wd_element())
+        covered = len(element) - 20
+        struct.pack_into("<I", element, covered, dfupatch.stm32_crc(bytes(element[:covered])))
+        stock = self.path("padded.dfu", dfuse_file(bytes(element)))
+        at = BASE + 0x40
+        old = bytes(element[0x40:0x44]).hex()
+        patch = self.path("p.txt", f"0x{at:08X} {old} {dfupatch.thumb_bl(at, PAD_START).hex()}\n")
+        output = self.path("out.dfu")
+        code, _, err = run("apply", stock, patch, output)
+        self.assertEqual(code, 1)
+        self.assertIn("empty padding", err)
+        self.assertFalse(os.path.exists(output))
+
     def test_place_writes_the_file_and_refuses_inside_the_repository(self):
         data = dfuse_file(full_wd_element())
         source = self.path("full.dfu", data)
