@@ -64,7 +64,7 @@ int32_t dfw_text_units(const dfw_text_face *face, const uint8_t *codes, size_t c
 }
 
 /// One channel's blend of the ground toward the ink by a 4-bit coverage.
-static dfw_pixel blend(dfw_pixel ground, uint32_t ink, int level) {
+static dfw_pixel blend_level(dfw_pixel ground, uint32_t ink, int level) {
     dfw_pixel out = 0;
     for (int shift = 0; shift <= 16; shift += 8) {
         int g = (int)(ground >> shift & 0xFF), i = (int)(ink >> shift & 0xFF);
@@ -96,7 +96,7 @@ static void draw_glyph(dfw_pixel *frame, const dfw_text_face *face, uint8_t glyp
             if (px < 0 || px >= DFW_SIZE) continue;
             uint8_t pair = coverage[r * row_bytes + c / 2];
             int level = c % 2 ? pair & 0x0F : pair >> 4;
-            if (level) frame[y * DFW_SIZE + px] = blend(frame[y * DFW_SIZE + px], ink, level);
+            if (level) frame[y * DFW_SIZE + px] = blend_level(frame[y * DFW_SIZE + px], ink, level);
         }
     }
 }
