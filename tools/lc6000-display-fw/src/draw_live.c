@@ -317,6 +317,8 @@ static void draw_meter(dfw_pixel *frame, uint8_t level, uint8_t peak) {
 /// the fill clockwise from 12 o'clock.
 #define PROGRESS_INNER 96.0f
 #define PROGRESS_OUTER 98.0f
+/// The time's text, the renderer's text white.
+#define TIME_TEXT 0xEDEDEAu
 
 /// sin and cos of `turns` (0-1) of a turn clockwise from 12 o'clock, folded to the nearest quarter turn as the needle's.
 static void turn_sin_cos(float turns, float *sin_out, float *cos_out) {
@@ -368,6 +370,18 @@ static void draw_time(dfw_pixel *frame, const dfw_unit *unit) {
     uint16_t elapsed = unit->elapsed < unit->track_length ? unit->elapsed : unit->track_length;
     dfw_pixel deck = (dfw_pixel)unit->deck.r << 16 | (dfw_pixel)unit->deck.g << 8 | unit->deck.b;
     progress(frame, (float)elapsed / (float)unit->track_length, deck);
+    // What's left as "-m:ss", minutes not wrapped to hours: up to "-273:03" from the wire's 16383 s.
+    unsigned left = (unsigned)(unit->track_length - elapsed), minutes = left / 60u, seconds = left % 60u;
+    char text[8], *p = text;
+    *p++ = '-';
+    if (minutes >= 100u) *p++ = (char)('0' + minutes / 100u);
+    if (minutes >= 10u) *p++ = (char)('0' + minutes / 10u % 10u);
+    *p++ = (char)('0' + minutes % 10u);
+    *p++ = ':';
+    *p++ = (char)('0' + seconds / 10u);
+    *p++ = (char)('0' + seconds % 10u);
+    *p = 0;
+    dfw_draw_time_text(frame, text, TIME_TEXT);
 }
 
 void dfw_draw_live(dfw_pixel *frame, const dfw_unit *unit) {

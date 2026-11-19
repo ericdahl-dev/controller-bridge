@@ -61,6 +61,9 @@ let faces = [
     // The player badge: GeistMono-SemiBold 14 in 0xEDEDEA on the ground, tracked 0.04 em, centered at y 37.5.
     Face(name: "badge", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 14, ink: 0xEDEDEA,
          ground: 0x0B0B0B, middle: 37.5, tracking: 0.04, glyphs: "CDEIKMOQRST", lines: ["TRK", "OSC", "MIDI", "SEQ"]),
+    // The time left (#460): GeistMono-SemiBold 14 in 0xEDEDEA on the ground, untracked, centered at y 169.
+    Face(name: "time", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 14, ink: 0xEDEDEA,
+         ground: 0x0B0B0B, middle: 169, tracking: 0, glyphs: "-0123456789:", lines: ["-2:45", "-1:22", "-99:59", "-0:00"]),
 ]
 
 let pad = 16, box = 48
@@ -164,7 +167,9 @@ for face in faces {
                 minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
             } }
             guard maxX >= 0, minX > 0, minY > 0, maxX < box - 1, maxY < box - 1 else { fail("\(ch) doesn't fit the box") }
-            let symbol = "\(face.name)_\(ch)_\(p)"
+            // A letter or digit names its bitmap; anything else ('-', ':') by its code, to make a C name.
+            let tag = ch.isLetter || ch.isNumber ? String(ch) : String(format: "x%02X", ch.asciiValue!)
+            let symbol = "\(face.name)_\(tag)_\(p)"
             var bytes: [String] = []
             for y in minY...maxY { bytes.append((minX...maxX).map { String(format: "%3d", coverage[y * box + $0]) }.joined(separator: ",")) }
             out += "static const uint8_t \(symbol)[] = {\n    " + bytes.joined(separator: ",\n    ") + ",\n};\n"

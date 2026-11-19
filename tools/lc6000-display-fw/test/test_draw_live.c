@@ -325,6 +325,11 @@ static void the_play_flags_change_no_pixels(void) {
 #define PROGRESS_CAP 16
 #define PROGRESS_BUDGET_START 0
 #define PROGRESS_BUDGET_FILL 35
+/// The time left (#460), GeistMono-SemiBold 14 from CoreText's own glyphs at their own baseline and x phases, as the
+/// header's badge. Measured: within 1 everywhere, so 2 and no budget; a 1 px shift or a wrong glyph is hundreds off.
+#define TIME_CLOSE 2
+#define TIME_BUDGET 0
+#define TIME_CAP 2
 
 typedef struct { const char *file; uint8_t level, peak; int budget; } meter_case;
 static const meter_case meters[] = {
@@ -474,6 +479,44 @@ static const time_case times[] = {
 };
 #define TIMES (sizeof times / sizeof times[0])
 
+/// The time left, centred at (99, 169): compared over a box around its line that holds nothing else for these decks.
+#define TIME_LEFT 60
+#define TIME_RIGHT 140
+#define TIME_TOP 156
+#define TIME_BOTTOM 182
+
+static int time_text_matches(const char *name, int close, int budget, int cap) {
+    int worst = 0, loose = 0, over = 0;
+    for (int y = TIME_TOP; y < TIME_BOTTOM; y++)
+        for (int x = TIME_LEFT; x < TIME_RIGHT; x++) {
+            int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
+            if (d > worst) worst = d;
+            if (d > close) loose++;
+            if (d > cap) over++;
+        }
+    fprintf(stderr, "    %s time: worst %d, %d over %d (budget %d)\n", name, worst, loose, close, budget);
+    return over == 0 && loose <= budget;
+}
+
+static void the_time_left_is_drawn(void) {
+    for (size_t n = 0; n < TIMES; n++) {
+        CHECK(load_reference(times[n].file));
+        begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, times[n].elapsed, times[n].length, 0);
+        memcpy(frame, rec.last, sizeof frame);
+        CHECK(time_text_matches(times[n].file + 9, TIME_CLOSE, TIME_BUDGET, TIME_CAP));
+    }
+}
+
+/// The wire's longest, 16383 s, is "-273:03": minutes never wrap to hours, and its seventh character is drawn, wider
+/// than "-99:59" (from x 73.8) on the left.
+static void the_longest_time_has_three_digit_minutes(void) {
+    begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, 0, 16383, 0);
+    int ink = 0;
+    for (int y = TIME_TOP; y < TIME_BOTTOM; y++)
+        for (int x = 69; x < 73; x++) ink += rec.last[y * DFW_SIZE + x] != 0x0B0B0Bu;
+    CHECK(ink > 10);
+}
+
 static void the_progress_ring_is_drawn(void) {
     for (size_t n = 0; n < TIMES; n++) {
         CHECK(load_reference(times[n].file));
@@ -496,6 +539,10 @@ static void each_time_reference_differs_from_the_plain_one(void) {
             for (int x = 0; x < DFW_SIZE; x++)
                 changed += radius2(x, y) >= PROGRESS_FROM * PROGRESS_FROM && reference[y * DFW_SIZE + x] != plain[y * DFW_SIZE + x];
         CHECK(changed > 1000);
+        changed = 0;
+        for (int y = TIME_TOP; y < TIME_BOTTOM; y++)
+            for (int x = TIME_LEFT; x < TIME_RIGHT; x++) changed += reference[y * DFW_SIZE + x] != plain[y * DFW_SIZE + x];
+        CHECK(changed > 150);
     }
 }
 
@@ -532,6 +579,8 @@ static void stale_draws_no_time(void) {
 
 const test_case draw_live_tests[] = {
     { "the progress ring is drawn", the_progress_ring_is_drawn },
+    { "the time left is drawn", the_time_left_is_drawn },
+    { "the longest time has three digit minutes", the_longest_time_has_three_digit_minutes },
     { "each time reference differs from the plain one", each_time_reference_differs_from_the_plain_one },
     { "an unknown length draws nothing", an_unknown_length_draws_nothing },
     { "stale draws no time", stale_draws_no_time },

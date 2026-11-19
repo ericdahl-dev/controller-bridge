@@ -9,6 +9,9 @@
 #define GROUND 0x0B0B0Bu
 #define DOWNBEAT_OFF 0x5A5A5Au
 #define BEAT_OFF 0x2C2C2Cu
+/// The time left (#460): centred on x 99, its line box's middle at y 169.
+#define TIME_CENTER_X 99.0f
+#define TIME_MIDDLE 169.0f
 
 #define CENTER 99.0f
 #define RING_OUTER 95.0f
@@ -209,6 +212,12 @@ static void draw_line(dfw_pixel *frame, const dfw_face *face, const char *text, 
         draw_glyph(frame, face, g, x, row);
         x += g->advance + face->tracking;
     }
+}
+
+void dfw_draw_time_text(dfw_pixel *frame, const char *text, dfw_pixel ink) {
+    dfw_face face = time_face;
+    face.ink = ink;
+    draw_line(frame, &face, text, TIME_CENTER_X - line_width(&face, text) / 2.0f, TIME_MIDDLE);
 }
 
 #define CHIP 26.0f

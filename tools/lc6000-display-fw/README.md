@@ -48,7 +48,7 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   Under the marker, the level meter (#461, Swift's `drawMeter`): an arc 80-83 px out on the left, 240° to 300°, a
   dark track filled green to three quarters and yellow above, all red at clip, with the held peak as a 2° tick. No
   meter until a meter message has come since begin. Nothing while the display is stale.
-- `src/font_header.h`: glyph coverage for the header's two faces, generated from the bundled Geist fonts
+- `src/font_header.h`: glyph coverage for the header's two faces and the track time's (#460), generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
   ```sh
