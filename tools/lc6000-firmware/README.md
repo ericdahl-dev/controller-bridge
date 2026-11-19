@@ -59,6 +59,13 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 # wrote ...: new trailer CRC 0x36DF3956, DfuSe suffix CRC 0x5F321B11
 ```
 
+### `patches/wd-00.50-vos-scale-1.patch` (#438)
+
+- **For:** `wd` firmware 00.50 only, the stock file `jc20_wd_update_00_50_3A7CE2CA.dfu` (trailer CRC `0x3A7CE2CA`). `apply` refuses any other image, because the old bytes won't match.
+- **What it changes:** one byte. The clock setup lowers the STM32F429's core regulator to Scale 2 (`PWR_CR.VOS = 0b10`) and then runs the chip at 180 MHz with over-drive on. ST rates Scale 2 with over-drive to 168 MHz; only Scale 1 with over-drive is rated to 180 MHz. At `0x0800A69E`, `orr r0, r0, #0x8000` becomes `orr r0, r0, #0xc000` (`40 f4 00 40` to `40 f4 40 40`), so VOS stays at `0b11`, Scale 1, the chip's reset value. Nothing else in the image writes VOS.
+- **What it costs:** the core runs about 0.06 V higher (typical 1.26 V to 1.32 V), so the chip draws a little more current. Clock speed and all timing stay the same.
+- **Status: unproven on hardware.** Nobody has flashed it. Nobody has read `PWR_CR` on a running unit either, so the stock setting is known only from the code. It is not shown to fix the display drop-outs in #428. Whether the bootloader accepts a patched image at all is what the flash tests in #435 will show. Follow the runbook on #431, flash the stock image by the same route first, and have an SWD probe working before you try. The evidence is on #438.
+
 ## Flash day kit (#435)
 
 Three pieces for the first real flash of the display chip, all run **by the unit's owner**, never by an agent:
