@@ -136,6 +136,20 @@ struct CoreMIDIOutput: MIDIOutput {
         try check("MIDISendEventList", MIDISendEventList(port, destination, &list))
     }
 
+    /// Denon's color message (#530) as UMP SysEx7 packets, one event list. The unit has taken it as a MIDI 1.0 SysEx
+    /// packet; this UMP path is the one still to be seen on the unit.
+    func send(color: LEDColorMessage) throws {
+        // As the jog display sends its SysEx (CoreMIDIJogDisplay): a list in its own buffer, one packet per SysEx7 pair.
+        let capacity = 1024
+        let list = UnsafeMutableRawPointer.allocate(byteCount: capacity, alignment: 8).bindMemory(to: MIDIEventList.self, capacity: 1)
+        defer { list.deallocate() }
+        var packet = MIDIEventListInit(list, ._1_0)
+        for words in UMP.sysex7(color.bytes) {
+            packet = MIDIEventListAdd(list, capacity, packet, 0, words.count, words)
+        }
+        try check("MIDISendEventList", MIDISendEventList(port, destination, list))
+    }
+
     /// The output port is shared by every destination and lives as long as the MIDI client, so there is nothing to
     /// close per destination.
     func close() {}

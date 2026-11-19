@@ -30,6 +30,7 @@ struct CoordinatorCommandTests {
         #expect(Coordinator.Command.setDevices(input: nil, output: nil, controller: 0).routing == .waitsForDemo)
         #expect(Coordinator.Command.setDeckColors(followSyndicate: true, custom: .defaults).routing == .waitsForDemo)
         #expect(Coordinator.Command.setRingColors(.vivid).routing == .waitsForDemo)
+        #expect(Coordinator.Command.setColorMessages(true).routing == .waitsForDemo)
         #expect(Coordinator.Command.resync.routing == .waitsForDemo)
         #expect(Coordinator.Command.setControllers([]).routing == .waitsForDemo)
         #expect(Coordinator.Command.setProfiles([]).routing == .waitsForDemo)
