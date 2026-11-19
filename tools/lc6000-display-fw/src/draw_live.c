@@ -125,17 +125,54 @@ static float segment_distance(float u, float v, float au, float av, float bu, fl
     return root(*wu * *wu + *wv * *wv);
 }
 
+/// The area of a triangle inside the pixel square [x, x + 1] × [y, y + 1]: the triangle clipped to each of the square's
+/// four sides in turn (Sutherland–Hodgman), then the shoelace formula. Exact, where a product of edge covers is not:
+/// at the marker's 41° tip that product is twice the true area.
+static float triangle_in_pixel(const float *tx, const float *ty, float x, float y) {
+    float px[2][8], py[2][8];
+    int n = 3, from = 0;
+    for (int i = 0; i < 3; i++) { px[0][i] = tx[i]; py[0][i] = ty[i]; }
+    for (int side = 0; side < 4 && n > 0; side++) {
+        int to = 1 - from, m = 0;
+        for (int i = 0; i < n; i++) {
+            int j = (i + 1) % n;
+            float ax = px[from][i], ay = py[from][i], bx = px[from][j], by = py[from][j];
+            // How far inside this side each end is: x ≥ left, x ≤ right, y ≥ top, y ≤ bottom.
+            float da = side == 0 ? ax - x : side == 1 ? x + 1.0f - ax : side == 2 ? ay - y : y + 1.0f - ay;
+            float db = side == 0 ? bx - x : side == 1 ? x + 1.0f - bx : side == 2 ? by - y : y + 1.0f - by;
+            if (da >= 0.0f && m < 8) { px[to][m] = ax; py[to][m] = ay; m++; }
+            if ((da >= 0.0f) != (db >= 0.0f) && m < 8) {
+                float t = da / (da - db);
+                px[to][m] = ax + t * (bx - ax);
+                py[to][m] = ay + t * (by - ay);
+                m++;
+            }
+        }
+        n = m;
+        from = to;
+    }
+    float area = 0.0f;
+    for (int i = 0; i < n; i++) {
+        int j = (i + 1) % n;
+        area += px[from][i] * py[from][j] - px[from][j] * py[from][i];
+    }
+    return clamp01((area < 0.0f ? -area : area) / 2.0f);
+}
+
 /// The marker as Swift draws it: a white wedge riding the ring's edge, pointing in, with a black 2 px keyline. Each
 /// pixel's signed distance to the triangle (positive outside) gives the keyline's band (within 1 px of the edge,
-/// rounded at the corners as the round joins are); the fill is the three edges' half-planes. Keyline, then fill.
+/// rounded at the corners as the round joins are); the fill is the triangle's exact area in the pixel. Keyline, then
+/// fill.
 static void marker(dfw_pixel *frame, uint16_t needle) {
     float sn, cs;
     needle_sin_cos(needle, &sn, &cs);
     // On screen (y down), u runs along (sin, −cos) and v along (cos, sin).
     const float corner_u[3] = { tip_u, base_u, base_u }, corner_v[3] = { 0.0f, -base_v, base_v };
-    float left = (float)DFW_SIZE, right = 0.0f, top = (float)DFW_SIZE, bottom = 0.0f;
+    float left = (float)DFW_SIZE, right = 0.0f, top = (float)DFW_SIZE, bottom = 0.0f, corner_x[3], corner_y[3];
     for (int i = 0; i < 3; i++) {
         float x = CENTER + corner_u[i] * sn + corner_v[i] * cs, y = CENTER - corner_u[i] * cs + corner_v[i] * sn;
+        corner_x[i] = x;
+        corner_y[i] = y;
         if (x < left) left = x;
         if (x > right) right = x;
         if (y < top) top = y;
@@ -163,11 +200,12 @@ static void marker(dfw_pixel *frame, uint16_t needle) {
                 float lu = corner_u[j] - corner_u[i], lv = corner_v[j] - corner_v[i], l = root(lu * lu + lv * lv);
                 float cross = (lu * (v - corner_v[i]) - lv * (u - corner_u[i])) / l;
                 if (cross < 0.0f) inside = 0;
-                // The fill is the three half-planes' cover together, as the ring's sections are: a distance field
-                // rounds the corners, and CoreGraphics fills them sharp. The edge's inward normal, on screen.
+                // Whether the pixel is wholly inside or outside the fill: each edge's cover, by its inward normal.
                 float mu = -lv / l, mv = lu / l;
                 fill *= edge_cover(cross, mu * sn + mv * cs, -mu * cs + mv * sn);
             }
+            // On an edge, the exact area: a distance field would round the corners that CoreGraphics fills sharp.
+            if (fill > 0.0f && fill < 1.0f) fill = triangle_in_pixel(corner_x, corner_y, (float)x, (float)y);
             float signed_distance = inside ? -distance : distance;
             // The direction the distance is measured in, on screen; on the edge itself any will do.
             float length = root(wu * wu + wv * wv);

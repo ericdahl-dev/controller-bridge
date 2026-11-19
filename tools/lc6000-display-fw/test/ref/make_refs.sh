@@ -25,3 +25,5 @@ done
 for needle in 0 4096 8192 12288 1500; do
     "$live" 4 0 128 255 empty - "$needle" "$here/deck4-blue-empty-needle$needle.ppm"
 done
+# The marker over a lit section, at an angle that folds back from the last quarter turn.
+"$live" 4 0 128 255 empty 3 11000 "$here/deck4-blue-empty-beat3-needle11000.ppm"

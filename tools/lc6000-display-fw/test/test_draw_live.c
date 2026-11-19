@@ -13,8 +13,11 @@
 #define RING_CLOSE 6
 /// The lit section is the live green on the ground, 244 levels apart in green, three times the unlit sections' 79. The
 /// renderers' anti-aliasing differs by the same fraction of that (about 4%), so a few of its edge pixels are up to 8
-/// off. Measured: worst 8, on 6 or 7 pixels per beat. A 1 px shift (hundreds of levels) or a wrong green fails.
-#define LIT_CLOSE 10
+/// off. Measured: worst 8, with 6 or 7 pixels over 6 per beat. So 6 with a budget of 10, and nothing past 10: a green
+/// off by 7 or more fails across the section, and a 1 px shift (hundreds of levels) fails the cap.
+#define LIT_CLOSE 6
+#define LIT_BUDGET 10
+#define LIT_CAP 10
 
 static dfw_pixel reference[DFW_SIZE * DFW_SIZE];
 static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
@@ -55,18 +58,20 @@ static int channel_diff(dfw_pixel a, dfw_pixel b) {
     return worst;
 }
 
-/// The ring band of `frame` against `reference`: whether no pixel is more than `close` off. Prints its worst.
-static int ring_matches(const char *name, int close) {
-    int worst = 0, loose = 0;
+/// The ring band of `frame` against `reference`: at most `budget` pixels more than `close` off, and none more than
+/// `cap`. Prints its numbers.
+static int ring_matches(const char *name, int close, int budget, int cap) {
+    int worst = 0, loose = 0, over = 0;
     for (int y = 0; y < DFW_SIZE; y++)
         for (int x = 0; x < DFW_SIZE; x++) {
             if (!in_ring(x, y)) continue;
             int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
             if (d > worst) worst = d;
             if (d > close) loose++;
+            if (d > cap) over++;
         }
-    fprintf(stderr, "    %s ring: worst %d, %d over %d\n", name, worst, loose, close);
-    return loose == 0;
+    fprintf(stderr, "    %s ring: worst %d, %d over %d (budget %d)\n", name, worst, loose, close, budget);
+    return over == 0 && loose <= budget;
 }
 
 static dfw_unit unit;
@@ -85,7 +90,7 @@ static void each_beat_lights_its_section(void) {
     for (uint8_t beat = 1; beat <= 4; beat++) {
         CHECK(load_reference(files[beat]));
         draw_beat(beat);
-        CHECK(ring_matches(files[beat] + 9, LIT_CLOSE));
+        CHECK(ring_matches(files[beat] + 9, LIT_CLOSE, LIT_BUDGET, LIT_CAP));
     }
 }
 
@@ -108,7 +113,7 @@ static void no_master_clock_lights_no_section(void) {
     memset(&unit, 0, sizeof unit);
     CHECK(load_reference(UNLIT));
     draw_beat(0);
-    CHECK(ring_matches("deck4-blue-empty.ppm (beat 0)", RING_CLOSE));
+    CHECK(ring_matches("deck4-blue-empty.ppm (beat 0)", RING_CLOSE, 0, RING_CLOSE));
 }
 
 /// The waiting look is agent3's; whatever it is, the beat changes none of it.
@@ -133,28 +138,32 @@ static void stale_lights_no_section(void) {
 /// The marker reaches in to radius 78 (its tip at 79, less its keyline) and out past the frame's edge. The chip, the
 /// only other thing drawn for this deck, stays inside 76. So everything from 77 out is compared.
 #define MARKER_IN 77.0f
-/// Measured: the marker is white on a black keyline over the ground, up to 255 levels of contrast. At the quarter
-/// turns every pixel is within 9 (two pixels at 9); off them (1500) two corner pixels are 14 and 20 off, where
-/// CoreGraphics' anti-aliasing of the sharp base corners differs. So 8 with a budget of 4, and nothing past 24. Turning
-/// the marker half a degree puts 87 pixels over 8 and one 244 off; a degree, 119.
-#define MARKER_CLOSE 8
-#define MARKER_BUDGET 4
-#define MARKER_CAP 24
+/// Measured: with the fill's exact area in each edge pixel, the marker is within 3 levels everywhere, at the five
+/// references and at 19 more angles swept round the turn. So 6 and no budget, as the unlit ring. Turning the marker
+/// half a degree puts dozens of pixels hundreds of levels off.
+#define MARKER_CLOSE 6
+#define MARKER_BUDGET 0
+#define MARKER_CAP 6
 
-/// Everything from MARKER_IN out against `reference`. Prints its numbers.
-static int marker_band_matches(const char *name) {
+/// Everything from MARKER_IN out against `reference`, within limits as test_draw.c's: at most `budget` pixels more than
+/// `close` off, and none more than `cap`. Prints its numbers.
+static int band_from_matches(const char *name, int close, int budget, int cap) {
     int worst = 0, loose = 0, over = 0;
     for (int y = 0; y < DFW_SIZE; y++)
         for (int x = 0; x < DFW_SIZE; x++) {
             if (radius2(x, y) < MARKER_IN * MARKER_IN) continue;
             int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
             if (d > worst) worst = d;
-            if (d > MARKER_CLOSE) loose++;
-            if (d > MARKER_CAP) over++;
+            if (d > close) loose++;
+            if (d > cap) over++;
         }
     fprintf(stderr, "    %s from %.0f out: worst %d, %d over %d (budget %d)\n", name, (double)MARKER_IN, worst, loose,
-            MARKER_CLOSE, MARKER_BUDGET);
-    return over == 0 && loose <= MARKER_BUDGET;
+            close, budget);
+    return over == 0 && loose <= budget;
+}
+
+static int marker_band_matches(const char *name) {
+    return band_from_matches(name, MARKER_CLOSE, MARKER_BUDGET, MARKER_CAP);
 }
 
 typedef struct { const char *file; uint16_t needle; } needle_case;
@@ -190,6 +199,17 @@ static void the_needle_is_drawn_as_the_marker(void) {
         memcpy(frame, rec.last, sizeof frame);
         CHECK(marker_band_matches(needles[n].file + 9));
     }
+}
+
+/// The marker drawn over the lit section it sits in: beat 3, needle 11000 (folded back from the last quarter turn).
+static void the_marker_is_drawn_over_the_lit_section(void) {
+    CHECK(load_reference("test/ref/deck4-blue-empty-beat3-needle11000.ppm"));
+    begin_with_needle(11000);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 08 03 F7");   // beat 3
+    dfw_tick(&live, 10);
+    CHECK(rec.presents == 2);
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(band_from_matches("deck4-blue-empty-beat3-needle11000.ppm", LIT_CLOSE, LIT_BUDGET, LIT_CAP));
 }
 
 /// Not vacuous: each marker reference differs from the unlit one from MARKER_IN out.
@@ -293,6 +313,7 @@ static void the_play_flags_change_no_pixels(void) {
 const test_case draw_live_tests[] = {
     { "the play flags change no pixels", the_play_flags_change_no_pixels },
     { "the needle is drawn as the marker", the_needle_is_drawn_as_the_marker },
+    { "the marker is drawn over the lit section", the_marker_is_drawn_over_the_lit_section },
     { "each marker reference differs from the unlit one", each_marker_reference_differs_from_the_unlit_one },
     { "no needle message draws no marker", no_needle_message_draws_no_marker },
     { "a needle message changes the frame", a_needle_message_changes_the_frame },

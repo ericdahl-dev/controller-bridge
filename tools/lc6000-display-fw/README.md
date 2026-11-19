@@ -98,10 +98,10 @@ log.
 The live elements (#459) are checked in `test/test_draw_live.c` against references with a beat lit or the marker
 drawn. The Kit's `jog-reference` tool draws neither, so `test/ref/live-reference/` is a small Swift package beside the
 references that renders the Kit's `JogDisplayRenderer.simulatorImage` with them. `make_refs.sh` builds and runs both.
-The lit section is the live green on the ground, three times the contrast of the unlit sections, so its limit is 10
-levels with no budget (measured worst: 8). The marker is compared from radius 77 out (inside that is only the chip, for deck
-4 empty): at most 4 pixels more than 8 off, and none more than 24 (measured worst: 9 at the quarter turns, 20 on one
-sharp corner at 1500). Half a degree off fails.
+The lit section is the live green on the ground, three times the contrast of the unlit sections, so at most 10 of
+its pixels may be more than 6 off, and none more than 10 (measured worst: 8 on 7 pixels). The marker is compared from
+radius 77 out (inside that is only the chip, for deck 4 empty) as the unlit ring is: none more than 6 off (measured
+worst: 3, at the references and at 19 more angles swept round the turn). Half a degree off fails.
 
 **To add or change a reference image:**
 
