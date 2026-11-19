@@ -111,4 +111,11 @@ struct JogDisplayRendererTimeTests {
                                                       look: .warningNormal)
         #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0x0080FF, by: 8))
     }
+
+    @Test("The needle crosses the ring once a bar and draws on top of it")
+    func needleOnTop() {
+        let image = JogDisplayRenderer.simulatorImage(Self.content, litBeat: nil, marker: 0.25,
+                                                      time: (elapsed: 90, length: 120))
+        #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0xFFFFFF, by: 8))
+    }
 }
