@@ -548,9 +548,18 @@ if pgrep -f "ControllerBridge.app/Contents/MacOS" >/dev/null 2>&1; then
 fi
 step "Quit every other DJ or MIDI app. Do NOT open Denon's updater."
 step "LC6000 on a direct cable to the Mac, not a hub. Powered on, running normally."
-step "ST-Link probe connected, and it can read the chip (#433)."
 step "No gig today."
 confirm "All of that true?" || exit 1
+# The probe (#433) is its own question (#468): the owner may flash without one, knowingly, never by confirming one.
+if confirm "Is an ST-Link probe connected, and can it read the chip (#433)?"; then
+  say "With the probe there, a dark display after the flash can still be brought back."
+else
+  drawn no-probe-risk
+  printf '  %s? Type NO PROBE to go on without it, anything else to stop:%s ' "$YELLOW" "$RESET"
+  typed=""
+  read -r typed || true
+  drawn no-probe "$typed" || exit 1
+fi
 
 stage "Enter update mode (display chip)"
 enter_update_mode

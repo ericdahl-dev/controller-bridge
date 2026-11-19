@@ -116,6 +116,10 @@ Checked on hardware (2026-11-15, see #12 and #103):
   2 bits per channel. Another controller lists its own: `[{ "rgb": [255, 0, 0], "value": 5 }, …]`, and a color takes
   the nearest entry's value (the first of equally near ones). Black is off; a dim color never rounds to a black entry
   but takes the nearest lit one. Each `rgb` is three values 0–255, each `value` 0–127.
+- `leds.color_message` (#530): the LEDs that take Denon's color message, `F0 00 02 0B 7F 10 03 00 04 <note> <r> <g>
+  <b> F7`, exact RGB at 7 bits a channel, in place of a table velocity. `notes` lists them; each must be `leds.ring` or
+  a pad. The LC6000's stock top panel firmware takes it for its pads and ring (32-40). Left out, a controller has none
+  and every color goes through `leds.color_table`.
 
 Still PROVISIONAL:
 
@@ -231,6 +235,9 @@ equal to the table.
 - `leds.levels.dim`: a whole number; 0–127; LC6000 `1`
 - `leds.levels.off`: a whole number; 0–127; LC6000 `0`
 - `leds.color_table`: text `"rgb222"` (the LC6000's), or a list of at least 1 entry (`leds.color_table[]` below)
+- `leds.color_message`: an object
+- `leds.color_message.notes`: a list; at least 1
+- `leds.color_message.notes[]`: a whole number; 0–127; LC6000 `32`
 - `pads`: an object
 - `pads.roll_sizes`: a list
 - `pads.roll_sizes[]`: text; one of `ThirtySecond`, `Sixteenth`, `Eighth`, `Quarter`, `Half`, `One`, `Two`, `Four`; LC6000 `"ThirtySecond"`
