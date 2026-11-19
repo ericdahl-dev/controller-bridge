@@ -24,6 +24,17 @@ ARM_OBJ := $(ARM_BUILD)/entry.o $(patsubst %.c,$(ARM_BUILD)/%.o,$(notdir $(ARM_C
 .PHONY: arm
 arm: $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.bin
 
+# The build's flags, ARM_UPPER_PROVEN above all, kept with its outputs (#501). Make doesn't see a variable change,
+# and its timestamps here are whole seconds, so when the flags differ from the last build in this directory, that
+# build's outputs go and are built again: `make arm` then `make arm ARM_UPPER_PROVEN=1` never leaves the old block A.
+# It runs as the makefile is read, before make decides what is up to date.
+ARM_FLAGS := $(ARM_CFLAGS) | $(ARM_C) $(ARM_EXTRA_C) | $(ARM_EXTRA_LDFLAGS)
+ifneq ($(filter arm arm-test %/block.bin %/upper.bin,$(or $(MAKECMDGOALS),none)),)
+$(shell mkdir -p $(ARM_BUILD) && if [ "$$(cat $(ARM_BUILD)/flags.txt 2>/dev/null)" != "$(ARM_FLAGS)" ]; then \
+	rm -f $(ARM_BUILD)/block.elf $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.elf $(ARM_BUILD)/upper.bin; \
+	echo "$(ARM_FLAGS)" > $(ARM_BUILD)/flags.txt; fi)
+endif
+
 $(ARM_BUILD)/block.elf: $(ARM_C) arm/entry.S arm/block.ld arm/hook.h arm/upper.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
 	@mkdir -p $(ARM_BUILD)
 	cd $(ARM_BUILD) && $(ARM_PREFIX)gcc $(ARM_CFLAGS) -I$(CURDIR)/arm/include -I$(CURDIR)/src -I$(CURDIR)/arm -c $(addprefix $(CURDIR)/,$(ARM_C)) $(ARM_EXTRA_C)
@@ -39,7 +50,7 @@ $(ARM_BUILD)/block.bin: $(ARM_BUILD)/block.elf
 	$(ARM_PREFIX)objcopy -O binary --gap-fill 0xFF -j .entry_command -j .entry_render -j .text -j .data \
 		-j .marker $< $@
 	@test "$$(wc -c < $@ | tr -d ' ')" = 9184 || { echo "block.bin isn't the 9,184-byte padding" >&2; exit 1; }
-	@$(ARM_PREFIX)size -A $< | awk '/^\.(entry|text|data|marker)/ {used += $$2} END {printf "block: %d of 9184 bytes used\n", used}'
+	@$(ARM_PREFIX)size -A $< | awk '/^\.(entry|text|data|marker)/ {used += $$2} END {printf "block: %d of 9184 bytes used%s\n", used, "$(if $(filter 1,$(ARM_UPPER_PROVEN)),; reads block B at 0x08080000 (ARM_UPPER_PROVEN=1),; never reads block B (ARM_UPPER_PROVEN=0))"}'
 
 # Block B (#501): the drawing for 0x08080000, sectors 8-11. B never calls into block A, whose addresses move from
 # build to build: it links its own copy of what the drawing uses from src/ (dfw_stale, say) and of the few C library

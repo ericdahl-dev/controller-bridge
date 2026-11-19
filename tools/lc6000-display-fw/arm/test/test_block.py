@@ -303,6 +303,18 @@ class UpperSwitchTests(unittest.TestCase):
         chip.call(dfupatch.HOOK_COMMAND_ENTRY, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8], r8=0)
         chip.call(dfupatch.HOOK_RENDER_ENTRY)
 
+    def test_flipping_the_switch_rebuilds_block_a_in_the_same_build_dir(self):
+        # The README's own order: make arm, then, after the read-only checks, make arm ARM_UPPER_PROVEN=1.
+        with tempfile.TemporaryDirectory() as out:
+            built = []
+            for proven in ("0", "1", "0"):
+                subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", f"ARM_UPPER_PROVEN={proven}"],
+                               check=True, capture_output=True)
+                with open(os.path.join(out, "block.bin"), "rb") as f:
+                    built.append(f.read())
+        self.assertNotEqual(built[0], built[1], "the switch on must give a new block A")
+        self.assertEqual(built[0], built[2], "and off again the old one")
+
     def test_with_the_switch_the_tick_touches_nothing_before_our_first_message(self):
         # A power cycle clears any crash of ours only if our code runs after our first message (#501).
         chip = Chip(data=proven_block(), upper=upper_block())
