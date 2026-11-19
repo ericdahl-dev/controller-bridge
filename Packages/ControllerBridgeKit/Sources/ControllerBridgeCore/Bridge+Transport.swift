@@ -15,8 +15,11 @@ extension Bridge {
         sendDeck("PlayPause", .int(1))
     }
 
+    /// Sync toggles the deck's sync. With Shift (#478, printed OFF) it only turns sync off: from a synced deck the
+    /// toggle goes, otherwise nothing, so it never turns sync on.
     func sync(_ pressed: Bool) {
-        if pressed { sendDeck("TempoSync", .int(1)) }
+        guard pressed, !shift || synced else { return }
+        sendDeck("TempoSync", .int(1))
     }
 
     func master(_ pressed: Bool) {

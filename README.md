@@ -26,6 +26,7 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 | Beat Jump ◀ ▶ (Shift for a bar) | `SkipBeatBack` / `SkipBeatForward` (`SkipBar…` with Shift) |
 | Censor (hold; Shift + Censor latches) | `Reverse` 1/0 while held; with Shift, each press turns `Reverse` on or off |
 | Key Lock / Slip | `PitchPreserve` / `CueSlip` |
+| Shift + Sync (OFF) | Turns sync off: `TempoSync` 1 only while the deck is synced (Syndicate's `Sync` feedback); nothing otherwise, so it never turns sync on |
 | Shift + Key Lock (pitch reset) | `TempoSlider` 0.0, then the fader waits to meet 0.0. Nothing while the tempo slider is disabled (a synced follower) |
 | Pitch Bend − / + (hold) | `PhaseMinus` / `PhasePlus` 1/0, nudging the tempo while held |
 | Shift + Pitch Bend − / + | Transposes the deck down or up a semitone (`PitchDown` / `PitchUp`, once per press). It turns the deck's key lock (P) on first, since Syndicate transposes only with it on |
