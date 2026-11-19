@@ -43,4 +43,14 @@ struct LightBrightnessTests {
         rig.coordinator.setLightBrightness(50)
         #expect(try Ring.colors(rig).count == 1)
     }
+
+    @Test("The app's command reaches it: apply(.setLightBrightness(50)) scales the ring")
+    func command() throws {
+        let rig = try Ring.exact(deck: 2)
+        Ring.palette(rig, slot: 3, 255, 140, 0)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        try Ring.output(rig).colors.removeAll()
+        rig.coordinator.apply(.setLightBrightness(50))
+        #expect(try Ring.colors(rig) == [[63, 35, 0]])
+    }
 }
