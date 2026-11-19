@@ -85,11 +85,31 @@ class UpperTests(DrawnFlashTests):
         read[30] ^= 1
         self.assertRefused(run("upper", self.upper_dfu(), self.read(bytes(read))), "0x0808001E")
 
-    def test_a_half_written_block_is_refused_where_it_stops(self):
-        # A write cut off part way: this B's first bytes, then erased flash.
+    def test_a_half_written_block_says_replace(self):
+        # A write cut off part way: this B's first bytes, then erased flash. B is rewritten behind its own word.
         block = good_block()
         read = block[:20] + b"\xff" * (UPPER_SIZE - 20)
-        self.assertRefused(run("upper", self.upper_dfu(), self.read(read)), "0x08080014")
+        code, out, _ = run("upper", self.upper_dfu(), self.read(read))
+        self.assertEqual((code, out.split()[0]), (0, "replace"))
+
+    def test_another_good_block_b_says_replace(self):
+        # #501's first B: version 2, the 20-byte header, CRC 0x22B5DF72 from Python's zlib. Every layout change makes
+        # a new B (#516), so an older one is replaced, not refused.
+        old = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
+        code, out, _ = run("upper", self.upper_dfu(), self.read(old + b"\xff" * (UPPER_SIZE - len(old))))
+        self.assertEqual((code, out.split()[0]), (0, "replace"))
+
+    def test_another_block_b_with_a_bad_CRC_is_refused(self):
+        old = bytearray(bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789")
+        old[-1] ^= 1
+        self.assertRefused(run("upper", self.upper_dfu(), self.read(bytes(old) + b"\xff" * (UPPER_SIZE - 29))),
+                           "CRC")
+
+    def test_another_block_b_with_bytes_after_it_is_refused(self):
+        old = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
+        read = bytearray(old + b"\xff" * (UPPER_SIZE - len(old)))
+        read[0x50000] = 0
+        self.assertRefused(run("upper", self.upper_dfu(), self.read(bytes(read))), "0x080D0000")
 
     def test_anything_else_there_is_refused(self):
         read = bytearray(b"\xff" * UPPER_SIZE)
