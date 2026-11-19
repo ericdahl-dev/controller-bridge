@@ -314,16 +314,17 @@ static void the_play_flags_change_no_pixels(void) {
 /// from MARKER_IN out: the meter, the ring and nothing else of this deck's. Its edges against the dark track are within
 /// 3. Against the bright fill, the band's two circles land about 0.03 px further in in CoreGraphics than their exact
 /// areas put them, as the lit section's do, and the band is all edge: measured, worst 13 with 46 pixels over 6, all on
-/// the circles, none on the radial edges or the tick. So 6 with a budget of 50, and nothing past 16: a quarter pixel
-/// off is 60 levels on every edge pixel of the fill.
+/// the circles, none on the radial edges or the tick; at clip, the whole arc bright, 89. So 6 with a budget a little
+/// over each case's count, and nothing past 16 in any: a quarter pixel off is 60 levels on every edge pixel of the fill.
 #define METER_CLOSE 6
-#define METER_BUDGET 50
 #define METER_CAP 16
 
-typedef struct { const char *file; uint8_t level, peak; } meter_case;
+typedef struct { const char *file; uint8_t level, peak; int budget; } meter_case;
 static const meter_case meters[] = {
-    { "test/ref/deck4-blue-empty-meter0-0.ppm", 0, 0 },
-    { "test/ref/deck4-blue-empty-meter64-90.ppm", 64, 90 },
+    { "test/ref/deck4-blue-empty-meter0-0.ppm", 0, 0, 0 },
+    { "test/ref/deck4-blue-empty-meter64-90.ppm", 64, 90, 50 },
+    // Clip: the whole arc red, and the tick red at the top.
+    { "test/ref/deck4-blue-empty-meter127-127.ppm", 127, 127, 95 },
 };
 #define METERS (sizeof meters / sizeof meters[0])
 
@@ -344,7 +345,7 @@ static void the_meter_is_drawn(void) {
         begin_with_meter(meters[n].level, meters[n].peak);
         CHECK(rec.presents == 1);
         memcpy(frame, rec.last, sizeof frame);
-        CHECK(band_from_matches(meters[n].file + 9, METER_CLOSE, METER_BUDGET, METER_CAP));
+        CHECK(band_from_matches(meters[n].file + 9, METER_CLOSE, meters[n].budget, METER_CAP));
     }
 }
 
