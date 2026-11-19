@@ -89,4 +89,23 @@ struct DrawnPreviewTests {
         rig.coordinator.tick()
         #expect(Self.drawnPreviews(take()).contains { $0.deck?.number == 1 })
     }
+
+    @Test("Back to images (Firmware set to Denon): the view is told once, so it draws today's previews again")
+    func backToImages() throws {
+        let (rig, take) = try JogDisplayPreviewNoControllerTests.rig()
+        rig.coordinator.setDisplayFirmware(.custom)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)]))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3))
+        rig.clock.now = 0.1
+        rig.coordinator.tick()
+        _ = take()
+        rig.coordinator.setDisplayFirmware(.denon)
+        rig.clock.now = 0.2
+        rig.coordinator.tick()
+        rig.clock.now = 0.3
+        rig.coordinator.tick()
+        let events = take()
+        #expect(events.filter { $0 == .drawnPreviewsEnded }.count == 1)
+        #expect(Self.drawnPreviews(events).isEmpty)
+    }
 }

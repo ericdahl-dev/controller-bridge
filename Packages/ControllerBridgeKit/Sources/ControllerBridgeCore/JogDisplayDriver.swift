@@ -69,6 +69,8 @@ public enum JogDisplayEvent: Equatable, Sendable {
     /// What a deck's drawn display would show (#465), as the chip would decode it from the host's messages: every deck,
     /// live, while the jog display would draw (previewsDrawn). Nothing is sent for it.
     case drawnPreview(DrawnDisplayState)
+    /// The previews show images again (#465): the view goes back to `preview`'s images.
+    case drawnPreviewsEnded
 }
 
 public final class JogDisplayDriver {
@@ -400,7 +402,10 @@ public final class JogDisplayDriver {
         var state = drawnPreviews[deck] ?? DrawnDisplayState()
         for bytes in messages.map(\.bytes) + Self.texts(content) { state.apply(bytes) }
         drawnPreviews[deck] = state
-        guard previewsDrawn else { return reportedDrawn.removeAll() }
+        guard previewsDrawn else {
+            if !reportedDrawn.isEmpty { onEvent?(.drawnPreviewsEnded) }
+            return reportedDrawn.removeAll()
+        }
         guard reportedDrawn[deck] != state else { return }
         reportedDrawn[deck] = state
         onEvent?(.drawnPreview(state))
