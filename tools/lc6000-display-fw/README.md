@@ -41,7 +41,9 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
 - `src/draw_live.h`, `src/draw_live.c`: `dfw_draw_live`, called last by `dfw_draw`, draws the live elements over
   design B (#459): the master beat's section lit in the live green, and the marker (Swift's `drawMarker`: a white
   wedge with a 2 px black keyline) at the needle's angle. No marker until a needle message has come since begin.
-  Nothing while the display is stale.
+  Under the marker, the level meter (#461, Swift's `drawMeter`): an arc 80-83 px out on the left, 240° to 300°, a
+  dark track filled green to three quarters and yellow above, all red at clip, with the held peak as a 2° tick. No
+  meter until a meter message has come since begin. Nothing while the display is stale.
 - `src/font_header.h`: glyph coverage for the header's two faces, generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
