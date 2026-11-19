@@ -1,5 +1,5 @@
 // live-reference <deck> <r> <g> <b> <player-type|-> <lit-beat|-> <needle|-> [<level> <peak>] [phase=<n>]
-//     [time=<elapsed>/<length>] [look=red|normal] <out.ppm> (#459, #461, #462, #460)
+//     [time=<elapsed>/<length>] [look=red|white] <out.ppm> (#459, #461, #462, #460)
 // Writes JogDisplayRenderer's simulator image for that deck, with master beat <lit-beat> (1-4) lit and the marker at
 // <needle> (0-16383, a turn clockwise from 12 o'clock, as op 09 carries it) and, if given, the level meter at <level>
 // with <peak> held (0-127 each, as op 0A carries them), the phase rule at <n> (1/16384 beats, -8191 to 8191, as op 0B
@@ -27,7 +27,7 @@ if let option = flags["phase"] {
     phase = value
 }
 let usage = "Usage: live-reference <deck> <r> <g> <b> <player-type|-> <lit-beat|-> <needle|-> [<level> <peak>] "
-    + "[phase=<n>] [time=<elapsed>/<length>] [look=red|normal] <out.ppm>"
+    + "[phase=<n>] [time=<elapsed>/<length>] [look=red|white] <out.ppm>"
 guard arguments.count == 8 || arguments.count == 10, let deck = Int(arguments[0]), let r = Int(arguments[1]), let g = Int(arguments[2]),
       let b = Int(arguments[3]) else { fail(usage) }
 let litBeat = arguments[5] == "-" ? nil : Int(arguments[5])
@@ -48,7 +48,7 @@ let look: JogTrackTime.Look
 switch flags["look"] {
 case nil: look = .normal
 case "red": look = .warningRed
-case "normal": look = .warningNormal
+case "white": look = .warningWhite
 default: fail(usage)
 }
 let output = arguments[arguments.count - 1]

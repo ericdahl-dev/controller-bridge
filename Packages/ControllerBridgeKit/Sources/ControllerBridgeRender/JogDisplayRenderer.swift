@@ -279,17 +279,18 @@ public enum JogDisplayRenderer {
 
     /// Track time (#460): the time left, "-m:ss" (minutes past 59 stay minutes), in the slot under key/BPM. Seconds.
     /// Around the edge, the progress ring: the deck color clockwise from 12 o'clock, the rest a dark track.
-    /// The warning's red half draws text and fill red; its normal half fills `JogTrackTime.warningNormalFill`.
+    /// The warning's red draws text and fill red; the blink's white half draws both white.
     private static func drawTime(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int],
                                  in context: CGContext) {
-        let red = look == .warningRed ? color(JogTrackTime.warningRed) : nil
-        let fill = red ?? color(look == .warningNormal ? JogTrackTime.warningNormalFill(deck: deck) : deck)
+        let warning = look == .warningRed ? color(JogTrackTime.warningRed)
+            : look == .warningWhite ? color(JogTrackTime.warningWhite) : nil
+        let fill = warning ?? color(deck)
         let elapsed = min(max(elapsed, 0), length), left = length - elapsed
         band(inner: progressInner, outer: progressOuter, from: 0, to: 360, color: beatOff, in: context)
         band(inner: progressInner, outer: progressOuter, from: 0, to: 360 * CGFloat(elapsed) / CGFloat(length),
              color: fill, in: context)
         let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, timeSize, nil)
-        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: red ?? text), font: font,
+        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: warning ?? text), font: font,
              centerX: center, centerY: timeCenterY, in: context)
     }
 
