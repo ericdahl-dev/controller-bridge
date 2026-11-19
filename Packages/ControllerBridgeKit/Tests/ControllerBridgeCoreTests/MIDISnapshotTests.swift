@@ -76,4 +76,41 @@ struct MIDISnapshotTests {
         #expect(inner.connected.isEmpty)
         _ = try system.openOutput(destination: Self.unit)
     }
+
+    /// The jog display's port, whose lookup of the WD port hangs while `blocked`.
+    final class BlockingJogPort: JogDisplayPort, @unchecked Sendable {
+        private let lock = NSLock()
+        private var attached: Bool
+        private var blocked = false
+        private(set) var waited = 0
+        var wd: [[UInt8]] = []
+        init(attached: Bool) { self.attached = attached }
+        func set(attached: Bool) { lock.withLock { self.attached = attached } }
+        func block(_ on: Bool) { lock.withLock { blocked = on } }
+        func sendController(_ bytes: [UInt8]) {}
+        func sendWD(_ bytes: [UInt8]) { wd.append(bytes) }
+        var isAttached: Bool {
+            if lock.withLock({ blocked }) {
+                lock.withLock { waited += 1 }
+                Thread.sleep(forTimeInterval: 0.3)
+            }
+            return lock.withLock { attached }
+        }
+    }
+
+    @Test("The jog display's attached check, made every tick, answers from the snapshot while the MIDI server hangs")
+    func attachedDoesntWait() {
+        let inner = BlockingJogPort(attached: true)
+        let port = SnapshotJogDisplayPort(inner: inner)
+        inner.block(true)
+        #expect(port.isAttached)
+        #expect(inner.waited == 0)
+        inner.block(false)
+        inner.set(attached: false)
+        #expect(port.isAttached, "until the next refresh")
+        port.refresh()
+        #expect(!port.isAttached)
+        port.sendWD([1, 2])
+        #expect(inner.wd == [[1, 2]])
+    }
 }

@@ -31,3 +31,27 @@ public final class SnapshotMIDISystem: MIDISystem, @unchecked Sendable {
         try inner.openOutput(destination: destination)
     }
 }
+
+/// The jog display's port, its `isAttached` (asked every tick) the answer last read by `refresh()`. Sends go straight
+/// through.
+public final class SnapshotJogDisplayPort: JogDisplayPort, @unchecked Sendable {
+    private let inner: any JogDisplayPort
+    private let lock = NSLock()
+    private var attached: Bool
+
+    /// Asks once now: build it where waiting is fine.
+    public init(inner: any JogDisplayPort) {
+        self.inner = inner
+        attached = inner.isAttached
+    }
+
+    /// Asks again. Call it off the loop when CoreMIDI's setup changes, before the Coordinator hears of it.
+    public func refresh() {
+        let now = inner.isAttached
+        lock.withLock { attached = now }
+    }
+
+    public var isAttached: Bool { lock.withLock { attached } }
+    public func sendController(_ bytes: [UInt8]) { inner.sendController(bytes) }
+    public func sendWD(_ bytes: [UInt8]) { inner.sendWD(bytes) }
+}
