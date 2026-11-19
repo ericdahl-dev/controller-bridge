@@ -114,7 +114,7 @@ struct BrowseTests {
         ])
     }
 
-    @Test("Shift + the auto loop knob moves the loop (#470): a beat forward per click clockwise, a beat back the other way, and no resize")
+    @Test("Shift + the auto loop knob is Loop Move (#470): each click sends what Beat Jump ▶ or ◀ sends, so Syndicate moves the loop by its own skip amount; no resize")
     func loopMove() throws {
         let rig = try Self.startedRig()
         Self.holdingShift(rig) {
@@ -123,12 +123,12 @@ struct BrowseTests {
             Self.turn(rig, cc: 3, 0x7F)   // one click counter-clockwise
             Self.turn(rig, cc: 3, 0x00)
         }
-        let moves = rig.osc.sent.filter { $0.address.contains("Loop") }
-        #expect(moves == [
-            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(-1)]),
+        let sent = rig.osc.sent.filter { $0.address.contains("Loop") || $0.address.contains("Skip") }
+        #expect(sent == [
+            OSCMessage("/Syndicate/Deck/1/SkipBeatForward", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/SkipBeatForward", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/SkipBeatForward", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/SkipBeatBack", [.int(1)]),
         ])
     }
 
