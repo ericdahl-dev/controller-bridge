@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Says whether CI's Mac jobs (Kit tests, App build) need to run for a change.
 Reads the changed paths, one per line, on stdin; prints mac=true or mac=false for $GITHUB_OUTPUT.
+`--base EVENT_NAME EVENT_PATH` prints instead the commit the change is measured against (#546).
 Tested by scripts/test_ci_changes.py."""
-import fnmatch, sys
+import fnmatch, json, sys
 
 # Changes only the Linux jobs check (Site check, spelling): the website, its scripts, Markdown docs and their check,
 # and the LC6000 firmware tool.
@@ -32,7 +33,28 @@ def needs_mac(paths):
     return not all(site_only(path) for path in paths)
 
 
+def diff_base(event_name, event):
+    """The commit a run's change is measured against: a pull request's base, a merge queue entry's base (#546), a
+    push's previous commit. Empty when unknown, which runs everything."""
+    if event_name == "pull_request":
+        return ((event.get("pull_request") or {}).get("base") or {}).get("sha") or ""
+    if event_name == "merge_group":
+        return (event.get("merge_group") or {}).get("base_sha") or ""
+    if event_name == "push":
+        return event.get("before") or ""
+    return ""
+
+
 def main():
+    if sys.argv[1:2] == ["--base"]:
+        name, path = sys.argv[2], sys.argv[3]
+        try:
+            with open(path) as f:
+                event = json.load(f)
+        except (OSError, ValueError):
+            event = {}
+        print(diff_base(name, event))
+        return
     paths = [line.strip() for line in sys.stdin if line.strip()]
     print(f"mac={'true' if needs_mac(paths) else 'false'}")
 
