@@ -7,8 +7,10 @@ SRC := $(wildcard src/*.c)
 TESTS := $(wildcard test/test_*.c)
 
 .PHONY: test clean tables
-test: $(BUILD)/tests $(BUILD)/band_table_gen $(BUILD)/ring_table_gen
+test: $(BUILD)/tests $(BUILD)/band_table_gen $(BUILD)/ring_table_gen $(BUILD)/upper-pin
 	$(BUILD)/tests
+	@# Block B's header, Python's and C's pinned together (#572).
+	python3 -I arm/test/test_upper_header.py $(BUILD)/upper-pin
 	sh test/check_symbols.sh $(BUILD)/freestanding
 	@# The protocol's tables (#569) must be what vectors/messages.json describes now.
 	python3 -I vectors/gen_protocol.py --check
@@ -46,6 +48,10 @@ $(BUILD)/sequences.h: vectors/messages.json test/vectors_to_c.py
 
 $(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h test/layer_record.c test/layer_record.h test/present.c test/present.h $(wildcard src/*.h) $(BUILD)/vectors.h $(BUILD)/sequences.h
 	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c test/present.c -lm
+
+$(BUILD)/upper-pin: arm/test/upper_pin.c arm/upper.c arm/upper_build.c arm/upper.h arm/upper_build.h arm/upper_crc.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $(SAN) -Iarm -o $@ arm/test/upper_pin.c arm/upper.c arm/upper_build.c
 
 clean:
 	rm -rf $(BUILD)

@@ -32,7 +32,7 @@ $(shell mkdir -p $(ARM_BUILD) && if [ "$$(cat $(ARM_BUILD)/flags.txt 2>/dev/null
 	echo "$(ARM_FLAGS)" > $(ARM_BUILD)/flags.txt; fi)
 endif
 
-$(ARM_BUILD)/block.elf: $(ARM_C) arm/entry.S arm/block.ld arm/hook.h arm/upper.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
+$(ARM_BUILD)/block.elf: $(ARM_C) arm/entry.S arm/block.ld arm/hook.h arm/upper.h arm/upper_crc.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
 	@mkdir -p $(ARM_BUILD)
 	cd $(ARM_BUILD) && $(ARM_PREFIX)gcc $(ARM_CFLAGS) -I$(CURDIR)/arm/include -I$(CURDIR)/src -I$(CURDIR)/arm -c $(addprefix $(CURDIR)/,$(ARM_C))
 	$(ARM_PREFIX)gcc $(ARM_CPU) -c arm/entry.S -o $(ARM_BUILD)/entry.o
