@@ -236,6 +236,12 @@ static void marker(dfw_pixel *frame, uint16_t needle) {
 #define METER_INNER 80.0f
 #define METER_OUTER 83.0f
 #define METER_TRACK 0x2C2C2Cu
+#define METER_YELLOW 0xFFD400u
+#define METER_PEAK 0xFFFFFFu
+/// Where the fill turns from green to yellow, as a fraction of the arc.
+#define METER_YELLOW_FROM 0.75f
+/// The peak tick's half width, as a fraction of the arc: 1° of the 60°.
+#define METER_TICK_HALF (1.0f / 60.0f)
 /// cos 30°: the arc's ends are 30° either side of 9 o'clock.
 #define COS_30 0.8660254f
 
@@ -282,11 +288,23 @@ static void meter(dfw_pixel *frame, const meter_sector *sectors, int count) {
 
 /// The meter's sectors for a level and a held peak, 0-127 each, in the order Swift fills them.
 static void draw_meter(dfw_pixel *frame, uint8_t level, uint8_t peak) {
-    (void)level;
-    (void)peak;
-    meter_sector sectors[1];
+    meter_sector sectors[4];
     int count = 0;
     sectors[count++] = sector(0.0f, 1.0f, METER_TRACK);
+    if (level > 127) level = 127;
+    if (peak > 127) peak = 127;
+    float fill = (float)level / 127.0f;
+    if (level > 0) {
+        sectors[count++] = sector(0.0f, fill < METER_YELLOW_FROM ? fill : METER_YELLOW_FROM, LIVE);
+        if (fill > METER_YELLOW_FROM) sectors[count++] = sector(METER_YELLOW_FROM, fill, METER_YELLOW);
+    }
+    if (peak > 0) {
+        // The tick kept inside the arc.
+        float place = (float)peak / 127.0f;
+        if (place < METER_TICK_HALF) place = METER_TICK_HALF;
+        if (place > 1.0f - METER_TICK_HALF) place = 1.0f - METER_TICK_HALF;
+        sectors[count++] = sector(place - METER_TICK_HALF, place + METER_TICK_HALF, METER_PEAK);
+    }
     meter(frame, sectors, count);
 }
 

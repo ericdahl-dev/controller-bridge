@@ -311,14 +311,19 @@ static void the_play_flags_change_no_pixels(void) {
 }
 
 /// The level meter (#461): an arc 80-83 inside the ring on the left, Swift's drawMeter. Compared, as the marker is,
-/// from MARKER_IN out: the meter, the ring and nothing else of this deck's.
+/// from MARKER_IN out: the meter, the ring and nothing else of this deck's. Its edges against the dark track are within
+/// 3. Against the bright fill, the band's two circles land about 0.03 px further in in CoreGraphics than their exact
+/// areas put them, as the lit section's do, and the band is all edge: measured, worst 13 with 46 pixels over 6, all on
+/// the circles, none on the radial edges or the tick. So 6 with a budget of 50, and nothing past 16: a quarter pixel
+/// off is 60 levels on every edge pixel of the fill.
 #define METER_CLOSE 6
-#define METER_BUDGET 0
-#define METER_CAP 6
+#define METER_BUDGET 50
+#define METER_CAP 16
 
 typedef struct { const char *file; uint8_t level, peak; } meter_case;
 static const meter_case meters[] = {
     { "test/ref/deck4-blue-empty-meter0-0.ppm", 0, 0 },
+    { "test/ref/deck4-blue-empty-meter64-90.ppm", 64, 90 },
 };
 #define METERS (sizeof meters / sizeof meters[0])
 
@@ -341,6 +346,18 @@ static void the_meter_is_drawn(void) {
         memcpy(frame, rec.last, sizeof frame);
         CHECK(band_from_matches(meters[n].file + 9, METER_CLOSE, METER_BUDGET, METER_CAP));
     }
+}
+
+/// No reference has a fill past the yellow; the spec's colors are exact where the band covers a pixel whole. Level 110
+/// (0.87 of the arc), no peak: mid-band pixels at fractions 0.40 (green), 0.80 (yellow) and 0.96 (the track).
+static void the_fill_turns_yellow_past_three_quarters(void) {
+    memset(&unit, 0, sizeof unit);
+    unit.meter_heard = 1;
+    unit.level = 110;
+    draw_beat(0);
+    CHECK(frame[107 * DFW_SIZE + 17] == 0x00FF48u);
+    CHECK(frame[73 * DFW_SIZE + 21] == 0xFFD400u);
+    CHECK(frame[61 * DFW_SIZE + 26] == 0x2C2C2Cu);
 }
 
 /// Not vacuous: each meter reference differs from the unlit one, from MARKER_IN out.
@@ -379,6 +396,7 @@ const test_case draw_live_tests[] = {
     { "the meter is drawn", the_meter_is_drawn },
     { "each meter reference differs from the unlit one", each_meter_reference_differs_from_the_unlit_one },
     { "stale draws no meter", stale_draws_no_meter },
+    { "the fill turns yellow past three quarters", the_fill_turns_yellow_past_three_quarters },
     { "the play flags change no pixels", the_play_flags_change_no_pixels },
     { "the needle is drawn as the marker", the_needle_is_drawn_as_the_marker },
     { "the marker is drawn over the lit section", the_marker_is_drawn_over_the_lit_section },
