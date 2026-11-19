@@ -177,3 +177,15 @@ struct DrawnDisplayHandshakeTests {
         #expect(silent.coordinator.status.displayFound?.label == "Custom (images)")
     }
 }
+
+/// Settings' Firmware row (#425, #456): what the setting means, then what was found on the unit.
+@Suite("Drawn display: Settings' Firmware row")
+struct DisplayFirmwareHintTests {
+    @Test("The row's hint says what the setting means, then what was found; nothing found, no second line")
+    func hint() {
+        #expect(DisplayFirmware.denon.hint(found: nil) == "Denon's own: 15 image slots, so deck 4 shows three of its four beats")
+        #expect(DisplayFirmware.custom.hint(found: .customDrawn(version: 1))
+                == "Custom: 16 image slots, or a drawn display if the unit's firmware answers. Only for a flashed unit\nFound: Custom (drawn display, protocol 1)")
+        #expect(DisplayFirmware.custom.hint(found: .customImages).hasSuffix("\nFound: Custom (images)"))
+    }
+}

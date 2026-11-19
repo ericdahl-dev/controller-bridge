@@ -19,6 +19,16 @@ public enum DisplayFound: Equatable, Sendable {
     }
 }
 
+extension DisplayFirmware {
+    /// Settings' Firmware row hint: what the setting means, then what was found on the unit, if anything.
+    public func hint(found: DisplayFound?) -> String {
+        let meaning = self == .denon
+            ? "Denon's own: 15 image slots, so deck 4 shows three of its four beats"
+            : "Custom: 16 image slots, or a drawn display if the unit's firmware answers. Only for a flashed unit"
+        return found.map { meaning + "\nFound: " + $0.label } ?? meaning
+    }
+}
+
 public enum DrawnDisplay {
     /// The command byte of every drawn-display message. A placeholder until #466 finds one Denon's dispatcher leaves
     /// free; the vectors file and the C side carry the same number.
