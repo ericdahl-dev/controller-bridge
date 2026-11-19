@@ -37,6 +37,16 @@ class NeedsMacTests(unittest.TestCase):
             "tools/lc6000-firmware/dfupatch.py", "tools/lc6000-firmware/test_dfupatch.py",
             "tools/lc6000-firmware/.gitignore"]))
 
+    def test_the_drawn_display_firmware_skips_the_mac_jobs(self):
+        # tools/lc6000-display-fw (#457): C with its own tests, run by the Display firmware job on Linux
+        self.assertFalse(ci_changes.needs_mac([
+            "tools/lc6000-display-fw/src/dfw.c", "tools/lc6000-display-fw/test/test_modes.c",
+            "tools/lc6000-display-fw/Makefile", "tools/lc6000-display-fw/README.md"]))
+
+    def test_the_shared_message_vectors_run_the_mac_jobs(self):
+        # the vectors file (#456) is walked by the Kit tests too, so a change to it alone must still run them
+        self.assertTrue(ci_changes.needs_mac(["tools/lc6000-display-fw/vectors/messages.json"]))
+
     def test_workflow_and_release_script_changes_run_the_mac_jobs(self):
         for path in [".github/workflows/ci.yml", "scripts/ci_profile.py", "scripts/smoke.sh", "project.yml",
                      ".github/pull_request_template.md"]:
