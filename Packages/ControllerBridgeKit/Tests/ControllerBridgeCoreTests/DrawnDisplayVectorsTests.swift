@@ -35,6 +35,7 @@ struct DrawnDisplayVectorsTests {
                 .map { .text($0, fields["text"] as! String) }
         case "tempo": return .tempo(tenths: fields["tenths"] as! Int)
         case "time": return .time(elapsedSeconds: fields["elapsed"] as! Int, lengthSeconds: fields["length"] as! Int)
+        case "phase": return .phase(fields["offset"] as! Int)
         default: return nil
         }
     }
@@ -43,7 +44,7 @@ struct DrawnDisplayVectorsTests {
     func hostMessagesEncode() {
         let entries = (Self.file["messages"] as! [[String: Any]]).filter { $0["direction"] as? String != "unit" }
         #expect(Set(entries.map { $0["kind"] as! String }).isSuperset(of: ["begin", "end", "capability", "deck", "state", "beat", "needle",
-                                                                          "text", "tempo", "meter", "time"]))
+                                                                          "text", "tempo", "meter", "time", "phase"]))
         for entry in entries {
             let message = Self.message(entry)
             #expect(message != nil, "\(entry["name"]!): unknown kind")

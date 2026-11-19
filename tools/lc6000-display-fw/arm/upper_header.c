@@ -8,9 +8,10 @@ typedef struct {
     uint32_t version;
     uint32_t length;
     uint32_t crc;
+    uint32_t layout;
     void (*draw)(dfw_pixel *frame, const struct dfw_unit *unit);
 } upper_header;
 
 __attribute__((section(".upper_header"), used)) const upper_header upper_head = {
-    UPPER_MARKER, UPPER_VERSION, 0, 0, dfw_draw,
+    UPPER_MARKER, UPPER_VERSION, 0, 0, DFW_LAYOUT, dfw_draw,
 };

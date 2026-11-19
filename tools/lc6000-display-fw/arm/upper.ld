@@ -17,6 +17,6 @@ SECTIONS
     /DISCARD/ : { *(.ARM.exidx*) *(.ARM.extab*) *(.comment) *(.note*) }
 }
 
-ASSERT(SIZEOF(.upper_header) == 20, "B's header is 20 bytes (upper.h)")
+ASSERT(SIZEOF(.upper_header) == 24, "B's header is 24 bytes (upper.h)")
 ASSERT(SIZEOF(.data) == 0, "no initialized data in B: there is no startup code to copy it")
 ASSERT(SIZEOF(.bss) == 0, "no zeroed data in B: there is no startup code to zero it")

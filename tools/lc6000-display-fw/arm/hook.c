@@ -66,7 +66,7 @@ static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
 static void check_upper(hook_state *state, const hook_stock *stock) {
     if (!stock->upper || state->upper_checked) return;
     state->upper_checked = 1;
-    uint32_t entry = upper_check(stock->upper);
+    uint32_t entry = upper_check(stock->upper, DFW_LAYOUT);
     if (!entry) return;
     state->upper_drawing.draw = (void (*)(dfw_pixel *, const struct dfw_unit *))(uintptr_t)entry;
     state->unit.drawing = &state->upper_drawing;

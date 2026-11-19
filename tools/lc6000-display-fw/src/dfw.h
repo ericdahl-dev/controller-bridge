@@ -46,6 +46,9 @@ typedef struct {
 /// The deck in front, as the deck message gave it.
 typedef struct { uint8_t number, r, g, b, player; } dfw_deck_state;
 
+/// The phase message's reserved value (#462): not measured (not playing, no master clock, none since load).
+#define DFW_PHASE_UNKNOWN (-8192)
+
 typedef struct dfw_unit {
     dfw_port port;
     const dfw_drawing *drawing;
@@ -78,6 +81,9 @@ typedef struct dfw_unit {
     uint32_t time_at;
     /// How the time looks now (dfw_time_look), worked out at each tick so a flip of the blink draws a frame.
     uint8_t time_look;
+    /// How far the deck is from the master clock's beat (#462), in 1/16384 beats, -8191 to 8191; negative is behind,
+    /// 0 in phase, DFW_PHASE_UNKNOWN not measured.
+    int16_t phase;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
     /// The clock at the tick that is drawing, for anything drawn over time.
@@ -91,6 +97,26 @@ typedef struct dfw_unit {
 /// The track time's look (#460, JogTrackTime): no warning; the last minute's warning in its red half (the first
 /// 500 ms of each second, from when the time last changed); its normal half.
 enum { DFW_TIME_NORMAL = 0, DFW_TIME_RED = 1, DFW_TIME_WARNING_NORMAL = 2 };
+/// dfw_unit's layout as one word (#516): block B, the drawing, reads A's dfw_unit, so B's header carries the layout
+/// it was built for and block A calls B only when it matches A's own. Each field's offset has its own odd multiplier,
+/// so a moved, resized or swapped field changes the word. A new field in dfw_unit or dfw_deck_state goes in here too.
+#define DFW_LAYOUT ((uint32_t)( \
+    1u * sizeof(dfw_unit) + 3u * sizeof(dfw_deck_state) + 5u * sizeof(dfw_slot) + 7u * sizeof(dfw_port) + \
+    11u * sizeof(dfw_pixel) + 13u * DFW_SIZE + 17u * DFW_TEXT_MAX + 19u * DFW_TEXT_FIELDS + 23u * DFW_INBOX + \
+    29u * offsetof(dfw_unit, port) + 31u * offsetof(dfw_unit, drawing) + 37u * offsetof(dfw_unit, head) + \
+    41u * offsetof(dfw_unit, tail) + 43u * offsetof(dfw_unit, inbox) + 47u * offsetof(dfw_unit, drawn) + \
+    53u * offsetof(dfw_unit, deck) + 59u * offsetof(dfw_unit, flags) + 61u * offsetof(dfw_unit, beat) + \
+    67u * offsetof(dfw_unit, needle) + 71u * offsetof(dfw_unit, level) + 73u * offsetof(dfw_unit, peak) + \
+    79u * offsetof(dfw_unit, needle_heard) + 83u * offsetof(dfw_unit, meter_heard) + \
+    89u * offsetof(dfw_unit, text) + 97u * offsetof(dfw_unit, text_length) + 101u * offsetof(dfw_unit, tempo) + \
+    103u * offsetof(dfw_unit, text_heard) + 163u * offsetof(dfw_unit, phase) + 107u * offsetof(dfw_unit, heard) + \
+    167u * offsetof(dfw_unit, elapsed) + 173u * offsetof(dfw_unit, track_length) + \
+    179u * offsetof(dfw_unit, time_heard) + 181u * offsetof(dfw_unit, time_at) + \
+    191u * offsetof(dfw_unit, time_look) + \
+    109u * offsetof(dfw_unit, now_ms) + 113u * offsetof(dfw_unit, silent) + 127u * offsetof(dfw_unit, dirty) + \
+    131u * offsetof(dfw_unit, frame) + 137u * offsetof(dfw_deck_state, number) + \
+    139u * offsetof(dfw_deck_state, r) + 149u * offsetof(dfw_deck_state, g) + \
+    151u * offsetof(dfw_deck_state, b) + 157u * offsetof(dfw_deck_state, player)))
 
 /// Starts the unit. `frame` may be NULL until the hook has one (see dfw_set_frame); `drawing` is NULL when there is
 /// none to call.

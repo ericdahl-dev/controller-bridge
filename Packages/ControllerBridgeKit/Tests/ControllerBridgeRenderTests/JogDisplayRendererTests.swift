@@ -117,4 +117,63 @@ struct JogDisplayRendererTests {
         #expect(Self.near(Self.pixel(Self.meterImage(level: 64, peak: 90, stale: true), x: 17, y: 98), 0x0B0B0B))
     }
 
+
+    /// The phase rule (#462), the user's pick: the rule under the artist (x 50–147, y 127–128, centered on x 99) shows
+    /// the deck's phase against the master, in 1/16384 beats as op 0B carries it.
+    static func phaseImage(_ phase: Int?) -> [UInt8] {
+        JogDisplayRenderer.simulatorImage(JogDisplayContent(deck: 4, color: [0, 128, 255]), litBeat: nil, marker: nil,
+                                          phase: phase)
+    }
+
+    @Test("In phase: the plain rule in the deck color, with a 2×6 tick at its center (x 98–99, y 125–130)")
+    func phaseInPhase() {
+        let image = Self.phaseImage(0)
+        for (x, y) in [(50, 127), (147, 128), (98, 125), (99, 130), (98, 127)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0080FF, by: 4), "(\(x), \(y))")
+        }
+        for (x, y) in [(97, 125), (100, 125), (98, 124), (99, 131)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0B0B0B, by: 4), "(\(x), \(y))")
+        }
+    }
+
+    /// Off phase the rule dims to 35% of the deck color over the ground: 0x0080FF dims to 0x073460.
+    static let dimBlue: UInt32 = 0x073460
+
+    @Test("Behind: a 4 px bar grows left from the center, 17 px at a hundredth of a beat; the rest of the rule dims; no tick")
+    func phaseBehind() {
+        let image = Self.phaseImage(-164)
+        for (x, y) in [(82, 126), (98, 129), (90, 127)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0080FF, by: 4), "bar (\(x), \(y))")
+        }
+        for (x, y) in [(81, 127), (50, 128), (99, 127), (147, 127)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), Self.dimBlue, by: 4), "dim (\(x), \(y))")
+        }
+        for (x, y) in [(90, 125), (90, 130), (98, 125), (99, 126)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0B0B0B, by: 4), "ground (\(x), \(y))")
+        }
+    }
+
+    @Test("Ahead: the bar grows right from the center instead")
+    func phaseAhead() {
+        let image = Self.phaseImage(164)
+        for (x, y) in [(99, 126), (115, 129)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0080FF, by: 4), "bar (\(x), \(y))")
+        }
+        for (x, y) in [(98, 127), (116, 127)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), Self.dimBlue, by: 4), "dim (\(x), \(y))")
+        }
+    }
+
+    @Test("The bar's length in px for an offset in 1/16384 beats: at least 1, a hundredth of a beat 17, a tenth 42, half a beat 49",
+          arguments: [(1, 1), (33, 5), (164, 17), (-164, 17), (1638, 42), (8191, 49), (-8191, 49)])
+    func phaseBarLength(phase: Int, px: Int) {
+        #expect(JogDisplayRenderer.phaseBar(phase) == px)
+    }
+
+    @Test("Unknown phase draws the plain rule: no tick, nothing dimmed")
+    func phaseUnknown() {
+        let image = Self.phaseImage(nil)
+        #expect(Self.near(Self.pixel(image, x: 52, y: 127), 0x0080FF, by: 4))
+        #expect(Self.near(Self.pixel(image, x: 98, y: 125), 0x0B0B0B, by: 4))
+    }
 }
