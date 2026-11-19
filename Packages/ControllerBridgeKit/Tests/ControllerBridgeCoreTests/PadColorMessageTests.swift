@@ -1,0 +1,47 @@
+import ControllerBridgeCore
+import Foundation
+import Testing
+
+/// The pads in exact colors (#531): with the color message on, each pad takes Denon's color message (exact RGB, 7 bits
+/// a channel) in place of the 64-color note-on.
+@Suite("Pads in exact color")
+struct PadColorMessageTests {
+    typealias Ring = RingColorMessageTests
+
+    /// What a pad shows on the unit: the last write to its note, a color message or a note-on.
+    static func shows(_ output: Rig.FakeOutput, _ note: UInt8) -> String? {
+        for write in output.writes.reversed() {
+            switch write {
+            case .color(let m) where m.note == note: return "color \(m.red) \(m.green) \(m.blue)"
+            case .event(.noteOn(_, let n, let velocity)) where n == note: return "note-on \(velocity)"
+            default: continue
+            }
+        }
+        return nil
+    }
+
+    static func cues(_ rig: Rig, deck: Int = 1, _ slots: [Int32]) {
+        let arguments = slots.enumerated().flatMap { [OSCArgument.int($1), .string("c\($0 + 1)")] }
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/Cues", arguments))
+    }
+
+    /// A started LC6000 on deck 1 with the color message on and a track loaded; palette slots 2 and 4 two close colors.
+    static func loaded() throws -> Rig {
+        let rig = try Ring.exact(deck: 1)
+        Ring.palette(rig, slot: 2, 200, 100, 50)
+        Ring.palette(rig, slot: 4, 202, 100, 50)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        return rig
+    }
+
+    @Test("Hot cue pads show their palette colors exactly: two close colors differ; an empty pad is off; no pad note-on")
+    func hotCues() throws {
+        let rig = try Self.loaded()
+        Self.cues(rig, [2, 4, 0, 0, 0, 0, 0, 0])
+        let output = try Ring.output(rig)
+        #expect(Self.shows(output, 32) == "color 100 50 25")
+        #expect(Self.shows(output, 33) == "color 101 50 25")
+        #expect(Self.shows(output, 34) == "color 0 0 0")
+        #expect(!output.sent.contains { if case .noteOn(_, 32...39, let v) = $0 { v > 0 } else { false } })
+    }
+}

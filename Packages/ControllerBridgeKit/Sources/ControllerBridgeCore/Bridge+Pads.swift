@@ -114,7 +114,15 @@ extension Bridge {
         for (name, mode) in modes { buttonLED(name, on: padMode == mode) }
         cycleButtonLED()
         // With notes per mode (#225), the current mode's notes carry the colors and the other modes' go dark.
-        for (note, velocity) in zip(padNotes(for: padMode), padColors()) { padLED(note, velocity) }
+        let rgb = padRGB()
+        for (index, (note, velocity)) in zip(padNotes(for: padMode), padColors()).enumerated() {
+            // A pad that takes Denon's color message (#531) shows its exact color; any other its velocity.
+            if index < rgb.count, let message = colorMessageEncoder?.message(note: note, rgb: rgb[index]) {
+                colorLED(message)
+            } else {
+                padLED(note, velocity)
+            }
+        }
         let lit = Set(padNotes(for: padMode))
         for note in padModule.allModeNotes where !lit.contains(note) { padLED(note, Self.off) }
         ringLED()
@@ -137,6 +145,12 @@ extension Bridge {
     func padColors() -> [UInt8] {
         let heldPads = Set(mapping.notes.pads.indices.filter { held.contains(.pad($0)) })
         return padModule.velocities(held: heldPads, ringColors: ringColors)
+    }
+
+    /// Each pad's exact color in the current mode (#531), with which pads are held.
+    func padRGB() -> [[Int]] {
+        let heldPads = Set(mapping.notes.pads.indices.filter { held.contains(.pad($0)) })
+        return padModule.colors(held: heldPads)
     }
 
     /// The ring's and a held pad's velocity, by the Settings mapping (#151), through the profile's color table (#197).

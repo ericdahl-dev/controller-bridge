@@ -108,6 +108,20 @@ struct PadModule {
         }
     }
 
+    /// Each pad's color in the current mode, as 8-bit RGB, for the color message (#531): what `velocities` shows,
+    /// without the 64-color table. An empty pad is off, as with the table.
+    func colors(held: Set<Int>) -> [[Int]] {
+        switch mode {
+        case .hotCue:
+            return cues.map { slot in
+                guard slot != 0 else { return [0, 0, 0] }
+                return palette[slot] ?? [255, 255, 255]
+            }
+        default:
+            return Array(repeating: [0, 0, 0], count: cues.count)
+        }
+    }
+
     /// The color scaled up so its strongest channel is 255.
     static func brightest(_ rgb: [Int]) -> [Int] {
         guard let top = rgb.max(), top > 0 else { return rgb }
