@@ -170,4 +170,40 @@ struct PitchArrowTests {
         Self.fader(rig, 0x1000)
         #expect(rig.leds[Self.forward] == nil && rig.leds[Self.back] == nil)
     }
+
+    /// Every velocity sent to `note`, in order.
+    static func writes(_ rig: Rig, _ note: UInt8) -> [UInt8] {
+        (rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).compactMap { if case .noteOn(_, note, let v) = $0 { v } else { nil } }
+    }
+
+    @Test("Only changes go out: the fader moving further on the same side sends nothing more to either arrow")
+    func onlyChanges() throws {
+        let rig = try Self.pending()
+        Self.fader(rig, 0x1000)
+        let (back, forward) = (Self.writes(rig, Self.back).count, Self.writes(rig, Self.forward).count)
+        for raw in [0x1100, 0x1200, 0x1300] { Self.fader(rig, raw) }
+        #expect(Self.writes(rig, Self.back).count == back && Self.writes(rig, Self.forward).count == forward)
+    }
+
+    @Test("A captured controller holds the arrows like its other lights; given back, they show the state now")
+    func captureHolds() throws {
+        let rig = try Self.pending()
+        Self.fader(rig, 0x1000)   // forward
+        rig.coordinator.setCapture(source: Rig.lc6000.id)
+        let before = (Self.writes(rig, Self.back), Self.writes(rig, Self.forward))
+        ContinuousTests.feedback(rig, "TempoSlider", [.float(-0.9)])
+        #expect(Self.writes(rig, Self.back) == before.0 && Self.writes(rig, Self.forward) == before.1)
+        rig.coordinator.setCapture(source: nil)
+        // The capture swept the fader, so its position is still the last one known: -0.5, above -0.9: back.
+        #expect(rig.leds[Self.back] == 127 && rig.leds[Self.forward] == 0)
+    }
+
+    @Test("The center light behaves as today: dim while waiting, full at 0 once caught")
+    func centerUnchanged() throws {
+        let rig = try Self.pending(tempo: 0)
+        Self.fader(rig, 0x1000)
+        #expect(rig.leds[42] == 1)
+        Self.fader(rig, 0x2000)   // the center: caught at 0
+        #expect(rig.leds[42] == 127)
+    }
 }
