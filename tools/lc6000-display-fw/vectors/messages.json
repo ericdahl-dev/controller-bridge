@@ -94,6 +94,489 @@
       "blink_half_ms": 500
     }
   },
+  "sequences": {
+    "about": "The sequence rules as cases (#569): each step at its time in ms sends a message (\"send\") or only ticks the clock; after the last step, the expected state. A step's time ticks the chip after its message. Both the chip code (make test) and the Swift decoder walk every case.",
+    "cases": [
+      {
+        "name": "a deck change clears the deck's own values (flags 0-4, texts, tempo, phase, time) and keeps stale, the beat and the needle",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 23 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 04 04 00 41 62 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 03 05 0A 00 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 03 0B 01 24 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 00 41 02 25 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 08 03 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 03 09 20 00 F7"
+          },
+          {
+            "at_ms": 10,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 03 00 00 01 7F 00 00 01 F7"
+          }
+        ],
+        "expect": {
+          "drawn": true,
+          "deck": 3,
+          "flags": 32,
+          "stale": true,
+          "beat": 3,
+          "needle": 4096,
+          "tempo": 0,
+          "phase": -8192,
+          "time": null,
+          "text_heard": false,
+          "look": "normal"
+        }
+      },
+      {
+        "name": "the heartbeat's same deck changes nothing",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 03 05 0A 00 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 03 0B 01 24 F7"
+          },
+          {
+            "at_ms": 10,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          }
+        ],
+        "expect": {
+          "drawn": true,
+          "deck": 2,
+          "flags": 3,
+          "stale": false,
+          "beat": 0,
+          "needle": null,
+          "tempo": 1280,
+          "phase": 164,
+          "time": null,
+          "text_heard": false,
+          "look": "normal"
+        }
+      },
+      {
+        "name": "end forgets the deck and everything live; a new begin starts from nothing",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 08 02 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 03 09 20 00 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 03 0B 01 24 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 00 41 02 25 F7"
+          },
+          {
+            "at_ms": 10,
+            "send": "F0 00 02 0B 7F 10 20 00 02 02 01 F7"
+          },
+          {
+            "at_ms": 20,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          }
+        ],
+        "expect": {
+          "drawn": true,
+          "deck": 0,
+          "flags": 0,
+          "stale": false,
+          "beat": 0,
+          "needle": null,
+          "phase": -8192,
+          "time": null,
+          "look": "normal"
+        }
+      },
+      {
+        "name": "nothing counts before begin",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 03 05 0A 00 F7"
+          }
+        ],
+        "expect": {
+          "drawn": false,
+          "deck": 0,
+          "flags": 0,
+          "stale": false,
+          "tempo": 0
+        }
+      },
+      {
+        "name": "3 s with no message is the stale look",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 3000
+          }
+        ],
+        "expect": {
+          "drawn": true,
+          "deck": 2,
+          "flags": 3,
+          "stale": true
+        }
+      },
+      {
+        "name": "just under 3 s is not stale",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 2999
+          }
+        ],
+        "expect": {
+          "stale": false
+        }
+      },
+      {
+        "name": "any message ends the silence",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 3000
+          },
+          {
+            "at_ms": 3500,
+            "send": "F0 00 02 0B 7F 10 20 00 02 08 01 F7"
+          }
+        ],
+        "expect": {
+          "stale": false,
+          "beat": 1
+        }
+      },
+      {
+        "name": "60 s to 31 s left while playing: the time is steady red",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 01 7A 02 25 F7"
+          },
+          {
+            "at_ms": 700
+          }
+        ],
+        "expect": {
+          "time": [
+            250,
+            293
+          ],
+          "look": "red"
+        }
+      },
+      {
+        "name": "30 s or less while playing: red the first half second after the time changes",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 1000,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 02 0E 02 25 F7"
+          },
+          {
+            "at_ms": 1200
+          }
+        ],
+        "expect": {
+          "look": "red"
+        }
+      },
+      {
+        "name": "30 s or less while playing: white the second half second",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 1000,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 02 0E 02 25 F7"
+          },
+          {
+            "at_ms": 1700
+          }
+        ],
+        "expect": {
+          "look": "white"
+        }
+      },
+      {
+        "name": "30 s or less while playing: red again a second after the time changed",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 1000,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 02 0E 02 25 F7"
+          },
+          {
+            "at_ms": 2100
+          }
+        ],
+        "expect": {
+          "look": "red"
+        }
+      },
+      {
+        "name": "a loop on holds the warning off",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 13 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 02 0E 02 25 F7"
+          },
+          {
+            "at_ms": 200
+          }
+        ],
+        "expect": {
+          "look": "normal"
+        }
+      },
+      {
+        "name": "paused, no warning",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 02 0E 02 25 F7"
+          },
+          {
+            "at_ms": 200
+          }
+        ],
+        "expect": {
+          "look": "normal"
+        }
+      },
+      {
+        "name": "stale, no warning",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 23 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 02 0E 02 25 F7"
+          },
+          {
+            "at_ms": 200
+          }
+        ],
+        "expect": {
+          "look": "normal",
+          "stale": true
+        }
+      },
+      {
+        "name": "an unknown length, no warning",
+        "steps": [
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+          },
+          {
+            "at_ms": 0,
+            "send": "F0 00 02 0B 7F 10 20 00 05 06 02 22 00 00 F7"
+          },
+          {
+            "at_ms": 200
+          }
+        ],
+        "expect": {
+          "look": "normal",
+          "time": [
+            290,
+            0
+          ]
+        }
+      }
+    ]
+  },
   "messages": [
     {
       "name": "capability ask, host speaks v1",

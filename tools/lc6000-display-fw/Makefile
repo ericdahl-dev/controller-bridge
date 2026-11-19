@@ -39,7 +39,12 @@ $(BUILD)/vectors.h: vectors/messages.json test/vectors_to_c.py
 	@mkdir -p $(BUILD)
 	python3 -I test/vectors_to_c.py $< > $@
 
-$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h $(wildcard src/*.h) $(BUILD)/vectors.h
+# The sequence cases (#569), as C for the sequence walk.
+$(BUILD)/sequences.h: vectors/messages.json test/vectors_to_c.py
+	@mkdir -p $(BUILD)
+	python3 -I test/vectors_to_c.py $< --sequences > $@
+
+$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h $(wildcard src/*.h) $(BUILD)/vectors.h $(BUILD)/sequences.h
 	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c -lm
 
 clean:

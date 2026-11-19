@@ -38,7 +38,41 @@ public struct DrawnDisplayState: Equatable, Sendable {
     }
     private var timeValue: [Int]?
 
+    /// The clock, in ms, as the caller gives it (#569): the sequence cases' own times, or the preview's.
+    private var nowMs = 0
+    /// When the last of our messages came, and whether `silenceMs` have passed since (the waiting look).
+    private var heardMs = 0
+    public private(set) var silent = false
+    /// When the time last changed: the warning's blink starts there.
+    public private(set) var timeAtMs = 0
+
+    /// The waiting look: the host says feedback stopped, or nothing came for `silenceMs`.
+    public var stale: Bool { silent || flags.contains(.stale) }
+
+    /// The track time's look (#460, #524), as dfw.c's time_look.
+    public enum Look: Equatable, Sendable { case normal, red, white }
+
+    public func look(atMs now: Int) -> Look {
+        guard let time, time.length > 0, flags.contains(.playing), !flags.contains(.loopOn), !stale,
+              time.length - time.elapsed <= DrawnDisplayProtocol.warningSeconds else { return .normal }
+        if time.length - time.elapsed > DrawnDisplayProtocol.blinkSeconds { return .red }
+        return ((now - timeAtMs) / DrawnDisplayProtocol.blinkHalfMs) % 2 == 0 ? .red : .white
+    }
+
     public init() {}
+
+    /// Applies a message at `now` ms.
+    @discardableResult
+    public mutating func apply(_ bytes: [UInt8], atMs now: Int) -> Bool {
+        nowMs = now
+        return apply(bytes)
+    }
+
+    /// The clock moved on to `now` ms: `silenceMs` with no message of ours is the waiting look.
+    public mutating func tick(atMs now: Int) {
+        nowMs = now
+        if drawn, !silent, now - heardMs >= DrawnDisplayProtocol.silenceMs { silent = true }
+    }
 
     /// Applies one whole message, F0 through F7, as the chip does; anything malformed or not ours changes nothing.
     /// Whether anything changed.
@@ -67,14 +101,14 @@ public struct DrawnDisplayState: Equatable, Sendable {
         if kind == .text {
             guard declared >= 2, declared <= 2 + DrawnDisplay.textCap,
                   let field = DrawnDisplay.TextField(rawValue: args[0]), let codes = Self.decode(args.dropFirst()) else { return }
+            heard()
             guard drawn else { return }
             textHeard = true
             texts[field] = codes
             return
         }
-        guard let length = Self.length(op), declared == length else { return }
-        // Version 0 is malformed.
-        if [.capability, .begin, .end].contains(kind), args[0] == 0 { return }
+        guard let length = Self.length(op), declared == length, Self.inRange(kind, args) else { return }
+        heard()
         switch kind {
         case .begin: drawn = true
         case .end:
@@ -87,10 +121,7 @@ public struct DrawnDisplayState: Equatable, Sendable {
             phase = DrawnPhase.unknown
             time = nil
         case .deck:
-            guard args[0] >= 1, args[0] <= DrawnDisplayProtocol.deckMax, args[1] <= 1, args[3] <= 1, args[5] <= 1,
-                  args[7] <= DrawnDisplayProtocol.playerMax,
-                  let player = DrawnDisplay.Player(rawValue: args[7]) else { return }
-            guard drawn else { return }
+            guard drawn, let player = DrawnDisplay.Player(rawValue: args[7]) else { return }
             let new = Deck(number: Int(args[0]),
                            color: [Int(args[1]) << 7 | Int(args[2]), Int(args[3]) << 7 | Int(args[4]), Int(args[5]) << 7 | Int(args[6])],
                            player: player)
@@ -104,18 +135,39 @@ public struct DrawnDisplayState: Equatable, Sendable {
             phase = DrawnPhase.unknown
             time = nil
         case .tempo: if drawn { tempo = word() }
-        case .state:
-            guard args[0] & UInt8(1 << DrawnDisplayProtocol.flagBits["reserved"]!) == 0 else { return }
-            if drawn { flags = DrawnDisplay.State(rawValue: args[0]) }
-        case .beat:
-            guard args[0] <= DrawnDisplayProtocol.beatMax else { return }
-            if drawn { beat = Int(args[0]) }
+        case .state: if drawn { flags = DrawnDisplay.State(rawValue: args[0]) }
+        case .beat: if drawn { beat = Int(args[0]) }
         case .needle: if drawn { needle = word() }
         case .meter: if drawn { meter = (Int(args[0]), Int(args[1])) }
-        case .time: if drawn { time = (Int(args[0]) << 7 | Int(args[1]), Int(args[2]) << 7 | Int(args[3])) }
+        case .time:
+            let new = [Int(args[0]) << 7 | Int(args[1]), Int(args[2]) << 7 | Int(args[3])]
+            guard drawn, timeValue != new else { return }
+            timeValue = new
+            // The blink's phase starts again, red, when the time changes.
+            timeAtMs = nowMs
         case .phase: if drawn { phase = word() >= 8192 ? word() - 16384 : word() }
         case .capability, .text: break
         }
+    }
+
+    /// Whether an op's arguments are in range, as dfw.c's in_range: versions aren't 0, a deck is 1-4 with channels up
+    /// to 255 and a known player, a state's reserved bit is clear, a beat is 0-4.
+    private static func inRange(_ kind: DrawnDisplayProtocol.Op, _ args: [UInt8]) -> Bool {
+        switch kind {
+        case .capability, .begin, .end: args[0] != 0
+        case .deck:
+            args[0] >= 1 && Int(args[0]) <= DrawnDisplayProtocol.deckMax && args[1] <= 1 && args[3] <= 1 && args[5] <= 1
+                && Int(args[7]) <= DrawnDisplayProtocol.playerMax
+        case .state: args[0] & UInt8(1 << DrawnDisplayProtocol.flagBits["reserved"]!) == 0
+        case .beat: Int(args[0]) <= DrawnDisplayProtocol.beatMax
+        case .text, .tempo, .time, .needle, .meter, .phase: true
+        }
+    }
+
+    /// One of ours: it counts as hearing from the host, and ends any silence.
+    private mutating func heard() {
+        heardMs = nowMs
+        silent = false
     }
 
     /// A text message's characters as Windows-1252 codes; nil if malformed: a code below 0x20, an escape with nothing
@@ -141,6 +193,6 @@ public struct DrawnDisplayState: Equatable, Sendable {
     public static func == (a: DrawnDisplayState, b: DrawnDisplayState) -> Bool {
         a.drawn == b.drawn && a.deck == b.deck && a.flags == b.flags && a.beat == b.beat && a.needle == b.needle
             && a.meterValue == b.meterValue && a.texts == b.texts && a.textHeard == b.textHeard && a.tempo == b.tempo
-            && a.phase == b.phase && a.timeValue == b.timeValue
+            && a.phase == b.phase && a.timeValue == b.timeValue && a.silent == b.silent && a.timeAtMs == b.timeAtMs
     }
 }
