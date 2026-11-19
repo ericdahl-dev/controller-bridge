@@ -22,17 +22,40 @@ public enum JogDisplayRenderer {
                               meter: (level: Int, peak: Int)? = nil, phase: Int? = nil,
                               time: (elapsed: Int, length: Int)? = nil, look: JogTrackTime.Look = .normal) -> [UInt8] {
         drawing { context in
-            draw(content, litBeat: litBeat, phase: phase, in: context)
-            if let meter, !content.stale { drawMeter(level: meter.level, peak: meter.peak, in: context) }
-            if let time, time.length > 0, !content.stale {
-                drawTime(elapsed: time.elapsed, length: time.length, look: look, deck: content.color, in: context)
-            }
-            if let marker { drawMarker(turns: marker, in: context) }
+            frame(content, litBeat: litBeat, marker: marker, meter: meter, phase: phase, time: time, look: look, in: context)
         }
     }
 
-    /// RGBA rows of a 198×198 image, drawn with a top-left origin and y down, as the rows are stored and the design measures.
-    private static func drawing(_ body: (CGContext) -> Void) -> [UInt8] {
+    /// The drawn display as the panel shows it (#524): 216×216 RGBA, the 198 frame centered (9 px in) on the panel's
+    /// black, so the band just outside the frame shows too. Drawn mode only; image mode keeps `simulatorImage`.
+    public static let drawnSize = 216
+    public static func drawnImage(_ content: JogDisplayContent, live: DrawnLive) -> [UInt8] {
+        let inset = CGFloat(drawnSize - size) / 2
+        return drawing(size: drawnSize) { context in
+            context.setFillColor(rgb(0x000000))
+            context.fill(CGRect(x: 0, y: 0, width: drawnSize, height: drawnSize))
+            context.translateBy(x: inset, y: inset)
+            frame(content, litBeat: live.beat, marker: live.needle.map { Double($0) / 16384 },
+                  meter: live.meter.map { ($0.level, $0.peak) }, phase: live.phase,
+                  time: live.time.map { ($0.elapsed, $0.length) }, look: live.look, in: context)
+        }
+    }
+
+    /// The 198 frame and its live parts, in the frame's own coordinates.
+    private static func frame(_ content: JogDisplayContent, litBeat: Int?, marker: Double?, meter: (level: Int, peak: Int)?,
+                              phase: Int?, time: (elapsed: Int, length: Int)?, look: JogTrackTime.Look,
+                              in context: CGContext) {
+        draw(content, litBeat: litBeat, phase: phase, in: context)
+        if let meter, !content.stale { drawMeter(level: meter.level, peak: meter.peak, in: context) }
+        if let time, time.length > 0, !content.stale {
+            drawTime(elapsed: time.elapsed, length: time.length, look: look, deck: content.color, in: context)
+        }
+        if let marker { drawMarker(turns: marker, in: context) }
+    }
+
+    /// RGBA rows of a `size`×`size` image, drawn with a top-left origin and y down, as the rows are stored and the
+    /// design measures.
+    private static func drawing(size: Int = size, _ body: (CGContext) -> Void) -> [UInt8] {
         _ = fontsRegistered
         var pixels = [UInt8](repeating: 0, count: size * size * 4)
         guard let context = CGContext(
