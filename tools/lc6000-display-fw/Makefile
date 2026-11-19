@@ -9,6 +9,7 @@ TESTS := $(wildcard test/test_*.c)
 .PHONY: test clean
 test: $(BUILD)/tests
 	$(BUILD)/tests
+	sh test/check_symbols.sh $(BUILD)/freestanding
 
 # The shared message vectors (#456), as a C header for the vectors walk.
 $(BUILD)/vectors.h: vectors/messages.json test/vectors_to_c.py
