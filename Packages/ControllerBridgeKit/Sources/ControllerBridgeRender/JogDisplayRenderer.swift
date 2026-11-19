@@ -77,21 +77,23 @@ public enum JogDisplayRenderer {
 
     // MARK: The design's measurements
 
-    static let center: CGFloat = 99
-    static let ringOuter: CGFloat = 95, ringInner: CGFloat = 85
+    // The numbers shared with the chip's C come from JogLayout (layout/layout.json, #571).
+    static let center = CGFloat(JogLayout.center)
+    static let ringOuter = CGFloat(JogLayout.ringOuter), ringInner = CGFloat(JogLayout.ringInner)
     /// The gap between beat sections, measured at mid-band.
-    static let ringGap: CGFloat = 7
+    static let ringGap = CGFloat(JogLayout.ringGap)
     /// Text stays inside this circle, 6 px clear of the ring.
     static let safe: CGFloat = 79
 
-    static let background = rgb(0x0B0B0B), text = rgb(0xEDEDEA), caption = rgb(0xBDBDBD), keyColor = rgb(0x9DC3EE)
-    static let live = rgb(0x00FF48), beatOff = rgb(0x2C2C2C), downbeatOff = rgb(0x5A5A5A)
+    static let background = rgb(JogLayout.ground), text = rgb(JogLayout.text), caption = rgb(JogLayout.caption)
+    static let keyColor = rgb(JogLayout.keyInk)
+    static let live = rgb(JogLayout.live), beatOff = rgb(JogLayout.beatOff), downbeatOff = rgb(JogLayout.downbeatOff)
     /// The deck number's ink on its color: black, or white on a dark one (DeckNumberInk).
     private static func numberInk(_ deck: [Int]) -> CGColor { DeckNumberInk.white(on: deck) ? text : background }
 
     /// The level meter (#461): an arc just inside the ring on the left, from 240° (bottom) to 300° clockwise from
     /// 12 o'clock. Green to `meterYellowFrom` of the arc, yellow above; the whole fill red at clip (127).
-    static let meterInner: CGFloat = 80, meterOuter: CGFloat = 83
+    static let meterInner = CGFloat(JogLayout.meterInner), meterOuter = CGFloat(JogLayout.meterOuter)
     static let meterFrom: CGFloat = 240, meterSpan: CGFloat = 60, meterYellowFrom: CGFloat = 0.75
     /// Track time (#460): the remaining time's size and the middle of its line box, under key/BPM. The largest that
     /// keeps "-99:59" inside the text-safe circle with a gap under key/BPM; the user asked for about 18, which reaches r 83.
@@ -101,15 +103,17 @@ public enum JogDisplayRenderer {
     struct Layout {
         let keySize: CGFloat, keyCenterY: CGFloat?, timeSize: CGFloat, timeCenterY: CGFloat
         static let image = Layout(keySize: 22, keyCenterY: nil, timeSize: 14, timeCenterY: 169)
-        static let drawn = Layout(keySize: 18, keyCenterY: 140.5, timeSize: 21, timeCenterY: 160)
+        static let drawn = Layout(keySize: CGFloat(JogLayout.keySize), keyCenterY: CGFloat(JogLayout.keyCenterY),
+                                  timeSize: CGFloat(JogLayout.timeSize), timeCenterY: CGFloat(JogLayout.timeCenterY))
     }
     /// The progress ring (#524), in the panel's black band outside the frame: r 103–107 from the frame's center, a
     /// 0x4A4A4A track. How much of the band the round window shows is checked on the unit (#469).
-    static let progressInner: CGFloat = 103, progressOuter: CGFloat = 107
-    static let progressTrack = rgb(0x4A4A4A)
+    static let progressInner = CGFloat(JogLayout.bandInner), progressOuter = CGFloat(JogLayout.bandOuter)
+    static let progressTrack = rgb(JogLayout.bandTrack)
     /// The peak tick's width, in degrees.
     static let meterTick: CGFloat = 2
-    static let meterYellow = rgb(0xFFD400), meterClip = rgb(0xFF3B30), meterPeak = rgb(0xFFFFFF)
+    static let meterYellow = rgb(JogLayout.meterYellow), meterClip = rgb(JogLayout.warningRed)
+    static let meterPeak = rgb(JogLayout.meterPeak)
 
     static func badge(_ playerType: String?) -> String? { JogDisplayWords.badge(playerType) }
     static func untitled(_ playerType: String?) -> (title: String, caption: String) { JogDisplayWords.untitled(playerType) }
@@ -174,24 +178,33 @@ public enum JogDisplayRenderer {
     private static func rule(phase: Int?, color: CGColor, in context: CGContext) {
         guard let phase, phase != 0 else {
             context.setFillColor(color)
-            context.fill(CGRect(x: 50, y: 127, width: 98, height: 2))
-            if phase == 0 { context.fill(CGRect(x: 98, y: 125, width: 2, height: 6)) }
+            context.fill(ruleRect)
+            if phase == 0 { context.fill(tickRect) }
             return
         }
         context.setFillColor(dimmed(color))
-        context.fill(CGRect(x: 50, y: 127, width: 98, height: 2))
+        context.fill(ruleRect)
         let length = CGFloat(phaseBar(phase))
         context.setFillColor(color)
-        context.fill(CGRect(x: phase < 0 ? center - length : center, y: 126, width: length, height: 4))
+        context.fill(CGRect(x: phase < 0 ? center - length : center, y: CGFloat(JogLayout.barY), width: length,
+                            height: CGFloat(JogLayout.barHeight)))
     }
 
+    /// The rule, and the in-phase tick at its center (JogLayout, shared with the chip).
+    static let ruleRect = CGRect(x: CGFloat(JogLayout.ruleX), y: CGFloat(JogLayout.ruleY), width: CGFloat(JogLayout.ruleWidth),
+                                 height: CGFloat(JogLayout.ruleHeight))
+    static let tickRect = CGRect(x: CGFloat(JogLayout.tickX), y: CGFloat(JogLayout.tickY), width: CGFloat(JogLayout.tickWidth),
+                                 height: CGFloat(JogLayout.tickHeight))
+
     /// How much of the deck color the rule keeps while off phase.
-    static let phaseDim: CGFloat = 0.35
+    static let phaseDim = CGFloat(JogLayout.phaseDim)
+    /// The ground's level in each channel (it is a gray).
+    static let groundLevel = CGFloat(JogLayout.ground & 0xFF)
 
     /// The deck color at `phaseDim` over the ground, each channel rounded to a whole 0–255 level.
     private static func dimmed(_ color: CGColor) -> CGColor {
         let deck = color.components ?? [1, 1, 1, 1]
-        let level = { (channel: CGFloat) -> CGFloat in ((channel * 255 * phaseDim + 11 * (1 - phaseDim)).rounded()) / 255 }
+        let level = { (channel: CGFloat) -> CGFloat in ((channel * 255 * phaseDim + groundLevel * (1 - phaseDim)).rounded()) / 255 }
         return CGColor(srgbRed: level(deck[0]), green: level(deck[1]), blue: level(deck[2]), alpha: 1)
     }
 
@@ -199,9 +212,10 @@ public enum JogDisplayRenderer {
     /// offset in beats (`phase`/16384); so a hundredth of a beat is a third of the way and half a beat the whole half.
     /// At least 1 px off phase.
     static func phaseBar(_ phase: Int) -> Int {
-        func g(_ beats: Double) -> Double { beats / (abs(beats) + 0.02) }
-        let length = (49 * g(abs(Double(phase)) / 16384) / g(0.5)).rounded()
-        return max(1, min(49, Int(length)))
+        func g(_ beats: Double) -> Double { beats / (abs(beats) + JogLayout.phaseCurve) }
+        let most = JogLayout.barMax
+        let length = (Double(most) * g(abs(Double(phase)) / Double(JogLayout.phaseUnitsPerBeat)) / g(JogLayout.phaseFull)).rounded()
+        return max(1, min(most, Int(length)))
     }
 
     /// One line of the text block: its words, face, CSS line box and tracking. The drawn display firmware lays out the
@@ -218,8 +232,9 @@ public enum JogDisplayRenderer {
         if title.isEmpty {
             // No title: the deck says what it holds, or that it's empty. Nothing invented.
             let words = untitled(content.playerType)
-            return ([TextLine(string: words.title, font: "Geist-Bold", size: 26, lineHeight: 1.1, top: 66, color: text),
-                     TextLine(string: words.caption, font: "Geist-Medium", size: 16, lineHeight: 1.1, top: 100, color: caption)],
+            return ([TextLine(string: words.title, font: "Geist-Bold", size: 26, lineHeight: 1.1, top: CGFloat(JogLayout.untitledTop), color: text),
+                     TextLine(string: words.caption, font: "Geist-Medium", size: 16, lineHeight: 1.1, top: CGFloat(JogLayout.untitledCaptionTop),
+                                     color: caption)],
                     badge(content.playerType) != nil && badge(content.playerType) != "TRK")
         }
         var lines: [TextLine]

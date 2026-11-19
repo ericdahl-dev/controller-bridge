@@ -1,4 +1,5 @@
 #include "text.h"
+#include "layout_generated.h"
 
 #include <string.h>
 
@@ -64,7 +65,7 @@ int32_t dfw_text_units(const dfw_text_face *face, const uint8_t *codes, size_t c
 }
 
 /// One channel's blend of the ground toward the ink by a 4-bit coverage.
-static dfw_pixel blend(dfw_pixel ground, uint32_t ink, int level) {
+static dfw_pixel blend_level(dfw_pixel ground, uint32_t ink, int level) {
     dfw_pixel out = 0;
     for (int shift = 0; shift <= 16; shift += 8) {
         int g = (int)(ground >> shift & 0xFF), i = (int)(ink >> shift & 0xFF);
@@ -96,7 +97,7 @@ static void draw_glyph(dfw_pixel *frame, const dfw_text_face *face, uint8_t glyp
             if (px < 0 || px >= DFW_SIZE) continue;
             uint8_t pair = coverage[r * row_bytes + c / 2];
             int level = c % 2 ? pair & 0x0F : pair >> 4;
-            if (level) frame[y * DFW_SIZE + px] = blend(frame[y * DFW_SIZE + px], ink, level);
+            if (level) frame[y * DFW_SIZE + px] = blend_level(frame[y * DFW_SIZE + px], ink, level);
         }
     }
 }
@@ -121,7 +122,7 @@ static void draw_codes(dfw_pixel *frame, const dfw_text_face *face, const uint8_
 }
 
 /// The screen's center, where every line is centered.
-#define TEXT_CENTER 99.0f
+#define TEXT_CENTER DFW_CENTER
 
 void dfw_text_draw_line(dfw_pixel *frame, const dfw_text_line *line) {
     const dfw_text_face *face = line->face;
@@ -131,10 +132,10 @@ void dfw_text_draw_line(dfw_pixel *frame, const dfw_text_line *line) {
 }
 
 /// The key's blue (JogDisplayRenderer's keyColor); the BPM is in the face's own ink.
-#define KEY_INK 0x9DC3EEu
+#define KEY_INK DFW_KEY_INK
 #define EM_DASH 0x97
 /// Key and BPM's line box middle in drawn mode (#524, the renderer's Layout.drawn): 18 px, centered on y 140.5.
-#define FOOT_MIDDLE 140.5f
+#define FOOT_MIDDLE DFW_KEY_CENTER_Y
 
 void dfw_text_draw_foot(dfw_pixel *frame, const dfw_unit *unit) {
     const dfw_text_face *face = dfw_mono18;

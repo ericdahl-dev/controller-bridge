@@ -64,8 +64,8 @@ void feed(dfw_unit *unit, const char *hex) {
 }
 
 // Each test file's own table, each ending in { 0, 0 }. A new file adds its table here.
-extern const test_case all_tests[], draw_tests[], draw_live_tests[], text_tests[], layout_tests[], draw_band_tests[], ring_table_tests[], panel_tests[], present_tests[], panel_record_tests[];
-static const test_case *const tables[] = { all_tests, draw_tests, draw_live_tests, text_tests, layout_tests, draw_band_tests, ring_table_tests, panel_tests, present_tests, panel_record_tests };
+extern const test_case all_tests[], draw_tests[], draw_live_tests[], text_tests[], layout_tests[], draw_band_tests[], ring_table_tests[], panel_tests[], present_tests[], panel_record_tests[], geometry_tests[];
+static const test_case *const tables[] = { all_tests, draw_tests, draw_live_tests, text_tests, layout_tests, draw_band_tests, ring_table_tests, panel_tests, present_tests, panel_record_tests, geometry_tests };
 
 int main(void) {
     int run = 0;
