@@ -25,7 +25,8 @@ final class JogDisplayController {
     static let markerRate = 30.0
     /// Each mixer channel's meter from Syndicate (#461): the latest level, 0...1, and the peak held since `peakAt`.
     private var meters: [Int: (level: Double, peak: Double, peakAt: Double)] = [:]
-    private var lastMeterSent: Double?
+    /// When the next meter is due: a schedule 1/`markerRate` apart (#582), as the needle's (#561).
+    private var nextMeterDue: Double?
     /// The deck whose meter went out last: a switch sends the new one's at once.
     private var lastMeterDeck: Int?
     /// How long a peak holds above the level: the mixer LEDs' default (mixer.meter.hold_ms), as the LC6000 has none.
@@ -214,7 +215,7 @@ final class JogDisplayController {
             driver.meter(level: 0, peak: 0)
             return
         }
-        if deck == lastMeterDeck, let sent = lastMeterSent, clock.now - sent < 1 / Self.markerRate - 1e-9 { return }
+        if deck == lastMeterDeck, let due = nextMeterDue, clock.now < due - 1e-9 { return }
         lastMeterDeck = deck
         if clock.now - meter.peakAt > Self.peakHold {
             meter.peak = meter.level
@@ -222,7 +223,10 @@ final class JogDisplayController {
             meters[deck] = meter
         }
         func scaled(_ value: Double) -> Int { Int((min(max(value, 0), 1) * 127).rounded()) }
-        if driver.meter(level: scaled(meter.level), peak: scaled(meter.peak)) { lastMeterSent = clock.now }
+        if driver.meter(level: scaled(meter.level), peak: scaled(meter.peak)) {
+            let next = (nextMeterDue ?? clock.now) + 1 / Self.markerRate
+            nextMeterDue = next > clock.now ? next : clock.now + 1 / Self.markerRate
+        }
     }
 
     /// Each entry's facts, after Syndicate's feedback: a deck that stops keeps its needle where it is, and a new

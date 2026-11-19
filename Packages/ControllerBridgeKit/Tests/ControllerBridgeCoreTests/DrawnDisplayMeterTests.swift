@@ -48,6 +48,19 @@ struct DrawnDisplayMeterTests {
         #expect(Self.meters(port).count == settled)   // nothing new: nothing sent
     }
 
+    /// #582: a send schedule 1/30 s apart, as the needle's (#561): a send that lands late on a 10 ms tick doesn't push
+    /// the next one back. It was 25 a second.
+    @Test("A second of 10 ms ticks with the level changing every tick sends the meter 30 times")
+    func fullRate() throws {
+        let (rig, port) = try Self.drawing()
+        for step in 0..<100 {
+            rig.clock.now = 1 + Double(step) * 0.01
+            Self.level(rig, Float(step % 2 == 0 ? 0.2 : 0.9))
+            rig.coordinator.tick()
+        }
+        #expect(Self.meters(port).count == 30)
+    }
+
     @Test("The peak holds 0.3 s above the level, then falls to it")
     func peakHold() throws {
         let (rig, port) = try Self.drawing()
