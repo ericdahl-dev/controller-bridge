@@ -258,7 +258,102 @@ static void the_frame_draws_the_rings_corners(void) {
     CHECK(rec.last[25 * DFW_SIZE + 173] == 0x4A4A4Au);
 }
 
+/// A recording layer (#468): the layer's pixels, and per pixel how many writes this call made and whether one wrote
+/// black and a later one a color (the shimmer: the ring went dark on the visible layer before it was drawn again).
+typedef struct {
+    uint16_t pixels[DFW_LAYER_W * DFW_LAYER_H];
+    uint8_t writes[DFW_LAYER_W * DFW_LAYER_H];
+    uint8_t blacked[DFW_LAYER_W * DFW_LAYER_H];
+    int total, dark_then_lit, in_square;
+} recorder;
+static recorder record;
+
+static uint16_t record_read(void *ctx, int index) { return ((recorder *)ctx)->pixels[index]; }
+
+static void record_write(void *ctx, int index, uint16_t value) {
+    recorder *r = ctx;
+    int px = index % DFW_LAYER_W, py = index / DFW_LAYER_W;
+    if (px >= DFW_FRAME_X && px < DFW_FRAME_X + DFW_SIZE && py >= DFW_FRAME_Y && py < DFW_FRAME_Y + DFW_SIZE) r->in_square++;
+    if (r->blacked[index] && value != 0) r->dark_then_lit++;
+    if (value == 0) r->blacked[index] = 1;
+    if (r->writes[index] < 255) r->writes[index]++;
+    r->total++;
+    r->pixels[index] = value;
+}
+
+/// One present's band through the recorder: the counts start again, the pixels stay (the layer is the memory).
+static void record_band(void) {
+    memset(record.writes, 0, sizeof record.writes);
+    memset(record.blacked, 0, sizeof record.blacked);
+    record.total = record.dark_then_lit = record.in_square = 0;
+    const dfw_layer_io io = { record_read, record_write, &record };
+    dfw_band_layer(&unit, &io);
+}
+
+static int most_writes(void) {
+    int most = 0;
+    for (int i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) if (record.writes[i] > most) most = record.writes[i];
+    return most;
+}
+
+/// (1), (2), (5): a present's band writes each pixel at most once, never black and then a color, and never in the square.
+/// From a black layer and from a layer holding another ring (83 then 120 of 165).
+static void the_band_writes_each_pixel_once_with_its_final_value(void) {
+    memset(record.pixels, 0, sizeof record.pixels);
+    with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
+    record_band();
+    CHECK(record.total > 1000);
+    CHECK(most_writes() == 1 && record.dark_then_lit == 0 && record.in_square == 0);
+    with_time(DECK_4_BLUE_EMPTY, PLAYING, 120, 165, 0);
+    record_band();
+    CHECK(record.total > 0);
+    CHECK(most_writes() == 1 && record.dark_then_lit == 0 && record.in_square == 0);
+}
+
+/// (3): the same ring again writes nothing: the layer already holds it.
+static void an_unchanged_ring_writes_nothing(void) {
+    memset(record.pixels, 0, sizeof record.pixels);
+    with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
+    record_band();
+    CHECK(record.total > 1000);
+    record_band();
+    CHECK(record.total == 0);
+}
+
+/// (4), (5): a ring that goes (an unknown length, stale, a deck change) leaves the band black outside the square, the
+/// square untouched; and writes only what was lit.
+static void a_ring_that_goes_leaves_black(void) {
+    static const struct { const char *message; uint32_t now; } goes[] = {
+        { "F0 00 02 0B 7F 10 20 00 05 06 00 2A 00 00 F7", 10 },                        // unknown length
+        { "F0 00 02 0B 7F 10 20 00 02 07 21 F7", 10 },                                  // feedback stale
+        { "F0 00 02 0B 7F 10 20 00 09 03 03 00 00 01 48 00 50 00 F7", 10 },             // another deck
+    };
+    for (size_t n = 0; n < sizeof goes / sizeof goes[0]; n++) {
+        for (int i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) record.pixels[i] = 0x1234u;
+        for (int py = 0; py < DFW_LAYER_H; py++)
+            for (int px = 0; px < DFW_LAYER_W; px++)
+                if (in_cleared_band(px, py)) record.pixels[py * DFW_LAYER_W + px] = 0;
+        with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
+        record_band();
+        int lit = record.total;
+        feed(&unit, goes[n].message);
+        dfw_tick(&unit, goes[n].now);
+        record_band();
+        int off = 0;
+        for (int py = 0; py < DFW_LAYER_H; py++)
+            for (int px = 0; px < DFW_LAYER_W; px++) {
+                uint16_t p = record.pixels[py * DFW_LAYER_W + px];
+                off += in_cleared_band(px, py) ? p != 0 : p != 0x1234u;
+            }
+        CHECK(off == 0 && record.in_square == 0 && most_writes() == 1);
+        CHECK(record.total > 0 && record.total <= lit);
+    }
+}
+
 const test_case draw_band_tests[] = {
+    { "the band writes each pixel once with its final value", the_band_writes_each_pixel_once_with_its_final_value },
+    { "an unchanged ring writes nothing", an_unchanged_ring_writes_nothing },
+    { "a ring that goes leaves black", a_ring_that_goes_leaves_black },
     { "the band ring is the renderer's", the_band_ring_is_the_renderers },
     { "each band reference has the ring", each_band_reference_has_the_ring },
     { "no ring puts nothing", no_ring_puts_nothing },

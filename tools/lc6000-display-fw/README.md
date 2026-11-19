@@ -59,8 +59,9 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   from the frame's center, a 0x4A4A4A track and the fill clockwise from 12 o'clock in the deck color, or the
   warning's red or white. `dfw_band_pixels` puts its pixels in the frame's coordinates (some below 0 or past 197),
   each over what lies under it, and keeps no state. The frame draws the ones inside its 198 square (the ring crosses
-  its corners); `dfw_draw_band`, block B's band entry, writes the rest into layer 2, turned as the frame is, after
-  clearing the band so a ring that goes leaves nothing.
+  its corners); `dfw_draw_band`, block B's band entry, writes the rest into layer 2, turned as the frame is,
+  each band pixel once with its final value (black where there is no ring), only where the layer
+  differs (#468), so a ring that goes leaves nothing and an unchanged one writes nothing.
 - `src/font_header.h`: glyph coverage for the header's two faces and the track time's (#460), generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
