@@ -1,5 +1,5 @@
 // The mixer section (#207): channel faders, trim, EQ and filter knobs, cue/mute/solo, and VU meters, on mixer channel
-// N for the controller driving deck N. Addresses are in MixerOSC (provisional for input until the #207 spike).
+// N for the controller driving deck N. Addresses are in MixerOSC (inputs confirmed by the #207 spike, but for Cue).
 
 extension Bridge {
     /// A CC from one of the mixer's faders or knobs (#383: MixerModule). False for any other CC.
