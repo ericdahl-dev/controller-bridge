@@ -568,8 +568,10 @@ while :; do
       ;;
     write)
       warn "Writing $a3 to the $a1 area. Don't unplug or power off while it runs."
-      dfu-util -p "$a2" -a 0 -D "$a3" 2>&1 | tee "$WORK/flash-$STAMP-$a1.log"
-      plan record "$PLAN" "$a4" "${PIPESTATUS[0]}"
+      # Its status kept, not left to set -e: a failed write must reach the plan's stop and the way back (#567).
+      rc=0
+      dfu-util -p "$a2" -a 0 -D "$a3" 2>&1 | tee "$WORK/flash-$STAMP-$a1.log" || rc=$?
+      plan record "$PLAN" "$a4" "$rc"
       ;;
     power-cycle)
       reboot_check

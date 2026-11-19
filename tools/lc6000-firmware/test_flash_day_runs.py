@@ -32,8 +32,12 @@ FAKE_DFU_UTIL = textwrap.dedent('''\
     if "-l" in args:
         sys.stdout.write(open(os.path.join(unit, "listing.txt")).read())
         sys.exit(0)
+    fail = open(os.path.join(unit, "fail.txt")).read().split() if os.path.exists(os.path.join(unit, "fail.txt")) else []
     if opt("-U"):
         out = opt("-U")
+        address = int(opt("-s").split(":")[0], 0)
+        if ("read-" + ("options" if opt("-a") == "1" else "app" if address == {app} else "upper")) in fail:
+            sys.exit("dfu-util: fake read failure")
         if os.path.exists(out):
             sys.exit("dfu-util: file exists")
         address, size = (int(x, 0) for x in opt("-s").split(":"))
@@ -46,6 +50,8 @@ FAKE_DFU_UTIL = textwrap.dedent('''\
         sys.exit(0)
     if opt("-D"):
         image = dfupatch.parse(dfupatch.read(opt("-D")))
+        if ("write-" + ("app" if image.address == {app} else "upper")) in fail:
+            sys.exit("dfu-util: fake write failure")
         name, base = ("app.bin", {app}) if image.address == {app} else ("upper.bin", {upper})
         path = os.path.join(unit, name)
         memory = bytearray(open(path, "rb").read())
@@ -91,6 +97,11 @@ class FlashDayRunTests(unittest.TestCase):
         with open(path, "wb") as f:
             f.write(content)
         return path
+
+    def unit_fails(self, *what):
+        """The fake dfu-util fails these: read-app, read-upper, read-options, write-upper, write-app."""
+        with open(os.path.join(self.unit, "fail.txt"), "w") as f:
+            f.write(" ".join(what))
 
     def unit_holds(self, app, upper=None, devices=(("2-1.2", DISPLAY_LAYOUT),)):
         with open(os.path.join(self.unit, "app.bin"), "wb") as f:
@@ -165,6 +176,40 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.downloads(), [])
         self.assertEqual(self.memory("app.bin"), self.current_element)
+
+
+    FRESH = ["", "{current}", "{upper}", "{owner}", "y", "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+
+    def answers(self):
+        return [a.format(current=self.current, upper=self.upper, owner=self.owner) for a in self.FRESH]
+
+    def assert_stopped_with_the_way_back(self, result, reason):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(reason, result.stdout)
+        self.assertIn("The way back to stock firmware", result.stdout)
+
+    def test_a_failed_write_of_b_says_so_and_the_way_back_and_never_writes_the_image(self):
+        # set -e must not end the wizard silently inside the write's pipeline (#567).
+        self.unit_holds(self.current_element)
+        self.unit_fails("write-upper")
+        result = self.run_wizard(self.answers())
+        self.assert_stopped_with_the_way_back(result, "dfu-util reported an error writing block B")
+        self.assertEqual(self.memory("app.bin"), self.current_element)
+
+    def test_a_failed_write_of_the_image_says_dont_power_cycle(self):
+        self.unit_holds(self.current_element)
+        self.unit_fails("write-app")
+        result = self.run_wizard(self.answers())
+        self.assert_stopped_with_the_way_back(result, "Don't power-cycle")
+
+    def test_a_failed_read_says_so_and_the_way_back(self):
+        for what in ("read-app", "read-options", "read-upper"):
+            with self.subTest(what):
+                self.unit_holds(self.current_element)
+                self.unit_fails(what)
+                result = self.run_wizard(self.answers())
+                self.assert_stopped_with_the_way_back(result, "couldn't be read")
+                self.assertEqual(self.downloads(), [])
 
 
 if __name__ == "__main__":
