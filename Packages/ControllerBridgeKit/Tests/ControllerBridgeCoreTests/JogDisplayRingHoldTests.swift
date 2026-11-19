@@ -115,6 +115,30 @@ struct JogDisplayRingHoldTests {
         #expect(Self.ring(rig).last == lit)
     }
 
+    /// #533: the smooth pulse never lights the ring during an upload (#422), beats or not.
+    @Test("With the color message and the smooth pulse on, master beats during the uploads send the ring nothing but dark")
+    func pulseHeldWhileUploading() throws {
+        var profiles = try ControllerProfile.bundled()
+        for index in profiles.indices { profiles[index].mapping.leds.beatPulse = .beat }
+        let rig = ProfileMatchingTests.ProfileRig(profiles: profiles, sources: [Self.lc6000, Self.wd])
+        let port = Port()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: Rig.FakeClock(), log: rig.log, size: 1,
+                                                          renderBeat: { _, beat in [UInt8(beat), 0, 0, 255] }) { _ in [0, 0, 0, 255] })
+        rig.coordinator.start()
+        rig.coordinator.setColorMessages(true)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        let output = try #require(rig.midi.outputs[Self.lc6000.id + 1000])
+        rig.coordinator.setJogDisplay(enabled: true)
+        func last() -> [UInt8]? { output.colors.last { $0.note == 40 }.map { [$0.red, $0.green, $0.blue] } }
+        #expect(last() == [0, 0, 0])
+        for step in 0..<3 {
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(Int32(step + 1))]))
+            rig.coordinator.tick()
+            #expect(last() == [0, 0, 0], "beat \(step + 1)")
+            Self.answer(rig, port)
+        }
+    }
+
     @Test("A layer switch to deck 2 while images still go up: no ring lit from the switch until the last upload is done; then deck 2's color")
     func layerSwitchHoldsRing() throws {
         let (rig, port) = try Self.owned()
