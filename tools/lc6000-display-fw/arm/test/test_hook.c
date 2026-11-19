@@ -347,83 +347,101 @@ static void good_upper(void) {
     memset(upper, 0xFF, sizeof upper);
     put_word(upper + 0, UPPER_MARKER);
     put_word(upper + 4, UPPER_VERSION);
-    put_word(upper + 8, 33);
-    put_word(upper + 12, 0x85E2FFECu);
+    put_word(upper + 8, 37);
+    put_word(upper + 12, 0x6ACCA34Bu);
     put_word(upper + 16, TEST_LAYOUT);
-    put_word(upper + 20, 0x08080019u);
-    memcpy(upper + 24, "123456789", 9);
+    put_word(upper + 20, 0x0808001Du);
+    put_word(upper + 24, 0x0808001Fu);
+    memcpy(upper + 28, "123456789", 9);
 }
 
-void a_good_upper_block_gives_its_draw_entry(void) {
+/// B's draw entry if the B in `upper` checks out for `layout`, else 0; its band entry likewise.
+static uint32_t draw_entry(uint32_t layout) {
+    upper_entries entries;
+    return upper_check(upper, layout, &entries) ? entries.draw : 0;
+}
+
+static uint32_t band_entry(uint32_t layout) {
+    upper_entries entries;
+    return upper_check(upper, layout, &entries) ? entries.band : 0;
+}
+
+void a_good_upper_block_gives_its_draw_and_band_entries(void) {
     good_upper();
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0x08080019u);
+    CHECK(draw_entry(TEST_LAYOUT) == 0x0808001Du);
+    CHECK(band_entry(TEST_LAYOUT) == 0x0808001Fu);
 }
 
 void erased_upper_flash_has_no_block(void) {
     memset(upper, 0xFF, sizeof upper);
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+    CHECK(draw_entry(TEST_LAYOUT) == 0);
 }
 
 void a_block_for_another_version_is_refused(void) {
     good_upper();
     put_word(upper + 4, UPPER_VERSION + 1);
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+    CHECK(draw_entry(TEST_LAYOUT) == 0);
 }
 
 void a_block_built_for_another_layout_is_refused(void) {
-    // B's own CRC is good (Python's zlib, 0xD678A468), so only the layout check can refuse it (#516).
+    // B's own CRC is good (Python's zlib, 0x11D221A8), so only the layout check can refuse it (#516).
     good_upper();
     put_word(upper + 16, TEST_LAYOUT + 1);
-    put_word(upper + 12, 0xD678A468u);
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
-    CHECK(upper_check(upper, TEST_LAYOUT + 1) == 0x08080019u);
+    put_word(upper + 12, 0x11D221A8u);
+    CHECK(draw_entry(TEST_LAYOUT) == 0);
+    CHECK(draw_entry(TEST_LAYOUT + 1) == 0x0808001Du);
 }
 
 void a_block_whose_CRC_doesnt_match_is_refused(void) {
     good_upper();
-    upper[28] ^= 1;
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+    upper[32] ^= 1;
+    CHECK(draw_entry(TEST_LAYOUT) == 0);
 }
 
 void a_length_past_the_sector_or_inside_the_header_is_refused(void) {
     good_upper();
     put_word(upper + 8, UPPER_LIMIT + 4);
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+    CHECK(draw_entry(TEST_LAYOUT) == 0);
     put_word(upper + 8, UPPER_HEADER - 1);
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+    CHECK(draw_entry(TEST_LAYOUT) == 0);
     put_word(upper + 8, 0);
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+    CHECK(draw_entry(TEST_LAYOUT) == 0);
 }
 
 void an_entry_that_isnt_Thumb_code_inside_the_block_is_refused(void) {
-    // Each entry with its own good CRC (Python's zlib), so only the entry check can refuse it.
-    static const struct { uint32_t entry, crc; } bad[] = {
-        { 0x08080018u, 0x58742669u }, /* no Thumb bit */
-        { 0x08080023u, 0xB8C474E5u }, /* past the end of B */
-        { 0x08080015u, 0x1F584617u }, /* inside the header */
-        { 0x00000019u, 0x2CF65E5Du }, /* nowhere near B */
+    // Each entry with its own good CRC (Python's zlib), so only the entry check can refuse it: the draw entry at +20,
+    // then the band entry at +24 (#524).
+    static const struct { uint32_t at, entry, crc; } bad[] = {
+        { 20, 0x0808001Cu, 0xED6A6808u }, /* no Thumb bit */
+        { 20, 0x08080027u, 0x6112D795u }, /* past the end of B */
+        { 20, 0x08080019u, 0x19C48484u }, /* inside the header */
+        { 20, 0x0000001Du, 0x961C71FAu }, /* nowhere near B */
+        { 24, 0x0808001Eu, 0xB75A7ACEu },
+        { 24, 0x08080027u, 0x37B69D09u },
+        { 24, 0x08080019u, 0xCA297C96u },
+        { 24, 0x0000001Fu, 0xC3D802FAu },
     };
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
         good_upper();
-        put_word(upper + 20, bad[i].entry);
+        put_word(upper + bad[i].at, bad[i].entry);
         put_word(upper + 12, bad[i].crc);
-        CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+        CHECK(draw_entry(TEST_LAYOUT) == 0);
     }
 }
 
-/// A good B of 0x20024 bytes, past sector 8 into sector 9: zeros after the good B's bytes. CRC from Python's zlib.
+/// A good B of 0x20028 bytes, past sector 8 into sector 9: zeros after the good B's bytes. CRC from Python's zlib.
 static void long_upper(void) {
     good_upper();
-    memset(upper + 33, 0, 0x20024 - 33);
-    put_word(upper + 8, 0x20024);
-    put_word(upper + 12, 0x3D15BEA1u);
+    memset(upper + 37, 0, 0x20028 - 37);
+    put_word(upper + 8, 0x20028);
+    put_word(upper + 12, 0x2B090256u);
 }
 
 void a_block_past_sector_8_is_checked_whole(void) {
     long_upper();
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0x08080019u);
-    upper[0x20023] = 1;
-    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+    CHECK(draw_entry(TEST_LAYOUT) == 0x0808001Du);
+    upper[0x20027] = 1;
+    CHECK(draw_entry(TEST_LAYOUT) == 0);
 }
 
 /// zlib's CRC-32 a bit at a time, for the hook tests' B: its layout word is A's own DFW_LAYOUT, which differs between
@@ -495,7 +513,7 @@ void an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer(void) {
     for (int bad = 0; bad < 2; bad++) {
         cold_boot();
         hooked_upper();
-        if (bad == 0) upper[28] ^= 1;
+        if (bad == 0) upper[32] ^= 1;
         else put_word(upper + 4, UPPER_VERSION + 1);
         stock.upper = upper;
         stock.drawing = NULL;
@@ -526,7 +544,7 @@ void a_long_upper_block_is_checked_whole_at_the_first_ask(void) {
     for (int corrupt = 0; corrupt < 2; corrupt++) {
         cold_boot();
         hooked_long_upper();
-        if (corrupt) upper[0x20023] = 1;  // B's last byte: only a whole check sees it
+        if (corrupt) upper[0x20027] = 1;  // B's last byte: only a whole check sees it
         stock.upper = upper;
         stock.drawing = NULL;
         deliver(0, CAPABILITY_V1);
@@ -589,7 +607,7 @@ const test_case all_tests[] = {
     { "garbage with the magic but a bad check word is fresh state", garbage_with_the_magic_but_a_bad_check_word_is_fresh_state },
     { "three seconds of silence turn the screen stale", three_seconds_of_silence_turn_the_screen_stale },
     { "the millisecond clock runs on across a counter wrap", the_millisecond_clock_runs_on_across_a_counter_wrap },
-    { "a good upper block gives its draw entry", a_good_upper_block_gives_its_draw_entry },
+    { "a good upper block gives its draw and band entries", a_good_upper_block_gives_its_draw_and_band_entries },
     { "erased upper flash has no block", erased_upper_flash_has_no_block },
     { "a block for another version is refused", a_block_for_another_version_is_refused },
     { "a block built for another layout is refused", a_block_built_for_another_layout_is_refused },

@@ -11,9 +11,9 @@ PROOF_SIZE = 512 * 1024
 
 
 def good_block():
-    """The same B as the C header tests (arm/test/test_hook.c): header version 3 with its layout word (#516), CRC
-    0x85E2FFEC zlib's, worked out apart."""
-    return struct.pack("<IIIIII", 0x42574644, 3, 33, 0x85E2FFEC, 0x1A2B3C4D, 0x08080019) + b"123456789"
+    """The same B as the C header tests (arm/test/test_hook.c): header version 4 with its layout word (#516) and its
+    draw and band entries (#524), CRC 0x6ACCA34B zlib's, worked out apart."""
+    return struct.pack("<IIIIIII", 0x42574644, 4, 37, 0x6ACCA34B, 0x1A2B3C4D, 0x0808001D, 0x0808001F) + b"123456789"
 
 
 def run(*argv):
@@ -88,7 +88,7 @@ class BuildUpperDfuTests(unittest.TestCase):
     def test_a_block_whose_header_doesnt_check_out_is_refused(self):
         good = good_block()
         bad_crc = bytearray(good)
-        bad_crc[28] ^= 1
+        bad_crc[32] ^= 1
         cases = {
             "marker": b"\xff\xff\xff\xff" + good[4:],
             # The 20-byte header #501 first built, without a layout word: refused, never read as version 2.
@@ -96,7 +96,8 @@ class BuildUpperDfuTests(unittest.TestCase):
             "CRC": bytes(bad_crc),
             "length": good + b"\xff",  # the file is longer than the header's length
             # No Thumb bit, with its own good CRC (worked out with zlib apart), so only the entry check can refuse it.
-            "entry": good[:12] + struct.pack("<III", 0x58742669, 0x1A2B3C4D, 0x08080018) + good[24:],
+            "draw entry": good[:12] + struct.pack("<IIII", 0xED6A6808, 0x1A2B3C4D, 0x0808001C, 0x0808001F) + good[28:],
+            "band entry": good[:12] + struct.pack("<IIII", 0xB75A7ACE, 0x1A2B3C4D, 0x0808001D, 0x0808001E) + good[28:],
         }
         for reason, block in cases.items():
             with self.subTest(reason):

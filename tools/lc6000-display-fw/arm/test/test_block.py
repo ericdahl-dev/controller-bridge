@@ -271,15 +271,16 @@ def built_layout():
     return struct.unpack_from("<I", upper_block(), 16)[0]
 
 
-def sealed_upper(layout, entry, body):
-    """A block B with its header's length and CRC (zlib's, from +16) worked out here."""
-    rest = struct.pack("<II", layout, entry) + body
-    return struct.pack("<IIII", 0x42574644, 3, 16 + len(rest), zlib.crc32(rest)) + rest
+def sealed_upper(layout, entry, body, band=None):
+    """A block B with its header's length and CRC (zlib's, from +16) worked out here. Its band entry is the draw
+    entry plus 2 unless given: a capability ask calls neither."""
+    rest = struct.pack("<III", layout, entry, band if band is not None else entry + 2) + body
+    return struct.pack("<IIII", 0x42574644, 4, 16 + len(rest), zlib.crc32(rest)) + rest
 
 
 def good_upper():
     """A small block B for the chip's layout. Its entry is never called by a capability ask."""
-    return sealed_upper(built_layout(), 0x08080019, b"123456789")
+    return sealed_upper(built_layout(), 0x0808001D, b"123456789")
 
 
 def proven_block():
@@ -292,7 +293,7 @@ def proven_block():
 
 def full_upper():
     """A good B filling all 512 KB, so the check is as long as it can ever be."""
-    return sealed_upper(built_layout(), 0x08080019, bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 24)))
+    return sealed_upper(built_layout(), 0x0808001D, bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 28)))
 
 
 class UpperSwitchTests(unittest.TestCase):
@@ -363,9 +364,9 @@ class UpperBlockTests(unittest.TestCase):
 
     def test_b_starts_with_a_header_block_a_will_accept(self):
         data = upper_block()
-        marker, version, length, crc, layout, draw = struct.unpack_from("<IIIIII", data)
+        marker, version, length, crc, layout, draw, band = struct.unpack_from("<IIIIIII", data)
         self.assertEqual(marker, 0x42574644)
-        self.assertEqual(version, 3)
+        self.assertEqual(version, 4)
         self.assertEqual(length, len(data))
         self.assertLessEqual(length, UPPER_SIZE)
         self.assertEqual(crc, zlib.crc32(data[16:]))
@@ -373,9 +374,11 @@ class UpperBlockTests(unittest.TestCase):
                              check=True).stdout
         names = {name: int(value, 16) for value, _, name in (line.split() for line in out.splitlines()
                                                               if line.count(" ") == 2)}
-        self.assertEqual(draw & ~1, names["dfw_draw"])  # nm prints a Thumb function's address without bit 0
-        self.assertEqual(draw & 1, 1, "Thumb")
-        self.assertTrue(UPPER + 24 <= draw < UPPER + length)
+        for entry, name in ((draw, "dfw_draw"), (band, "dfw_draw_band")):
+            with self.subTest(name):
+                self.assertEqual(entry & ~1, names[name])  # nm prints a Thumb function's address without bit 0
+                self.assertEqual(entry & 1, 1, "Thumb")
+                self.assertTrue(UPPER + 28 <= entry < UPPER + length)
 
     def test_block_a_draws_through_a_good_b_and_stays_silent_for_a_corrupted_one(self):
         proven = proven_block()
@@ -384,8 +387,8 @@ class UpperBlockTests(unittest.TestCase):
         corrupted[len(corrupted) // 2] ^= 0x01
         # B's own bytes, resealed for another dfw_unit (#516): its CRC is good, only the layout is A's no longer.
         built = upper_block()
-        layout, entry = struct.unpack_from("<II", built, 16)
-        other_layout = sealed_upper(layout ^ 1, entry, built[24:])
+        layout, entry, band = struct.unpack_from("<III", built, 16)
+        other_layout = sealed_upper(layout ^ 1, entry, built[28:], band)
         for upper, drawn in ((built, True), (bytes(corrupted), False), (other_layout, False)):
             with self.subTest(drawn=drawn):
                 chip = Chip(data=proven, upper=upper)

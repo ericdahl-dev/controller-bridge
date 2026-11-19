@@ -53,7 +53,8 @@ $(ARM_BUILD)/block.bin: $(ARM_BUILD)/block.elf
 # build to build: it links its own copy of what the drawing uses from src/ (dfw_stale, say) and of the few C library
 # functions; --gc-sections drops the rest, so the protocol itself stays in A. Its header's length and CRC are filled
 # in after the link (upper_seal.py), and block A checks both before it calls B.
-UPPER_C := arm/upper_header.c arm/libc_min.c $(SRC)
+# The band (#524): a stub with dfw_draw_band's signature until src/ has the real one.
+UPPER_C := arm/upper_header.c arm/libc_min.c $(SRC) arm/test/band_stub.c
 # For the size tests only: one extra C file (absolute path) and extra link flags, to grow B past its limit.
 UPPER_EXTRA_C ?=
 UPPER_EXTRA_LDFLAGS ?=
