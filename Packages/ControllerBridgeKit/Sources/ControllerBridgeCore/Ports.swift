@@ -24,6 +24,9 @@ public struct MIDIEndpoint: Hashable, Sendable, Identifiable, Codable {
 public protocol MIDIOutput: Sendable {
     /// Throws when the destination is gone, which counts as an unplug.
     func send(_ event: MIDIEvent) throws
+    /// Sends Denon's color message (#530) for a pad or the ring: the only SysEx the bridge sends a controller, made
+    /// only by `LEDColorEncoder`.
+    func send(color: LEDColorMessage) throws
     /// Closes the port. Nothing is sent after this.
     func close()
 }

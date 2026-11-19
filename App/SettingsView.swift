@@ -471,10 +471,20 @@ struct SettingsView: View {
                           ? "Cue palette slots 1, 3, 5 and 7 in Syndicate's CUE COLORS, as they change"
                           : "Your own colors, for the app's badges and the LC6000's ring",
                       isOn: settings.followSyndicateDeckColors)
-            // Vivid keeps a color's hue on the LC6000's 64 colors; Exact rounds each channel (#151).
-            row("Ring colors", hint: settings.wrappedValue.ringColors == .vivid
-                ? "Strong colors on the ring and a held pad, keeping each hue"
-                : "Each channel rounded, as the pads' cue colors are; softer colors look paler") {
+            // #530: Denon's own color message gives the ring (and, later, the pads) their exact color. Off is the way
+            // back to the 64-color table, for a top panel firmware that doesn't take it.
+            switchRow("Exact colors on the LC6000",
+                      hint: settings.wrappedValue.colorMessages
+                          ? "The ring shows each deck's exact color"
+                          : "The ring uses the LC6000's 64 colors",
+                      isOn: settings.colorMessages)
+            // Vivid keeps a color's hue on the LC6000's 64 colors; Exact rounds each channel (#151). With exact colors on,
+            // only a held pad still takes the table, until the pads move to the color message too (#531).
+            row("Ring colors", hint: settings.wrappedValue.colorMessages
+                ? "For a held pad; the ring shows exact colors"
+                : settings.wrappedValue.ringColors == .vivid
+                    ? "Strong colors on the ring and a held pad, keeping each hue"
+                    : "Each channel rounded, as the pads' cue colors are; softer colors look paler") {
                 SegmentedPills(options: [RingColors.vivid, .exact], title: { $0 == .vivid ? "Vivid" : "Exact" },
                                selection: settings.ringColors)
                     .accessibilityElement(children: .contain).accessibilityLabel("Ring colors")
@@ -502,10 +512,11 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 hint("On the LC6000")
                 RoundedRectangle(cornerRadius: Theme.Radius.small)
-                    .fill(Color(RGB(deckColor: DeckColors.ledPreview(
+                    .fill(Color(RGB(deckColor: settings.wrappedValue.colorMessages
+                        // The color message (#530): the deck's own color.
+                        ? (shown ?? [0, 0, 0])
                         // rgb222, the LC6000's table, as the label says and #197 planned (#313): not a profile lookup.
-                        shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors, table: .rgb222
-                    ))))
+                        : DeckColors.ledPreview(shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors, table: .rgb222))))
                     .frame(width: 26, height: 26)
                     .accessibilityLabel("Deck \(deck) on the LC6000")
             }

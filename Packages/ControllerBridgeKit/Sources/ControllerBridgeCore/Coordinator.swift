@@ -68,12 +68,16 @@ public final class Coordinator {
     /// A Bridge for a controller, with the deck colors in use.
     /// Settings' ring color mapping (#151).
     private var ringColors = RingColors.vivid
+    /// Settings (#530): pads and ring in exact RGB through Denon's color message, where the profile lists them. Off,
+    /// every color goes through the 64-color table. The app turns it on from its setting.
+    private var colorMessages = false
 
     private func makeBridge(_ mapping: Mapping) -> Bridge {
         let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
         bridge.trace = trace
         bridge.deckColors = deckColors
         bridge.ringColors = ringColors
+        bridge.colorMessages = colorMessages
         return bridge
     }
 
@@ -393,7 +397,10 @@ public final class Coordinator {
         if let destination = chosenOutput ?? sameName ?? Self.match(allowed, bridge.mapping.midi.output) {
             do {
                 let opened = try midiSystem.openOutput(destination: destination)
-                bridge.output = trace.map { TracingOutput(inner: opened, name: destination.name, trace: $0) } ?? opened
+                let leds = bridge.mapping
+                bridge.output = trace.map {
+                    TracingOutput(inner: opened, name: destination.name, trace: $0, ledName: { leds.ledName(note: Int($0)) })
+                } ?? opened
                 // Layers sharing a unit open the same port: say it once.
                 if controllers[index].destination?.id != destination.id,
                    !controllers.contains(where: { $0.destination?.id == destination.id }) {
@@ -539,6 +546,9 @@ public final class Coordinator {
     ///   (pads.channel only), it plays the layer in front. Neither is the multi-channel state.
     /// Returns the event as the layers should see it: a ch1 control re-addressed to the active layer's channel; and,
     /// for a pad, the one layer that handles it.
+    /// `layerHandover`'s `only` for an event no layer handles: only controllers that don't follow layers get it.
+    private static let noLayer = -1
+
     private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) -> (MIDIEvent, only: Int?) {
         let layers = controllers.indices.filter { controllers[$0].source?.id == source && controllers[$0].followsLayers }
         guard let first = layers.first else { return (event, nil) }
@@ -565,8 +575,13 @@ public final class Coordinator {
             if velocity > 0, let at = layers.firstIndex(of: current) {
                 let target = layers[(at + 1) % layers.count]
                 activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
+                // Its light (#477) flashes full on the layer it stepped to, and goes back to idle on release.
+                controllers[target].bridge.pressLit("deck_select", true)
+            } else if velocity == 0 {
+                controllers[current].bridge.pressLit("deck_select", false)
             }
-            return (event, nil)
+            // Lit here; no layer handles the note itself, or a hidden one would keep it held.
+            return (event, Self.noLayer)
         }
         let onPads = layers.filter {
             let bridge = controllers[$0].bridge
@@ -912,6 +927,13 @@ public final class Coordinator {
         followSyndicateDeckColors = followSyndicate
         customDeckColors = custom
         applyDeckColors()
+        disconnectFailedOutputs()
+    }
+
+    /// Settings (#530): exact RGB through Denon's color message, or the 64-color table; repainted at once.
+    public func setColorMessages(_ on: Bool) {
+        colorMessages = on
+        for bridge in bridges { bridge.setColorMessages(on) }
         disconnectFailedOutputs()
     }
 

@@ -136,5 +136,6 @@ struct UnifiedLogSink: LogSink {
 /// The demo controller has no LEDs to light (#64): its LED writes go nowhere.
 struct DroppedMIDIOutput: MIDIOutput {
     func send(_ event: MIDIEvent) throws {}
+    func send(color: LEDColorMessage) throws {}
     func close() {}
 }

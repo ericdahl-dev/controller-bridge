@@ -28,6 +28,15 @@ struct DraftDecodesTests {
         #expect(draft.todos.contains { $0.key == "mapping.needle" })
     }
 
+    @Test("A draft never takes the LC6000's color message: it would send Denon's SysEx to another controller (#530)")
+    func noColorMessage() throws {
+        let draft = ProfileDraft.make(capture: DraftCheckTests.ddj)
+        let profile = try ControllerProfile(decoding: Data(draft.file.text().utf8))
+        #expect(profile.mapping.leds.colorMessage == nil)
+        #expect(!draft.placeholders.contains { $0.key.hasPrefix("mapping.leds.color_message") })
+        #expect(!draft.todos.contains { $0.key.hasPrefix("mapping.leds.color_message") })
+    }
+
     @Test("Each placeholder is listed with the LC6000 value it holds, and its TODO stays")
     func placeholders() throws {
         let draft = ProfileDraft.make(capture: DraftCheckTests.ddj)
