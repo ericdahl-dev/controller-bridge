@@ -283,10 +283,11 @@ read_upper() {
   dfu-util -p "$DFU_PATH" -a 0 -s "$UPPER_ADDRESS:$UPPER_SIZE" -U "$1"
 }
 
-# flash IMAGE LABEL [AREA] writes one .dfu to the display chip, after a typed confirmation, then reads it back and
-# compares. AREA is app (the image, 0x08008000) or upper (block B, 0x08080000); the caller has checked the file is one.
+# flash IMAGE LABEL [AREA] [WORD] writes one .dfu to the display chip, after the typed WORD (FLASH unless named), then
+# reads it back and compares. AREA is app (the image, 0x08008000) or upper (block B, 0x08080000); the caller has
+# checked the file is one. Only a rewrite of the upper flash names its own word, REWRITE (#468).
 flash() {
-  local image="$1" label="$2" area="${3:-app}" typed="" readback="$WORK/wd-readback-$STAMP-$2.bin"
+  local image="$1" label="$2" area="${3:-app}" word="${4:-FLASH}" typed="" readback="$WORK/wd-readback-$STAMP-$2.bin"
   if [[ "$area" == upper ]]; then
     warn "This ERASES and WRITES the display chip's upper flash, from 0x08080000 as far as block B reaches, with:"
   else
@@ -294,9 +295,9 @@ flash() {
   fi
   say  "  $image"
   note "The bootloader and the settings sector are not touched. Don't unplug or power off while it runs."
-  printf '  %s? Type FLASH to write it, anything else to stop:%s ' "$YELLOW" "$RESET"
+  printf '  %s? Type %s to write it, anything else to stop:%s ' "$YELLOW" "$word" "$RESET"
   read -r typed || true
-  [[ "$typed" == "FLASH" ]] || way_back
+  [[ -n "$word" && "$typed" == "$word" ]] || way_back
   if ! dfu-util -p "$DFU_PATH" -a 0 -D "$image" 2>&1 | tee "$WORK/flash-$STAMP-$label.log"; then
     warn "dfu-util reported an error. Don't retry blindly."
     way_back
@@ -565,13 +566,18 @@ if ! read_upper "$WORK/wd-upper-before-$STAMP.bin"; then
   way_back
 fi
 if ! UPPER_STATE=$(drawn upper "$UPPER_DFU" "$WORK/wd-upper-before-$STAMP.bin"); then
-  warn "The flash above the image is neither erased nor this block B. Nothing is written over it."
+  warn "The flash above the image is neither erased, this block B, nor a block B that checks out."
+  note "Nothing is written over it. Post the message above on #468."
   way_back
 fi
-B_DONE=0
+B_DONE=0; B_REPLACE=0
 if [[ "$UPPER_STATE" == holds* ]]; then
   B_DONE=1
   printf '  %s✓%s block B is already there, exactly: step 1 is done\n' "$GREEN" "$RESET"
+elif [[ "$UPPER_STATE" == replace* ]]; then
+  B_REPLACE=1
+  say "The flash above the image holds ${UPPER_STATE#replace }."
+  note "Step 1 rewrites it with this block B, after you type REWRITE."
 else
   printf '  %s✓%s the flash above the image is erased: block B can go there\n' "$GREEN" "$RESET"
 fi
@@ -581,6 +587,10 @@ pause
 stage "Step 1 of 2: block B"
 if (( B_DONE )); then
   say "Block B is already there, exactly as in $UPPER_DFU. Nothing to write."
+elif (( B_REPLACE )); then
+  say "Rewriting the upper flash with this block B. The read just before this one is the check that it's a B."
+  say "Until the owner's image is on, the image there now runs as before: a part or an old B is never called."
+  flash "$UPPER_DFU" "upper" upper REWRITE
 else
   say "Block B goes first. With only B on the chip, the image there now runs as before: only block A calls B."
   flash "$UPPER_DFU" "upper" upper

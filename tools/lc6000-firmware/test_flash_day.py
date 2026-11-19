@@ -37,8 +37,11 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(len(downloads), 1)
         start, end = self.stages.index("flash() {"), self.stages.index("# reboot_check")
         self.assertTrue(start < downloads[0] < end)
-        gate = self.stages.index('[[ "$typed" == "FLASH" ]] || way_back')
+        gate = self.stages.index('[[ -n "$word" && "$typed" == "$word" ]] || way_back')
         self.assertTrue(start < gate < downloads[0])
+        # The word is FLASH unless the caller names another: only a rewrite of the upper flash does (#468).
+        self.assertIn('word="${4:-FLASH}"', self.body("flash"))
+        self.assertEqual(re.findall(r'flash "[^\n]*" (?:app|upper) (\w+)', self.stages), ["REWRITE"])
 
     def test_no_dangerous_dfu_util_options_appear(self):
         for word in (":mass-erase", ":unprotect", ":force", "0x1FFF", "-s 0x08000000"):
@@ -119,6 +122,13 @@ class DrawnPathTests(unittest.TestCase):
         upper = self.drawn.index('flash "$UPPER_DFU" "upper" upper')
         owner = self.drawn.index('flash "$OWNER_DFU" "owner" app')
         self.assertLess(upper, owner)
+
+    def test_part_of_this_b_or_another_good_b_is_rewritten_behind_its_own_word(self):
+        before = self.drawn[self.drawn.index('stage "Before'):self.drawn.index('stage "Step 1 of 2')]
+        self.assertIn('[[ "$UPPER_STATE" == replace* ]]', before)
+        step_1 = self.drawn[self.drawn.index('stage "Step 1 of 2'):self.drawn.index('stage "Step 2 of 2')]
+        rewrite = step_1.index('flash "$UPPER_DFU" "upper" upper REWRITE')
+        self.assertLess(step_1.index('if (( B_REPLACE ))'), rewrite)
 
     def test_a_block_b_already_there_is_not_written_again(self):
         step_1 = self.drawn[self.drawn.index('stage "Step 1 of 2'):self.drawn.index('stage "Step 2 of 2')]
