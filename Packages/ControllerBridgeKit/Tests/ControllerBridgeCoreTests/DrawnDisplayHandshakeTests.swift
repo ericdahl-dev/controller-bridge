@@ -86,4 +86,34 @@ struct DrawnDisplayHandshakeTests {
         #expect(JogDisplaySlotCacheTests.uploadSlots(port) == [1])
         #expect(rig.log.lines.contains(Self.fallbackLine))
     }
+
+    /// The LC6000 following its four layers, all loaded, with Custom firmware that answered: drawn mode.
+    static func drawnLayers() throws -> (ProfileMatchingTests.ProfileRig, Port) {
+        let (rig, port) = try JogDisplayRingHoldTests.owned()
+        let unit = JogDisplayRingHoldTests.lc6000
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: unit, output: MIDIEndpoint(id: unit.id + 1000, name: unit.name))],
+            layers: LayersTests.lc6000Layers))
+        for deck in 1...4 { rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/Loaded", [.int(1)])) }
+        rig.coordinator.setDisplayFirmware(.custom)
+        rig.coordinator.setJogDisplay(enabled: true)
+        rig.coordinator.jogDisplayReply(answer)
+        return (rig, port)
+    }
+
+    @Test("A deck switch in drawn mode: one deck message (deck 2), no upload, and the ring is never held dark")
+    func deckSwitchDraws() throws {
+        let (rig, port) = try Self.drawnLayers()
+        #expect(!port.wd.contains(where: Self.isUpload))
+        port.wd.removeAll()
+        let before = JogDisplayRingHoldTests.ring(rig).count
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: JogDisplayRingHoldTests.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: JogDisplayRingHoldTests.lc6000.id)
+        let drawn = Self.drawn(port)
+        #expect(drawn.count == 1)
+        #expect(drawn.first?[9] == 0x03 && drawn.first?[10] == 2)
+        #expect(!port.wd.contains(where: Self.isUpload))
+        let since = JogDisplayRingHoldTests.ring(rig).dropFirst(before)
+        #expect(!since.isEmpty && !since.contains(0))
+    }
 }
