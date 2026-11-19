@@ -18,6 +18,10 @@ public final class Coordinator {
     }
     /// Streaming OSC, both ways, at most 5 a second per address in the trace.
     private var traceSampler = StreamSampler()
+    /// Where a finished meter capture's CSV goes (#582): the app's Debug build writes it to its Logs folder.
+    public var meterCaptureSink: (@Sendable (String) -> Void)?
+    /// The meter capture running, if any.
+    var meterCapture: MeterCapture?
     private var controllers: [Controller]
     /// The controller profiles a device can match.
     private var profiles: [ControllerProfile]
@@ -509,6 +513,7 @@ public final class Coordinator {
 
     /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
     public func tick() {
+        finishMeterCapture()
         settleLayer()
         runSweep()
         for bridge in bridges { bridge.tick() }
@@ -516,6 +521,16 @@ public final class Coordinator {
         holdRing()
         checkLiveness()
         disconnectFailedOutputs()
+    }
+
+    /// Starts a meter capture of `seconds` from now (#582).
+    func startMeterCapture(seconds: Double) { meterCapture = MeterCapture(start: clock.now, seconds: seconds) }
+
+    /// A meter capture whose time is up goes to its sink, once.
+    private func finishMeterCapture() {
+        guard let capture = meterCapture, capture.done(at: clock.now) else { return }
+        meterCapture = nil
+        meterCaptureSink?(capture.csv)
     }
 
     /// The first endpoint whose name contains `wanted`, ignoring case.
@@ -699,6 +714,10 @@ public final class Coordinator {
 
     /// An OSC feedback message from Syndicate. One listener fans out to every Bridge.
     public func feedback(_ message: OSCMessage) {
+        if meterCapture != nil {
+            meterCapture?.record(message, at: clock.now)
+            finishMeterCapture()
+        }
         // Syndicate's deck colors are cue palette slots 1, 3, 5 and 7 (#123).
         // Several slots may come in one message (OSC arrays, flattened): one group of four per slot.
         if message.address.lowercased().hasSuffix("/colorpalette") {

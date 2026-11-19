@@ -19,6 +19,8 @@ enum BridgeHost {
         #if DEBUG
         // Everything an agent needs, to os_log and Library/Logs/DeckBridge (#395). Set before start, so ports trace too.
         coordinator.trace = DebugTrace.shared.sink
+        // The meter capture (#582): its CSV goes next to the trace, in Library/Logs/DeckBridge.
+        coordinator.meterCaptureSink = { csv in DebugTrace.shared.writeCapture(csv, named: "meter-capture") }
         #endif
         // The LC6000's jog display (#165). Off until Settings turns it on, which comes through the pipe. Always attached:
         // with no WD port, or with the switch off, it only previews, for the Diagnostics simulator (#221).

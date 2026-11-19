@@ -114,6 +114,16 @@ struct TraceJogDisplayTests {
         #expect(lines.list.contains("jog display: drawn display, protocol 1"))
     }
 
+    /// #582: drawn messages are all command 0x20, and the needle and the meter are both 13 bytes, so the trace names the
+    /// op: "WD out cmd=0x20 op=0A meter 13 bytes".
+    @Test("A drawn message's trace line names its op, so a meter and a needle can be told apart")
+    func drawnOpNamed() {
+        #expect(JogDisplayDriver.describe(DrawnDisplay.Message.meter(level: 64, peak: 90).bytes) == "cmd=0x20 op=0A meter 13 bytes")
+        #expect(JogDisplayDriver.describe(DrawnDisplay.Message.needle(4096).bytes) == "cmd=0x20 op=09 needle 13 bytes")
+        #expect(JogDisplayDriver.describe(DrawnDisplay.Message.time(elapsedSeconds: 1, lengthSeconds: 2).bytes)
+                == "cmd=0x20 op=06 time 15 bytes")
+    }
+
     @Test("Hello on the controller port, the upload out on WD, each ack with its status and ms since the last send")
     func wdTraffic() {
         let rig = JogDisplayDriverTests.DriverRig()
