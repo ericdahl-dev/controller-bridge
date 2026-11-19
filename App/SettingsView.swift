@@ -185,9 +185,8 @@ struct SettingsView: View {
                       isOn: settings.jogDisplay)
             if settings.wrappedValue.jogDisplay {
                 // Denon's firmware shows 15 image slots; a unit flashed with the slot 16 patch shows 16 (#425).
-                row("Firmware", hint: settings.wrappedValue.displayFirmware == .denon
-                    ? "Denon's own: 15 image slots, so deck 4 shows three of its four beats"
-                    : "Custom: 16 image slots. Only for a unit flashed with the slot 16 patch") {
+                // The hint ends with what was found on the unit (#456): Denon, Custom (images), or drawn.
+                row("Firmware", hint: settings.wrappedValue.displayFirmware.hint(found: model.status.displayFound)) {
                     SegmentedPills(options: [DisplayFirmware.denon, .custom], title: { $0 == .denon ? "Denon" : "Custom" },
                                    selection: settings.displayFirmware)
                         .accessibilityElement(children: .contain).accessibilityLabel("Firmware")

@@ -28,6 +28,8 @@ final class BridgeStatus {
     var missingSubscriptions: [Subscription] = []
     /// Another DJ app holds the LC6000 as its host (#333).
     var otherHost = false
+    /// The jog display firmware found on the unit (#456), for Settings' Firmware row.
+    var displayFound: DisplayFound?
     /// What the controllers' profiles need, for the setup guide (#211).
     // The eight every profile needs until the Coordinator says (BarRamp joins only with the jog display on, #165).
     var requiredSubscriptions: [Subscription] = Subscription.always
