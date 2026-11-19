@@ -443,6 +443,20 @@ void with_a_good_upper_block_the_capability_ask_is_answered(void) {
     CHECK(rec.sends == 1);
 }
 
+void an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer(void) {
+    for (int bad = 0; bad < 2; bad++) {
+        cold_boot();
+        good_upper();
+        if (bad == 0) upper[24] ^= 1;
+        else put_word(upper + 4, UPPER_VERSION + 1);
+        stock.upper = upper;
+        stock.drawing = NULL;
+        deliver(0, CAPABILITY_V1);
+        tick();
+        CHECK(rec.sends == 0);
+    }
+}
+
 const test_case all_tests[] = {
     { "with no drawing from stock the capability ask gets no answer",
       with_no_drawing_from_stock_the_capability_ask_gets_no_answer },
@@ -476,6 +490,7 @@ const test_case all_tests[] = {
     { "a block past sector 8 is checked whole", a_block_past_sector_8_is_checked_whole },
     { "with an erased upper block the capability ask gets no answer", with_an_erased_upper_block_the_capability_ask_gets_no_answer },
     { "with a good upper block the capability ask is answered", with_a_good_upper_block_the_capability_ask_is_answered },
+    { "an upper block with a bad CRC or another version gets no answer", an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer },
     { 0, 0 },
 };
 
