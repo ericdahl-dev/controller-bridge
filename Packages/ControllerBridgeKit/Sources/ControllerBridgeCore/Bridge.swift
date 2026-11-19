@@ -401,6 +401,7 @@ final class Bridge {
         padLEDs()
         led(mapping.leds.pitchCenter, pitchCenterVelocity)
         pitchArrowLEDs()
+        pressLitLEDs()
         mixerLEDs()
     }
 
