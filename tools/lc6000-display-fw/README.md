@@ -5,7 +5,7 @@ showing uploaded images (spec #455, this part #457). DeckBridge sends the messag
 parses them and draws today's design B into a back buffer.
 
 Everything here builds and is tested natively, on a Mac or on Linux, with no hardware and no vendor data. The
-Arm build and the hook in the stock image are #467, under `arm/`. The repo never holds vendor firmware or built
+Arm build and the hook in the stock image are #467. The repo never holds vendor firmware or built
 images.
 
 ## Build and test
