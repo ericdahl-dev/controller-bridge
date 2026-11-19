@@ -40,4 +40,66 @@ struct DrawnDisplayStateTests {
             }
         }
     }
+
+    @Test("Every invalid host message in the shared vectors changes nothing, as on the chip")
+    func invalid() {
+        let bad = (Vectors.file["invalid"] as! [[String: Any]]).filter { $0["direction"] as? String != "unit" }
+        #expect(!bad.isEmpty)
+        for entry in bad {
+            var state = DrawnDisplayState()
+            state.apply(Self.begin)
+            state.apply(Self.deck3)
+            state.apply(DrawnDisplay.Message.state(.loaded).bytes)
+            let before = state
+            let changed = state.apply(Vectors.bytes(entry))
+            #expect(!changed, "\(entry["name"]!)")
+            #expect(state == before, "\(entry["name"]!)")
+        }
+    }
+
+    typealias Message = DrawnDisplay.Message
+
+    /// Begin, deck 3, then its state, texts, tempo, phase and the live values, as the full state sends them.
+    static func full() -> DrawnDisplayState {
+        var state = DrawnDisplayState()
+        for message: Message in [.begin(version: 1), .deck(number: 3, color: [0, 255, 0], player: .sequencer),
+                                 .state([.loaded, .playing, .stale]), .text(.title, "Strobe"), .tempo(tenths: 1280),
+                                 .phase(164), .beat(2), .needle(4096), .meter(level: 64, peak: 90)] {
+            state.apply(message.bytes)
+        }
+        return state
+    }
+
+    @Test("Nothing before begin: a deck, text or state message alone is ignored")
+    func beforeBegin() {
+        var state = DrawnDisplayState()
+        for message: Message in [.deck(number: 3, color: [0, 255, 0], player: .sequencer), .text(.title, "Strobe"),
+                                 .state(.loaded), .phase(164)] {
+            state.apply(message.bytes)
+        }
+        #expect(state == DrawnDisplayState())
+    }
+
+    @Test("The heartbeat's same deck changes nothing; another deck clears flags 0-4, texts, tempo and phase, keeps stale")
+    func deckChange() {
+        var state = Self.full()
+        let changed = state.apply(Message.deck(number: 3, color: [0, 255, 0], player: .sequencer).bytes)
+        #expect(!changed)
+        #expect(state.texts[.title] == Array("Strobe".utf8) && state.tempo == 1280 && state.phase == 164)
+        state.apply(Message.deck(number: 1, color: [255, 0, 0], player: .track).bytes)
+        #expect(state.flags == .stale)
+        #expect(state.texts.isEmpty && !state.textHeard && state.tempo == 0 && state.phase == DrawnPhase.unknown)
+        // The master clock's beat, the needle and the meter aren't the deck's: they stay.
+        #expect(state.beat == 2 && state.needle == 4096 && state.meter?.level == 64)
+    }
+
+    @Test("End forgets the deck and everything live; a new begin starts from nothing")
+    func end() {
+        var state = Self.full()
+        state.apply(Message.end(version: 1).bytes)
+        state.apply(Message.begin(version: 1).bytes)
+        #expect(state.drawn)
+        #expect(state.deck == nil && state.flags == [] && state.beat == 0 && state.needle == nil)
+        #expect(state.meter == nil && state.phase == DrawnPhase.unknown)
+    }
 }
