@@ -26,6 +26,26 @@ func fail(_ message: String) -> Never {
 }
 
 let fontDir = "Packages/ControllerBridgeKit/Sources/ControllerBridgeRender/Fonts"
+
+/// The picture's shared numbers (#571), from layout/layout.json: the generator reads the same table the renderer does.
+let layoutTable: [String: String] = {
+    let url = URL(fileURLWithPath: "tools/lc6000-display-fw/layout/layout.json")
+    guard let data = try? Data(contentsOf: url), let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let constants = json["constants"] as? [[String: Any]] else { fail("Can't read \(url.path)") }
+    var table: [String: String] = [:]
+    for constant in constants { if let name = constant["name"] as? String { table[name] = constant["value"] as? String } }
+    return table
+}()
+
+func layout(_ name: String) -> CGFloat {
+    guard let text = layoutTable[name], let value = Double(text) else { fail("layout.json has no \(name)") }
+    return CGFloat(value)
+}
+
+func layoutColor(_ name: String) -> Int {
+    guard let text = layoutTable[name], let value = Int(text, radix: 16) else { fail("layout.json has no color \(name)") }
+    return value
+}
 let arguments = Array(CommandLine.arguments.dropFirst())
 guard arguments.count == 2 else { fail("Usage: text_font_gen.swift <font_text.h> <text_widths.h>") }
 
@@ -96,8 +116,8 @@ let faces = [
          about: "the title at 20 px, line box tops 54, 78 and 64, 1.1: all on the same pixel phase"),
     Face(name: "caption16", file: "Geist-Medium.ttf", postScriptName: "Geist-Medium", size: 16, ink: caption, ground: ground,
          middle: 94 + 16 * 1.15 / 2, tracking: 0, kerned: false, about: "the artist, line box tops 94 and 103, 1.15; an untitled deck's caption, top 100, 1.1"),
-    Face(name: "mono18", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 18, ink: text,
-         ground: ground, middle: 140.5, tracking: 0, kerned: false,
+    Face(name: "mono18", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: layout("keySize"),
+         ink: text, ground: ground, middle: layout("keyCenterY"), tracking: 0, kerned: false,
          about: "key and BPM in drawn mode (#524), line box middle 140.5"),
 ]
 

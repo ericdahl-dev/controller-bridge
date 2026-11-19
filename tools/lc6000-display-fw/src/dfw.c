@@ -1,4 +1,5 @@
 #include "dfw.h"
+#include "layout_generated.h"
 
 #include <string.h>
 
@@ -20,8 +21,8 @@ enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_
 #define FLAG_LOOP 0x10
 /// The last minute's warning (#460, #524): steady red with this many seconds or fewer left, blinking with
 /// BLINK_SECONDS or fewer, and each half of the blink this long.
-#define WARNING_SECONDS 60
-#define BLINK_SECONDS 30
+#define WARNING_SECONDS DFW_WARNING_SECONDS
+#define BLINK_SECONDS DFW_BLINK_SECONDS
 #define BLINK_HALF_MS 500u
 /// No drawn-display message for this long draws the waiting look (#464): three missed heartbeats.
 #define SILENCE_MS 3000u

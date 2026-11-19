@@ -2,16 +2,17 @@
 // (0, 0) the top-left corner, a pixel's center at +0.5. Anti-aliased by coverage as draw.c is; its helpers are static
 // there, so the few this needs are repeated here.
 #include "draw_live.h"
+#include "layout_generated.h"
 #include "geometry.h"
 #include "draw_band.h"
 #include "ring_table.h"
 
-#define GROUND 0x0B0B0Bu
-#define LIVE 0x00FF48u
+#define GROUND DFW_GROUND
+#define LIVE DFW_LIVE
 #define KEYLINE 0x000000u
 #define MARKER 0xFFFFFFu
 
-#define CENTER 99.0f
+#define CENTER DFW_CENTER
 
 /// Beat `beat`'s (1-4) section in the live green, from the ring's table (#558). Swift fills the lit section once over
 /// the ground, so each pixel's color was worked out from the ground (src/ring_geometry.h), not over the unlit section
@@ -164,13 +165,13 @@ static void marker(dfw_pixel *frame, uint16_t needle) {
 
 /// The level meter (#461), Swift's drawMeter: the band 80-83 from 240° (the bottom, fraction 0) to 300° (the top,
 /// fraction 1) clockwise from 12 o'clock.
-#define METER_INNER 80.0f
-#define METER_OUTER 83.0f
-#define METER_TRACK 0x2C2C2Cu
-#define METER_YELLOW 0xFFD400u
-#define METER_PEAK 0xFFFFFFu
+#define METER_INNER DFW_METER_INNER
+#define METER_OUTER DFW_METER_OUTER
+#define METER_TRACK DFW_BEAT_OFF
+#define METER_YELLOW DFW_METER_YELLOW
+#define METER_PEAK DFW_METER_PEAK
 /// Clip (127): the whole fill, and a tick held there.
-#define METER_CLIP 0xFF3B30u
+#define METER_CLIP DFW_WARNING_RED
 /// Where the fill turns from green to yellow, as a fraction of the arc.
 #define METER_YELLOW_FROM 0.75f
 /// The peak tick's half width, as a fraction of the arc: 1° of the 60°.
@@ -245,7 +246,7 @@ static void draw_meter(dfw_pixel *frame, uint8_t level, uint8_t peak) {
 }
 
 /// The time's text, the renderer's text white.
-#define TIME_TEXT 0xEDEDEAu
+#define TIME_TEXT DFW_TEXT
 
 /// The ring's pixels that fall in the frame (#524): the band crosses the 198 square at its diagonals, and the layer's
 /// band leaves the square to the frame.

@@ -9,7 +9,7 @@
 #define CANVAS 216
 /// The frame sits 9 px in on the drawn image.
 #define INSET ((CANVAS - DFW_SIZE) / 2)
-#define GROUND 0x0B0B0Bu
+#define GROUND DFW_GROUND
 
 static dfw_pixel reference[CANVAS * CANVAS];
 static dfw_pixel canvas[CANVAS * CANVAS];

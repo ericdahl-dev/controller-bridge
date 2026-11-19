@@ -1,4 +1,5 @@
 #include "text.h"
+#include "layout_generated.h"
 
 #include <string.h>
 
@@ -121,7 +122,7 @@ static void draw_codes(dfw_pixel *frame, const dfw_text_face *face, const uint8_
 }
 
 /// The screen's center, where every line is centered.
-#define TEXT_CENTER 99.0f
+#define TEXT_CENTER DFW_CENTER
 
 void dfw_text_draw_line(dfw_pixel *frame, const dfw_text_line *line) {
     const dfw_text_face *face = line->face;
@@ -131,10 +132,10 @@ void dfw_text_draw_line(dfw_pixel *frame, const dfw_text_line *line) {
 }
 
 /// The key's blue (JogDisplayRenderer's keyColor); the BPM is in the face's own ink.
-#define KEY_INK 0x9DC3EEu
+#define KEY_INK DFW_KEY_INK
 #define EM_DASH 0x97
 /// Key and BPM's line box middle in drawn mode (#524, the renderer's Layout.drawn): 18 px, centered on y 140.5.
-#define FOOT_MIDDLE 140.5f
+#define FOOT_MIDDLE DFW_KEY_CENTER_Y
 
 void dfw_text_draw_foot(dfw_pixel *frame, const dfw_unit *unit) {
     const dfw_text_face *face = dfw_mono18;

@@ -4,14 +4,15 @@
 #ifndef DFW_RING_GEOMETRY_H
 #define DFW_RING_GEOMETRY_H
 #include "band_geometry.h"
+#include "layout_generated.h"
 
-#define RING_OUTER 95.0f
-#define RING_INNER 85.0f
+#define RING_OUTER DFW_RING_OUTER
+#define RING_INNER DFW_RING_INNER
 /// The gap between beat sections, measured at mid-band.
-#define RING_GAP 7.0f
-#define DOWNBEAT_OFF 0x5A5A5Au
-#define BEAT_OFF 0x2C2C2Cu
-#define LIVE 0x00FF48u
+#define RING_GAP DFW_RING_GAP
+#define DOWNBEAT_OFF DFW_DOWNBEAT_OFF
+#define BEAT_OFF DFW_BEAT_OFF
+#define LIVE DFW_LIVE
 
 /// sin and cos of a small angle by their series; ample for the ring's half gap (0.04 rad).
 static inline void small_sin_cos(float a, float *s, float *c) {

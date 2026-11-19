@@ -2,11 +2,12 @@
 // else wrapped at words at 20 px; the artist; an untitled deck's words and caption; every line cut with an ellipsis
 // to the round screen. Only the drawing calls this: it stays out of the hook block (#501).
 #include "text.h"
+#include "layout_generated.h"
 
 #include <string.h>
 
 /// The screen's center and the safe circle's radius (JogDisplayRenderer's center and safe).
-#define CENTER 99.0
+#define CENTER ((double)DFW_CENTER)
 #define SAFE 79.0
 #define ELLIPSIS 0x85
 #define EM_DASH 0x97

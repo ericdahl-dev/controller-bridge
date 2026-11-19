@@ -79,6 +79,17 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   The generator copies how CoreText places glyphs, so the C text lands where the Swift renderer's does. Add a
   glyph by adding it to the generator's list.
 
+## The picture's numbers
+
+`layout/layout.json` (#571) holds every number the Swift renderer and this C share: the colors (ground, text, the key's
+blue, the live green, the beat ring's grays, the warning's red and white, the band's track, the meter's), the radii
+(the beat ring, the meter, the band), drawn mode's foot (key/BPM 18 px at 140.5, the time 21 px at 160), the untitled
+text tops, and the thresholds (60 and 30 s for the warning, 0.1791 for the deck number's white).
+`layout/gen_layout.py` writes `src/layout_generated.h` and the Kit's `JogLayout.generated.swift` from it, each value
+written as its literal was, so neither side's numbers changed. Don't edit either; change the JSON and run
+`make layout`. `make test` regenerates both into `build/` and fails if they differ. The font generators read their
+sizes and middles from the same file.
+
 ## The messages
 
 `vectors/messages.json` is the protocol's one description (#456, #569), shared with the Swift side.

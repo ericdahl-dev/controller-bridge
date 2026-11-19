@@ -4,18 +4,19 @@
 #ifndef DFW_BAND_GEOMETRY_H
 #define DFW_BAND_GEOMETRY_H
 #include "dfw.h"
+#include "layout_generated.h"
 #include "geometry.h"
 
-#define CENTER 99.0f
-#define BAND_INNER 103.0f
-#define BAND_OUTER 107.0f
-#define BAND_TRACK 0x4A4A4Au
+#define CENTER DFW_CENTER
+#define BAND_INNER DFW_BAND_INNER
+#define BAND_OUTER DFW_BAND_OUTER
+#define BAND_TRACK DFW_BAND_TRACK
 /// Under the ring: the frame's ground inside the 198 square, the panel's black outside it.
-#define GROUND 0x0B0B0Bu
+#define GROUND DFW_GROUND
 #define PANEL 0x000000u
 /// The time's white (the blink's other half) and the warning's red, as draw_live.c's.
-#define WARNING_WHITE 0xEDEDEAu
-#define WARNING_RED 0xFF3B30u
+#define WARNING_WHITE DFW_WARNING_WHITE
+#define WARNING_RED DFW_WARNING_RED
 /// The band's reach either side, for the frame (x, y) loops: center ± (outer + 1).
 #define REACH 109
 

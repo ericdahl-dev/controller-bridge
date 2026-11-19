@@ -2,18 +2,19 @@
 // center at +0.5. Edges are anti-aliased by coverage: a pixel is blended toward a shape by how much of it the shape
 // covers, estimated from the signed distance between the pixel's center and the shape's edge.
 #include "draw.h"
+#include "layout_generated.h"
 #include "geometry.h"
 #include "text.h"
 #include "draw_live.h"
 #include "font_header.h"
 #include "ring_table.h"
 
-#define GROUND 0x0B0B0Bu
+#define GROUND DFW_GROUND
 /// The time left (#460, #524): centered on x 99, its line box's middle at y 160 (drawn mode's layout).
-#define TIME_CENTER_X 99.0f
-#define TIME_MIDDLE 160.0f
+#define TIME_CENTER_X DFW_CENTER
+#define TIME_MIDDLE DFW_TIME_CENTER_Y
 
-#define CENTER 99.0f
+#define CENTER DFW_CENTER
 
 /// The four beat sections, clockwise from 12 o'clock, beat 1 a step brighter; or all dark, the waiting look. From the
 /// ring's table (#558): each pixel's gray, worked out once by the same geometry (src/ring_geometry.h) over the ground,
@@ -192,7 +193,7 @@ const float dfw_linear_channel[256] = {
 /// The deck number's face on its deck color (#542 follow-up, DeckNumberInk): the text white (its own glyphs: light text
 /// is drawn heavier) when the color's relative luminance is under 0.1791, where white contrasts more than black; the
 /// ground's black otherwise.
-#define NUMBER_WHITE_BELOW 0.1791f
+#define NUMBER_WHITE_BELOW DFW_NUMBER_WHITE_BELOW
 
 static const dfw_face *number_ink(const dfw_deck_state *deck) {
     float luminance = 0.2126f * dfw_linear_channel[deck->r] + 0.7152f * dfw_linear_channel[deck->g] +
