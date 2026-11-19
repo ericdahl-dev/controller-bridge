@@ -190,6 +190,23 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("undecoded", err)
 
+    def test_compare_passes_a_readback_equal_to_the_files_image(self):
+        code, out, _ = run("compare", self.input, self.path("readback.bin", self.element))
+        self.assertEqual(code, 0)
+        self.assertIn(f"match: {len(self.element):#x} bytes at 0x{BASE:08X}", out)
+
+    def test_compare_refuses_a_readback_with_one_byte_changed_and_says_where(self):
+        changed = bytearray(self.element)
+        changed[0x123] ^= 0x01
+        code, _, err = run("compare", self.input, self.path("readback.bin", bytes(changed)))
+        self.assertEqual(code, 1)
+        self.assertIn(f"1 byte differs, the first at 0x{BASE + 0x123:08X}", err)
+
+    def test_compare_refuses_a_readback_of_another_length(self):
+        code, _, err = run("compare", self.input, self.path("readback.bin", self.element[:-4]))
+        self.assertEqual(code, 1)
+        self.assertIn("bytes, the image is", err)
+
     def test_apply_writes_the_patched_file(self):
         old = self.element[0x40]
         patch = self.path("p.txt", f"0x{BASE + 0x40:08X} {old:02x} {old ^ 0xFF:02x}\n")
@@ -233,6 +250,28 @@ class CommittedPatchTests(unittest.TestCase):
         with open(os.path.join(here, "patches", name)) as f:
             return f.read()
 
+    def test_show_slot_16_is_one_edit_that_raises_the_show_bound_from_15_to_16(self):
+        # wd 00.50, 0x0800BDA4: `cmp r0, #0xf` (0f 28) becomes `cmp r0, #0x10` (10 28). See #425.
+        edits = dfupatch.parse_patch(self.patch_text("wd-00.50-show-slot-16.patch"))
+        self.assertEqual(edits, [(0x0800BDA4, bytes.fromhex("0f28"), bytes.fromhex("1028"))])
+
+    def test_show_slot_16_changes_one_byte_and_the_two_crcs_of_an_image_that_has_the_old_bytes(self):
+        element = bytearray(wd_element(size=0x4000))
+        element[0x3DA4:0x3DA6] = bytes.fromhex("0f28")
+        covered = len(element) - 20
+        struct.pack_into("<I", element, covered, dfupatch.stm32_crc(bytes(element[:covered])))
+        data = dfuse_file(bytes(element))
+        start = len(data) - 16 - len(element)
+        out = dfupatch.patch(data, self.patch_text("wd-00.50-show-slot-16.patch"))
+        crcs = {*range(start + covered, start + covered + 4), *range(len(out) - 4, len(out))}
+        changed = set(changed_offsets(data, out))
+        self.assertEqual(changed - crcs, {start + 0x3DA4})
+        self.assertEqual(out[start + 0x3DA4], 0x10)
+
+    def test_show_slot_16_is_refused_on_an_image_without_the_old_bytes(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):
+            dfupatch.patch(dfuse_file(wd_element(size=0x4000)), self.patch_text("wd-00.50-show-slot-16.patch"))
+
     def test_vos_scale_1_is_one_edit_that_sets_both_vos_bits(self):
         # wd 00.50, 0x0800A69E: `orr r0, r0, #0x8000` (40 f4 00 40) becomes `orr r0, r0, #0xc000` (40 f4 40 40). See #438.
         edits = dfupatch.parse_patch(self.patch_text("wd-00.50-vos-scale-1.patch"))
@@ -257,13 +296,14 @@ class CommittedPatchTests(unittest.TestCase):
 
 
 class IgnoreRuleTests(unittest.TestCase):
-    def test_the_vos_patch_description_is_not_ignored_by_git(self):
+    def test_patch_descriptions_are_not_ignored_by_git(self):
         here = os.path.dirname(os.path.abspath(__file__))
         if not shutil.which("git") or subprocess.run(["git", "-C", here, "rev-parse"], capture_output=True).returncode:
             self.skipTest("not in a git checkout")
-        path = os.path.join(here, "patches", "wd-00.50-vos-scale-1.patch")
-        result = subprocess.run(["git", "-C", here, "check-ignore", "-q", "--no-index", path])
-        self.assertEqual(result.returncode, 1, "the patch description is ignored")
+        for name in ["wd-00.50-show-slot-16.patch", "wd-00.50-vos-scale-1.patch"]:
+            path = os.path.join(here, "patches", name)
+            result = subprocess.run(["git", "-C", here, "check-ignore", "-q", "--no-index", path])
+            self.assertEqual(result.returncode, 1, f"{name} is ignored")
 
     def test_vendor_and_patched_images_in_this_folder_are_ignored_by_git(self):
         here = os.path.dirname(os.path.abspath(__file__))

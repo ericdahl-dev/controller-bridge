@@ -192,6 +192,20 @@ def apply(args):
     print(f"wrote {args.output}: new trailer CRC 0x{crc:08X}, DfuSe suffix CRC 0x{suffix_crc(out[:-4]):08X}")
 
 
+def compare(args):
+    """Checks a raw read-back of the app area (dfu-util -U) against the image in a DfuSe file."""
+    image = parse(read(args.input))
+    readback = read(args.readback)
+    if len(readback) != len(image.element):
+        raise Refused(f"the read-back is {len(readback):#x} bytes, the image is {len(image.element):#x}")
+    differing = [offset for offset in range(len(readback)) if readback[offset] != image.element[offset]]
+    if differing:
+        count = len(differing)
+        raise Refused(f"{count} byte{'' if count == 1 else 's'} differ{'s' if count == 1 else ''}, "
+                      f"the first at 0x{image.address + differing[0]:08X}")
+    print(f"match: {len(readback):#x} bytes at 0x{image.address:08X}")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Patch an LC6000 PRIME wd image in its DfuSe file.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -203,6 +217,10 @@ def main(argv=None):
     write.add_argument("patch")
     write.add_argument("output")
     write.set_defaults(run=apply)
+    match = commands.add_parser("compare", help="check a raw read-back of the app area against a .dfu's image")
+    match.add_argument("input")
+    match.add_argument("readback")
+    match.set_defaults(run=compare)
     args = parser.parse_args(argv)
     try:
         args.run(args)

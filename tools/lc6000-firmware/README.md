@@ -46,12 +46,44 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 
 Patch descriptions live in `patches/`. Each one is a few bytes for one firmware version; it holds no vendor image.
 
+### `patches/wd-00.50-show-slot-16.patch` (#425)
+
+- **For:** `wd` firmware 00.50 only, the stock file `jc20_wd_update_00_50_3A7CE2CA.dfu` (trailer CRC `0x3A7CE2CA`). `apply` refuses any other image, because the old bytes won't match.
+- **What it changes:** one byte. The show command (`0A`) drops any slot index above 15, although uploads (`0E`) take slots 1-16 and the slot table has room for 16. At `0x0800BDA4`, `cmp r0, #0xf` becomes `cmp r0, #0x10` (`0f 28` to `10 28`), so "show 16" works. The tool then rewrites the trailer CRC (to `0x36DF3956`) and the DfuSe suffix CRC.
+- **Why slot 16 is safe to show:** slot N is table entry N + 29, and the table has 46 entries (0-45), so slot 16 is the last entry, set up at boot exactly like slots 1-15. Nothing else in the firmware compares a slot index with 15 or loops over the slots. The details are on #425.
+- **Status: unproven on hardware.** Nobody has flashed it. Whether the bootloader accepts a patched image at all is what the flash tests in #435 will show. Follow the runbook on #431, and flash the stock image by the same route first.
+
+```sh
+python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50_3A7CE2CA.dfu \
+  tools/lc6000-firmware/patches/wd-00.50-show-slot-16.patch ~/lc6000/jc20_wd_00_50_show16.dfu
+# wrote ...: new trailer CRC 0x36DF3956, DfuSe suffix CRC 0x5F321B11
+```
+
 ### `patches/wd-00.50-vos-scale-1.patch` (#438)
 
 - **For:** `wd` firmware 00.50 only, the stock file `jc20_wd_update_00_50_3A7CE2CA.dfu` (trailer CRC `0x3A7CE2CA`). `apply` refuses any other image, because the old bytes won't match.
 - **What it changes:** one byte. The clock setup lowers the STM32F429's core regulator to Scale 2 (`PWR_CR.VOS = 0b10`) and then runs the chip at 180 MHz with over-drive on. ST rates Scale 2 with over-drive to 168 MHz; only Scale 1 with over-drive is rated to 180 MHz. At `0x0800A69E`, `orr r0, r0, #0x8000` becomes `orr r0, r0, #0xc000` (`40 f4 00 40` to `40 f4 40 40`), so VOS stays at `0b11`, Scale 1, the chip's reset value. Nothing else in the image writes VOS.
 - **What it costs:** the core runs about 0.06 V higher (typical 1.26 V to 1.32 V), so the chip draws a little more current. Clock speed and all timing stay the same.
 - **Status: unproven on hardware.** Nobody has flashed it. Nobody has read `PWR_CR` on a running unit either, so the stock setting is known only from the code. It is not shown to fix the display drop-outs in #428. Whether the bootloader accepts a patched image at all is what the flash tests in #435 will show. Follow the runbook on #431, flash the stock image by the same route first, and have an SWD probe working before you try. The evidence is on #438.
+
+## Flash day kit (#435)
+
+Three pieces for the first real flash of the display chip, all run **by the unit's owner**, never by an agent:
+
+- `flash-day.sh`: a step-by-step wizard. It checks the stock file, puts the display chip into update mode, lists what `dfu-util` sees (exactly one device, or it stops) and backs up the settings sector and the app (read-only). Then **Denon's own updater does the stock flash**: on this unit it flashes a chip that's in update mode and refuses a running, current one (seen 2026-11-19 on the top panel chip). If the updater won't, the wizard offers the same stock file through `dfu-util`, after you type `FLASH`, and reads it back. Then you power-cycle and it checks the display's MIDI port returns. A patched image is an optional last step, off by default: it goes through `dfu-util`, only after the chip is confirmed to hold stock, and is read back and compared. Everything it saves goes to `~/lc6000` (or `$LC6000_WORK`), outside the repo.
+- `enter-update-mode.swift`: sends the stock updater's one "enter update mode" SysEx to the unit's WD port. `selftest` and `check` send nothing; `send` needs `--yes-enter-update-mode` and exactly one WD port.
+- `dfupatch.py compare <file.dfu> <readback.bin>`: checks a raw read-back of the app area against a `.dfu`'s image and says where the first difference is.
+
+```sh
+brew install dfu-util
+tools/lc6000-firmware/flash-day.sh
+```
+
+**Unproven on hardware** until #435 is done: whether Denon's bootloader allows reading flash, whether a power cycle clears its update-mode flag, and whether it accepts a changed image. The wizard stops at each surprise and prints the way back (power cycle; then update mode plus Denon's own updater; then SWD, #433). A patched image still reports version 00.50, so the updater calls a running patched unit current: put the chip in update mode first. Have an ST-Link on the desk first. Never run Denon's updater "to look": it starts erasing as soon as it finds the unit.
+
+The top panel chip needs none of this: hold BACK + FWD + VINYL at power-on and it enters ST's ROM bootloader (seen on hardware, #432); a power cycle leaves it.
+
+The tests (`test_flash_day.py`) guard the kit's shape without hardware: one write, behind the typed word; no mass-erase, unprotect, option-byte or bootloader-sector access; reads only in the settings and app sectors.
 
 ## What it recomputes
 
