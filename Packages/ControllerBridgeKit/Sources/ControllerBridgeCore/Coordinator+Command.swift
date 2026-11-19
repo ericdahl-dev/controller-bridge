@@ -30,6 +30,8 @@ extension Coordinator {
         /// Start the LED sweep, `delay` seconds per color; or stop it part-way (#26).
         case ledSweep(delay: Double)
         case stopLEDSweep
+        /// A debug capture of the full-rate meter stream for `seconds` (#582), handed to `meterCaptureSink`.
+        case startMeterCapture(seconds: Double)
         /// A MIDI port that had stopped taking data takes it again (#552): the LED writes dropped meanwhile are lost,
         /// so every light is painted again.
         case portRecovered
@@ -49,7 +51,8 @@ extension Coordinator {
         public var routing: Routing {
             switch self {
             // A real device is captured, so the real Coordinator pauses it, demo or not.
-            case .setCapture, .portRecovered: .real
+            // The meter capture (#582) records what Syndicate sends the real controller.
+            case .setCapture, .portRecovered, .startMeterCapture: .real
             case .ledSweep, .stopLEDSweep: .active
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
@@ -80,6 +83,7 @@ extension Coordinator {
         case .setJogPreviewDeck(let deck): setJogPreviewDeck(deck)
         case .ledSweep(let delay): startLEDSweep(delay: delay)
         case .stopLEDSweep: stopLEDSweep()
+        case .startMeterCapture(let seconds): startMeterCapture(seconds: seconds)
         case .portRecovered: repaintAfterRecovery()
         }
     }

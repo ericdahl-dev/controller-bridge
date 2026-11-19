@@ -38,7 +38,7 @@ struct ControllerBridgeApp: App {
                 log: model.diagnostics, status: model.status, sweeping: model.status.sweeping, setOpen: model.setDiagnostics(open:),
                 startSweep: model.startLEDSweep(delay:), stopSweep: model.stopLEDSweep,
                 hiddenNotes: model.profiles.first?.mapping.midi.ignoreNotes ?? [], jogSimulator: model.jogSimulator,
-                setJogPreviewDeck: model.setJogPreviewDeck
+                setJogPreviewDeck: model.setJogPreviewDeck, captureMeter: { model.captureMeter(seconds: 10) }
             )
             .environment(\.deckColors, model.status.deckColors)
         }

@@ -42,6 +42,16 @@ final class DebugTrace: @unchecked Sendable {
         }
     }
 
+    /// A debug capture (#582) as its own file beside the trace, named with the time; its path goes to the trace.
+    func writeCapture(_ text: String, named name: String) {
+        let stamp = ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "-")
+        let url = fileURL.deletingLastPathComponent().appendingPathComponent("\(name)-\(stamp).csv")
+        queue.async {
+            try? Data(text.utf8).write(to: url)
+            self.file.append(TraceLine.format(at: .now, .coordinator, "Meter capture written: \(url.path)"))
+        }
+    }
+
     /// The Coordinator's status, logged when it changes: controllers (deck, layer, profile, connection), feedback,
     /// missing subscriptions and another host.
     func status(_ status: CoordinatorStatus) {
