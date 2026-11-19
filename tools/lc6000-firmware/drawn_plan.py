@@ -89,13 +89,15 @@ def judged(function, **arguments):
 
 
 def checked(plan, name, function, files):
-    """`judged`, remembered in the plan by the files' contents: a file check depends only on what the files hold, so a
-    changed file is checked again and an unchanged one isn't re-read (dfupatch's verify walks all 480 KB)."""
+    """`judged`, remembered in the plan by the files' contents: a judgment of files (the owner's, or a read) depends
+    only on what they hold, so a changed file is judged again and an unchanged one isn't re-read (dfupatch's verify and
+    compare walk all 480 KB). Keyed by each argument's name and content, so two files can't swap places unnoticed."""
     import hashlib
     digest = hashlib.sha256()
-    for path in files.values():
+    for argument, path in sorted(files.items()):
+        digest.update(argument.encode() + b"\0")
         with open(path, "rb") as f:
-            digest.update(f.read())
+            digest.update(hashlib.sha256(f.read()).digest())
     key = f"{name}:{digest.hexdigest()}"
     cache = plan.setdefault("checks", {})
     if key not in cache:
@@ -174,24 +176,24 @@ def decide(plan):
         return unreadable(plan, "app_read")
     if not fresh(plan, "app_read"):
         return ("read", "app", dfu_path, out(plan, "wd-app-before"), "app_read")
-    ok, why = judged(dfupatch.compare, input=files["current"], readback=fact(plan, "app_read"))
+    ok, why = checked(plan, "compare", dfupatch.compare, {"input": files["current"], "readback": fact(plan, "app_read")})
     if not ok:
         return ("stop", f"The chip doesn't hold the image it runs now ({why}). Nothing was written.")
-    ok, app_state = judged(drawn_flash.app, owner=files["owner"], read=fact(plan, "app_read"))
+    ok, app_state = checked(plan, "app", drawn_flash.app, {"owner": files["owner"], "read": fact(plan, "app_read")})
     if not ok:
         return ("stop", f"The app area couldn't be judged against the owner's image: {app_state}")
     if unreadable(plan, "options_read"):
         return unreadable(plan, "options_read")
     if not fresh(plan, "options_read"):
         return ("read", "options", dfu_path, out(plan, "wd-option-bytes"), "options_read")
-    ok, why = judged(drawn_flash.options, read=fact(plan, "options_read"))
+    ok, why = checked(plan, "options", drawn_flash.options, {"read": fact(plan, "options_read")})
     if not ok:
         return ("stop", f"The chip's protection isn't what block B needs: {why}. Nothing was written.")
     if unreadable(plan, "upper_read"):
         return unreadable(plan, "upper_read")
     if not fresh(plan, "upper_read"):
         return ("read", "upper", dfu_path, out(plan, "wd-upper-before"), "upper_read")
-    ok, upper_state = judged(drawn_flash.upper, upper=files["upper"], read=fact(plan, "upper_read"))
+    ok, upper_state = checked(plan, "upper", drawn_flash.upper, {"upper": files["upper"], "read": fact(plan, "upper_read")})
     if not ok:
         return ("stop", f"The flash above the image is neither erased, this block B, nor a block B that checks out: "
                         f"{upper_state}. Nothing is written over it.")
@@ -295,7 +297,7 @@ def step_upper(plan, dfu_path, upper_state):
         return ("read", "upper", dfu_path, out(plan, "wd-upper-after"), "upper_back")
     if unreadable(plan, "upper_back"):
         return unreadable(plan, "upper_back")
-    ok, state = judged(drawn_flash.upper, upper=files["upper"], read=fact(plan, "upper_back"))
+    ok, state = checked(plan, "upper", drawn_flash.upper, {"upper": files["upper"], "read": fact(plan, "upper_back")})
     if not ok or not state.startswith("holds"):
         return ("stop", "The upper flash isn't exactly block B after the write. Block A checks B's CRC before calling "
                         "it, so it stays unused. Don't flash the owner's image on top: post this on #468.")
@@ -330,7 +332,7 @@ def step_app(plan, dfu_path, app_state):
         return ("read", "app", dfu_path, out(plan, "wd-app-after"), "app_back")
     if unreadable(plan, "app_back"):
         return unreadable(plan, "app_back")
-    ok, why = judged(dfupatch.compare, input=files["owner"], readback=fact(plan, "app_back"))
+    ok, why = checked(plan, "compare", dfupatch.compare, {"input": files["owner"], "readback": fact(plan, "app_back")})
     if not ok:
         return ("stop", f"What's on the chip differs from the owner's image ({why}). Don't power-cycle into it: "
                         f"flash the stock or slot 16 image again.")

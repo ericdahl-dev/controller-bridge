@@ -75,6 +75,20 @@ def tp_element(size=0x400):
 
 
 class Stm32CrcTests(unittest.TestCase):
+    def test_it_matches_the_crc_units_bit_by_bit_definition_on_many_words_and_when_chained(self):
+        # The definition, one bit at a time, as the reference for the fast version (#567).
+        def by_bits(data, crc=0xFFFFFFFF):
+            for (word,) in struct.iter_unpack("<I", data):
+                crc ^= word
+                for _ in range(32):
+                    crc = ((crc << 1) ^ 0x04C11DB7) & 0xFFFFFFFF if crc & 0x80000000 else (crc << 1) & 0xFFFFFFFF
+            return crc
+        import random
+        data = random.Random(567).randbytes(4096)
+        self.assertEqual(dfupatch.stm32_crc(data), by_bits(data))
+        self.assertEqual(dfupatch.stm32_crc(data[2048:], dfupatch.stm32_crc(data[:2048])), by_bits(data))
+        self.assertEqual(dfupatch.stm32_crc(data, 0x1234ABCD), by_bits(data, 0x1234ABCD))
+
     def test_it_matches_the_stm32_crc_unit_on_a_known_word(self):
         # ST's CRC unit fed the one word 0x12345678 from reset reads back 0xDF8A8A2B
         self.assertEqual(dfupatch.stm32_crc(struct.pack("<I", 0x12345678)), 0xDF8A8A2B)

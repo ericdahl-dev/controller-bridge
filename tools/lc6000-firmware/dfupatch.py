@@ -56,16 +56,24 @@ def suffix_crc(data):
     return zlib.crc32(data) ^ 0xFFFFFFFF
 
 
+_REVERSED_BYTES = bytes(int(f"{b:08b}"[::-1], 2) for b in range(256))
+
+
 def stm32_crc(data, crc=0xFFFFFFFF):
     """The STM32 hardware CRC unit: CRC-32 poly 0x04C11DB7, from 0xFFFFFFFF, little-endian 32-bit words,
-    no reflection, no final XOR."""
+    no reflection, no final XOR. Computed with zlib's reflected CRC-32 on the bit-reversed big-endian bytes (#567):
+    the same CRC mirrored, about 100 times faster than bit by bit in Python, which matters for 480 KB images."""
     if len(data) % 4:
         raise ValueError("the STM32 CRC unit takes whole 32-bit words")
-    for (word,) in struct.iter_unpack("<I", data):
-        crc ^= word
-        for _ in range(32):
-            crc = ((crc << 1) ^ 0x04C11DB7) & 0xFFFFFFFF if crc & 0x80000000 else (crc << 1) & 0xFFFFFFFF
-    return crc
+    big_endian = bytearray(len(data))
+    for i in range(4):
+        big_endian[i::4] = data[3 - i::4]
+    mirrored = zlib.crc32(bytes(big_endian).translate(_REVERSED_BYTES), _reverse32(crc) ^ 0xFFFFFFFF) ^ 0xFFFFFFFF
+    return _reverse32(mirrored)
+
+
+def _reverse32(value):
+    return int(f"{value:032b}"[::-1], 2)
 
 
 def chip(element):
