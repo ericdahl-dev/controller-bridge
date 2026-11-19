@@ -137,6 +137,10 @@ public final class JogDisplayDriver {
     /// "cmd=0x0A 11 bytes" for the unit's own SysEx (F0, a 5-byte head, the command); anything else as hex.
     static func describe(_ bytes: [UInt8]) -> String {
         if bytes.count > 7, bytes[0] == 0xF0, Array(bytes[1...3]) == [0x00, 0x02, 0x0B] {
+            // Drawn messages share one command and two ops share a length (#582): name the op.
+            if bytes[6] == DrawnDisplay.command, bytes.count > 9, let op = DrawnDisplayProtocol.Op(rawValue: bytes[9]) {
+                return String(format: "cmd=0x%02X op=%02X %@ %d bytes", bytes[6], bytes[9], "\(op)", bytes.count)
+            }
             return String(format: "cmd=0x%02X %d bytes", bytes[6], bytes.count)
         }
         return bytes.map { String(format: "%02X", $0) }.joined(separator: " ")

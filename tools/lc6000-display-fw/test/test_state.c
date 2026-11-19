@@ -1,10 +1,18 @@
 // The state message (op 07, #464): one flags byte, bit 6 reserved. Checked directly here too, so the decoder stays
 // covered whichever side's vectors land first.
 #include "harness.h"
+#include "view.h"
 
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
 
 static dfw_unit unit;
+
+/// What drawing would see now (#573): the tests read this, never dfw_unit's fields.
+static dfw_view view(void) {
+    dfw_view v;
+    dfw_view_of(&unit, &v);
+    return v;
+}
 static recording rec;
 
 static int flags_after(const char *state) {
@@ -13,7 +21,7 @@ static int flags_after(const char *state) {
     feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 03 F7");   // loaded and playing
     feed(&unit, state);
     dfw_tick(&unit, 0);
-    return unit.flags;
+    return view().flags;
 }
 
 void the_state_flags_decode(void) {

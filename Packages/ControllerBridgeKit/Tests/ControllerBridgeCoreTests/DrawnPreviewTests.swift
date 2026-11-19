@@ -78,6 +78,22 @@ struct DrawnPreviewTests {
         #expect(Self.drawnPreviews(take()).last { $0.deck?.number == 1 }?.texts[.title] == Array("Daybreak".utf8))
     }
 
+    /// #582: one implementation of the meter's ballistics for the unit and the preview.
+    @Test("The preview's meter has the same ballistics as the unit's: 1.0, then 0.05 s of fall, 114 with the peak held")
+    func previewMeterBallistics() throws {
+        let (rig, _, take) = try Self.unit()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH1/Meter", [.float(1.0)]))
+        rig.clock.now = 0.05
+        rig.coordinator.tick()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH1/Meter", [.float(0.25)]))
+        rig.clock.now = 0.1
+        rig.coordinator.tick()
+        let meter = Self.drawnPreviews(take()).last { $0.deck?.number == 1 }?.meter
+        #expect(meter?.level == 114 && meter?.peak == 127)
+    }
+
     @Test("When the unit answers, every deck's drawn preview goes at once, even with nothing new about it")
     func switchingToDrawn() throws {
         let (rig, _, take) = try Self.unit()

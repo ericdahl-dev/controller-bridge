@@ -14,14 +14,14 @@ Nothing here is flashed. Nothing here holds vendor bytes: the stock addresses co
 ## Build
 
 ```sh
-make -C tools/lc6000-display-fw arm                       # build/arm/block.bin (A) and build/arm/upper.bin (B)
-make -C tools/lc6000-display-fw arm ARM_UPPER_PROVEN=1    # A that reads B: only after the owner's read-only checks
+make -C tools/lc6000-display-fw arm                       # build/arm/block.bin (A) and upper.bin (B): the flashed build
+make -C tools/lc6000-display-fw arm ARM_UPPER_PROVEN=0    # the A from before the read-only checks: never reads B
 make -C tools/lc6000-display-fw arm-test PYTHON=<python with unicorn>
 make -C tools/lc6000-display-fw arm ARM_DRAW=0            # A's hook path alone, inert
 make -C tools/lc6000-display-fw arm-size                  # A (hook and protocol), A (hook only), B; any one over fails
 ```
 
-- **`ARM_UPPER_PROVEN`, 0 by default.** Block A reads `0x08080000` only when built with 1, which waits for the owner's read-only read of that flash (`tools/lc6000-firmware/README.md`, "Read-only checks"). Built with 0, A never reads it and never answers the app's capability ask, so the app stays on images.
+- **`ARM_UPPER_PROVEN`, 1 by default** (#573): `make arm` builds what's on the owner's unit, block A reading `0x08080000`, since the owner's read-only read of that flash (`tools/lc6000-firmware/README.md`, "Read-only checks") proved it. Built with 0, A never reads it and never answers the app's capability ask, so the app stays on images; the block tests keep that build for the switch's own tests.
 - The build prints how much of each block is used. If A doesn't fit below its marker, the link fails with "our code doesn't fit in the wd padding". If B is over 512 KB, its link fails.
 - The block tests build A with an empty drawing table (`ARM_DRAW=stub`, test builds only) so they see the capability answer without B.
 - **Toolchain, pinned:** `arm-none-eabi-gcc` 16.2.0 with GNU Binutils 2.47 (Homebrew, macOS). CI builds with Ubuntu's `gcc-arm-none-eabi` package.

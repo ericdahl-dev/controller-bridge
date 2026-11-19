@@ -1,6 +1,7 @@
 // The beat ring drawn from its table (#558) is the geometry it replaced, pixel for pixel: unlit, all dark (the waiting
 // look) and each beat lit, against src/ring_geometry.h (draw.c's ring() and draw_live.c's lit_section(), verbatim).
 #include "harness.h"
+#include "messages.h"
 #include "draw.h"
 #include "ring_geometry.h"
 #include <string.h>
@@ -27,16 +28,18 @@ static int ring_matches(const dfw_unit *unit, int all_dark, int beat) {
 
 static void the_ring_from_its_table_is_the_geometry(void) {
     static dfw_unit unit;
-    memset(&unit, 0, sizeof unit);
-    unit.drawn = 1;
-    unit.deck = (dfw_deck_state){ 4, 0, 128, 255, 0 };
-    unit.phase = DFW_PHASE_UNKNOWN;
+    static recording rec;
+    fresh(&unit, &rec);
+    send_begin(&unit);
+    send_deck(&unit, 4, 0, 128, 255, 0);
     for (uint8_t beat = 0; beat <= 4; beat++) {
-        unit.beat = beat;
+        send_beat(&unit, beat);
+        dfw_tick(&unit, 0);
         CHECK(ring_matches(&unit, 0, beat));
     }
-    unit.flags = 0x20;   // feedback stale: all dark, no beat
-    unit.beat = 3;
+    send_state(&unit, 0x20);   // feedback stale: all dark, no beat
+    send_beat(&unit, 3);
+    dfw_tick(&unit, 0);
     CHECK(ring_matches(&unit, 1, 0));
 }
 

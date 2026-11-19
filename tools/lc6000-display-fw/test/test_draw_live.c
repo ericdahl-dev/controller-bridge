@@ -1,8 +1,9 @@
 // The live elements (#459): the lit master beat and the marker, checked against JogDisplayRenderer's simulator image:
-// test/ref/*-beat*.ppm and *-needle*.ppm, made by test/ref/make_refs.sh with the live-reference tool, never from this
+// test/ref/*-beat*.ppm and *-needle*.ppm, made by test/ref/make_refs.sh from test/ref/manifest.json, never from this
 // code. Every case is deck 4, blue, empty: its header is the chip alone, and nothing else is drawn near the ring.
 #include "harness.h"
 #include "draw.h"
+#include "messages.h"
 #include <string.h>
 
 #define UNLIT "test/ref/deck4-blue-empty.ppm"
@@ -74,19 +75,38 @@ static int ring_matches(const char *name, int close, int budget, int cap) {
     return over == 0 && loose <= budget;
 }
 
+/// The unit these tests drive through messages, as the host does (#573), and its clock.
 static dfw_unit unit;
+static recording drawn;
+static uint32_t clock_ms;
 
-/// Deck 4, blue, empty, drawn with this beat and the rest of the unit as the test left it.
+/// Begin, then deck 4, blue, empty: what every case here draws.
+static void start_deck4(void) {
+    fresh(&unit, &drawn);
+    clock_ms = 0;
+    send_begin(&unit);
+    send_deck(&unit, 4, 0, 128, 255, 0);
+}
+
+/// The next tick at `at` ms, and the frame the unit shows after it.
+static void show_at(uint32_t at) {
+    clock_ms = at;
+    dfw_tick(&unit, clock_ms);
+    memcpy(frame, drawn.last, sizeof frame);
+}
+
+static void show(void) { show_at(clock_ms); }
+
+/// This master beat, then the frame.
 static void draw_beat(uint8_t beat) {
-    unit.deck = (dfw_deck_state){ 4, 0, 128, 255, 0 };
-    unit.beat = beat;
-    dfw_draw(frame, &unit);
+    send_beat(&unit, beat);
+    show();
 }
 
 static void each_beat_lights_its_section(void) {
     static const char *const files[] = { 0, "test/ref/deck4-blue-empty-beat1.ppm", "test/ref/deck4-blue-empty-beat2.ppm",
                                          "test/ref/deck4-blue-empty-beat3.ppm", "test/ref/deck4-blue-empty-beat4.ppm" };
-    memset(&unit, 0, sizeof unit);
+    start_deck4();
     for (uint8_t beat = 1; beat <= 4; beat++) {
         CHECK(load_reference(files[beat]));
         draw_beat(beat);
@@ -110,7 +130,7 @@ static void each_lit_reference_differs_from_the_unlit_one(void) {
 }
 
 static void no_master_clock_lights_no_section(void) {
-    memset(&unit, 0, sizeof unit);
+    start_deck4();
     CHECK(load_reference(UNLIT));
     draw_beat(0);
     CHECK(ring_matches("deck4-blue-empty.ppm (beat 0)", RING_CLOSE, 0, RING_CLOSE));
@@ -119,19 +139,25 @@ static void no_master_clock_lights_no_section(void) {
 /// The waiting look is agent3's; whatever it is, the beat changes none of it.
 static void stale_lights_no_section(void) {
     static dfw_pixel without[DFW_SIZE * DFW_SIZE];
-    memset(&unit, 0, sizeof unit);
-    unit.flags = 0x20;
+    start_deck4();
+    send_state(&unit, 0x20);   // Syndicate's feedback stopped
     draw_beat(0);
     memcpy(without, frame, sizeof without);
     for (uint8_t beat = 1; beat <= 4; beat++) {
         draw_beat(beat);
         CHECK(memcmp(frame, without, sizeof frame) == 0);
     }
-    memset(&unit, 0, sizeof unit);
-    unit.silent = 1;
-    draw_beat(0);
+    // 3 s with no message: the same waiting look with no beat and with beat 3 (any message ends the silence, so the
+    // beat comes first).
+    start_deck4();
+    show_at(0);
+    show_at(3000);
+    CHECK(dfw_stale(&unit));
     memcpy(without, frame, sizeof without);
-    draw_beat(3);
+    start_deck4();
+    send_beat(&unit, 3);
+    show_at(0);
+    show_at(3000);
     CHECK(memcmp(frame, without, sizeof frame) == 0);
 }
 
@@ -283,13 +309,12 @@ static void end_forgets_the_needle(void) {
 /// The waiting look is agent3's; whatever it is, the needle changes none of it.
 static void stale_draws_no_marker(void) {
     static dfw_pixel without[DFW_SIZE * DFW_SIZE];
-    memset(&unit, 0, sizeof unit);
-    unit.flags = 0x20;
+    start_deck4();
+    send_state(&unit, 0x20);   // Syndicate's feedback stopped
     draw_beat(0);
     memcpy(without, frame, sizeof without);
-    unit.needle_heard = 1;
-    unit.needle = 4096;
-    draw_beat(0);
+    send_needle(&unit, 4096);
+    show();
     CHECK(memcmp(frame, without, sizeof frame) == 0);
 }
 
@@ -375,10 +400,9 @@ static void the_meter_is_drawn(void) {
 /// No reference has a fill past the yellow; the spec's colors are exact where the band covers a pixel whole. Level 110
 /// (0.87 of the arc), no peak: mid-band pixels at fractions 0.40 (green), 0.80 (yellow) and 0.96 (the track).
 static void the_fill_turns_yellow_past_three_quarters(void) {
-    memset(&unit, 0, sizeof unit);
-    unit.meter_heard = 1;
-    unit.level = 110;
-    draw_beat(0);
+    start_deck4();
+    send_meter(&unit, 110, 0);
+    show();
     CHECK(frame[107 * DFW_SIZE + 17] == 0x00FF48u);
     CHECK(frame[73 * DFW_SIZE + 21] == 0xFFD400u);
     CHECK(frame[61 * DFW_SIZE + 26] == 0x2C2C2Cu);
@@ -387,11 +411,9 @@ static void the_fill_turns_yellow_past_three_quarters(void) {
 /// No reference has the tick over the fill: level 110 with the peak at 64, a mid-band pixel whole inside the tick
 /// (fractions 0.500-0.512 of the tick's 0.487-0.521) is the tick's white, not the fill's green.
 static void the_tick_is_drawn_over_the_fill(void) {
-    memset(&unit, 0, sizeof unit);
-    unit.meter_heard = 1;
-    unit.level = 110;
-    unit.peak = 64;
-    draw_beat(0);
+    start_deck4();
+    send_meter(&unit, 110, 64);
+    show();
     CHECK(frame[98 * DFW_SIZE + 17] == 0xFFFFFFu);
 }
 
@@ -427,14 +449,12 @@ static void each_meter_reference_differs_from_the_unlit_one(void) {
 /// The waiting look is agent3's; whatever it is, the meter changes none of it.
 static void stale_draws_no_meter(void) {
     static dfw_pixel without[DFW_SIZE * DFW_SIZE];
-    memset(&unit, 0, sizeof unit);
-    unit.flags = 0x20;
+    start_deck4();
+    send_state(&unit, 0x20);   // Syndicate's feedback stopped
     draw_beat(0);
     memcpy(without, frame, sizeof without);
-    unit.meter_heard = 1;
-    unit.level = 64;
-    unit.peak = 90;
-    draw_beat(0);
+    send_meter(&unit, 64, 90);
+    show();
     CHECK(memcmp(frame, without, sizeof frame) == 0);
 }
 
@@ -842,14 +862,12 @@ static void an_unknown_length_draws_nothing(void) {
 /// The waiting look is agent3's; whatever it is, the time changes none of it.
 static void stale_draws_no_time(void) {
     static dfw_pixel without[DFW_SIZE * DFW_SIZE];
-    memset(&unit, 0, sizeof unit);
-    unit.flags = 0x20;
+    start_deck4();
+    send_state(&unit, 0x20);   // Syndicate's feedback stopped
     draw_beat(0);
     memcpy(without, frame, sizeof without);
-    unit.time_heard = 1;
-    unit.elapsed = 83;
-    unit.track_length = 165;
-    draw_beat(0);
+    send_time(&unit, 83, 165);
+    show();
     CHECK(memcmp(frame, without, sizeof frame) == 0);
 }
 

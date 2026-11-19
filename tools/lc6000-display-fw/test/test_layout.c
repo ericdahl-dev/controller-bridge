@@ -1,6 +1,7 @@
 // The text block's layout (#458): the title's size, its wrap, and every ellipsis cut, as JogDisplayRenderer lays them
 // out, for every case in test/ref/text_layout.h (written from the renderer by a Kit test).
 #include "harness.h"
+#include "messages.h"
 #include "text.h"
 #include "ref/text_layout.h"
 #include <math.h>
@@ -13,10 +14,8 @@ static const dfw_text_face *face_named(const char *name) {
     return NULL;
 }
 
-static void set_text(dfw_unit *unit, int field, const char *codes) {
-    size_t n = strlen(codes);
-    memcpy(unit->text[field], codes, n);
-    unit->text_length[field] = (uint8_t)n;
+static void send_codes(dfw_unit *unit, int field, const char *codes) {
+    send_text(unit, (uint8_t)field, (const uint8_t *)codes, strlen(codes));
 }
 
 static void print_codes(const uint8_t *codes, size_t count) {
@@ -29,11 +28,14 @@ static void every_case_lays_out_as_the_renderer(void) {
     for (size_t i = 0; i < count; i++) {
         const text_layout_case *c = &text_layout_cases[i];
         static dfw_unit unit;
-        memset(&unit, 0, sizeof unit);
-        unit.deck.player = (uint8_t)c->player;
-        set_text(&unit, 0, c->title);
-        set_text(&unit, 1, c->artist);
-        set_text(&unit, 3, c->words);
+        static recording rec;
+        fresh(&unit, &rec);
+        send_begin(&unit);
+        send_deck(&unit, 1, 255, 255, 255, (uint8_t)c->player);
+        send_codes(&unit, 0, c->title);
+        send_codes(&unit, 1, c->artist);
+        send_codes(&unit, 3, c->words);
+        dfw_tick(&unit, 0);
         dfw_text_block block;
         dfw_text_block_for(&unit, &block);
         int ok = block.count == c->count && block.foot == c->foot;

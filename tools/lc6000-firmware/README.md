@@ -112,10 +112,10 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_tp_update_00_31
 - **Block A,** `block.bin`: the hook and the protocol, placed in the image's padding by `build_owner_image.py`.
 - **Block B,** `upper.bin`: the drawing, with its own `.dfu` at `0x08080000` (see "Block B's own file" below).
 
-Block A reads B only when it is built with `ARM_UPPER_PROVEN=1`, and that waits for the read-only checks below. Built without it (the default), A never reads `0x08080000`, so it never answers the app's capability ask: DeckBridge stays on images and the unit behaves as stock.
+Block A reads B only when it is built with `ARM_UPPER_PROVEN=1`. That is the default since the owner's read-only checks below proved the upper flash (#573). Built with `ARM_UPPER_PROVEN=0`, A never reads `0x08080000`, so it never answers the app's capability ask: DeckBridge stays on images and the unit behaves as stock.
 
 ```sh
-make -C tools/lc6000-display-fw arm                       # after the read-only checks: add ARM_UPPER_PROVEN=1
+make -C tools/lc6000-display-fw arm                       # the flashed build: A reads B; also writes build.json (#572)
 python3 -I tools/lc6000-firmware/build_owner_image.py ~/lc6000/jc20_wd_update_00_50_3A7CE2CA.dfu \
   tools/lc6000-display-fw/build/arm/block.bin ~/lc6000/jc20_wd_00_50_drawn.dfu --show-slot-16
 ```

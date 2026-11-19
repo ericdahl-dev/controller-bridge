@@ -3,13 +3,16 @@
 
 public enum JogTrackTime {
     /// Steady red from this many seconds left.
-    public static let warningSeconds = 60
+    public static let warningSeconds = DrawnDisplayProtocol.warningSeconds
     /// Blinking from this many seconds left.
-    public static let blinkSeconds = 30
+    public static let blinkSeconds = DrawnDisplayProtocol.blinkSeconds
     /// The warning's red, 0xFF3B30.
-    public static let warningRed = [0xFF, 0x3B, 0x30]
+    public static let warningRed = channels(JogLayout.warningRed)
     /// The blink's other color, the text's white, 0xEDEDEA, whatever the deck color.
-    public static let warningWhite = [0xED, 0xED, 0xEA]
+    public static let warningWhite = channels(JogLayout.warningWhite)
+
+    /// 0xRRGGBB as [r, g, b].
+    static func channels(_ hex: Int) -> [Int] { [hex >> 16 & 0xFF, hex >> 8 & 0xFF, hex & 0xFF] }
 
     public enum Look: Equatable, Sendable {
         /// No warning: the text white, the ring the deck color.

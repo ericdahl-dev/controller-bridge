@@ -112,6 +112,8 @@ final class BridgeModel {
     }
     func startLEDSweep(delay: Double) { producer?.send(.ledSweep(delay: delay)) }
     func stopLEDSweep() { producer?.send(.stopLEDSweep) }
+    /// The meter capture (#582): every Meter value for `seconds`, to a CSV in Logs/DeckBridge (Debug builds).
+    func captureMeter(seconds: Double) { producer?.send(.startMeterCapture(seconds: seconds)) }
     /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
     func setJogPreviewDeck(_ deck: Int?) { producer?.send(.setJogPreviewDeck(deck)) }
     /// Turns the demo controller (#64) on or off. In memory only: it is off again at the next launch.

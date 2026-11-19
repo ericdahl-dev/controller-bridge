@@ -1,6 +1,7 @@
 // The shared message vectors (#456): every message in the file decodes to its fields, every invalid one is ignored.
 // The Swift encoder walks the same file in the Kit tests.
 #include "harness.h"
+#include "view.h"
 #include <string.h>
 
 enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE, KIND_BEAT, KIND_NEEDLE,
@@ -40,6 +41,13 @@ typedef struct {
 static dfw_unit unit;
 static recording rec;
 
+/// What drawing would see now (#573): the tests read this, never dfw_unit's fields.
+static dfw_view view(void) {
+    dfw_view v;
+    dfw_view_of(&unit, &v);
+    return v;
+}
+
 static void check(int ok, const char *name) {
     CHECK(ok);
     if (!ok) fprintf(stderr, "  in vector: %s\n", name);
@@ -67,73 +75,73 @@ void every_vector_decodes(void) {
         case KIND_BEGIN:
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.drawn, v->name);
+            check(view().drawn, v->name);
             break;
         case KIND_END:
             feed(&unit, BEGIN_V1);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(!unit.drawn, v->name);
+            check(!view().drawn, v->name);
             break;
         case KIND_DECK:
             feed(&unit, BEGIN_V1);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(rec.presents == 1 && unit.deck.number == v->number && unit.deck.r == v->color[0] &&
-                  unit.deck.g == v->color[1] && unit.deck.b == v->color[2] && unit.deck.player == v->player, v->name);
+            check(rec.presents == 1 && view().deck.number == v->number && view().deck.r == v->color[0] &&
+                  view().deck.g == v->color[1] && view().deck.b == v->color[2] && view().deck.player == v->player, v->name);
             break;
         case KIND_STATE:
             feed(&unit, BEGIN_V1);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.flags == v->flags, v->name);
+            check(view().flags == v->flags, v->name);
             break;
         case KIND_BEAT:
             feed(&unit, BEGIN_V1);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.beat == v->beat, v->name);
+            check(view().beat == v->beat, v->name);
             break;
         case KIND_NEEDLE:
             feed(&unit, BEGIN_V1);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.needle == v->angle, v->name);
+            check(view().needle == v->angle, v->name);
             break;
         case KIND_METER:
             feed(&unit, BEGIN_V1);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.level == v->level && unit.peak == v->peak, v->name);
+            check(view().level == v->level && view().peak == v->peak, v->name);
             break;
         case KIND_TIME:
             feed(&unit, BEGIN_V1);
             feed(&unit, DECK_3_GREEN_SEQ);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.time_heard && unit.elapsed == v->elapsed && unit.track_length == v->track_length, v->name);
+            check(view().time_heard && view().elapsed == v->elapsed && view().track_length == v->track_length, v->name);
             break;
         case KIND_TEXT:
             feed(&unit, BEGIN_V1);
             feed(&unit, DECK_3_GREEN_SEQ);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.text_length[v->field] == v->code_count &&
-                  memcmp(unit.text[v->field], v->codes, v->code_count) == 0, v->name);
+            check(view().text_length[v->field] == v->code_count &&
+                  memcmp(view().text[v->field], v->codes, v->code_count) == 0, v->name);
             break;
         case KIND_TEMPO:
             feed(&unit, BEGIN_V1);
             feed(&unit, DECK_3_GREEN_SEQ);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.tempo == v->tenths, v->name);
+            check(view().tempo == v->tenths, v->name);
             break;
         case KIND_PHASE:
             feed(&unit, BEGIN_V1);
             feed(&unit, DECK_3_GREEN_SEQ);
             dfw_message(&unit, v->bytes, v->length);
             dfw_tick(&unit, 0);
-            check(unit.phase == v->offset, v->name);
+            check(view().phase == v->offset, v->name);
             break;
         default:
             check(0, v->name);
@@ -152,21 +160,12 @@ void every_invalid_vector_is_ignored(void) {
         // A time held, so a malformed one can't pass by leaving a fresh unit's zeros alone.
         feed(&unit, TIME_65_OF_293);
         dfw_tick(&unit, 0);
-        dfw_deck_state before = unit.deck;
-        uint8_t flags = unit.flags, beat = unit.beat;
-        uint16_t needle = unit.needle, tempo = unit.tempo;
-        int16_t phase = unit.phase;
-        uint8_t text_length = unit.text_length[0];
-        uint8_t level = unit.level, peak = unit.peak;
-        uint16_t elapsed = unit.elapsed, track_length = unit.track_length;
-        uint8_t time_heard = unit.time_heard;
+        dfw_view before = view(), after;
         dfw_message(&unit, v->bytes, v->length);
         dfw_tick(&unit, 0);
-        check(unit.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&unit.deck, &before, sizeof before) == 0 &&
-              unit.flags == flags && unit.beat == beat && unit.needle == needle && unit.tempo == tempo &&
-                  unit.text_length[0] == text_length && unit.level == level && unit.peak == peak &&
-                  unit.elapsed == elapsed && unit.track_length == track_length && unit.time_heard == time_heard &&
-                  unit.phase == phase,
+        after = view();
+        // Nothing drawing sees changed, and nothing was presented or sent.
+        check(after.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&before, &after, sizeof before) == 0,
               v->name);
     }
 }

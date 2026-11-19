@@ -5,7 +5,7 @@ import Foundation
 
 public enum DeckNumberInk {
     /// Below this relative luminance white contrasts more than black (WCAG: (L + 0.05)² = 0.05 × 1.05).
-    public static let threshold = 0.1791
+    public static let threshold = JogLayout.numberWhiteBelow
 
     /// White on `color` ([r, g, b], 0-255): its relative luminance under `threshold`.
     public static func white(on color: [Int]) -> Bool {
