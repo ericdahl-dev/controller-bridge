@@ -73,4 +73,28 @@ struct DrawnDisplayTextDriverTests {
                                             Message.text(.artist, "Bill Hamel, Jeremus").bytes,
                                             Message.text(.key, "8A").bytes, Message.tempo(122.5).bytes])
     }
+
+    @Test("Same deck, a new title or tempo: only the changed message goes, once")
+    func changeGoesOnce() throws {
+        let (rig, port, _) = try Handshake.rig(.custom)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        port.wd.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1, title: "Nightfall"))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1, title: "Nightfall"))
+        #expect(Handshake.drawn(port) == [Message.text(.title, "Nightfall").bytes])
+        port.wd.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1, title: "Nightfall", bpm: 130))
+        #expect(Handshake.drawn(port) == [Message.tempo(130).bytes])
+    }
+
+    @Test("In image mode no text or tempo message goes")
+    func notInImages() throws {
+        let (rig, port, clock) = try Handshake.rig(.custom)
+        clock.now = 0.5
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1, title: "Nightfall"))
+        #expect(Self.textAndTempo(port).isEmpty)
+    }
 }

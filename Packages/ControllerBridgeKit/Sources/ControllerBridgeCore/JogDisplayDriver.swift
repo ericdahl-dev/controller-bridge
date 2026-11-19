@@ -553,7 +553,7 @@ public final class JogDisplayDriver {
         let color = content.color.count == 3 ? content.color : [255, 255, 255]
         let deck = DrawnDisplay.Message.deck(number: content.deck, color: color,
                                              player: DrawnDisplay.Player(playerType: content.playerType)).bytes
-        guard deck != lastDeck else { return }
+        guard deck != lastDeck else { return sendChangedTexts(content) }
         lastDeck = deck
         sendWD(deck)
         // Every deck message is followed by its state: the flags are the deck's (#464). A new deck clears the chip's
@@ -562,6 +562,14 @@ public final class JogDisplayDriver {
         sendState()
         lastTexts = Self.texts(content)
         for text in lastTexts { sendWD(text) }
+    }
+
+    /// Same deck: only the texts and tempo that changed, once each (#458).
+    private func sendChangedTexts(_ content: JogDisplayContent) {
+        let texts = Self.texts(content)
+        defer { lastTexts = texts }
+        guard texts.count == lastTexts.count else { return texts.forEach(sendWD) }
+        for (text, last) in zip(texts, lastTexts) where text != last { sendWD(text) }
     }
 
     /// A deck's text and tempo messages (#458): title, artist and key (empty clears one), the untitled words only for

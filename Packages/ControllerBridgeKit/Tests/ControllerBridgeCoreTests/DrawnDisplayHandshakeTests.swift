@@ -212,7 +212,8 @@ struct DrawnDisplayHandshakeTests {
         port.wd.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [.string("Daybreak"), .string("Kid"), .string("8A"),
                                                                              .float(124), .float(200), .int(100), .int(400), .string("track")]))
-        #expect(Self.drawn(port).isEmpty)
+        // Only the new title (#458), no deck message.
+        #expect(Self.drawn(port) == [DrawnDisplay.Message.text(.title, "Daybreak").bytes])
     }
 }
 
