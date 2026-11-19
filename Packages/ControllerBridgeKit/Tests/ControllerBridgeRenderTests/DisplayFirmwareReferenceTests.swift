@@ -55,8 +55,25 @@ struct DisplayFirmwareReferenceTests {
     @Test("Each reference is what the renderer draws now", arguments: references.map(\.file))
     func referenceIsCurrent(file: String) throws {
         let content = try #require(Self.references.first { $0.file == file }?.content)
+        try compare(file, with: JogDisplayRenderer.render(content))
+    }
+
+    /// The phase rule's references (#462), as make_refs.sh renders them with live-reference: deck 4, empty, blue.
+    @Test("Each phase reference is what the renderer draws now", arguments: [0, -164, 164, -1638, 8191])
+    func phaseReferenceIsCurrent(phase: Int) throws {
+        let content = JogDisplayContent(deck: 4, color: [0, 128, 255], playerType: "empty")
+        let file = "deck4-blue-empty-phase\(phase).ppm", rendered = JogDisplayRenderer.render(content, phase: phase)
+        try compare(file, with: rendered)
+        // The rule's rows hold no text, so no rasterizer slack: every pixel there within `close`.
+        let reference = try #require(Self.rgb(file))
+        let off = (124 * 198..<132 * 198).filter { pixel in
+            (0..<3).contains { abs(Int(rendered[pixel * 4 + $0]) - Int(reference[pixel * 3 + $0])) > Self.close }
+        }
+        #expect(off.isEmpty, "\(file): \(off.count) pixels of the rule's rows off")
+    }
+
+    private func compare(_ file: String, with rendered: [UInt8]) throws {
         let reference = try #require(Self.rgb(file), "missing or malformed \(file)")
-        let rendered = JogDisplayRenderer.render(content)
         var worst = 0, loose = 0
         for pixel in 0..<(198 * 198) {
             var difference = 0

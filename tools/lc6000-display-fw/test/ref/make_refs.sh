@@ -45,3 +45,26 @@ for meter in "0 0" "64 90" "110 120" "127 127"; do
     set -- $meter
     "$live" 4 0 128 255 empty - - "$1" "$2" "$here/deck4-blue-empty-meter$1-$2.ppm"
 done
+# The phase rule (#462): in phase (the tick), a hundredth of a beat behind and ahead, a tenth behind, and the most
+# ahead (the whole half). Unknown is the plain rule, as every reference above draws it.
+for phase in 0 -164 164 -1638 8191; do
+    "$live" 4 0 128 255 empty - - phase=$phase "$here/deck4-blue-empty-phase$phase.ppm"
+done
+# A PNG of the five, for people to look at (the PR): the rule of each, at 4×.
+python3 -I - "$here" <<'PY'
+import sys
+here = sys.argv[1]
+names = ["0", "-164", "164", "-1638", "8191"]
+x0, y0, w, h, k = 30, 119, 138, 16, 4
+rows = []
+for name in names:
+    data = open(f"{here}/deck4-blue-empty-phase{name}.ppm", "rb").read()
+    pixels = data[data.index(b"255\n") + 4:]
+    for y in range(y0, y0 + h):
+        line = b"".join(pixels[(y * 198 + x) * 3:(y * 198 + x) * 3 + 3] * k for x in range(x0, x0 + w))
+        rows += [line] * k
+    rows += [b"\x40\x40\x40" * (w * k)] * 2
+open(f"{here}/phase-preview.ppm", "wb").write(b"P6\n%d %d\n255\n" % (w * k, len(rows)) + b"".join(rows))
+PY
+sips -s format png "$here/phase-preview.ppm" --out "$here/phase-preview.png" >/dev/null
+rm "$here/phase-preview.ppm"
