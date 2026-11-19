@@ -28,6 +28,9 @@ import build_upper_dfu  # noqa: E402
 import dfupatch  # noqa: E402
 import drawn_flash  # noqa: E402
 
+# Every step `next` can ask for: the shell handles exactly these.
+ACTIONS = ("ask", "type", "update-mode", "list", "read", "write", "power-cycle", "skip", "stop", "done")
+
 DISPLAY_LAYOUT = "/0x08000000/04*016Kg,01*064Kg,07*128Kg"  # 1 MB, single bank: the display chip (#432)
 TOP_PANEL_LAYOUT = "/0x08000000/04*016Kg,01*064Kg,01*128Kg"  # 256 KB: the top panel chip (#434)
 
@@ -327,7 +330,8 @@ def main(argv=None):
     if command == "begin" and len(argv) == 6:
         begin(argv[1], current=argv[2], upper=argv[3], owner=argv[4], work=argv[5])
     elif command == "next" and len(argv) == 2:
-        print("\t".join(next_action(argv[1])))
+        # One line, fields separated by tabs; a field's own line breaks as \\n (the shell prints them with %b).
+        print("\t".join(field.replace("\\", "\\\\").replace("\n", "\\n") for field in next_action(argv[1])))
     elif command == "record" and len(argv) == 4:
         record(argv[1], argv[2], argv[3])
     else:

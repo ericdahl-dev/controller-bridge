@@ -210,6 +210,7 @@ DFU_PATH=""
 
 dfupatch() { python3 -I "$HERE/dfupatch.py" "$@"; }
 drawn() { python3 -I "$HERE/drawn_flash.py" "$@"; }
+plan() { python3 -I "$HERE/drawn_plan.py" "$@"; }
 
 # way_back prints how to get the unit back to stock, then stops the wizard.
 way_back() {
@@ -492,11 +493,12 @@ pause
 finish
 }
 
-# The drawn flash (#468): `flash-day.sh drawn`. Two writes, each with its own typed word, read back and compared:
-# block B at 0x08080000, then the owner's image. No stock flash: the chip must hold the image it runs now.
+# The drawn flash (#468): `flash-day.sh drawn`. Every decision is drawn_plan.py's (#567): this loop asks it for the
+# next step, does it (dfu-util, the keyboard), and records the result. Two writes, each behind its own typed word and
+# read back: block B at 0x08080000, then the owner's image, each skipped when it's already there exactly.
 run_drawn() {
 
-TOTAL_STAGES=8
+TOTAL_STAGES=3
 mkdir -p "$WORK"
 ENV_FILE="$WORK/flash-day.env"
 
@@ -511,7 +513,7 @@ for tool in dfu-util swiftc python3; do
   fi
 done
 say "Three files, all outside the repo (such as $WORK):"
-step "the .dfu the display chip runs now: the stock 00.50 file, or the slot 16 image you flashed (#425)"
+step "the .dfu the display chip runs now: the stock 00.50 file, the slot 16 image (#425), or the owner's image"
 step "block B's .dfu, from build_upper_dfu.py with --proof (the README's read-only checks come first)"
 step "the owner's image, from build_owner_image.py"
 ask CURRENT_WD "Path to the .dfu the chip runs now:"
@@ -520,25 +522,9 @@ ask UPPER_DFU "Path to block B's .dfu:"
 UPPER_DFU="${UPPER_DFU/#\~/$HOME}"
 ask OWNER_DFU "Path to the owner's image .dfu:"
 OWNER_DFU="${OWNER_DFU/#\~/$HOME}"
-if ! dfupatch verify "$CURRENT_WD" | tee "$WORK/verify-current-$STAMP.txt"; then
-  warn "The image the chip runs now doesn't verify. Stopping before anything is sent."
-  exit 1
-fi
-if ! dfupatch verify "$OWNER_DFU" | tee "$WORK/verify-owner-$STAMP.txt"; then
-  warn "The owner's image doesn't verify. Stopping before anything is sent."
-  exit 1
-fi
-if ! drawn files "$UPPER_DFU" "$OWNER_DFU"; then
-  warn "Those aren't block B and the owner's image in their places. Stopping before anything is sent."
-  exit 1
-fi
 write_env CURRENT_WD "$CURRENT_WD"
 write_env UPPER_DFU "$UPPER_DFU"
 write_env OWNER_DFU "$OWNER_DFU"
-say "Two things no file can show, so they're yours to say:"
-step "Block A, in the owner's image, was built with ARM_UPPER_PROVEN=1. Without it, A never reads B (images only)."
-step "Block A and block B were built from the same commit (#516). A and B from different ones stay silent together."
-confirm "Both true?" || exit 1
 say "Building the update-mode tool…"
 swiftc -O -swift-version 5 "$HERE/enter-update-mode.swift" -o "$WORK/enter-update-mode"
 "$WORK/enter-update-mode" selftest
@@ -546,114 +532,72 @@ if pgrep -f "ControllerBridge.app/Contents/MacOS" >/dev/null 2>&1; then
   warn "DeckBridge is running. Quit it first: it talks to the display."
   pause "Press Enter once DeckBridge is quit"
 fi
-step "Quit every other DJ or MIDI app. Do NOT open Denon's updater."
-step "LC6000 on a direct cable to the Mac, not a hub. Powered on, running normally."
-step "No gig today."
-confirm "All of that true?" || exit 1
-# The probe (#433) is its own question (#468): the owner may flash without one, knowingly, never by confirming one.
-if confirm "Is an ST-Link probe connected, and can it read the chip (#433)?"; then
-  say "With the probe there, a dark display after the flash can still be brought back."
-else
-  drawn no-probe-risk
-  printf '  %s? Type NO PROBE to go on without it, anything else to stop:%s ' "$YELLOW" "$RESET"
-  typed=""
-  read -r typed || true
-  drawn no-probe "$typed" || exit 1
-fi
 
-stage "Enter update mode (display chip)"
-enter_update_mode
-
-stage "Look (read-only)"
-say "Listing update-mode devices. Nothing is written."
-look "drawn"
-pause
-
-stage "Before (read-only)"
-say "Reading the app and the flash above it, into $WORK. Nothing is written."
-if read_app "$WORK/wd-app-before-$STAMP.bin" && dfupatch compare "$CURRENT_WD" "$WORK/wd-app-before-$STAMP.bin"; then
-  printf '  %s✓%s the chip holds the image it runs now\n' "$GREEN" "$RESET"
-else
-  warn "Couldn't confirm the chip holds $CURRENT_WD (the read failed or it differs). Stopping."
-  way_back
-fi
-# The owner's image already there, exactly (a rewrite of block B alone, #468): step 2 has nothing to write.
-if ! APP_STATE=$(drawn app "$OWNER_DFU" "$WORK/wd-app-before-$STAMP.bin"); then
-  warn "The app area couldn't be judged against the owner's image (the line above says why). Stopping."
-  way_back
-fi
-A_DONE=0
-if [[ "$APP_STATE" == holds* ]]; then
-  A_DONE=1
-  printf "  %s✓%s the owner's image is already there, exactly: step 2 will write nothing\n" "$GREEN" "$RESET"
-fi
-if ! read_options "$WORK/wd-option-bytes-$STAMP.bin"; then
-  warn "The option bytes couldn't be read, so the chip's protection can't be checked. Stopping."
-  way_back
-fi
-if ! drawn options "$WORK/wd-option-bytes-$STAMP.bin"; then
-  warn "The chip's protection isn't what block B needs (the line above says what). Nothing is written."
-  note "Post that line on #468."
-  way_back
-fi
-if ! read_upper "$WORK/wd-upper-before-$STAMP.bin"; then
-  warn "The flash above the image couldn't be read: it isn't shown to exist. Block B has nowhere to go."
-  way_back
-fi
-if ! UPPER_STATE=$(drawn upper "$UPPER_DFU" "$WORK/wd-upper-before-$STAMP.bin"); then
-  warn "The flash above the image is neither erased, this block B, nor a block B that checks out."
-  note "Nothing is written over it. Post the message above on #468."
-  way_back
-fi
-B_DONE=0; B_REPLACE=0
-if [[ "$UPPER_STATE" == holds* ]]; then
-  B_DONE=1
-  printf '  %s✓%s block B is already there, exactly: step 1 is done\n' "$GREEN" "$RESET"
-elif [[ "$UPPER_STATE" == replace* ]]; then
-  B_REPLACE=1
-  say "The flash above the image holds ${UPPER_STATE#replace }."
-  note "Step 1 rewrites it with this block B, after you type REWRITE."
-else
-  printf '  %s✓%s the flash above the image is erased: block B can go there\n' "$GREEN" "$RESET"
-fi
-note "Keep these reads out of the repo and don't share them: vendor bytes."
-pause
-
-stage "Step 1 of 2: block B"
-if (( B_DONE )); then
-  say "Block B is already there, exactly as in $UPPER_DFU. Nothing to write."
-elif (( B_REPLACE )); then
-  say "Rewriting the upper flash with this block B. The read just before this one is the check that it's a B."
-  say "Until the owner's image is on, the image there now runs as before: a part or an old B is never called."
-  REWRITE_DFU="$WORK/wd-upper-rewrite-$STAMP.dfu"
-  drawn rewrite "$UPPER_DFU" "$WORK/wd-upper-before-$STAMP.bin" "$REWRITE_DFU" || way_back
-  flash "$REWRITE_DFU" "upper" upper REWRITE
-else
-  say "Block B goes first. With only B on the chip, the image there now runs as before: only block A calls B."
-  flash "$UPPER_DFU" "upper" upper
-fi
-pause
-
-stage "Step 2 of 2: the owner's image"
-say "The hooked image, with block A in its padding. Once it's on, A calls B when DeckBridge asks for drawn mode."
-if (( A_DONE )); then
-  say "The owner's image is already there, exactly as in $OWNER_DFU. Nothing to write: the app area isn't touched."
-else
-  if [[ -z "$(dfu_paths)" ]]; then
-    warn "The chip isn't in update mode any more."
-    way_back
-  fi
-  flash "$OWNER_DFU" "owner" app
-fi
-pause
-
-stage "Power cycle"
-reboot_check
-say "With no host talking to it, the display should look exactly like stock."
-confirm "Display looks like stock?" || way_back
-say "Then open DeckBridge with drawn mode on: after its hello and begin, the deck chip is drawn by our code."
+stage "The drawn flash"
+PLAN="$WORK/drawn-plan-$STAMP.json"
+plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$WORK"
+while :; do
+  action="" a1="" a2="" a3="" a4=""
+  IFS=$'\t' read -r action a1 a2 a3 a4 < <(plan next "$PLAN") || true
+  case "$action" in
+    ask)
+      if confirm "$(printf '%b' "$a2")"; then plan record "$PLAN" "$a1" y; else plan record "$PLAN" "$a1" n; fi
+      ;;
+    type)
+      printf '%b\n' "$a3" | sed 's/^/  /'
+      printf '  %s? Type %s to go on, anything else to stop:%s ' "$YELLOW" "$a2" "$RESET"
+      typed=""
+      read -r typed || true
+      plan record "$PLAN" "$a1" "$typed"
+      ;;
+    update-mode)
+      enter_update_mode
+      plan record "$PLAN" update_mode ok
+      ;;
+    list)
+      dfu-util -l > "$a1" 2>&1 || true
+      grep -i 'Found DFU' "$a1" | sed 's/^/    /' || true
+      plan record "$PLAN" "$a2" "$a1"
+      ;;
+    read)
+      say "Reading the $a1 area (read-only)…"
+      got=failed
+      case "$a1" in
+        app) dfu-util -p "$a2" -a 0 -s "$APP_ADDRESS:$APP_SIZE" -U "$a3" && got="$a3" ;;
+        upper) dfu-util -p "$a2" -a 0 -s "$UPPER_ADDRESS:$UPPER_SIZE" -U "$a3" && got="$a3" ;;
+        options) dfu-util -p "$a2" -a 1 -s "$OPTION_ADDRESS:$OPTION_SIZE" -U "$a3" && got="$a3" ;;
+      esac
+      plan record "$PLAN" "$a4" "$got"
+      ;;
+    write)
+      warn "Writing $a3 to the $a1 area. Don't unplug or power off while it runs."
+      dfu-util -p "$a2" -a 0 -D "$a3" 2>&1 | tee "$WORK/flash-$STAMP-$a1.log"
+      plan record "$PLAN" "$a4" "${PIPESTATUS[0]}"
+      ;;
+    power-cycle)
+      reboot_check
+      plan record "$PLAN" power_cycle ok
+      ;;
+    skip)
+      printf '  %s✓%s %b\n' "$GREEN" "$RESET" "$a2"
+      plan record "$PLAN" "$a1" seen
+      ;;
+    stop)
+      warn "$(printf '%b' "$a1")"
+      way_back
+      ;;
+    done)
+      break
+      ;;
+    *)
+      warn "The plan couldn't say what's next (${action:-nothing}). Stopping."
+      way_back
+      ;;
+  esac
+done
+say "Open DeckBridge with drawn mode on: after its hello and begin, the deck chip is drawn by our code."
 say "Its end (quit DeckBridge) brings back stock images; a power cycle returns to the app."
-note "Whatever you see, write it on #468: it's the first drawn frame on real hardware."
+note "Whatever you see, write it on #468."
 pause
 
 stage "Way back, for the record"
@@ -662,7 +606,7 @@ step "Display chip: run this wizard again (no 'drawn'); stage 2 puts it in updat
 step "Restoring Denon's image removes block A with the hook. Block B stays at 0x08080000, unused: only A calls it."
 step "Denon's image has no slot 16 (#425). To get it back, use that wizard's last stage, the patched image."
 step "If the display chip never shows up in update mode: ST-Link (#433). Don't keep trying USB."
-note "Logs and read-backs from today: $WORK"
+note "Logs, reads and the plan from today: $WORK"
 say "Please note on #468 what happened at each stage."
 pause
 
