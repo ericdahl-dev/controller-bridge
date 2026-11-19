@@ -1,5 +1,6 @@
 import ControllerBridgeCore
 @testable import ControllerBridgeRender
+import CoreText
 import Foundation
 import Testing
 
@@ -35,8 +36,39 @@ struct DisplayFirmwareTextLayoutTests {
         for n in stride(from: 1, through: artists[2].count, by: 1) {
             all.append(content(title: "Strobe", artist: String(artists[2].prefix(n))))
         }
+        for n in 1...ligatureArtist.count { all.append(content(title: "Strobe", artist: String(ligatureArtist.prefix(n)))) }
+        // The same, slid along by thin letters, so the cut lands inside a ligature in some of them.
+        for pad in 0..<16 {
+            all.append(content(title: "Strobe", artist: String(repeating: "i", count: pad) + "Affluent offer staff fluff tattoo"))
+            all.append(content(title: "Strobe", artist: String(repeating: ".", count: pad) + "Wolfgang Office fluff attitude"))
+        }
+        for title in nearTheSizeBoundary { all.append(content(title: title, artist: "Deadmau5")) }
         for player in players { all.append(content(title: nil, artist: nil, player: player)) }
         return all
+    }
+
+    /// Cut where a ligature (ff, fi, fl, tt) would split: CoreText keeps it whole.
+    static let ligatureArtist = "Office fluff affluent officer staff stuff attitude"
+
+    /// Titles within a fraction of a pixel of fitting at 26 px, on either side: the size choice is a <= against the
+    /// chord, so these pin it (picked by measuring the renderer's own 26 px line).
+    static var nearTheSizeBoundary: [String] {
+        let font = CTFontCreateWithName("Geist-Bold" as CFString, 26, nil)
+        func width(_ title: String) -> Double {
+            CTLineGetTypographicBounds(CTLineCreateWithAttributedString(NSAttributedString(string: title, attributes: [
+                kCTFontAttributeName as NSAttributedString.Key: font, kCTKernAttributeName as NSAttributedString.Key: -0.26,
+            ])), nil, nil, nil)
+        }
+        _ = JogDisplayRenderer.fontsRegistered
+        var candidates: [String] = []
+        for base in ["Daybreak", "Night", "Strobe", "Avatar", "Fiction", "Café"] {
+            for a in "ijl.,:'!frtTWAVo " { for b in "ijl.,:'!frtTWAVo " { for c in "ijl.,:'!fr" {
+                candidates.append(base + String([a, b, c]))
+            } } }
+        }
+        let twentySix = candidates.filter { JogDisplayRenderer.titleSize($0) == 26 }.sorted { width($0) > width($1) }
+        let twenty = candidates.filter { JogDisplayRenderer.titleSize($0) == 20 }.sorted { width($0) < width($1) }
+        return Array(twentySix.prefix(3)) + Array(twenty.prefix(3))
     }
 
     static func content(title: String?, artist: String?, player: String = "track") -> JogDisplayContent {

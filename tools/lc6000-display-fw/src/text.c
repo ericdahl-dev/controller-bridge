@@ -37,8 +37,15 @@ static int kern(const dfw_text_face *face, uint8_t left, uint8_t right) {
     return 0;
 }
 
+float dfw_text_size(const dfw_text_face *face) { return face->size; }
+uint16_t dfw_text_units_per_em(const dfw_text_face *face) { return face->units_per_em; }
+
 float dfw_text_width(const dfw_text_face *face, const uint8_t *codes, size_t count, int tracked) {
-    // Font units, summed exactly, then scaled once: a fit decided by <= can't turn on rounding.
+    return (float)dfw_text_units(face, codes, count, tracked) * face->size / (float)face->units_per_em;
+}
+
+int32_t dfw_text_units(const dfw_text_face *face, const uint8_t *codes, size_t count, int tracked) {
+    // Font units, summed exactly, then scaled once by the caller: a fit decided by <= can't turn on rounding.
     int32_t units = 0;
     int previous = -1;
     for (size_t i = 0; i < count;) {
@@ -51,5 +58,5 @@ float dfw_text_width(const dfw_text_face *face, const uint8_t *codes, size_t cou
         }
         previous = glyph;
     }
-    return (float)units * face->size / (float)face->units_per_em;
+    return units;
 }

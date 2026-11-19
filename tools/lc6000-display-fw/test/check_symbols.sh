@@ -1,12 +1,13 @@
 #!/bin/sh
 # The firmware sources build freestanding and need nothing from libc but the four functions GCC's freestanding mode
 # expects (memcpy, memmove, memset, memcmp): no allocation, no stdio, no libm (#455). Apple clang spells memset as
-# bzero. Builds src/*.c without sanitizers and lists what they leave undefined between them.
+# bzero. Apple clang fortifies memcpy into __memcpy_chk by default, which the Arm build never does, so fortify is
+# off. Builds src/*.c without sanitizers and lists what they leave undefined between them.
 set -eu
 out=${1:-build/freestanding}
 mkdir -p "$out"
 for source in src/*.c; do
-    ${CC:-cc} -std=c99 -Wall -Wextra -Werror -pedantic -O2 -ffreestanding -fno-stack-protector \
+    ${CC:-cc} -std=c99 -Wall -Wextra -Werror -pedantic -O2 -ffreestanding -fno-stack-protector -D_FORTIFY_SOURCE=0 \
         -c "$source" -o "$out/$(basename "$source" .c).o"
 done
 # What one of our objects needs and none of them defines.
