@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "dfw.h"
+#include "upper.h"
 
 /// The last word of the padding, 0x0807FFDC on the unit: our block is present only if it holds this.
 #define HOOK_MARKER 0x31574644u /* "DFW1" */
@@ -50,9 +51,12 @@ typedef struct {
     uint8_t malloc_tried;
     /// Something was presented since drawn mode last ended, so the screen is ours until hidden.
     uint8_t shown;
+    /// A message of ours came since our state started. Until then the tick only checks B.
+    uint8_t heard;
     /// The stock side this state was started with: the port wrapper below reaches it through here.
     const hook_stock *stock;
-    /// B's table, filled from its checked header (#501); the unit points here once B checks out.
+    /// B's check, a chunk a tick from boot (#501), and B's table once it checks out; the unit then points there.
+    upper_progress upper;
     dfw_drawing upper_drawing;
     dfw_unit unit;
 } hook_state;
@@ -61,7 +65,8 @@ typedef struct {
 /// Acts only on our command, with our marker present, and only on a whole message: len + 10 bytes received and F7
 /// at 9 + len. Copies the message; never keeps a pointer into stock's buffer.
 void hook_command(hook_state *state, const hook_stock *stock, uint8_t cmd, const uint8_t *msg, uint32_t len);
-/// The draw tick, once per main-loop pass. Does nothing until our first valid message since the last reset.
+/// The draw tick, once per main-loop pass. Until our first valid message since the last reset, it only checks block
+/// B, a chunk a tick, when there is one to check (#501); without B it does nothing.
 void hook_tick(hook_state *state, const hook_stock *stock);
 
 #endif

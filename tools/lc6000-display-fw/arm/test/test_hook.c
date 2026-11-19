@@ -399,12 +399,16 @@ void an_entry_that_isnt_Thumb_code_inside_the_block_is_refused(void) {
     }
 }
 
-void a_block_past_sector_8_is_checked_whole(void) {
-    // 0x20020 bytes: past sector 8 into sector 9, zeros after the good B's bytes. CRC from Python's zlib.
+/// A good B of 0x20020 bytes, past sector 8 into sector 9: zeros after the good B's bytes. CRC from Python's zlib.
+static void long_upper(void) {
     good_upper();
     memset(upper + 29, 0, 0x20020 - 29);
     put_word(upper + 8, 0x20020);
     put_word(upper + 12, 0x40575571u);
+}
+
+void a_block_past_sector_8_is_checked_whole(void) {
+    long_upper();
     CHECK(upper_check(upper) == 0x08080015u);
     upper[0x2001F] = 1;
     CHECK(upper_check(upper) == 0);
@@ -457,6 +461,19 @@ void an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer(void) {
     }
 }
 
+void a_long_upper_block_is_checked_a_chunk_a_tick_from_boot(void) {
+    // So the check is done long before the app asks, and no one tick holds up stock's main loop.
+    cold_boot();
+    long_upper();
+    stock.upper = upper;
+    stock.drawing = NULL;
+    tick();
+    CHECK(state.upper.status == UPPER_CHECKING && state.upper.done <= 16 + UPPER_CHUNK);
+    for (uint32_t i = 0; i < 0x20020 / UPPER_CHUNK + 1; i++) tick();
+    CHECK(state.upper.status == UPPER_GOOD);
+    CHECK(rec.sends == 0 && rec.presents == 0 && chip.mallocs == 0 && chip.hides == 0);
+}
+
 const test_case all_tests[] = {
     { "with no drawing from stock the capability ask gets no answer",
       with_no_drawing_from_stock_the_capability_ask_gets_no_answer },
@@ -491,6 +508,7 @@ const test_case all_tests[] = {
     { "with an erased upper block the capability ask gets no answer", with_an_erased_upper_block_the_capability_ask_gets_no_answer },
     { "with a good upper block the capability ask is answered", with_a_good_upper_block_the_capability_ask_is_answered },
     { "an upper block with a bad CRC or another version gets no answer", an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer },
+    { "a long upper block is checked a chunk a tick from boot", a_long_upper_block_is_checked_a_chunk_a_tick_from_boot },
     { 0, 0 },
 };
 
