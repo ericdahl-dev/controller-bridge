@@ -478,6 +478,24 @@ struct SettingsView: View {
                           ? "The ring shows each deck's exact color"
                           : "The ring uses the LC6000's 64 colors",
                       isOn: settings.colorMessages)
+            // #532: how bright the exact-color LEDs (the ring, and the pads with #531) are; the user's pick, 10% to 100%
+            // in tens. Only with exact colors on: the 64-color table and the single-color buttons don't take it.
+            if settings.wrappedValue.colorMessages {
+                row("Light brightness", hint: "How bright the ring and pads are: dim them in a dark room") {
+                    HStack(spacing: 8) {
+                        Slider(value: Binding(
+                            get: { Double(settings.wrappedValue.lightBrightness) },
+                            set: { settings.wrappedValue.lightBrightness = LightBrightness.snapped(Int($0.rounded())) }
+                        ), in: 10...100, step: 10)
+                            .frame(width: 160)
+                            .accessibilityLabel("Light brightness")
+                            .accessibilityValue(LightBrightness.label(settings.wrappedValue.lightBrightness))
+                        Text(LightBrightness.label(settings.wrappedValue.lightBrightness))
+                            .monospacedDigit()
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
+            }
             // Vivid keeps a color's hue on the LC6000's 64 colors; Exact rounds each channel (#151). With exact colors on,
             // only a held pad still takes the table, until the pads move to the color message too (#531).
             row("Ring colors", hint: settings.wrappedValue.colorMessages

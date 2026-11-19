@@ -41,8 +41,9 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 - Key Lock, Shift and the pad-mode buttons show the bridge's own state. Censor is lit while Reverse is on, held or latched with Shift.
 - The pitch arrows by the fader show pickup: while the fader waits to meet Syndicate's tempo, the arrow pointing the way to move it is lit, and both go out when it catches. No arrow is lit while the deck's tempo slider is disabled (a synced follower) or no track is loaded.
 - Buttons with no state of their own are lit dim so the panel reads in the dark, and full while held: Beat Jump, Track ◀ ▶, Pitch Bend − / +, Param ◀ ▶, the browse knob's ring and the deck select button. Vinyl is lit the same way, and also full while its seek mode is on.
-- Pads show your hot cues in Syndicate's cue colors, quantized to the LC6000's 64-color table. A held pad lights brighter.
-- The platter ring lights when a track is loaded, in its deck's color, the same as the deck's badge in the app, so switching layers changes it. On the LC6000 it shows the exact color through Denon's own color message; turn off **Exact colors on the LC6000** in Settings to go back to the 64-color table. Deck colors follow Syndicate's cue palette (slots 1, 3, 5 and 7, under CUE COLORS) as you change it, or set your own under **Settings › Decks**. It can also pulse on each beat or on the downbeat.
+- Pads show your hot cues in Syndicate's cue colors, and each pad mode in its own color. On the LC6000 they're exact, through Denon's own color message (with **Exact colors on the LC6000** off, they're quantized to its 64-color table). A held pad lights brighter.
+- The platter ring lights when a track is loaded, in its deck's color, the same as the deck's badge in the app, so switching layers changes it. On the LC6000 it shows the exact color through Denon's own color message; turn off **Exact colors on the LC6000** in **Settings › Decks** to go back to the 64-color table. Deck colors follow Syndicate's cue palette (slots 1, 3, 5 and 7, under CUE COLORS) as you change it, or set your own under **Settings › Decks**. It can also pulse on Syndicate's master clock, on each beat or on the downbeat: with exact colors, full on the beat and easing down until the next one, never dark.
+- **Light brightness** (**Settings › Decks**, with exact colors on) dims the pads and the platter ring together, from 10% to 100%, for a dark room.
 
 **Recovery:**
 - Unplugging the LC6000, sleeping the Mac, switching layers or quitting releases every held control first, including a held Pitch Bend or a latched Reverse.
@@ -53,7 +54,11 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 - Scratching: Syndicate has no scratch or scrub OSC route.
 - Slicer mode: it is unmapped.
 
-**Coming in v1.1:** the platter's center display showing the active deck (#165).
+**Jog display** (the LC6000's round screen in the platter, #165):
+- It shows the deck in front: its number in the deck's color, the title and artist, key and BPM, and the master beat around the edge. Turn it on or off in **Settings › Controller › Show the deck on the jog display**.
+- On Denon's own firmware (**Firmware: Denon**, the default) DeckBridge uploads a picture of each deck.
+- **Firmware: Custom** is only for a unit flashed with DeckBridge's display firmware, an experiment that isn't part of the release. Such a unit answers DeckBridge and draws the screen itself from small messages: the needle, the beat, the time left with a warning near the end, the level meter, and the deck's phase against the master. It shows our logo with the deck's number when Syndicate stops answering. A unit that doesn't answer gets pictures, as on Denon's firmware.
+- **Diagnostics › Jog display** previews every deck's screen, drawn or pictures, as the unit would show it.
 
 ## Install
 
