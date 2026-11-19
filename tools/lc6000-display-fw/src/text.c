@@ -5,7 +5,7 @@
 #include "font_text.h"
 
 const dfw_text_face *const dfw_title26 = &title26_face, *const dfw_title20 = &title20_face,
-                    *const dfw_caption16 = &caption16_face, *const dfw_mono22 = &mono22_face;
+                    *const dfw_caption16 = &caption16_face, *const dfw_mono18 = &mono18_face;
 
 enum { LIG_FF, LIG_FI, LIG_FL, LIG_TT };
 
@@ -133,11 +133,11 @@ void dfw_text_draw_line(dfw_pixel *frame, const dfw_text_line *line) {
 /// The key's blue (JogDisplayRenderer's keyColor); the BPM is in the face's own ink.
 #define KEY_INK 0x9DC3EEu
 #define EM_DASH 0x97
-/// Key and BPM's line box: top 136, "normal" height (ascent + descent; the face has no leading).
-#define FOOT_TOP 136.0f
+/// Key and BPM's line box middle in drawn mode (#524, the renderer's Layout.drawn): 18 px, centered on y 140.5.
+#define FOOT_MIDDLE 140.5f
 
 void dfw_text_draw_foot(dfw_pixel *frame, const dfw_unit *unit) {
-    const dfw_text_face *face = dfw_mono22;
+    const dfw_text_face *face = dfw_mono18;
     uint8_t codes[DFW_TEXT_MAX + 16];
     size_t count = 0;
     if (unit->text_length[2]) {
@@ -163,7 +163,6 @@ void dfw_text_draw_foot(dfw_pixel *frame, const dfw_unit *unit) {
         codes[count++] = EM_DASH;
     }
     float width = dfw_text_width(face, codes, count, 0);
-    float height = face->ascent + face->descent;
-    float baseline = FOOT_TOP + height / 2 + (face->ascent - face->descent) / 2;
+    float baseline = FOOT_MIDDLE + (face->ascent - face->descent) / 2;
     draw_codes(frame, face, codes, count, 0, TEXT_CENTER - width / 2, baseline, split, KEY_INK);
 }

@@ -9,9 +9,9 @@
 #define GROUND 0x0B0B0Bu
 #define DOWNBEAT_OFF 0x5A5A5Au
 #define BEAT_OFF 0x2C2C2Cu
-/// The time left (#460): centered on x 99, its line box's middle at y 169.
+/// The time left (#460, #524): centered on x 99, its line box's middle at y 160 (drawn mode's layout).
 #define TIME_CENTER_X 99.0f
-#define TIME_MIDDLE 169.0f
+#define TIME_MIDDLE 160.0f
 
 #define CENTER 99.0f
 #define RING_OUTER 95.0f

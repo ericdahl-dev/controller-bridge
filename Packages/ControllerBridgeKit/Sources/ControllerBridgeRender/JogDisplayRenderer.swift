@@ -22,7 +22,8 @@ public enum JogDisplayRenderer {
                               meter: (level: Int, peak: Int)? = nil, phase: Int? = nil,
                               time: (elapsed: Int, length: Int)? = nil, look: JogTrackTime.Look = .normal) -> [UInt8] {
         drawing { context in
-            frame(content, litBeat: litBeat, marker: marker, meter: meter, phase: phase, time: time, look: look, in: context)
+            frame(content, litBeat: litBeat, marker: marker, meter: meter, phase: phase, time: time, look: look,
+                  drawn: false, in: context)
         }
     }
 
@@ -37,18 +38,20 @@ public enum JogDisplayRenderer {
             context.translateBy(x: inset, y: inset)
             frame(content, litBeat: live.beat, marker: live.needle.map { Double($0) / 16384 },
                   meter: live.meter.map { ($0.level, $0.peak) }, phase: live.phase,
-                  time: live.time.map { ($0.elapsed, $0.length) }, look: live.look, in: context)
+                  time: live.time.map { ($0.elapsed, $0.length) }, look: live.look, drawn: true, in: context)
         }
     }
 
     /// The 198 frame and its live parts, in the frame's own coordinates.
     private static func frame(_ content: JogDisplayContent, litBeat: Int?, marker: Double?, meter: (level: Int, peak: Int)?,
                               phase: Int?, time: (elapsed: Int, length: Int)?, look: JogTrackTime.Look,
-                              in context: CGContext) {
-        draw(content, litBeat: litBeat, phase: phase, in: context)
+                              drawn: Bool, in context: CGContext) {
+        let layout = drawn ? Layout.drawn : Layout.image
+        draw(content, litBeat: litBeat, phase: phase, layout: layout, in: context)
         if let meter, !content.stale { drawMeter(level: meter.level, peak: meter.peak, in: context) }
         if let time, time.length > 0, !content.stale {
-            drawTime(elapsed: time.elapsed, length: time.length, look: look, deck: content.color, in: context)
+            drawTime(elapsed: time.elapsed, length: time.length, look: look, deck: content.color, layout: layout,
+                     in: context)
         }
         if let marker { drawMarker(turns: marker, in: context) }
     }
@@ -85,7 +88,14 @@ public enum JogDisplayRenderer {
     static let meterFrom: CGFloat = 240, meterSpan: CGFloat = 60, meterYellowFrom: CGFloat = 0.75
     /// Track time (#460): the remaining time's size and the middle of its line box, under key/BPM. The largest that
     /// keeps "-99:59" inside the text-safe circle with a gap under key/BPM; the user asked for about 18, which reaches r 83.
-    static let timeSize: CGFloat = 14, timeCenterY: CGFloat = 169
+    /// Where the foot's lines go: image mode's design B (key/BPM 22 px, its line box from y 136) or drawn mode's
+    /// (#524, the user's pick): key/BPM 18 px and the remaining time 21 px, both whole inside the text-safe circle with
+    /// "12A 174.0" and "-99:59", their ink from y 134 (5 px under the rule) and 5 px apart.
+    struct Layout {
+        let keySize: CGFloat, keyCenterY: CGFloat?, timeSize: CGFloat, timeCenterY: CGFloat
+        static let image = Layout(keySize: 22, keyCenterY: nil, timeSize: 14, timeCenterY: 169)
+        static let drawn = Layout(keySize: 18, keyCenterY: 140.5, timeSize: 21, timeCenterY: 160)
+    }
     /// The progress ring, just outside the beat ring: 1 px clear of it (r 95) and of the image's edge (r 99).
     static let progressInner: CGFloat = 96, progressOuter: CGFloat = 98
     /// The peak tick's width, in degrees.
@@ -124,7 +134,7 @@ public enum JogDisplayRenderer {
         CTFontManagerRegisterFontURLs(urls as CFArray, .process, true, nil)
     }()
 
-    private static func draw(_ content: JogDisplayContent, litBeat: Int?, phase: Int?, in context: CGContext) {
+    private static func draw(_ content: JogDisplayContent, litBeat: Int?, phase: Int?, layout: Layout, in context: CGContext) {
         context.setFillColor(background)
         context.fill(CGRect(x: 0, y: 0, width: 198, height: 198))
         if content.stale {
@@ -140,7 +150,7 @@ public enum JogDisplayRenderer {
         let block = textBlock(content)
         for text in block.lines { line(text, in: context) }
         rule(phase: phase, color: deckColor, in: context)
-        if block.foot { keyAndBPM(key: content.key, bpm: content.bpm, in: context) }
+        if block.foot { keyAndBPM(key: content.key, bpm: content.bpm, layout: layout, in: context) }
     }
 
     /// The rule in the deck color (#462). Unknown phase: the plain rule. In phase: the rule with a 2×6 tick at its
@@ -263,8 +273,8 @@ public enum JogDisplayRenderer {
     }
 
     /// Key in blue and BPM in white, monospaced, at y 136; "—" for either one Syndicate didn't send.
-    private static func keyAndBPM(key: String?, bpm: Double?, in context: CGContext) {
-        let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, 22, nil)
+    private static func keyAndBPM(key: String?, bpm: Double?, layout: Layout, in context: CGContext) {
+        let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, layout.keySize, nil)
         let keyText = key.flatMap { $0.isEmpty ? nil : $0 } ?? "—"
         let bpmText = bpm.flatMap { $0 > 0 ? String(format: "%.1f", $0) : nil } ?? "—"
         let string = NSMutableAttributedString(string: keyText + " " + bpmText, attributes: [
@@ -274,23 +284,25 @@ public enum JogDisplayRenderer {
                             range: NSRange(location: 0, length: (keyText as NSString).length))
         // Not cut to the safe circle, as in the design: a key and a BPM are short, and both must show whole.
         let height = lineBoxHeight(font, lineHeight: nil)
-        draw(CTLineCreateWithAttributedString(string), font: font, centerX: center, centerY: 136 + height / 2, in: context)
+        draw(CTLineCreateWithAttributedString(string), font: font, centerX: center,
+             centerY: layout.keyCenterY ?? 136 + height / 2, in: context)
     }
 
     /// Track time (#460): the time left, "-m:ss" (minutes past 59 stay minutes), in the slot under key/BPM. Seconds.
     /// Around the edge, the progress ring: the deck color clockwise from 12 o'clock, the rest a dark track.
-    /// The warning's red half draws text and fill red; its normal half fills `JogTrackTime.warningNormalFill`.
-    private static func drawTime(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int],
+    /// The warning's red draws text and fill red; the blink's white half draws both white.
+    private static func drawTime(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int], layout: Layout,
                                  in context: CGContext) {
-        let red = look == .warningRed ? color(JogTrackTime.warningRed) : nil
-        let fill = red ?? color(look == .warningNormal ? JogTrackTime.warningNormalFill(deck: deck) : deck)
+        let warning = look == .warningRed ? color(JogTrackTime.warningRed)
+            : look == .warningWhite ? color(JogTrackTime.warningWhite) : nil
+        let fill = warning ?? color(deck)
         let elapsed = min(max(elapsed, 0), length), left = length - elapsed
         band(inner: progressInner, outer: progressOuter, from: 0, to: 360, color: beatOff, in: context)
         band(inner: progressInner, outer: progressOuter, from: 0, to: 360 * CGFloat(elapsed) / CGFloat(length),
              color: fill, in: context)
-        let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, timeSize, nil)
-        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: red ?? text), font: font,
-             centerX: center, centerY: timeCenterY, in: context)
+        let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, layout.timeSize, nil)
+        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: warning ?? text), font: font,
+             centerX: center, centerY: layout.timeCenterY, in: context)
     }
 
     /// The level meter (#461): the dark track, the fill from the bottom, the held peak as a tick. Levels 0–127.
