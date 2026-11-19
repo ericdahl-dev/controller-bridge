@@ -196,6 +196,7 @@ public final class Coordinator {
 
     /// The ring of the controller that owns the display stays dark while the display uploads (#422).
     private func holdRing() {
+        status.displayFound = jogController.found
         let held = jogController.uploading
         for (index, entry) in jogEntries.enumerated() where entry.ownsDisplay {
             controllers[index].bridge.ringHeld = held

@@ -2,6 +2,23 @@
 // instead of uploaded images. Denon's frame on the WD port, one command byte for all of them and an op byte. The shared
 // vectors (tools/lc6000-display-fw/vectors/messages.json) hold examples both this and the firmware's C are tested on.
 
+/// The jog display firmware DeckBridge found on the unit (#456).
+public enum DisplayFound: Equatable, Sendable {
+    case denon
+    /// Custom firmware that didn't answer as one that draws: uploaded images.
+    case customImages
+    case customDrawn(version: Int)
+
+    /// What Settings shows.
+    public var label: String {
+        switch self {
+        case .denon: "Denon"
+        case .customImages: "Custom (images)"
+        case .customDrawn(let version): "Custom (drawn display, protocol \(version))"
+        }
+    }
+}
+
 public enum DrawnDisplay {
     /// The command byte of every drawn-display message. A placeholder until #466 finds one Denon's dispatcher leaves
     /// free; the vectors file and the C side carry the same number.

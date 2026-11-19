@@ -160,6 +160,15 @@ public final class JogDisplayDriver {
         case drawn(version: Int)
     }
     private(set) var mode = Mode.images
+    /// The firmware found (#456): nil before the hello and while asking.
+    var found: DisplayFound? {
+        guard connected else { return nil }
+        switch mode {
+        case .asking: return nil
+        case .drawn(let version): return .customDrawn(version: version)
+        case .images: return displayFirmware == .custom ? .customImages : .denon
+        }
+    }
     /// How long custom firmware has to answer the capability question: a USB round trip is milliseconds, and half a
     /// second costs less than two image uploads (#456).
     static let answerTimeout = 0.5

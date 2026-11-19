@@ -158,4 +158,22 @@ struct DrawnDisplayHandshakeTests {
         #expect(!port.both.contains(Self.end))
         #expect(port.both.last == JogDisplay.goodbye)
     }
+
+    @Test("The status says which display firmware was found, for Settings: Denon, Custom (images), Custom (drawn display, protocol N)")
+    func firmwareFound() throws {
+        let (denon, _, _) = try Self.rig(.denon)
+        #expect(denon.coordinator.status.displayFound?.label == "Denon")
+
+        let (asked, _, _) = try Self.rig(.custom)
+        #expect(asked.coordinator.status.displayFound == nil)   // still asking
+        asked.coordinator.jogDisplayReply(Self.answer)
+        #expect(asked.coordinator.status.displayFound?.label == "Custom (drawn display, protocol 1)")
+        asked.coordinator.setJogDisplay(enabled: false)
+        #expect(asked.coordinator.status.displayFound == nil)   // no unit to speak of
+
+        let (silent, _, clock) = try Self.rig(.custom)
+        clock.now = 1
+        silent.coordinator.tick()
+        #expect(silent.coordinator.status.displayFound?.label == "Custom (images)")
+    }
 }
