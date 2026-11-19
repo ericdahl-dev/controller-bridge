@@ -1,6 +1,6 @@
 """Tests for dfupatch.py. They build synthetic DfuSe files, so they need no vendor data.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import contextlib, io, os, struct, tempfile, unittest, zlib
+import contextlib, io, os, shutil, struct, subprocess, tempfile, unittest, zlib
 
 import dfupatch
 
@@ -223,6 +223,17 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("outside the repository", err)
         self.assertFalse(os.path.exists(output))
+
+
+class IgnoreRuleTests(unittest.TestCase):
+    def test_vendor_and_patched_images_in_this_folder_are_ignored_by_git(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        if not shutil.which("git") or subprocess.run(["git", "-C", here, "rev-parse"], capture_output=True).returncode:
+            self.skipTest("not in a git checkout")
+        for name in ["stock.dfu", "wd.bin", "dump.bin", "out.patched.dfu", "images/wd.hex", "notes.elf"]:
+            path = os.path.join(here, name)
+            result = subprocess.run(["git", "-C", here, "check-ignore", "-q", "--no-index", path])
+            self.assertEqual(result.returncode, 0, f"{name} isn't ignored")
 
 
 if __name__ == "__main__":
