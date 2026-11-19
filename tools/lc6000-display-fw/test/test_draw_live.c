@@ -529,7 +529,7 @@ static const time_case times[] = {
 };
 #define TIMES (sizeof times / sizeof times[0])
 
-/// The time left, centred at (99, 169): compared over a box around its line that holds nothing else for these decks.
+/// The time left, centered at (99, 169): compared over a box around its line that holds nothing else for these decks.
 #define TIME_LEFT 60
 #define TIME_RIGHT 140
 #define TIME_TOP 156
@@ -671,8 +671,8 @@ static void a_new_second_restarts_the_red(void) {
     CHECK(rec.presents == 4);
 }
 
-/// Paused inside the last minute: no warning, the normal colours (for blue, the normal half's), and nothing blinks.
-static void paused_in_the_last_minute_draws_the_normal_colours(void) {
+/// Paused inside the last minute: no warning, the normal colors (for blue, the normal half's), and nothing blinks.
+static void paused_in_the_last_minute_draws_the_normal_colors(void) {
     CHECK(load_reference("test/ref/deck4-blue-empty-time135-165-normal.ppm"));
     begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, 135, 165, 0);
     memcpy(frame, rec.last, sizeof frame);
@@ -682,7 +682,7 @@ static void paused_in_the_last_minute_draws_the_normal_colours(void) {
     dfw_tick(&live, 500);
     dfw_tick(&live, 1000);
     CHECK(rec.presents == 1);
-    // A red deck paused keeps its own colour: the white is the warning's alone.
+    // A red deck paused keeps its own color: the white is the warning's alone.
     begin_with_time(DECK_2_RED_EMPTY, PAUSED, 135, 165, 0);
     CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF0000u);
 }
@@ -709,8 +709,8 @@ static void the_blink_survives_the_clock_wrapping(void) {
 }
 
 /// Near red (JogTrackTime.warningNormalFill): spread at least half the brightest and the hue within 25 degrees of
-/// 3.5. Orange (hue 30) keeps its colour; a red-orange (hue 14) and a magenta-red (hue 340) go white; a pale red
-/// (255 140 140: spread 115, under half of 255) keeps its colour.
+/// 3.5. Orange (hue 30) keeps its color; a red-orange (hue 14) and a magenta-red (hue 340) go white; a pale red
+/// (255 140 140: spread 115, under half of 255) keeps its color.
 static void only_a_deck_near_red_goes_white(void) {
     static const struct { const char *deck; dfw_pixel fill; } decks[] = {
         { "F0 00 02 0B 7F 10 20 00 09 03 01 01 7F 01 00 00 00 00 F7", 0xFF8000u },   // 255 128 0
@@ -794,7 +794,7 @@ const test_case draw_live_tests[] = {
     { "the warning references differ", the_warning_references_differ },
     { "the warning keeps blinking without a new second", the_warning_keeps_blinking_without_a_new_second },
     { "a new second restarts the red", a_new_second_restarts_the_red },
-    { "paused in the last minute draws the normal colours", paused_in_the_last_minute_draws_the_normal_colours },
+    { "paused in the last minute draws the normal colors", paused_in_the_last_minute_draws_the_normal_colors },
     { "the warning covers the last 60 seconds", the_warning_covers_the_last_60_seconds },
     { "the blink survives the clock wrapping", the_blink_survives_the_clock_wrapping },
     { "only a deck near red goes white", only_a_deck_near_red_goes_white },

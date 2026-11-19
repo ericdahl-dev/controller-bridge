@@ -7,7 +7,7 @@
 /// JogDisplayRenderer's ring(litBeat:) does. Nothing while the display is stale.
 void dfw_draw_live(dfw_pixel *frame, const dfw_unit *unit);
 
-/// The time left (#460), "-m:ss", centred under key/BPM in GeistMono-SemiBold 14: the text white, or the last
+/// The time left (#460), "-m:ss", centered under key/BPM in GeistMono-SemiBold 14: the text white, or the last
 /// minute's warning red (its own glyphs: light text is drawn heavier). In draw.c, with the header's glyphs.
 void dfw_draw_time_text(dfw_pixel *frame, const char *text, int warning_red);
 

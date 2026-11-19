@@ -7,13 +7,13 @@ public enum JogTrackTime {
     /// The warning's red, 0xFF3B30, and its hue in degrees.
     public static let warningRed = [0xFF, 0x3B, 0x30]
     static let warningHue = 3.5
-    /// A deck colour within this many degrees of the red's hue, and saturated, counts as near red.
+    /// A deck color within this many degrees of the red's hue, and saturated, counts as near red.
     static let nearRedHue = 25.0
     /// The text's white, 0xEDEDEA: the warning's normal fill for a deck near red.
     static let white = [0xED, 0xED, 0xEA]
 
     public enum Look: Equatable, Sendable {
-        /// No warning: the text white, the ring the deck colour.
+        /// No warning: the text white, the ring the deck color.
         case normal
         /// The warning's red half: text and ring fill red.
         case warningRed
@@ -28,7 +28,7 @@ public enum JogTrackTime {
         return phase < 0.5 ? .warningRed : .warningNormal
     }
 
-    /// The ring's fill in the warning's normal half: the deck colour, or white when that is near red, so the blink
+    /// The ring's fill in the warning's normal half: the deck color, or white when that is near red, so the blink
     /// still shows. Near red: the channels' spread at least half the brightest, and the hue within `nearRedHue`.
     public static func warningNormalFill(deck: [Int]) -> [Int] {
         guard deck.count == 3 else { return deck }

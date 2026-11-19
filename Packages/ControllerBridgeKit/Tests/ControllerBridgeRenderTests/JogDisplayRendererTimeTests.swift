@@ -32,7 +32,7 @@ struct JogDisplayRendererTimeTests {
     }
 
     /// "-99:59" is the widest a track under 100 minutes shows.
-    @Test("The remaining time draws below key/BPM, inside the text-safe circle, centred", arguments: [
+    @Test("The remaining time draws below key/BPM, inside the text-safe circle, centered", arguments: [
         (elapsed: 0, length: 165), (elapsed: 600, length: 4365), (elapsed: 0, length: 5999),
     ])
     func remainingFits(elapsed: Int, length: Int) {
@@ -53,9 +53,9 @@ struct JogDisplayRendererTimeTests {
 
     static func at(_ image: [UInt8], _ x: Int, _ y: Int) -> [UInt8] { JogDisplayRendererTests.pixel(image, x: x, y: y) }
 
-    /// The progress ring (r 96–98): filled in the deck colour clockwise from 12, the rest a dark track. Points mid-band
+    /// The progress ring (r 96–98): filled in the deck color clockwise from 12, the rest a dark track. Points mid-band
     /// (r ≈ 97): (115, 3) at 10°, (196, 98) at 90°, (98, 196) at 180°, (1, 98) at 270°.
-    @Test("Halfway: the ring is lit in the deck colour to 6 o'clock, dark after")
+    @Test("Halfway: the ring is lit in the deck color to 6 o'clock, dark after")
     func progressHalfway() {
         let image = Self.image((elapsed: 60, length: 120))
         #expect(JogDisplayRendererTests.near(Self.at(image, 115, 3), 0xFF0000))
@@ -93,7 +93,7 @@ struct JogDisplayRendererTimeTests {
         #expect(!Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xEDEDEA, by: 8) })
     }
 
-    @Test("Without the warning the remaining time is white and the fill the deck colour")
+    @Test("Without the warning the remaining time is white and the fill the deck color")
     func warningOff() {
         let image = Self.image((elapsed: 90, length: 120))
         #expect(Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xEDEDEA, by: 8) })

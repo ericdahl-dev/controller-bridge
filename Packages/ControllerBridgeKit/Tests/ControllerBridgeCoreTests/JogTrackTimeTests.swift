@@ -2,8 +2,8 @@
 import Testing
 
 /// The last minute's warning (#460), the user's pick: in the last 60 s, while playing, the remaining time and the
-/// progress ring blink at 1 Hz between red and their normal colours; nothing disappears. `phase` is the time since the
-/// shown second last changed, 0 to 1: red in its first half, so the colour flips on the frame the digit changes.
+/// progress ring blink at 1 Hz between red and their normal colors; nothing disappears. `phase` is the time since the
+/// shown second last changed, 0 to 1: red in its first half, so the color flips on the frame the digit changes.
 @Suite("Jog display: track time warning")
 struct JogTrackTimeTests {
     typealias Look = JogTrackTime.Look
@@ -33,12 +33,12 @@ struct JogTrackTimeTests {
     static let nearRed: [[Int]] = [[255, 0, 0], [255, 0, 64], [255, 80, 0], [128, 0, 0]]
     static let notNearRed: [[Int]] = [[255, 128, 0], [255, 0, 128], [0, 128, 255], [255, 255, 255], [255, 200, 200]]
 
-    @Test("A deck colour near red blinks against white", arguments: nearRed)
+    @Test("A deck color near red blinks against white", arguments: nearRed)
     func nearRedIsWhite(deck: [Int]) {
         #expect(JogTrackTime.warningNormalFill(deck: deck) == [0xED, 0xED, 0xEA])
     }
 
-    @Test("Any other deck colour blinks against itself", arguments: notNearRed)
+    @Test("Any other deck color blinks against itself", arguments: notNearRed)
     func otherIsItself(deck: [Int]) {
         #expect(JogTrackTime.warningNormalFill(deck: deck) == deck)
     }

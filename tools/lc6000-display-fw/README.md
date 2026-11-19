@@ -48,7 +48,7 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   Under the marker, the level meter (#461, Swift's `drawMeter`): an arc 80-83 px out on the left, 240° to 300°, a
   dark track filled green to three quarters and yellow above, all red at clip, with the held peak as a 2° tick. No
   meter until a meter message has come since begin. Over the meter and under the marker, the track time (#460,
-  Swift's `drawTime`): the progress ring (r 96-98, a dark track and the deck colour's fill clockwise from 12 o'clock)
+  Swift's `drawTime`): the progress ring (r 96-98, a dark track and the deck color's fill clockwise from 12 o'clock)
   and the time left, "-m:ss" in GeistMono-SemiBold 14 at (99, 169). None until a time message has come since begin or
   the deck changed, and none for an unknown length. In the last minute while playing it blinks at 1 Hz: red for the
   first 500 ms from when the time last changed, then its normal half (the ring white for a deck near red). The tick

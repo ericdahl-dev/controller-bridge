@@ -255,7 +255,7 @@ public enum JogDisplayRenderer {
     }
 
     /// Track time (#460): the time left, "-m:ss" (minutes past 59 stay minutes), in the slot under key/BPM. Seconds.
-    /// Around the edge, the progress ring: the deck colour clockwise from 12 o'clock, the rest a dark track.
+    /// Around the edge, the progress ring: the deck color clockwise from 12 o'clock, the rest a dark track.
     /// The warning's red half draws text and fill red; its normal half fills `JogTrackTime.warningNormalFill`.
     private static func drawTime(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int],
                                  in context: CGContext) {

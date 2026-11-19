@@ -368,7 +368,7 @@ static void progress(dfw_pixel *frame, float turns, dfw_pixel fill) {
     }
 }
 
-/// Whether a deck colour is near the warning's red, so its normal half fills white instead (JogTrackTime's
+/// Whether a deck color is near the warning's red, so its normal half fills white instead (JogTrackTime's
 /// warningNormalFill): the channels' spread at least half the brightest, and the hue within 25° of the red's 3.5°.
 static int near_red(const dfw_deck_state *deck) {
     float r = deck->r, g = deck->g, b = deck->b;
