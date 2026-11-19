@@ -9,6 +9,7 @@ struct DrawnDisplayMeterTests {
     typealias Handshake = DrawnDisplayHandshakeTests
 
     static func meters(_ port: Handshake.Port) -> [[UInt8]] { Handshake.drawn(port).filter { $0[9] == 0x0A } }
+    static func meters(_ port: JogDisplayDriverTests.FakePort) -> [[UInt8]] { Handshake.drawn(port).filter { $0[9] == 0x0A } }
     static func level(_ rig: ProfileMatchingTests.ProfileRig, channel: Int = 1, _ value: Float) {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH\(channel)/Meter", [.float(value)]))
     }
@@ -59,6 +60,20 @@ struct DrawnDisplayMeterTests {
         #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 32, peak: 127).bytes)
         rig.clock.now = 0.4
         rig.coordinator.tick()
+        #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 32, peak: 32).bytes)
+    }
+
+    @Test("A deck switch moves the meter to the new deck's channel at once, in the same tick")
+    func deckSwitch() throws {
+        let (rig, port) = try Handshake.drawnLayers()
+        Self.level(rig, channel: 1, 0.5)
+        Self.level(rig, channel: 2, 0.25)
+        rig.coordinator.tick()
+        #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 64, peak: 64).bytes)
+        let unit = JogDisplayRingHoldTests.lc6000.id
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: unit)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: unit)
+        rig.coordinator.tick()   // same instant: the rate limit doesn't hold the new deck back
         #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 32, peak: 32).bytes)
     }
 }

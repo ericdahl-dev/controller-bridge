@@ -24,6 +24,8 @@ final class JogDisplayController {
     /// Each mixer channel's meter from Syndicate (#461): the latest level, 0...1, and the peak held since `peakAt`.
     private var meters: [Int: (level: Double, peak: Double, peakAt: Double)] = [:]
     private var lastMeterSent: Double?
+    /// The deck whose meter went out last: a switch sends the new one's at once.
+    private var lastMeterDeck: Int?
     /// How long a peak holds above the level: the mixer LEDs' default (mixer.meter.hold_ms), as the LC6000 has none.
     static let peakHold = Double(ProfileKeys.fallback("mixer.meter.hold_ms") as Int) / 1000
 
@@ -147,7 +149,8 @@ final class JogDisplayController {
     /// it has held. Nothing until its channel has reported.
     private func meterTick(deck: Int, driver: JogDisplayDriver) {
         guard var meter = meters[deck] else { return }
-        if let sent = lastMeterSent, clock.now - sent < 1 / Self.markerRate - 1e-9 { return }
+        if deck == lastMeterDeck, let sent = lastMeterSent, clock.now - sent < 1 / Self.markerRate - 1e-9 { return }
+        lastMeterDeck = deck
         if clock.now - meter.peakAt > Self.peakHold {
             meter.peak = meter.level
             meter.peakAt = clock.now
