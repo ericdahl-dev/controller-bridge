@@ -61,7 +61,8 @@ struct DrawnDisplayTextDriverTests {
         port.wd.removeAll()
         clock.now = 1.0
         rig.coordinator.tick()
-        #expect(DrawnDisplayReconnectTests.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x0A])
+        // ... and (#460) the time, known since the first tick.
+        #expect(DrawnDisplayReconnectTests.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x06, 0x0A])
         #expect(Self.textAndTempo(port) == Self.daybreak)
     }
 

@@ -144,6 +144,7 @@ final class JogDisplayController {
         guard let front else { return }
         let facts = entries[front].facts
         meterTick(deck: facts.deck, driver: driver)
+        timeTick(facts, driver: driver)
         driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending, loop: facts.looping,
                          cue: facts.cueHeld)
         driver.playLight(facts.playing || (facts.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
@@ -151,6 +152,15 @@ final class JogDisplayController {
 
     /// The deck in front's meter to the drawn display, at most 30 times a second; the peak falls to the level once
     /// it has held. Nothing until its channel has reported.
+    /// The time message (#460): at most 4 a second, so a scrub doesn't flood the wire; a change held back goes
+    /// once the quarter second is up. Steady play changes it once a second, so a seek goes at once.
+    static let timeRate = 4.0
+    private var lastTimeSent: Double?
+    private func timeTick(_ facts: DeckFacts, driver: JogDisplayDriver) {
+        if let sent = lastTimeSent, clock.now - sent < 1 / Self.timeRate - 1e-9 { return }
+        if driver.time(.time(elapsed: facts.position, length: facts.duration)) { lastTimeSent = clock.now }
+    }
+
     private func meterTick(deck: Int, driver: JogDisplayDriver) {
         // A channel that hasn't reported shows an empty meter, not the last deck's (#461).
         guard var meter = meters[deck] else {

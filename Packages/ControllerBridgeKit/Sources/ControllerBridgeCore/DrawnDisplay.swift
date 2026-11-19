@@ -120,6 +120,20 @@ public enum DrawnDisplay {
         /// The deck's tempo in tenths of a BPM, 1-16383; 0 is none, drawn as "—" (#458).
         case tempo(tenths: Int)
 
+        /// How far into its track the deck is, and the track's length, in whole seconds, each 0-16383; length 0 is
+        /// unknown (#460). The chip works out what's left.
+        case time(elapsedSeconds: Int, lengthSeconds: Int)
+
+        /// The time message from Syndicate's position and length in seconds: each cut to the second shown, clamped to
+        /// 16383; an unknown, NaN, zero or negative one is 0.
+        public static func time(elapsed: Double?, length: Double?) -> Message {
+            func seconds(_ value: Double?) -> Int {
+                guard let value, value > 0 else { return 0 }
+                return value >= 16383 ? 16383 : Int(value)
+            }
+            return .time(elapsedSeconds: seconds(elapsed), lengthSeconds: seconds(length))
+        }
+
         /// The tempo message for a BPM: rounded once to tenths, clamped to 16383; 0 for none, NaN, zero or below.
         public static func tempo(_ bpm: Double?) -> Message {
             guard let bpm, bpm > 0 else { return .tempo(tenths: 0) }
@@ -146,6 +160,9 @@ public enum DrawnDisplay {
             case .meter(let level, let peak):
                 DrawnDisplay.frame(0x0A, [UInt8(min(max(level, 0), 127)), UInt8(min(max(peak, 0), 127))])
             case .text(let field, let text): DrawnDisplay.frame(0x04, [field.rawValue] + DrawnDisplay.escaped(text))
+            case .time(let elapsed, let length):
+                DrawnDisplay.frame(0x06, [UInt8(elapsed >> 7 & 0x7F), UInt8(elapsed & 0x7F),
+                                          UInt8(length >> 7 & 0x7F), UInt8(length & 0x7F)])
             case .tempo(let tenths):
                 DrawnDisplay.frame(0x05, [UInt8(tenths >> 7 & 0x7F), UInt8(tenths & 0x7F)])
             }

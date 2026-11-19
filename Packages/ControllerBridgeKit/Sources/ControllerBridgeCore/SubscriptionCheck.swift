@@ -70,8 +70,9 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         switch self {
         case .playing: "the Play LED doesn't follow the deck"
         case .playPending: "Play won't blink while a quantized start waits"
-        case .loaded: "the ring and Cue LED don't show a loaded track, and the jog can't seek by track length"
-        case .progress: "the jog seeks from the wrong place while paused"
+        case .loaded:
+            "the ring and Cue LED don't show a loaded track, the jog can't seek by track length, and the jog display shows no track length or time left"
+        case .progress: "the jog seeks from the wrong place while paused, and the jog display's time stands still"
         case .tempoSlider: "the pitch fader can jump"
         case .cues: "hot cue pads stay dark"
         case .sync: "the Sync LED doesn't follow the deck"

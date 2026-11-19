@@ -516,6 +516,8 @@ public final class JogDisplayDriver {
     private func sendLive() {
         sendWD(DrawnDisplay.Message.beat(lastMasterBeat ?? 0).bytes)
         if let lastMarker { sendWD(DrawnDisplay.Message.needle(lastMarker).bytes) }
+        // The deck's time (#460), once known.
+        if let lastTime { sendWD(lastTime) }
         // The level meter (#461): empty until the deck's channel reports.
         sendWD(DrawnDisplay.Message.meter(level: lastMeter.level, peak: lastMeter.peak).bytes)
     }
@@ -552,6 +554,19 @@ public final class JogDisplayDriver {
         lastMeter = (level, peak)
         guard connected, drawing else { return false }
         sendWD(DrawnDisplay.Message.meter(level: level, peak: peak).bytes)
+        return true
+    }
+
+    /// The deck in front's time for drawn mode (#460): sent only while drawing, and only when it changes (the shown
+    /// second, or the length); whether it went out.
+    private var lastTime: [UInt8]?
+    @discardableResult
+    public func time(_ message: DrawnDisplay.Message) -> Bool {
+        let bytes = message.bytes
+        guard bytes != lastTime else { return false }
+        lastTime = bytes
+        guard connected, drawing else { return false }
+        sendWD(bytes)
         return true
     }
 

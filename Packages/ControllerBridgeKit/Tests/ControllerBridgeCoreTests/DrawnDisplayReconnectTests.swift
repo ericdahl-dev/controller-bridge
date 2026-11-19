@@ -93,7 +93,8 @@ struct DrawnDisplayReconnectTests {
         rig.coordinator.tick()   // the deck's loaded flag (#459)
         let full = [DrawnDisplay.Message.begin(version: 1).bytes] + Handshake.drawn(port).filter { $0[9] == 0x03 }
             + [DrawnDisplay.Message.state(.loaded).bytes] + Handshake.drawn(port).filter { $0[9] == 0x04 || $0[9] == 0x05 }
-            + [DrawnDisplay.Message.beat(0).bytes, DrawnDisplay.Message.meter(level: 0, peak: 0).bytes]
+            + [DrawnDisplay.Message.beat(0).bytes, DrawnDisplay.Message.time(elapsedSeconds: 0, lengthSeconds: 0).bytes,
+               DrawnDisplay.Message.meter(level: 0, peak: 0).bytes]
         port.wd.removeAll()
         clock.now = 0.99
         rig.coordinator.tick()
@@ -107,7 +108,7 @@ struct DrawnDisplayReconnectTests {
         #expect(Self.ops(port).isEmpty)
         clock.now = 2.0
         rig.coordinator.tick()
-        #expect(Self.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x0A])
+        #expect(Self.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x06, 0x0A])
     }
 
     @Test("No heartbeat in image mode")
