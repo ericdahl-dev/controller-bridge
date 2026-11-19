@@ -320,7 +320,10 @@ public final class JogDisplayDriver {
     public func marker(_ pitchBend: Int) {
         guard pitchBend != lastMarker else { return }
         lastMarker = pitchBend
-        if connected { sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)]) }
+        // Drawing, the chip draws the needle from our message, and stock's pitch bend would only make it recompose
+        // its own hidden layer (#459, agent2's #466 reading).
+        if connected, case .drawn = mode { sendWD(DrawnDisplay.Message.needle(pitchBend).bytes) }
+        else if connected { sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)]) }
         onEvent?(.marker(pitchBend: pitchBend))
     }
 
