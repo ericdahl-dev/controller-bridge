@@ -17,6 +17,8 @@ void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame) {
     unit->frame = frame;
 }
 
+void dfw_set_frame(dfw_unit *unit, dfw_pixel *frame) { (void)unit; (void)frame; }
+
 void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {
     uint8_t next = (uint8_t)((unit->head + 1) % DFW_INBOX);
     if (length > DFW_MESSAGE_MAX || next == unit->tail) return;

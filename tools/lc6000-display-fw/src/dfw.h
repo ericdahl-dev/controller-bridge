@@ -45,7 +45,10 @@ typedef struct {
     dfw_pixel *frame;
 } dfw_unit;
 
+/// Starts the unit. `frame` may be NULL until the hook has one (see dfw_set_frame).
 void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame);
+/// Hands in the back buffer. Until there is one, nothing is drawn and the capability ask gets no answer.
+void dfw_set_frame(dfw_unit *unit, dfw_pixel *frame);
 /// One whole display message, F0 through F7. Only copies it; the tick acts on it.
 void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length);
 /// The draw tick: acts on the waiting messages, then presents a frame if something changed.
