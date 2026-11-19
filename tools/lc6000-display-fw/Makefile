@@ -25,10 +25,16 @@ clean:
 # The hook into the stock wd image (#467): its portable logic, tested natively (`make arm-test`).
 ARM_TESTS := $(wildcard arm/test/test_*.c)
 .PHONY: arm-test
-arm-test: $(BUILD)/hook-tests
+arm-test: $(BUILD)/hook-tests arm
 	$(BUILD)/hook-tests
 	sh arm/check_symbols.sh $(BUILD)/freestanding-arm
+	ARM_BUILD=$(ARM_BUILD) $(PYTHON) -I arm/test/test_block.py
+
+# The block tests need the `unicorn` package (pip install unicorn): `make arm-test PYTHON=path/to/venv/python`.
+PYTHON ?= python3
 
 $(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c $(ARM_TESTS) test/harness.c
+
+include arm/arm.mk
