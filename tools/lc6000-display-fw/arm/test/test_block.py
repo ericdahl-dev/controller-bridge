@@ -218,6 +218,7 @@ DECK_2_RED_TRACK = "F000020B7F10200009030201 7F0000000001F7".replace(" ", "")
 TITLE_STROBE = "F000020B7F102000080400 5374726F6265F7".replace(" ", "")  # title "Strobe", as test/test_sequence.c
 TEMPO_128 = "F000020B7F10200003050A00F7"
 END = "F000020B7F102000020201F7"
+TIME_83_OF_165 = "F000020B7F10200005060053 0125F7".replace(" ", "")  # 83 of 165 s: the progress ring under way
 
 
 class CommandEntryTests(unittest.TestCase):
@@ -425,8 +426,9 @@ class UpperBlockTests(unittest.TestCase):
 
     def test_block_a_calls_bs_band_right_after_a_real_present_and_never_otherwise(self):
         # The band (#524) goes straight into layer 2, so it must only follow a present: never on a tick that showed
-        # nothing, and never after end. B's stub band (arm/test/band_stub.c) writes 0xF81F at panel (0, 0), which no
-        # frame copy touches; the layer is zeroed when it is turned on, so a band called before the present is lost.
+        # nothing, and never after end. With a time under way, B's band draws the ring outside the frame: at 12
+        # o'clock, r 105, frame (99, -7), the fill's start in the red deck's color, 0xF800, at panel (159, 225), which
+        # no frame copy touches. The layer is zeroed when it is turned on, so a band called before the present is lost.
         chip = Chip(data=proven_block(), upper=upper_block())
 
         def deliver(*messages):
@@ -436,14 +438,16 @@ class UpperBlockTests(unittest.TestCase):
                           r5=(message[7] << 7) | message[8], r8=0)
             chip.call(dfupatch.HOOK_RENDER_ENTRY, count=50_000_000)
 
+        twelve = LAYER_AT + (225 * 320 + 159) * 2
+
         def corner():
-            return struct.unpack("<H", chip.uc.mem_read(LAYER_AT, 2))[0]
+            return struct.unpack("<H", chip.uc.mem_read(twelve, 2))[0]
 
         deliver(CAPABILITY)
         self.assertEqual(corner(), 0, "the ask presents nothing, so no band")
-        deliver(BEGIN, DECK_2_RED_TRACK)
-        self.assertEqual(corner(), 0xF81F, "the band follows the present")
-        chip.uc.mem_write(LAYER_AT, b"\x00\x00")
+        deliver(BEGIN, DECK_2_RED_TRACK, TIME_83_OF_165)
+        self.assertEqual(corner(), 0xF800, "the band follows the present")
+        chip.uc.mem_write(twelve, b"\x00\x00")
         deliver(END)
         deliver()
         self.assertEqual(corner(), 0, "end presents nothing, so no band")
@@ -457,6 +461,12 @@ def native_frame(messages):
     """The frame the native build (the Mac's compiler, the same src/) draws for these messages: 198x198 0x00RRGGBB."""
     out = subprocess.run([FRAME_DUMP, *messages], check=True, capture_output=True).stdout
     return struct.unpack(f"<{SIZE * SIZE}I", out)
+
+
+def native_panel(messages):
+    """The whole panel the native build shows for these messages (#524): 320x240 RGB565, the frame turned and the band."""
+    out = subprocess.run([FRAME_DUMP, "--panel", *messages], check=True, capture_output=True).stdout
+    return struct.unpack(f"<{320 * 240}H", out)
 
 
 def chip_frame(messages):
@@ -527,20 +537,14 @@ class NativeFrameTests(unittest.TestCase):
 
     def test_the_panel_shows_the_native_frame_turned_and_in_rgb565_with_black_around_it(self):
         # Layer 2 is the whole 320x240 panel: the frame turned 180 degrees at (61, 21), each pixel's top 5, 6 and 5 bits
-        # of red, green and blue; black everywhere else.
-        messages = (BEGIN, DECK_2_RED_TRACK)
-        native = native_frame(messages)
+        # of red, green and blue; the band's ring round it (#524), frame (x, y) at panel (61 + 197 - x, 21 + 197 - y);
+        # black everywhere else. The native build's panel (frame-dump --panel) is all of that, from the same source.
+        messages = (BEGIN, DECK_2_RED_TRACK, TIME_83_OF_165)
+        want = native_panel(messages)
+        self.assertGreater(sum(1 for i, w in enumerate(want) if w and not (61 <= i % 320 < 259 and 21 <= i // 320 < 219)),
+                           1000, "the native panel has the band's ring outside the frame")
         chip, _ = chip_frame(messages)
         layer = struct.unpack(f"<{320 * 240}H", bytes(chip.uc.mem_read(LAYER_AT, 320 * 240 * 2)))
-        want = [0] * (320 * 240)
-        for y in range(SIZE):
-            for x in range(SIZE):
-                p = native[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)]
-                want[(21 + y) * 320 + 61 + x] = (p >> 19 & 0x1F) << 11 | (p >> 10 & 0x3F) << 5 | (p >> 3 & 0x1F)
-        # B's band (#524) draws into the border after each present. Until the real band is in src/, B links
-        # arm/test/band_stub.c, which writes this one pixel at panel (0, 0); the real band replaces it with the
-        # native band's pixels.
-        want[0] = 0xF81F
         wrong = sum(1 for got, w in zip(layer, want) if got != w)
         self.assertEqual(wrong, 0, f"{wrong} of the panel's pixels differ")
 

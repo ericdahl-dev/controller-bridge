@@ -80,5 +80,12 @@ rm "$here/phase-preview.ppm"
 # The warning's first stage (#524): steady red at 45 s left, before the blink.
 "$live" 4 0 128 255 empty - - "time=120/165" look=red "$here/deck4-blue-empty-time120-165-red.ppm"
 "$live" 4 0 128 255 empty - 4096 "time=83/165" "$here/deck4-blue-empty-time83-165-needle4096.ppm"
+# The progress ring in the band outside the frame (#524): the whole 216 drawn image, for the chip's band. The start,
+# the middle, the steady red, the blink's white, and a red deck's white.
+"$live" 4 0 128 255 empty - - "time=0/165" canvas=216 "$here/band-deck4-blue-empty-time0-165.ppm"
+"$live" 4 0 128 255 empty - - "time=83/165" canvas=216 "$here/band-deck4-blue-empty-time83-165.ppm"
+"$live" 4 0 128 255 empty - - "time=120/165" look=red canvas=216 "$here/band-deck4-blue-empty-time120-165-red.ppm"
+"$live" 4 0 128 255 empty - - "time=135/165" look=white canvas=216 "$here/band-deck4-blue-empty-time135-165-white.ppm"
+"$live" 2 255 0 0 empty - - "time=135/165" look=white canvas=216 "$here/band-deck2-red-empty-time135-165-white.ppm"
 # Long tracks: minutes past 59 stay minutes, "-99:59" the widest.
 "$live" 4 0 128 255 empty - - "time=0/5999" "$here/deck4-blue-empty-time0-5999.ppm"

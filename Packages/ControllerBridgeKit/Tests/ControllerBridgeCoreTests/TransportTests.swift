@@ -54,6 +54,30 @@ struct TransportTests {
         ])
     }
 
+    // #478: the panel prints OFF under Sync. With Shift held, Sync turns sync off, and only off: TempoSync toggles.
+
+    @Test("Shift + Sync on a synced deck sends TempoSync 1 once, turning sync off; nothing on release")
+    func shiftSyncTurnsSyncOff() throws {
+        let rig = try Self.started()
+        PickupTests.report(rig, "Sync", .int(1))
+        rig.osc.sent.removeAll()
+        Self.press(rig, 26)
+        Self.press(rig, 20)
+        Self.release(rig, 20)
+        #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/TempoSync", [.int(1)])])
+    }
+
+    @Test("Shift + Sync on a deck that isn't synced sends nothing: it never turns sync on")
+    func shiftSyncNotSynced() throws {
+        let rig = try Self.started()
+        PickupTests.report(rig, "Sync", .int(0))
+        rig.osc.sent.removeAll()
+        Self.press(rig, 26)
+        Self.press(rig, 20)
+        Self.release(rig, 20)
+        #expect(rig.osc.sent == [])
+    }
+
     // #114: the LC6000's printed Shift functions. Pitch Bend − / + nudge the tempo while held (Syndicate §14.6).
 
     @Test("Pitch Bend − / + are holds: PhaseMinus or PhasePlus 1 on press, 0 on release")

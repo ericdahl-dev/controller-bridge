@@ -12,6 +12,7 @@ final class Bridge {
             "cue": { $0.cue },
             "censor": { $0.censor },
             "sync": { $0.sync },
+            "vinyl": { $0.vinyl },
             "master": { $0.master },
             "pitch_minus": { $0.pitchMinus },
             "pitch_plus": { $0.pitchPlus },
@@ -148,6 +149,8 @@ final class Bridge {
     var lastClockTime: Double?
     var loaded = false
     var synced = false
+    /// VINYL's mode (#540): on, a playing deck's jog seeks instead of bending. This deck's own; it starts off.
+    var vinylSeek = false
     var sliderEnabled = true
     var looping = false
     /// The loop Syndicate last reported, in seconds (LoopInfo), for Loop Move (#470); nil with none.
@@ -165,6 +168,10 @@ final class Bridge {
     /// The last velocity sent to each LED, buttons and pads on their own channel (#224) apart, so an unchanged LED is
     /// never sent twice (#383).
     private var ledCache = LEDCache()
+    /// What each color-message LED shows (#530), as last sent: only a change goes out, as with the velocity cache.
+    private var colorCache: [UInt8: [UInt8]] = [:]
+    /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
+    var colorMessages = false
 
     /// The pads' MIDI channel, 0-15 (#224): the deck's unless the profile gives the pads their own.
     let padChannel: UInt8
@@ -215,9 +222,15 @@ final class Bridge {
     /// The controller switched to this deck layer (#79): it shows this layer's LEDs now, so paint them all. The one
     /// pitch fader is shared by every layer, so its position belongs to another deck now: wait for pickup again.
     func becameActiveLayer() {
-        layerShown = true
         rearmPickup()
+        showLayer()
+    }
+
+    /// Shown from scratch: every LED painted again, once (#428: after the layer steps settle).
+    func showLayer() {
+        layerShown = true
         ledCache.flush()
+        colorCache = [:]
         refreshLEDs()
     }
 
@@ -227,6 +240,7 @@ final class Bridge {
         rearmPickup()
         rearmMixer()
         ledCache.flush()
+        colorCache = [:]
         mixerModule.forgetMeterShown()   // shown again on the next tick, on what may be a new port (#320)
         refreshLEDs()
     }
@@ -294,7 +308,10 @@ final class Bridge {
             refreshLEDs()
             return
         }
-        guard let name = buttonNames[note], let handler = Self.buttonHandlers[name] else { return }
+        guard let name = buttonNames[note] else { return }
+        // A dark button's light (#476) shows the press, whether or not the button does anything.
+        pressLit(name, pressed)
+        guard let handler = Self.buttonHandlers[name] else { return }
         handler(self)(pressed)
     }
 
@@ -401,6 +418,7 @@ final class Bridge {
         padLEDs()
         led(mapping.leds.pitchCenter, pitchCenterVelocity)
         pitchArrowLEDs()
+        pressLitLEDs()
         mixerLEDs()
     }
 
@@ -431,6 +449,7 @@ final class Bridge {
     /// Clears the LED cache and repaints every LED from the current state, as after an LED sweep.
     func repaintLEDs() {
         ledCache.flush()
+        colorCache = [:]
         // The meter shows again on its next tick (#320).
         mixerModule.forgetMeterShown()
         refreshLEDs()
@@ -443,6 +462,7 @@ final class Bridge {
         if enabled {
             ledsEnabled = true
             ledCache.flush()
+            colorCache = [:]
             mixerModule.forgetMeterShown()
             refreshLEDs()
         } else {
@@ -455,6 +475,10 @@ final class Bridge {
             for lit in ledCache.shown(onPads: true) where lit.velocity != Self.off {
                 padLED(lit.note, Self.off)
             }
+            // The color-message LEDs (#530): each lit one off with its own message.
+            for entry in colorCache.sorted(by: { $0.key < $1.key }) where entry.value != [0, 0, 0] {
+                if let message = colorMessageEncoder?.message(note: Int(entry.key), rgb: [0, 0, 0]) { colorLED(message) }
+            }
             // The VU meter too (#320).
             if let meter = mapping.mixer?.meter, let shown = mixerModule.meterShownValue, shown != 0, ledCC(UInt8(meter.cc), 0) {
                 mixerModule.forgetMeterShown()
@@ -466,6 +490,8 @@ final class Bridge {
     /// This bridge is a deck layer the controller is showing (#79). A hidden layer keeps its state and repaints when
     /// it comes to the front.
     var layerShown = true
+    /// The dark buttons held down now (#476): their lights are full.
+    var pressLitHeld: Set<String> = []
     /// The channel this layer's LEDs go out on, if not its own (#79): ch1 (0) while the controller sends every
     /// control on ch1 and only signals the layer.
     var ledChannel: UInt8?
@@ -481,6 +507,18 @@ final class Bridge {
             // The Coordinator treats this as an unplug once the current event is handled.
             outputFailed = true
         }
+    }
+
+    /// The color-message encoder in use (#530): nil when the setting is off or the profile has none.
+    var colorMessageEncoder: LEDColorEncoder? { colorMessages ? LEDColorEncoder(mapping) : nil }
+
+    /// A pad or the ring in exact RGB (#530), through Denon's color message.
+    func colorLED(_ message: LEDColorMessage) {
+        let rgb = [message.red, message.green, message.blue]
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, colorCache[message.note] != rgb else { return }
+        colorCache[message.note] = rgb
+        guard let output else { return }
+        do { try output.send(color: message) } catch { outputFailed = true }
     }
 
     /// An LED driven by a CC, such as a VU meter (#207): straight out, as the caller limits how often. False when held,

@@ -526,6 +526,15 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var colorTable: ColorTable
         /// Light a button's shifted note (#226) with the button's own state, on a controller where it has its own LED.
         public var mirrorShifted: Bool
+        /// The LEDs that take Denon's color message (#530): exact RGB, 7 bits a channel, in place of a velocity. Nil
+        /// on a controller without it.
+        public var colorMessage: ColorMessage?
+
+        /// Which notes' LEDs take the color message (#530).
+        public struct ColorMessage: Equatable, Sendable, Codable {
+            public var notes: [Int]
+            public init(notes: [Int]) { self.notes = notes }
+        }
 
         public enum BeatPulse: String, Equatable, Sendable, Codable, CaseIterable {
             case off, beat, downbeat
@@ -551,14 +560,17 @@ public struct Mapping: Equatable, Sendable, Codable {
             case levels
             case colorTable = "color_table"
             case mirrorShifted = "mirror_shifted"
+            case colorMessage = "color_message"
         }
 
         public init(
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
             beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000,
             colorTable: ColorTable = .rgb222,
-            mirrorShifted: Bool = false, pitchArrowBack: Int? = nil, pitchArrowForward: Int? = nil
+            mirrorShifted: Bool = false, pitchArrowBack: Int? = nil, pitchArrowForward: Int? = nil,
+            colorMessage: ColorMessage? = nil
         ) {
+            self.colorMessage = colorMessage
             self.pitchArrowBack = pitchArrowBack
             self.pitchArrowForward = pitchArrowForward
             self.levels = levels
@@ -592,7 +604,8 @@ public struct Mapping: Equatable, Sendable, Codable {
                 colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? ProfileKeys.fallback("leds.color_table"),
                 mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? ProfileKeys.fallback("leds.mirror_shifted"),
                 pitchArrowBack: try c.decodeIfPresent(Int.self, forKey: .pitchArrowBack),
-                pitchArrowForward: try c.decodeIfPresent(Int.self, forKey: .pitchArrowForward)
+                pitchArrowForward: try c.decodeIfPresent(Int.self, forKey: .pitchArrowForward),
+                colorMessage: try c.decodeIfPresent(ColorMessage.self, forKey: .colorMessage)
             )
         }
     }

@@ -7,6 +7,7 @@
 #include "harness.h"
 #include "draw.h"
 #include <string.h>
+#include <math.h>
 
 #define GROUND 0x0B0B0Bu
 /// The header band (chip and badge, 24-50) with room for anti-aliasing; the title's glyphs start below 66.
@@ -349,6 +350,66 @@ static void three_silent_seconds_present_the_logo(void) {
     CHECK(stale_matches());
 }
 
+/// Which pixels of the hub's middle (the number's box) are the number's ink: near the ground, not the hub's color.
+static void number_ink(const dfw_pixel *drawn, uint8_t *ink) {
+    for (int y = 0; y < 24; y++)
+        for (int x = 0; x < 24; x++) ink[y * 24 + x] = channel_diff(drawn[(87 + y) * DFW_SIZE + 87 + x], 0x0B0B0Bu) < 40;
+}
+
+/// The stale look shows the deck in the logo's hub (#524): a deck message while stale (it keeps the stale flag)
+/// presents the hub in the new deck's color with the new number. Hub at (111, 99): 12 px out, past the number,
+/// inside the hub's 17.8.
+static void a_new_deck_while_stale_shows_in_the_hub(void) {
+    static uint8_t before[24 * 24], after[24 * 24];
+    fresh(&unit, &rec);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");   // deck 2, red, track
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 21 F7");                         // loaded, feedback stale
+    dfw_tick(&unit, 0);
+    CHECK(rec.presents == 1 && dfw_stale(&unit));
+    CHECK(rec.last[99 * DFW_SIZE + 111] == 0xFF0000u);
+    number_ink(rec.last, before);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 03 00 00 01 48 00 50 00 F7");   // deck 3, 0/200/80
+    dfw_tick(&unit, 100);
+    CHECK(rec.presents == 2 && dfw_stale(&unit));
+    CHECK(rec.last[99 * DFW_SIZE + 111] == 0x00C850u);
+    number_ink(rec.last, after);
+    int ink = 0, moved = 0;
+    for (int i = 0; i < 24 * 24; i++) {
+        ink += after[i];
+        moved += after[i] != before[i];
+    }
+    CHECK(ink > 20 && moved > 10);
+}
+
+/// On a dark deck color the number is white (#542 follow-up, DeckNumberInk): navy (0, 0, 128) in the stale hub shows its
+/// number's ink in the text white, and none in the ground's black.
+static void a_dark_decks_hub_number_is_white(void) {
+    fresh(&unit, &rec);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 01 00 00 00 00 01 00 00 F7");   // deck 1, 0/0/128, empty
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 21 F7");                         // loaded, feedback stale
+    dfw_tick(&unit, 0);
+    CHECK(rec.presents == 1 && rec.last[99 * DFW_SIZE + 111] == 0x000080u);
+    int white = 0, black = 0;
+    for (int y = 87; y < 111; y++)
+        for (int x = 87; x < 111; x++) {
+            white += channel_diff(rec.last[y * DFW_SIZE + x], 0xEDEDEAu) < 40;
+            black += channel_diff(rec.last[y * DFW_SIZE + x], 0x0B0B0Bu) < 40;
+        }
+    CHECK(white > 20 && black == 0);
+}
+
+/// The linearization table is the WCAG formula, to float precision.
+static void the_linear_channel_table_is_wcags(void) {
+    int off = 0;
+    for (int c = 0; c < 256; c++) {
+        double x = c / 255.0, want = x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4);
+        off += fabs((double)dfw_linear_channel[c] - want) > 1e-7;
+    }
+    CHECK(off == 0);
+}
+
 /// The state's feedback-stale bit (#464): set, the presented frame is the logo; cleared, it's the deck again.
 static void the_stale_flag_draws_the_logo_and_fresh_feedback_clears_it(void) {
     fresh(&unit, &rec);
@@ -385,6 +446,9 @@ const test_case draw_tests[] = {
     { "every reference has the ring and header to compare", every_reference_has_the_ring_and_header_to_compare },
     { "begin then deck presents the reference", begin_then_deck_presents_the_reference },
     { "stale draws the logo", stale_draws_the_logo },
+    { "a new deck while stale shows in the hub", a_new_deck_while_stale_shows_in_the_hub },
+    { "a dark deck's hub number is white", a_dark_decks_hub_number_is_white },
+    { "the linear channel table is WCAG's", the_linear_channel_table_is_wcags },
     { "three silent seconds present the logo", three_silent_seconds_present_the_logo },
     { "the stale flag draws the logo and fresh feedback clears it",
       the_stale_flag_draws_the_logo_and_fresh_feedback_clears_it },

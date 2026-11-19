@@ -548,9 +548,18 @@ if pgrep -f "ControllerBridge.app/Contents/MacOS" >/dev/null 2>&1; then
 fi
 step "Quit every other DJ or MIDI app. Do NOT open Denon's updater."
 step "LC6000 on a direct cable to the Mac, not a hub. Powered on, running normally."
-step "ST-Link probe connected, and it can read the chip (#433)."
 step "No gig today."
 confirm "All of that true?" || exit 1
+# The probe (#433) is its own question (#468): the owner may flash without one, knowingly, never by confirming one.
+if confirm "Is an ST-Link probe connected, and can it read the chip (#433)?"; then
+  say "With the probe there, a dark display after the flash can still be brought back."
+else
+  drawn no-probe-risk
+  printf '  %s? Type NO PROBE to go on without it, anything else to stop:%s ' "$YELLOW" "$RESET"
+  typed=""
+  read -r typed || true
+  drawn no-probe "$typed" || exit 1
+fi
 
 stage "Enter update mode (display chip)"
 enter_update_mode
@@ -567,6 +576,16 @@ if read_app "$WORK/wd-app-before-$STAMP.bin" && dfupatch compare "$CURRENT_WD" "
 else
   warn "Couldn't confirm the chip holds $CURRENT_WD (the read failed or it differs). Stopping."
   way_back
+fi
+# The owner's image already there, exactly (a rewrite of block B alone, #468): step 2 has nothing to write.
+if ! APP_STATE=$(drawn app "$OWNER_DFU" "$WORK/wd-app-before-$STAMP.bin"); then
+  warn "The app area couldn't be judged against the owner's image (the line above says why). Stopping."
+  way_back
+fi
+A_DONE=0
+if [[ "$APP_STATE" == holds* ]]; then
+  A_DONE=1
+  printf "  %s✓%s the owner's image is already there, exactly: step 2 will write nothing\n" "$GREEN" "$RESET"
 fi
 if ! read_options "$WORK/wd-option-bytes-$STAMP.bin"; then
   warn "The option bytes couldn't be read, so the chip's protection can't be checked. Stopping."
@@ -617,11 +636,15 @@ pause
 
 stage "Step 2 of 2: the owner's image"
 say "The hooked image, with block A in its padding. Once it's on, A calls B when DeckBridge asks for drawn mode."
-if [[ -z "$(dfu_paths)" ]]; then
-  warn "The chip isn't in update mode any more."
-  way_back
+if (( A_DONE )); then
+  say "The owner's image is already there, exactly as in $OWNER_DFU. Nothing to write: the app area isn't touched."
+else
+  if [[ -z "$(dfu_paths)" ]]; then
+    warn "The chip isn't in update mode any more."
+    way_back
+  fi
+  flash "$OWNER_DFU" "owner" app
 fi
-flash "$OWNER_DFU" "owner" app
 pause
 
 stage "Power cycle"

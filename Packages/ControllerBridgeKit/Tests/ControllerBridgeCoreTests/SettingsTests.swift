@@ -326,6 +326,26 @@ struct SettingsTests {
         #expect(BridgeSettings.rebased(draft: exact, base: Self.defaults, onto: saved).ringColors == .exact)
     }
 
+    // #530: pads and ring in exact RGB through Denon's color message, or the 64-color table.
+
+    @Test("The color message is on by default, also for old settings; the table (the way back) round-trips and survives a rebase")
+    func colorMessagesSetting() {
+        #expect(Self.defaults.colorMessages)
+        let store = MemoryStore()
+        store.values[BridgeSettings.storageKey] = Data(#"""
+            {"controllers":[{"deck":1}],"syndicateHost":"127.0.0.1","syndicatePort":9090,"feedbackPort":9096,
+             "feedbackListen":"thisMac","ledsEnabled":true}
+            """#.utf8)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).colorMessages)
+        var table = Self.defaults
+        table.colorMessages = false
+        try? table.save(to: store)
+        #expect(!BridgeSettings.load(from: store, defaults: Self.defaults).colorMessages)
+        var saved = Self.defaults
+        saved.controllers[0].deck = 2
+        #expect(!BridgeSettings.rebased(draft: table, base: Self.defaults, onto: saved).colorMessages)
+    }
+
     // #425: the LC6000's display firmware, Denon's or custom.
 
     @Test("Display firmware defaults to Denon's; old settings load as Denon's; Custom round-trips and survives a rebase")

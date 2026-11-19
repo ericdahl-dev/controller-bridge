@@ -1,7 +1,7 @@
 """Tests for drawn_flash.py (#468): the checks the flash-day wizard's drawn path runs before and after each write. Synthetic
 files only; no vendor data, nothing sent to a unit.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import contextlib, io, os, tempfile, unittest
+import contextlib, io, os, subprocess, sys, tempfile, unittest
 
 import drawn_flash
 from test_build_upper_dfu import good_block
@@ -206,6 +206,61 @@ class OptionsTests(DrawnFlashTests):
 
     def test_a_read_that_isnt_16_bytes_is_refused(self):
         self.assertRefused(self.options(option_bytes()[:15]), "16")
+
+
+
+
+class AppTests(DrawnFlashTests):
+    """Before step 2 (#468): a read of the app area judged against the owner's image. When it's already there,
+    exactly (a rewrite of block B alone), step 2 writes nothing: the app area's erase and write is the one risky write."""
+
+    def read(self, content):
+        return self.path("wd-app-read.bin", content)
+
+    def test_the_owners_image_already_there_says_holds(self):
+        code, out, _ = run("app", self.owner_dfu(), self.read(full_wd_element()))
+        self.assertEqual((code, out.split()[0]), (0, "holds"))
+
+    def test_another_image_says_differs_with_the_first_address(self):
+        other = bytearray(full_wd_element())
+        other[0x100] ^= 1
+        code, out, _ = run("app", self.owner_dfu(), self.read(bytes(other)))
+        self.assertEqual((code, out.split()[0]), (0, "differs"))
+        self.assertIn("0x08008100", out)
+
+    def test_a_read_of_the_wrong_size_is_refused(self):
+        self.assertRefused(run("app", self.owner_dfu(), self.read(full_wd_element()[:-4])), "read")
+
+    def test_block_bs_file_in_the_owners_place_is_refused(self):
+        self.assertRefused(run("app", self.upper_dfu(), self.read(full_wd_element())), "0x08008000")
+
+    def test_it_runs_as_the_wizard_runs_it(self):
+        # python3 -I from another folder (#557), on a real decision.
+        owner, read = self.owner_dfu(), self.read(full_wd_element())
+        script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "drawn_flash.py")
+        with tempfile.TemporaryDirectory() as elsewhere:
+            result = subprocess.run([sys.executable, "-I", script, "app", owner, read], cwd=elsewhere,
+                                    capture_output=True, text=True)
+        self.assertEqual((result.returncode, result.stdout.split()[:1]), (0, ["holds"]), result.stderr)
+
+
+class NoProbeTests(DrawnFlashTests):
+    """Flashing without an ST-Link (#468, the owner's decision): the wizard never asks the owner to confirm a probe
+    they don't have. Without one it says the risk in plain words and goes on only on a typed phrase."""
+
+    def test_the_risk_is_said_in_plain_words(self):
+        code, out, _ = run("no-probe-risk")
+        self.assertEqual(code, 0)
+        for words in ("update-mode message", "stays dark until a probe", "top panel", "only after our own first message",
+                      "NO PROBE"):
+            self.assertIn(words, out)
+
+    def test_only_the_whole_phrase_goes_on(self):
+        self.assertEqual(run("no-probe", "NO PROBE")[0], 0)
+        self.assertEqual(run("no-probe", "  NO PROBE  ")[0], 0)   # stray spaces around it
+        for typed in ("", "y", "yes", "FLASH", "no probe", "NO", "NOPROBE", "NO PROBE!"):
+            with self.subTest(typed=typed):
+                self.assertRefused(run("no-probe", typed), "NO PROBE")
 
 
 if __name__ == "__main__":

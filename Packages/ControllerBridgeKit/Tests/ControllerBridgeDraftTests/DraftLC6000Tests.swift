@@ -54,8 +54,9 @@ struct DraftLC6000Tests {
                        "mapping.jog.seek_seconds_per_rev", "mapping.jog.beats_per_rev", "mapping.jog.require_touch",
                        "mapping.pitch.dead_zone", "mapping.pitch.pickup", "mapping.needle.require_touch",
                        "mapping.leds.", "mapping.notes."]
+        // Denon's color message (#530) is never drafted: it would send Denon's SysEx to another controller.
         let unexplained = try Self.bundled().keys.filter { key in
-            !set.contains(key) && !todo.contains { key == $0 || key.hasPrefix($0 + ".") }
+            !key.hasPrefix("mapping.leds.color_message") && !set.contains(key) && !todo.contains { key == $0 || key.hasPrefix($0 + ".") }
                 && !(general.contains { key.hasPrefix($0) } && (key.hasPrefix("mapping.leds.") || key.hasPrefix("mapping.notes.") ? todo.contains { key.hasPrefix($0) } : true))
         }.sorted()
         #expect(unexplained == [])

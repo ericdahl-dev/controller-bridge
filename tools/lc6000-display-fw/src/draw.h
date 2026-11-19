@@ -8,6 +8,9 @@
 /// outside 1-4 or an unknown player still draws a whole frame.
 void dfw_draw(dfw_pixel *frame, const dfw_unit *unit);
 
+/// sRGB channel values 0-255 linearized (WCAG), for the deck number's ink (#542 follow-up); the tests check it.
+extern const float dfw_linear_channel[256];
+
 /// The drawing's table, for dfw_init: the Mac tests and the drawing block name it, never the hook block (#501).
 extern const dfw_drawing dfw_drawn;
 

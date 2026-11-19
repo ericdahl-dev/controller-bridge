@@ -159,6 +159,26 @@ class DrawnPathTests(unittest.TestCase):
         self.assertLess(upper.index('read_upper "$readback"'), upper.index('drawn upper "$UPPER_DFU" "$readback"'))
         self.assertIn("^holds", upper)
 
+    def test_an_owners_image_already_there_is_not_written_again(self):
+        # A rewrite of block B alone (#468): the app area's erase and write is the one risky write, so it's skipped
+        # when the chip already holds the owner's image exactly.
+        before = self.drawn[self.drawn.index('stage "Before'):self.drawn.index('stage "Step 1 of 2')]
+        self.assertIn('APP_STATE=$(drawn app "$OWNER_DFU" "$WORK/wd-app-before-$STAMP.bin")', before)
+        self.assertIn('[[ "$APP_STATE" == holds* ]]', before)
+        step_2 = self.drawn[self.drawn.index('stage "Step 2 of 2'):self.drawn.index('stage "Power cycle')]
+        self.assertLess(step_2.index('if (( A_DONE ))'), step_2.index('flash "$OWNER_DFU" "owner" app'))
+
+    def test_it_never_asks_the_owner_to_confirm_a_probe_they_may_not_have(self):
+        ready = self.drawn[:self.drawn.index('stage "Enter update mode')]
+        all_true = ready[:ready.index('confirm "All of that true?"')]
+        self.assertNotIn("ST-Link probe connected", all_true[all_true.rindex('confirm "Both true?"'):])
+        # Its own question: yes goes on; no prints the risk and needs the typed phrase, judged by drawn_flash.py.
+        asked = ready.index('if confirm "Is an ST-Link probe connected, and can it read the chip (#433)?"; then')
+        risk = ready.index("drawn no-probe-risk")
+        gate = ready.index('drawn no-probe "$typed" || exit 1')
+        self.assertLess(asked, risk)
+        self.assertLess(risk, gate)
+
     def test_the_way_back_says_block_b_stays_and_is_harmless(self):
         way_back = self.stages[self.stages.index("way_back() {"):self.stages.index("# dfu_paths")]
         self.assertIn("Block B", way_back)

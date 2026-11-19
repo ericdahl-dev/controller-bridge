@@ -14,15 +14,19 @@
   python3 -I drawn_flash.py rewrite UPPER.dfu READ.bin OUT.dfu
       Only when `upper` says replace: B's element followed by erased bytes to the end of what the upper flash holds,
       so the write's erase covers an older, longer B too.
+  python3 -I drawn_flash.py app OWNER.dfu READ.bin
+      Before step 2: "holds" when the app area already holds the owner's image exactly (then step 2 writes nothing),
+      else "differs" with the first other address.
   python3 -I drawn_flash.py options READ.bin
       Judges a read of the option bytes (0x1FFFC000, 16 bytes) before step 1: read protection at level 0, sectors
       8-11 not write-protected, one bank. Anything else is refused.
 
 Standard library only."""
-import argparse, struct, sys, zlib
+import argparse, os, struct, sys, zlib
 
-import build_upper_dfu
-import dfupatch
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))  # -I leaves this folder off sys.path (#468)
+import build_upper_dfu  # noqa: E402
+import dfupatch  # noqa: E402
 
 APP_BASE = 0x08008000
 
@@ -135,6 +139,44 @@ def options(args):
     print("ok (read protection off, level 0; sectors 8-11 writable; one bank)")
 
 
+def app(args):
+    """Before step 2 (#468): a read of the app area against the owner's image. "holds" when it's already there
+    exactly (a rewrite of block B alone), so step 2 writes nothing; "differs" with the first other address."""
+    image = owner_image(args.owner)
+    read = dfupatch.read(args.read)
+    if len(read) != len(image):
+        raise dfupatch.Refused(f"the read is {len(read):#x} bytes, the owner's image {len(image):#x}")
+    first = next((i for i in range(len(image)) if read[i] != image[i]), None)
+    if first is None:
+        print("holds (exactly the owner's image)")
+    else:
+        print(f"differs (the first other byte is at 0x{APP_BASE + first:08X})")
+
+
+NO_PROBE = "NO PROBE"
+
+NO_PROBE_RISK = f"""Without an ST-Link probe (#433), one failure has no way back over USB:
+  If the new image starts but can't take the update-mode message, the jog display stays dark until a probe is
+  connected. Denon's updater and this wizard both need that message to reach the display chip.
+What makes that unlikely (from the code and the emulator, not yet from your unit):
+  - Our code runs only after our own first message: with no host, the image behaves like stock.
+  - Stock's own update-mode message is handled before our hook.
+  - Every write is read back and compared before the power cycle.
+Even then, the top panel and the rest of the unit keep working: only the jog display would be affected.
+Type {NO_PROBE} to go on without a probe; anything else stops here."""
+
+
+def no_probe_risk(_args):
+    print(NO_PROBE_RISK)
+
+
+def no_probe(args):
+    """Goes on without a probe only on the whole phrase, typed (#468)."""
+    if args.typed.strip() != NO_PROBE:
+        raise dfupatch.Refused(f"you typed {args.typed.strip()!r}, not {NO_PROBE}: stopping before anything is sent")
+    print(f"ok ({NO_PROBE}: going on without a probe)")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Checks for the drawn flash: files and reads, never the unit.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -154,6 +196,15 @@ def main(argv=None):
     bytes_ = commands.add_parser("options", help="judge a read of the option bytes at 0x1FFFC000 (16 bytes)")
     bytes_.add_argument("read")
     bytes_.set_defaults(run=options)
+    app_state = commands.add_parser("app", help="judge a read of the app area against the owner's image")
+    app_state.add_argument("owner")
+    app_state.add_argument("read")
+    app_state.set_defaults(run=app)
+    risk = commands.add_parser("no-probe-risk", help="what flashing without an ST-Link risks, in plain words")
+    risk.set_defaults(run=no_probe_risk)
+    phrase = commands.add_parser("no-probe", help="goes on without a probe only on the typed phrase NO PROBE")
+    phrase.add_argument("typed")
+    phrase.set_defaults(run=no_probe)
     args = parser.parse_args(argv)
     try:
         args.run(args)

@@ -35,6 +35,15 @@ struct TraceCoordinatorTests {
         #expect(lines.of(.midiOut).contains("DENON LC6000 PRIME ch1 note_on channel=0 note=1 velocity=127 time=0"))
     }
 
+    @Test("A color message (#530) is a readable MIDI out line: port, the LED's name, and its red, green and blue")
+    func colorMessage() throws {
+        let (rig, lines) = try Self.traced()
+        rig.coordinator.setColorMessages(true)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(140), .int(0)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        #expect(lines.of(.midiOut).contains("DENON LC6000 PRIME color ring r=127 g=70 b=0"))
+    }
+
     @Test("Streaming feedback is sampled: 20 Positions in 100 ms keep the first")
     func sampled() throws {
         let (rig, lines) = try Self.traced()
