@@ -39,6 +39,7 @@ struct CoordinatorCommandTests {
         #expect(Coordinator.Command.setJogDisplay(enabled: true).routing == .waitsForDemo)
         // A real device is captured, so the real Coordinator pauses it, demo or not.
         #expect(Coordinator.Command.setCapture(source: nil).routing == .real)
+        #expect(Coordinator.Command.startMeterCapture(seconds: 10).routing == .real)
         // The sweep runs on whichever Coordinator is active.
         #expect(Coordinator.Command.ledSweep(delay: 0.5).routing == .active)
         #expect(Coordinator.Command.stopLEDSweep.routing == .active)

@@ -48,19 +48,68 @@ struct DrawnDisplayMeterTests {
         #expect(Self.meters(port).count == settled)   // nothing new: nothing sent
     }
 
-    @Test("The peak holds 0.3 s above the level, then falls to it")
+    /// #582: a send schedule 1/30 s apart, as the needle's (#561): a send that lands late on a 10 ms tick doesn't push
+    /// the next one back. It was 25 a second.
+    @Test("A second of 10 ms ticks with the level changing every tick sends the meter 30 times")
+    func fullRate() throws {
+        let (rig, port) = try Self.drawing()
+        for step in 0..<100 {
+            rig.clock.now = 1 + Double(step) * 0.01
+            Self.level(rig, Float(step % 2 == 0 ? 0.2 : 0.9))
+            rig.coordinator.tick()
+        }
+        #expect(Self.meters(port).count == 30)
+    }
+
+    /// #582: the ballistics (MeterBallistics). The level falls from full to empty in 0.5 s rather than dropping to the
+    /// latest sample; the peak holds 0.3 s, then falls at the same rate instead of snapping to the level.
+    @Test("The level falls smoothly and the peak holds 0.3 s, then falls: 1.0, then 0.25 after 0.05 s")
     func peakHold() throws {
         let (rig, port) = try Self.drawing()
         Self.level(rig, 1.0)
         rig.clock.now = 0.05
         rig.coordinator.tick()
+        #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 127, peak: 127).bytes)
         Self.level(rig, 0.25)
         rig.clock.now = 0.1
         rig.coordinator.tick()
-        #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 32, peak: 127).bytes)
+        // 1.0 less 0.05 s of fall (0.1): 0.9, 114; the peak still held.
+        #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 114, peak: 127).bytes)
         rig.clock.now = 0.4
         rig.coordinator.tick()
-        #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 32, peak: 32).bytes)
+        // 0.35 s of fall: 0.3, 38. The peak held to 0.35, then 0.05 s of fall: 0.9, 114.
+        #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 38, peak: 114).bytes)
+    }
+
+    @Test("A hit between two sends shows at the next send: 0.9 then 0.1 inside one 33 ms window, sent as 0.84 (107), not 0.1")
+    func hitBetweenSends() throws {
+        let (rig, port) = try Self.drawing()
+        Self.level(rig, 0.1)
+        rig.clock.now = 1.0
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        rig.clock.now = 1.005
+        Self.level(rig, 0.9)
+        rig.clock.now = 1.006
+        Self.level(rig, 0.1)
+        for tick in [1.01, 1.02, 1.03, 1.04] {
+            rig.clock.now = tick
+            if tick > 1.01 { Self.level(rig, 0.1) }
+            rig.coordinator.tick()
+        }
+        // Risen to 0.9 at 1.01, then 0.03 s of fall by the send at 1.04.
+        #expect(Self.meters(port).first == DrawnDisplay.Message.meter(level: 107, peak: 114).bytes)
+    }
+
+    @Test("A steady level sends the meter once, then nothing new")
+    func steadySendsNothing() throws {
+        let (rig, port) = try Self.drawing()
+        for step in 0..<100 {
+            rig.clock.now = 1 + Double(step) * 0.01
+            Self.level(rig, 0.5)
+            rig.coordinator.tick()
+        }
+        #expect(Self.meters(port) == [DrawnDisplay.Message.meter(level: 64, peak: 64).bytes])
     }
 
     @Test("A deck switch moves the meter to the new deck's channel at once, in the same tick")
