@@ -66,6 +66,21 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 - **What it costs:** the core runs about 0.06 V higher (typical 1.26 V to 1.32 V), so the chip draws a little more current. Clock speed and all timing stay the same.
 - **Status: unproven on hardware.** Nobody has flashed it. Nobody has read `PWR_CR` on a running unit either, so the stock setting is known only from the code. It is not shown to fix the display drop-outs in #428. Whether the bootloader accepts a patched image at all is what the flash tests in #435 will show. Follow the runbook on #431, flash the stock image by the same route first, and have an SWD probe working before you try. The evidence is on #438.
 
+### `patches/tp-00.31-no-deck-select-on-hello.patch` (#439)
+
+- **For:** `tp` (top panel) firmware 00.31 only, the stock file `jc20_tp_update_00_31_120936.dfu`. `apply` refuses any other image, because the old bytes won't match.
+- **What it changes:** one byte of start-up data, no code. On a freshly powered unit a host hello (`F0 00 20 7F 01 F7`) puts the top panel into "pick a deck" mode: pads 1-4 blink and the other controls are muted until a pad is pressed. The hello handler (`0x0800C280`) does that only while the deck byte at `0x20000703` is `0xFF`, "no deck picked yet", its power-on value. That value is a literal in the compressed start-up data, at `0x08015CDD`; the patch makes it `0x00`, deck 1. The line covers the whole 4-byte token at `0x08015CDB` (`0a 14 ff 64` to `0a 14 00 64`).
+- **What the host then sees after a hello:** ch16 note 55 on (`9F 37 7F`), note 51 at 127 on ch1 (`90 33 7F`), ch16 note 55 off (`8F 37 00`). That is what the stock firmware sends on a hello once deck 1 has been picked. No blinking, no pad press.
+- **What stays the same:** with no host the unit already sends on ch1, and still does. Shift + deck select still opens deck select, and a pad still switches deck; pad 1 shows as the current deck from the start. A hello after you picked another deck reports that deck, as before. Goodbye (`F0 00 20 7F 02 F7`) is untouched.
+- **Status: unproven on hardware.** Nobody has flashed it. That a byte-patched `tp` image starts at all is known only from reading the startup stage (#434). The evidence is on #439.
+- **Way back:** hold BACK + FWD + VINYL at power-on (ST's ROM bootloader, which nothing in flash can remove), then run Denon's updater to restore stock 00.31.
+
+```sh
+python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_tp_update_00_31_120936.dfu \
+  tools/lc6000-firmware/patches/tp-00.31-no-deck-select-on-hello.patch ~/lc6000/jc20_tp_00_31_no_deck_select.dfu
+# wrote ...: tp image, trailer unchanged (no trailer CRC), DfuSe suffix CRC 0x7AA5BB38
+```
+
 ## Flash day kit (#435)
 
 Three pieces for the first real flash of the display chip, all run **by the unit's owner**, never by an agent:
