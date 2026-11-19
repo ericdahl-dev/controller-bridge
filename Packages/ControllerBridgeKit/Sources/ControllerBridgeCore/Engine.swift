@@ -59,9 +59,9 @@ public struct Engine {
                 }
             case .tick:
                 if let demo { demo.tick() } else { coordinator.tick() }
-            case .devicesChanged:
+            case .devicesChanged(let removed):
                 // The real controller re-reads the devices when the demo ends.
-                if demo == nil { coordinator.devicesChanged() }
+                if demo == nil { coordinator.devicesChanged(removed: removed) }
             case .sleep: active.willSleep()
             case .wake: if demo == nil { coordinator.didWake() }
             // Only while the window is open does the Coordinator build anything for it.

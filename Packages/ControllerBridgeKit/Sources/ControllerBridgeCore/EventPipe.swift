@@ -4,8 +4,9 @@ public enum PipeEvent: Equatable, Sendable {
     /// One UDP datagram from Syndicate, still OSC-encoded.
     case udp([UInt8])
     case tick
-    /// MIDI devices were added or removed: the Coordinator re-reads them.
-    case devicesChanged
+    /// MIDI devices were added or removed: the Coordinator re-reads them. `removed` is every endpoint removed since the
+    /// last one, even if already back (#429).
+    case devicesChanged(removed: Set<MIDIEndpoint.ID>)
     /// The Mac is about to sleep, or just woke.
     case sleep
     case wake
@@ -44,7 +45,7 @@ public struct EventPipe: Sendable {
         public func send(_ command: Coordinator.Command) { continuation.yield(.command(command)) }
         public func udp(_ datagram: [UInt8]) { continuation.yield(.udp(datagram)) }
         public func tick() { continuation.yield(.tick) }
-        public func devicesChanged() { continuation.yield(.devicesChanged) }
+        public func devicesChanged(removed: Set<MIDIEndpoint.ID> = []) { continuation.yield(.devicesChanged(removed: removed)) }
         public func sleep() { continuation.yield(.sleep) }
         public func wake() { continuation.yield(.wake) }
         public func diagnostics(open: Bool) { continuation.yield(.diagnostics(open: open)) }

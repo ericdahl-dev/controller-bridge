@@ -36,6 +36,11 @@ final class JogDisplayController {
         }
     }
 
+    /// Says goodbye, so the next refresh says hello again (#429).
+    func disconnect() {
+        driver?.disconnect()
+    }
+
     /// Whether the driver has said hello to a unit.
     var connected: Bool { driver?.connected ?? false }
 
