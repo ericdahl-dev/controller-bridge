@@ -16,6 +16,7 @@ SCRIPTS = [
     ("tools/lc6000-firmware/build_owner_image.py", ["--help"]),
     ("tools/lc6000-firmware/drawn_flash.py", ["--help"]),
     ("tools/lc6000-firmware/drawn_flash.py", ["no-probe-risk"]),
+    ("tools/lc6000-firmware/drawn_plan.py", []),   # usage on stderr, exit 2: it imported everything
 ]
 
 
@@ -34,7 +35,7 @@ class ScriptsAsRunTests(unittest.TestCase):
         with open(os.path.join(HERE, "flash-day.sh")) as f:
             wizard = f.read()
         self.assertIn('dfupatch() { python3 -I "$HERE/dfupatch.py" "$@"; }', wizard)
-        self.assertIn('drawn() { python3 -I "$HERE/drawn_flash.py" "$@"; }', wizard)
+        self.assertIn('plan() { python3 -I "$HERE/drawn_plan.py" "$@"; }', wizard)
 
 
 if __name__ == "__main__":

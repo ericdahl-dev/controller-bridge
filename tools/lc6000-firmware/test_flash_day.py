@@ -1,6 +1,9 @@
 """Guards for the flash-day kit (#435): the wizard and the update-mode tool. No hardware, no vendor data.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import os, re, shutil, subprocess, unittest
+import os, re, shutil, subprocess, sys, unittest
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import drawn_plan  # noqa: E402
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 
@@ -32,16 +35,17 @@ class WizardTests(unittest.TestCase):
                 declared = int(re.search(r"^TOTAL_STAGES=(\d+)", body, re.M).group(1))
                 self.assertEqual(declared, len(re.findall(r'^stage "', body, re.M)))
 
-    def test_the_only_write_to_the_chip_is_in_flash_behind_the_typed_word(self):
+    def test_the_only_writes_to_the_chip_are_flash_and_the_drawn_write_step(self):
+        # flash() for the stock wizard, behind its typed word here; the drawn loop's write step, which drawn_plan.py
+        # asks for only after its typed word (#567, tested there).
         downloads = [m.start() for m in re.finditer(r"dfu-util[^\n]*\s-D\s", self.stages)]
-        self.assertEqual(len(downloads), 1)
+        self.assertEqual(len(downloads), 2)
         start, end = self.stages.index("flash() {"), self.stages.index("# reboot_check")
         self.assertTrue(start < downloads[0] < end)
-        gate = self.stages.index('[[ -n "$word" && "$typed" == "$word" ]] || way_back')
+        drawn = self.stages.index("run_drawn() {")
+        self.assertGreater(downloads[1], drawn)
+        gate = self.stages.index('[[ "$typed" == "FLASH" ]] || way_back')
         self.assertTrue(start < gate < downloads[0])
-        # The word is FLASH unless the caller names another: only a rewrite of the upper flash does (#468).
-        self.assertIn('word="${4:-FLASH}"', self.body("flash"))
-        self.assertEqual(re.findall(r'flash "[^\n]*" (?:app|upper) (\w+)', self.stages), ["REWRITE"])
 
     def test_no_dangerous_dfu_util_options_appear(self):
         # 0x1FFF only as the option bytes' 16-byte read (#468): never the system memory or anything else up there.
@@ -82,6 +86,20 @@ class WizardTests(unittest.TestCase):
         self.assertIn("refuses a unit that's running and current", way_back)
         self.assertIn("BACK + FWD + VINYL", way_back)
 
+    def test_no_part_of_the_script_branches_on_pythons_printed_words(self):
+        # #567: every drawn decision is drawn_plan.py's; the stock wizard never judged B or the app against the owner's
+        # image, so none of that is left anywhere in the shell.
+        for text in ("^holds", "holds*", "replace*", "drawn upper", "drawn app", "read_upper", "read_options",
+                     '\ndrawn() {'):
+            self.assertNotIn(text, self.stages, text)
+
+    def test_look_asks_the_plan_about_the_devices_and_counts_nothing_itself(self):
+        # One judgment for both wizards (#567): exactly one device, and the display chip, not the top panel chip.
+        look = self.body("look")
+        self.assertIn('plan devices "$listing"', look)
+        self.assertNotIn("grep -c", look)
+        self.assertNotIn("0x08000000", look)
+
     def test_the_update_mode_message_needs_a_confirmation_first(self):
         send = self.stages.index("send --yes-enter-update-mode")
         ask = self.stages.index('confirm "Send the update-mode message to the display chip now?" || way_back')
@@ -89,14 +107,23 @@ class WizardTests(unittest.TestCase):
 
 
 class DrawnPathTests(unittest.TestCase):
-    """The drawn flash (#468): `flash-day.sh drawn`, two writes, block B at 0x08080000, then the owner's image. The
-    wizard is never run here: it builds and runs the real update-mode tool and dfu-util."""
+    """The drawn flash (#468, #567): `flash-day.sh drawn` is a thin adapter over drawn_plan.py, which decides every
+    step (tested with a fake unit in test_drawn_plan.py). Here: the shell asks the plan, does what it's told, and
+    records the result. The wizard is never run here: it builds and runs the real update-mode tool and dfu-util."""
 
     body = WizardTests.body
 
     def setUp(self):
         WizardTests.setUp(self)
         self.drawn = self.body("run_drawn")
+        loop = self.drawn.index("while :; do")
+        self.loop = self.drawn[loop:self.drawn.index("\ndone\n", loop)]
+
+    def branch(self, kind):
+        """One step's branch of the loop's case, up to the next step's label (a branch may hold a case of its own)."""
+        start = self.loop.index(f"\n    {kind})")
+        following = re.search(r"\n    [a-z*-]+\)", self.loop[start + 1:])
+        return self.loop[start:start + 1 + following.start()] if following else self.loop[start:]
 
     def test_the_drawn_path_runs_only_when_asked_for(self):
         self.assertIn('if [[ "${1:-}" == "drawn" ]]; then run_drawn; else run_wizard "$@"; fi', self.stages)
@@ -104,80 +131,30 @@ class DrawnPathTests(unittest.TestCase):
     def test_it_never_does_a_stock_flash(self):
         self.assertNotIn('flash "$STOCK_WD"', self.drawn)
 
-    def test_both_files_are_checked_before_any_write(self):
-        files = self.drawn.index('drawn files "$UPPER_DFU" "$OWNER_DFU"')
-        self.assertLess(files, self.drawn.index("enter_update_mode"))
-        self.assertLess(files, self.drawn.index('flash "$UPPER_DFU"'))
+    def test_it_begins_a_plan_and_asks_it_for_each_step(self):
+        self.assertIn('plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$WORK"', self.drawn)
+        self.assertIn('plan next "$PLAN"', self.loop)
 
-    def test_it_says_what_it_cant_check_and_asks(self):
-        ready = self.drawn[:self.drawn.index('stage "Enter update mode')]
-        self.assertIn("ARM_UPPER_PROVEN=1", ready)
-        self.assertIn("same commit", ready)
+    def test_it_handles_exactly_the_steps_the_plan_can_ask_for(self):
+        handled = set(re.findall(r"^    ([a-z-]+)\)", self.loop, re.M))
+        self.assertEqual(handled, set(drawn_plan.ACTIONS))
 
-    def test_the_chip_must_hold_the_image_it_runs_now_before_any_write(self):
-        before = self.drawn.index('dfupatch compare "$CURRENT_WD"')
-        self.assertLess(before, self.drawn.index('flash "$UPPER_DFU"'))
+    def test_it_never_branches_on_pythons_printed_words(self):
+        for word in ("holds", "replace", "erased", "UPPER_STATE", "APP_STATE", "B_DONE", "A_DONE", "B_REPLACE"):
+            self.assertNotIn(word, self.drawn, word)
 
-    def test_the_read_only_upper_read_is_the_gate_before_block_b(self):
-        read = self.drawn.index('read_upper "$WORK/wd-upper-before-$STAMP.bin"')
-        judged = self.drawn.index('drawn upper "$UPPER_DFU" "$WORK/wd-upper-before-$STAMP.bin"')
-        self.assertLess(read, judged)
-        self.assertLess(judged, self.drawn.index('flash "$UPPER_DFU"'))
-        self.assertIn("way_back", self.drawn[judged:self.drawn.index('flash "$UPPER_DFU"')])
+    def test_every_answer_and_result_goes_back_to_the_plan(self):
+        for kind in ("ask", "type", "update-mode", "list", "read", "write", "power-cycle", "skip"):
+            with self.subTest(kind):
+                self.assertIn('plan record "$PLAN"', self.branch(kind))
 
-    def test_block_b_goes_first_then_the_owners_image_each_through_flash(self):
-        # flash() asks for the typed word each time it's called, so each write has its own.
-        upper = self.drawn.index('flash "$UPPER_DFU" "upper" upper')
-        owner = self.drawn.index('flash "$OWNER_DFU" "owner" app')
-        self.assertLess(upper, owner)
+    def test_its_only_write_is_the_write_step(self):
+        downloads = [m.start() for m in re.finditer(r"dfu-util[^\n]*\s-D\s", self.drawn)]
+        self.assertEqual(len(downloads), 1)
+        self.assertIn("-D", self.branch("write"))
 
-    def test_the_option_bytes_are_read_and_judged_before_step_1(self):
-        before = self.drawn[self.drawn.index('stage "Before'):self.drawn.index('stage "Step 1 of 2')]
-        read = before.index('read_options "$WORK/wd-option-bytes-$STAMP.bin"')
-        judged = before.index('drawn options "$WORK/wd-option-bytes-$STAMP.bin"')
-        self.assertLess(read, judged)
-        self.assertIn("way_back", before[judged:before.index("read_upper")])
-
-    def test_part_of_this_b_or_another_good_b_is_rewritten_behind_its_own_word(self):
-        before = self.drawn[self.drawn.index('stage "Before'):self.drawn.index('stage "Step 1 of 2')]
-        self.assertIn('[[ "$UPPER_STATE" == replace* ]]', before)
-        step_1 = self.drawn[self.drawn.index('stage "Step 1 of 2'):self.drawn.index('stage "Step 2 of 2')]
-        # The file written over it is this B then erased bytes to the end of what's there (drawn_flash.py rewrite).
-        built = step_1.index('drawn rewrite "$UPPER_DFU" "$WORK/wd-upper-before-$STAMP.bin" "$REWRITE_DFU"')
-        rewrite = step_1.index('flash "$REWRITE_DFU" "upper" upper REWRITE')
-        self.assertLess(step_1.index('if (( B_REPLACE ))'), built)
-        self.assertLess(built, rewrite)
-
-    def test_a_block_b_already_there_is_not_written_again(self):
-        step_1 = self.drawn[self.drawn.index('stage "Step 1 of 2'):self.drawn.index('stage "Step 2 of 2')]
-        self.assertLess(step_1.index('if (( B_DONE ))'), step_1.index('flash "$UPPER_DFU"'))
-
-    def test_block_bs_write_is_read_back_and_judged(self):
-        flash = self.body("flash")
-        upper = flash[flash.index('if [[ "$area" == upper ]]; then', flash.index("-D")):]
-        # Judged against B's own file, also when the file written was the rewrite.
-        self.assertLess(upper.index('read_upper "$readback"'), upper.index('drawn upper "$UPPER_DFU" "$readback"'))
-        self.assertIn("^holds", upper)
-
-    def test_an_owners_image_already_there_is_not_written_again(self):
-        # A rewrite of block B alone (#468): the app area's erase and write is the one risky write, so it's skipped
-        # when the chip already holds the owner's image exactly.
-        before = self.drawn[self.drawn.index('stage "Before'):self.drawn.index('stage "Step 1 of 2')]
-        self.assertIn('APP_STATE=$(drawn app "$OWNER_DFU" "$WORK/wd-app-before-$STAMP.bin")', before)
-        self.assertIn('[[ "$APP_STATE" == holds* ]]', before)
-        step_2 = self.drawn[self.drawn.index('stage "Step 2 of 2'):self.drawn.index('stage "Power cycle')]
-        self.assertLess(step_2.index('if (( A_DONE ))'), step_2.index('flash "$OWNER_DFU" "owner" app'))
-
-    def test_it_never_asks_the_owner_to_confirm_a_probe_they_may_not_have(self):
-        ready = self.drawn[:self.drawn.index('stage "Enter update mode')]
-        all_true = ready[:ready.index('confirm "All of that true?"')]
-        self.assertNotIn("ST-Link probe connected", all_true[all_true.rindex('confirm "Both true?"'):])
-        # Its own question: yes goes on; no prints the risk and needs the typed phrase, judged by drawn_flash.py.
-        asked = ready.index('if confirm "Is an ST-Link probe connected, and can it read the chip (#433)?"; then')
-        risk = ready.index("drawn no-probe-risk")
-        gate = ready.index('drawn no-probe "$typed" || exit 1')
-        self.assertLess(asked, risk)
-        self.assertLess(risk, gate)
+    def test_a_stop_says_why_and_goes_the_way_back(self):
+        self.assertIn("way_back", self.branch("stop"))
 
     def test_the_way_back_says_block_b_stays_and_is_harmless(self):
         way_back = self.stages[self.stages.index("way_back() {"):self.stages.index("# dfu_paths")]
