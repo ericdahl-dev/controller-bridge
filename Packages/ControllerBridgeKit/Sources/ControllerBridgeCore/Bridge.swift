@@ -172,6 +172,8 @@ final class Bridge {
     private var colorCache: [UInt8: [UInt8]] = [:]
     /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
     var colorMessages = false
+    /// The color-message LEDs' brightness, in percent (#532).
+    var lightBrightness = 100
 
     /// The pads' MIDI channel, 0-15 (#224): the deck's unless the profile gives the pads their own.
     let padChannel: UInt8
@@ -510,7 +512,7 @@ final class Bridge {
     }
 
     /// The color-message encoder in use (#530): nil when the setting is off or the profile has none.
-    var colorMessageEncoder: LEDColorEncoder? { colorMessages ? LEDColorEncoder(mapping) : nil }
+    var colorMessageEncoder: LEDColorEncoder? { colorMessages ? LEDColorEncoder(mapping, brightness: lightBrightness) : nil }
 
     /// A pad or the ring in exact RGB (#530), through Denon's color message.
     func colorLED(_ message: LEDColorMessage) {

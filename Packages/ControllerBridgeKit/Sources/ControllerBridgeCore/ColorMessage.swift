@@ -28,20 +28,23 @@ public struct LEDColorMessage: Equatable, Sendable {
 /// pads. Nil for a profile without `leds.color_message`.
 public struct LEDColorEncoder: Sendable {
     private let notes: Set<Int>
+    /// The brightness every color is scaled to (#532), in percent, 0-100: 100 leaves it as it is.
+    public let brightness: Int
 
-    public init?(_ mapping: Mapping) {
+    public init?(_ mapping: Mapping, brightness: Int = 100) {
         guard let listed = mapping.leds.colorMessage?.notes else { return nil }
         notes = Set(listed).intersection(Set(mapping.notes.pads + [mapping.leds.ring])).filter { (0...127).contains($0) }
+        self.brightness = min(max(brightness, 0), 100)
     }
 
     /// Whether `note`'s LED takes the color message.
     public func takes(_ note: Int) -> Bool { notes.contains(note) }
 
-    /// The message for `note` in an 8-bit color (each channel clamped to 0-255, then its top 7 bits), or nil when the
-    /// note's LED doesn't take it.
+    /// The message for `note` in an 8-bit color (each channel clamped to 0-255, scaled to `brightness` rounding down,
+    /// then its top 7 bits), or nil when the note's LED doesn't take it.
     public func message(note: Int, rgb: [Int]) -> LEDColorMessage? {
         guard notes.contains(note), rgb.count == 3 else { return nil }
-        let seven = rgb.map { UInt8(min(max($0, 0), 255) >> 1) }
+        let seven = rgb.map { UInt8((min(max($0, 0), 255) * brightness / 100) >> 1) }
         return LEDColorMessage(note: UInt8(note), red: seven[0], green: seven[1], blue: seven[2])
     }
 }

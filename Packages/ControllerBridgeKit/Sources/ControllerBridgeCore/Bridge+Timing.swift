@@ -50,6 +50,13 @@ extension Bridge {
         repaintLEDs()
     }
 
+    /// Settings (#532): the color-message LEDs' brightness; the pads and ring whose color changes are sent again.
+    func setLightBrightness(_ percent: Int) {
+        guard percent != lightBrightness else { return }
+        lightBrightness = percent
+        refreshLEDs()
+    }
+
     /// Vivid or exact (#151): the ring and pads repaint.
     func setRingColors(_ mode: RingColors) {
         ringColors = mode

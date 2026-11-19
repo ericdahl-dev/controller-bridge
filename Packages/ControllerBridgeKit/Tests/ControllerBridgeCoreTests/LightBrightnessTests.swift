@@ -1,0 +1,31 @@
+import ControllerBridgeCore
+import Foundation
+import Testing
+
+/// The brightness of the color-message LEDs (#532): DeckBridge scales each channel of the colors it sends, after the
+/// 0-255 clamp and before the cut to 7 bits. 100% is the colors as they are.
+@Suite("Light brightness")
+struct LightBrightnessTests {
+    typealias Ring = RingColorMessageTests
+
+    @Test("At 100% the encoder's every message is byte-identical to today's, for every channel value")
+    func fullIsUnchanged() throws {
+        let mapping = try Mapping.bundledDefault()
+        let plain = try #require(LEDColorEncoder(mapping)), full = try #require(LEDColorEncoder(mapping, brightness: 100))
+        for value in -1...256 {
+            let rgb = [value, 255 - value, value / 2]
+            #expect(full.message(note: mapping.leds.ring, rgb: rgb) == plain.message(note: mapping.leds.ring, rgb: rgb))
+        }
+    }
+
+    @Test("At 50% the ring's deck color is halved before the 7-bit cut: 255, 140, 0 → 127, 70, 0 → 63, 35, 0")
+    func halfScalesTheRing() throws {
+        let rig = try Ring.exact(deck: 2)
+        rig.coordinator.setLightBrightness(50)
+        Ring.palette(rig, slot: 3, 255, 140, 0)
+        let output = try Ring.output(rig)
+        output.colors.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        #expect(try Ring.colors(rig) == [[63, 35, 0]])
+    }
+}
