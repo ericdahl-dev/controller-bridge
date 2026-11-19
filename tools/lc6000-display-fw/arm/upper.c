@@ -18,6 +18,7 @@ uint32_t upper_check(const uint8_t *b) {
     if (word(b) != UPPER_MARKER) return 0;
     if (word(b + 4) != UPPER_VERSION) return 0;
     uint32_t length = word(b + 8);
+    if (length < UPPER_HEADER || length > UPPER_LIMIT) return 0;
     if (crc32(b + 16, length - 16) != word(b + 12)) return 0;
     return word(b + 16);
 }
