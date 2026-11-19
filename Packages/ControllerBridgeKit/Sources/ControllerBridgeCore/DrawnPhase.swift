@@ -7,6 +7,7 @@ struct DrawnPhase {
 
     /// The value to send for the deck's latest offset in beats.
     mutating func value(offset: Double?, playing: Bool) -> Int {
-        Self.unknown
+        guard playing, let offset, offset.isFinite else { return Self.unknown }
+        return Int(min(max((offset * 16384).rounded(), -8191), 8191))
     }
 }
