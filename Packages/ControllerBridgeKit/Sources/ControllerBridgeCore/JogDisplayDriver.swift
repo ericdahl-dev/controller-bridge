@@ -77,23 +77,28 @@ public final class JogDisplayDriver {
     private let size: Int
     /// Draws content as RGBA rows, upright; the driver turns and encodes it.
     private let render: (JogDisplayContent) -> [UInt8]
-    /// Draws content with one master beat (1–4) lit (#215). When set, each content goes up four times, into slots 1–4,
-    /// and each master beat shows its slot; when nil, one image alternates between slots 1 and 2.
+    /// Draws content with one master beat (1–4) lit (#215). When set, each deck's content goes up once per beat, into
+    /// that deck's own slots (#424), and each master beat shows the front deck's slot; when nil, one image alternates
+    /// between slots 1 and 2.
     private let renderBeat: ((JogDisplayContent, Int) -> [UInt8])?
-    /// Draws the loading graphic (#165): it goes into `loadingSlot` once per connect, and each beat upload then shows it
-    /// while it goes up, instead of djay's blank.
-    private let renderLoading: (() -> [UInt8])?
-    static let loadingSlot: UInt8 = 5
-    /// The loading graphic still has to go up (after each connect); and whether the unit holds it now.
-    private var loadingPending = false
-    private var loadingReady = false
-    /// The beats still to upload for the current content, the master's beat first.
-    private var beatQueue: [Int] = []
-    /// Failed tries per beat slot for the current content: a stalled upload is tried again, up to `beatTries` in all.
-    private var beatFailures: [Int: Int] = [:]
+    /// The last slot the unit can show (its firmware drops a show above 15; it stores 16).
+    static let lastSlot = 15
+    /// Deck N's beat B lives in slot (N - 1) × 4 + B (#424), so every deck's images stay on the unit and a deck switch
+    /// is one show. Nil past the last slot: deck 4's beat 4, where its screen holds.
+    static func slot(deck: Int, beat: Int) -> UInt8? {
+        guard (1...4).contains(deck), (1...4).contains(beat) else { return nil }
+        let slot = (deck - 1) * 4 + beat
+        return slot <= lastSlot ? UInt8(slot) : nil
+    }
+    /// Every deck's content to keep on the unit, the front deck's too.
+    private var contents: [Int: JogDisplayContent] = [:]
+    /// Failed tries per slot for its deck's content: a stalled upload is tried again, up to `beatTries` in all.
+    private var beatFailures: [UInt8: Int] = [:]
     static let beatTries = 3
-    /// What each beat slot holds on the unit now: a slot is shown on its beat only if it holds the current content.
+    /// What each slot holds on the unit now: a slot is shown on its beat only if it holds its deck's content.
     private var slotContent: [UInt8: JogDisplayContent] = [:]
+    /// The slot on the unit's screen (beat mode): each upload leads with it, so the screen holds while a slot goes up.
+    private var screenSlot: UInt8?
 
     /// How long an upload may wait for the unit's answers.
     static let timeout = 5.0
@@ -163,17 +168,17 @@ public final class JogDisplayDriver {
     private var lastMasterBeat: Int?
     private var deckPlays: [Int: Bool] = [:]
     private var drawn: (content: JogDisplayContent, image: [UInt8])?
-    private var upload: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)?
+    /// The upload in flight; `content` is what its slot will hold (beat mode).
+    typealias Running = (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double, content: JogDisplayContent?)
+    private var upload: Running?
 
     public init(port: (any JogDisplayPort)?, clock: any Clock, log: any LogSink, size: Int = JogImage.size,
-                renderLoading: (() -> [UInt8])? = nil,
                 renderBeat: ((JogDisplayContent, Int) -> [UInt8])? = nil,
                 render: @escaping (JogDisplayContent) -> [UInt8]) {
         self.port = port
         self.clock = clock
         self.log = log
         self.size = size
-        self.renderLoading = renderLoading
         self.renderBeat = renderBeat
         self.render = render
     }
@@ -184,7 +189,7 @@ public final class JogDisplayDriver {
     /// Whether images are going up to the unit now (#422): one in flight, or more of the content's slots still to go.
     public var uploading: Bool {
         guard connected else { return false }
-        return upload != nil || !beatQueue.isEmpty || loadingPending
+        return upload != nil || (renderBeat != nil && nextJob() != nil)
     }
 
     /// The unit is attached: say hello as a host, then show what's wanted. With no port it stays a preview.
@@ -195,8 +200,8 @@ public final class JogDisplayDriver {
         if wanted == nil { wanted = current }
         current = nil
         slotContent = [:]
-        loadingPending = renderLoading != nil && renderBeat != nil
-        loadingReady = false
+        beatFailures = [:]
+        screenSlot = nil
         lastMarker = nil
         lastPlayLight = nil
         for message in JogDisplay.hello { sendController(message) }
@@ -222,6 +227,44 @@ public final class JogDisplayDriver {
         if upload == nil { next() }
     }
 
+    /// Another deck's content, kept on the unit in that deck's slots (#424), after the front deck's. Beat mode only.
+    public func keep(_ content: JogDisplayContent) {
+        guard renderBeat != nil, content.deck != (wanted ?? current)?.deck, contents[content.deck] != content else { return }
+        contents[content.deck] = content
+        forgetFailures(deck: content.deck)
+        if upload == nil { next() }
+    }
+
+    private func forgetFailures(deck: Int) {
+        for beat in 1...4 { if let slot = Self.slot(deck: deck, beat: beat) { beatFailures[slot] = nil } }
+    }
+
+    /// The front deck's slot for the beat now, on screen if it holds the deck's content.
+    private func showFrontBeat() {
+        guard let current, let slot = Self.slot(deck: current.deck, beat: lastMasterBeat ?? 1), slotContent[slot] == current else { return }
+        if connected { sendWD(JogDisplay.show(slot: slot)) }
+        screenSlot = slot
+        onEvent?(.shown(slot: slot))
+    }
+
+    /// The next slot to upload: the front deck's first, from the master's beat, then the other decks'. A slot given up
+    /// on is skipped until its deck's content changes.
+    private func nextJob() -> (content: JogDisplayContent, beat: Int, slot: UInt8)? {
+        let first = lastMasterBeat ?? 1
+        var decks: [JogDisplayContent] = []
+        if let current { decks.append(current) }
+        for deck in contents.keys.sorted() where deck != current?.deck { if let content = contents[deck] { decks.append(content) } }
+        for content in decks {
+            for offset in 0..<4 {
+                let beat = (first - 1 + offset) % 4 + 1
+                guard let slot = Self.slot(deck: content.deck, beat: beat), slotContent[slot] != content,
+                      (beatFailures[slot] ?? 0) < Self.beatTries else { continue }
+                return (content, beat, slot)
+            }
+        }
+        return nil
+    }
+
     /// The marker at `pitchBend` (0...16383): pitch bend on WD ch1. Only a change goes out.
     public func marker(_ pitchBend: Int) {
         guard pitchBend != lastMarker else { return }
@@ -244,11 +287,8 @@ public final class JogDisplayDriver {
         onEvent?(.masterBeat(beat))
         // Beat mode (#215): show the beat's slot, if it holds what's current; otherwise the screen holds. Never in the
         // middle of an upload: a show between its chunks can spoil it (ack 06). The upload's end shows the beat now.
-        let slot = UInt8(beat)
-        guard renderBeat != nil, upload == nil, let current, slotContent[slot] == current else { return }
-        if connected { sendWD(JogDisplay.show(slot: slot)) }
-        shownSlot = slot
-        onEvent?(.shown(slot: slot))
+        guard renderBeat != nil, upload == nil else { return }
+        showFrontBeat()
     }
 
     /// A deck's play state, reported on change; nothing is sent to the unit.
@@ -298,27 +338,21 @@ public final class JogDisplayDriver {
     }
 
     /// The unit has the image: show it (in beat mode, only on its beat) and start the next upload.
-    private func stored(_ running: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)) {
+    private func stored(_ running: Running) {
         upload = nil
-        if renderBeat != nil, running.slot == Self.loadingSlot {
-            loadingReady = true
-        } else if renderBeat != nil {
-            if let current { slotContent[running.slot] = current }
-            // Each upload starts by showing blank (slot 6), so the beat now's slot goes back on screen after every one,
-            // once it holds what's current; the others wait for their beat.
-            let beat = UInt8(lastMasterBeat ?? 1)
-            if let current, slotContent[beat] == current {
-                sendWD(JogDisplay.show(slot: beat))
-                shownSlot = beat
-                onEvent?(.shown(slot: beat))
-            }
+        if renderBeat != nil {
+            if let content = running.content { slotContent[running.slot] = content }
+            // The front deck's slot for the beat now goes on screen after every upload, once it holds its content; the
+            // others wait for their beat. A deck asked for meanwhile is the front deck from here.
+            adoptWanted()
+            showFrontBeat()
         } else {
             showSlot(running)
         }
         next()
     }
 
-    private func showSlot(_ running: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)) {
+    private func showSlot(_ running: Running) {
         sendWD(running.upload.show)
         shownSlot = running.slot
         onEvent?(.shown(slot: running.slot))
@@ -338,28 +372,18 @@ public final class JogDisplayDriver {
     }
 
     /// The upload is over without a show: what's shown stays, and nothing retries until the content changes.
-    private func fail(_ running: (upload: JogDisplay.Upload, slot: UInt8, acks: Int, finished: Bool, startedAt: Double)) {
+    private func fail(_ running: Running) {
         upload = nil
         guard renderBeat != nil else {
             wanted = nil
-            beatQueue = []
             return
         }
         // Beat mode: a stalled slot (seen after a deck change, 1 of 3 acks) is tried again, then given up on; the other
         // slots still go up, so the ring keeps stepping.
-        let beat = Int(running.slot)
-        if running.slot == Self.loadingSlot {
-            let failures = (beatFailures[beat] ?? 0) + 1
-            beatFailures[beat] = failures
-            if failures < Self.beatTries { loadingPending = true } else { log.log("The jog display gave up on the loading graphic") }
-            return
-        }
-        let failures = (beatFailures[beat] ?? 0) + 1
-        beatFailures[beat] = failures
-        if failures < Self.beatTries {
-            beatQueue.insert(beat, at: 0)
-        } else {
-            log.log("The jog display gave up on slot \(beat) after \(Self.beatTries) tries")
+        let failures = (beatFailures[running.slot] ?? 0) + 1
+        beatFailures[running.slot] = failures
+        if failures >= Self.beatTries {
+            log.log("The jog display gave up on slot \(running.slot) after \(Self.beatTries) tries")
         }
     }
 
@@ -387,40 +411,48 @@ public final class JogDisplayDriver {
         send(job, slot: slot, content: content, port: port)
     }
 
-    /// Beat mode (#215): a new content queues four uploads, the master's beat first; one goes at a time.
+    /// The deck asked for becomes the front deck; whether it changed.
+    @discardableResult
+    private func adoptWanted() -> Bool {
+        guard let content = wanted else { return false }
+        wanted = nil
+        guard content != current else { return false }
+        current = content
+        if contents[content.deck] != content {
+            contents[content.deck] = content
+            forgetFailures(deck: content.deck)
+        }
+        return true
+    }
+
+    /// Beat mode (#215, #424): the front deck's slot goes on screen at once if the unit holds it; then one slot goes up
+    /// at a time, the front deck's first, from the master's beat.
     private func nextBeat() {
         guard upload == nil, let renderBeat else { return }
-        if let content = wanted, content != current {
-            wanted = nil
-            current = content
-            beatFailures = [:]
+        let changed = adoptWanted()
+        guard connected, let port else {
+            // A preview (#221): no unit, so nothing is sent or waited on; the front deck's beats are shown at once.
+            guard changed, let content = current else { return }
             let first = lastMasterBeat ?? 1
-            beatQueue = (0..<4).map { (first - 1 + $0) % 4 + 1 }
-        }
-        if loadingPending, connected, let port, let renderLoading {
-            loadingPending = false
-            let job = JogDisplay.Upload(image: JogImage.forUnit(rgba: renderLoading(), width: size, height: size),
-                                        slot: Self.loadingSlot)
-            upload = (job, Self.loadingSlot, 0, false, clock.now)
-            for message in job.start + job.body { port.sendWD(message) }
-            lastPlayLight = false
+            for offset in 0..<4 {
+                let beat = (first - 1 + offset) % 4 + 1
+                guard let slot = Self.slot(deck: content.deck, beat: beat) else { continue }
+                let job = JogDisplay.Upload(image: JogImage.forUnit(rgba: renderBeat(content, beat), width: size, height: size), slot: slot)
+                onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
+                onEvent?(.shown(slot: slot))
+            }
             return
         }
-        guard let content = current, !beatQueue.isEmpty else { return }
-        let beat = beatQueue.removeFirst()
-        let slot = UInt8(beat)
-        let job = JogDisplay.Upload(image: JogImage.forUnit(rgba: renderBeat(content, beat), width: size, height: size),
-                                    slot: slot, showing: loadingReady ? Self.loadingSlot : nil)
-        guard connected, let port else {
-            onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
-            onEvent?(.shown(slot: slot))
-            return nextBeat()
-        }
-        send(job, slot: slot, content: content, port: port)
+        if changed { showFrontBeat() }
+        guard let next = nextJob() else { return }
+        // It leads with the slot on screen, so the screen holds while this one goes up (no blank, no loading graphic).
+        let job = JogDisplay.Upload(image: JogImage.forUnit(rgba: renderBeat(next.content, next.beat), width: size, height: size),
+                                    slot: next.slot, showing: screenSlot ?? next.slot)
+        send(job, slot: next.slot, content: next.content, port: port)
     }
 
     private func send(_ job: JogDisplay.Upload, slot: UInt8, content: JogDisplayContent, port: any JogDisplayPort) {
-        upload = (job, slot, 0, false, clock.now)
+        upload = (job, slot, 0, false, clock.now, content)
         for message in job.start + job.body { sendWD(message) }
         onEvent?(.uploadStarted(slot: slot, content: content, bytes: job.body.reduce(0) { $0 + $1.count }))
         // The upload's start turns the play light off (90 01 00): the next tick puts it back.

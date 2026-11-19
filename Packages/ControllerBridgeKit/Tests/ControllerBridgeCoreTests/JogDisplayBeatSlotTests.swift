@@ -15,10 +15,9 @@ struct JogDisplayBeatSlotTests {
         var contents: [JogDisplayContent] = []
     }
 
-    static func attach(_ rig: Rig, loading: Bool = false) -> (Port, Drawn) {
+    static func attach(_ rig: Rig) -> (Port, Drawn) {
         let port = Port(), drawn = Drawn()
-        let driver = JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1,
-                                      renderLoading: loading ? { [9, 9, 9, 255] } : nil, renderBeat: { content, beat in
+        let driver = JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1, renderBeat: { content, beat in
             drawn.beats.append(beat)
             drawn.contents.append(content)
             return [UInt8(beat), 0, 0, 255]
@@ -67,9 +66,14 @@ struct JogDisplayBeatSlotTests {
         #expect(Set(drawn.contents.map(\.deck)) == [1])
     }
 
-    /// The show messages (0A) in `port`'s WD messages, as their slots.
+    /// The show messages (0A) in `port`'s WD messages, as their slots; not the 0A that leads an upload (before its 0C).
     static func shows(_ port: Port) -> [UInt8] {
-        port.wd.filter { $0.count > 11 && $0[6] == 0x0A && $0[11] != 0x06 }.map { $0[11] }
+        port.wd.indices.filter { index in
+            let message = port.wd[index]
+            guard message.count > 11, message[6] == 0x0A else { return false }
+            let next = index + 1 < port.wd.count ? port.wd[index + 1] : []
+            return !(next.count > 6 && next[6] == 0x0C)
+        }.map { port.wd[$0][11] }
     }
 
     @Test("While the four go up, only the master's beat (3) is shown, again after each upload; then each beat shows its slot, with mask 0D, and uploads nothing")
@@ -194,7 +198,8 @@ struct JogDisplayBeatSlotTests {
         #expect(drawn.contents.suffix(4).allSatisfy { $0.deck == 2 })
         port.wd.removeAll()
         for beat in [2, 3, 4, 1] { Self.clock(rig, beat) }
-        #expect(Self.shows(port) == [2, 3, 4, 1])
+        // Deck 2's own slots (#424): beat B is slot 4 + B.
+        #expect(Self.shows(port) == [6, 7, 8, 5])
     }
 
     @Test("A layer change while the master plays, with the new deck's TrackInfo arriving mid-upload: once the uploads settle, every beat shows its slot")
@@ -220,7 +225,8 @@ struct JogDisplayBeatSlotTests {
         }
         port.wd.removeAll()
         var expected: [UInt8] = []
-        for _ in 0..<4 { beat = beat % 4 + 1; expected.append(UInt8(beat)); Self.clock(rig, beat) }
+        // Deck 2's own slots (#424): beat B is slot 4 + B.
+        for _ in 0..<4 { beat = beat % 4 + 1; expected.append(UInt8(beat + 4)); Self.clock(rig, beat) }
         #expect(Self.shows(port) == expected)
     }
 
@@ -272,33 +278,18 @@ struct JogDisplayBeatSlotTests {
             .map { port.wd[$0 - 1] }.filter { $0.count > 11 && $0[6] == 0x0A }.map { [$0[9], $0[11]] }
     }
 
-    @Test("With a loading graphic: slot 5 goes up first, then each beat upload leads with slot 5 shown (not the blank), so a switch never goes black")
-    func loadingLeads() throws {
+    @Test("No loading graphic and no blank (#424): each upload leads with the slot on screen, the first with its own slot")
+    func leadsHoldTheScreen() throws {
         let rig = try Rig()
-        let (port, _) = Self.attach(rig, loading: true)
+        let (port, _) = Self.attach(rig)
         Self.clock(rig, 3)
         rig.coordinator.start()
-        var slots: [UInt8] = []
         var leads: [[UInt8]] = []
-        for _ in 0..<5 {
-            slots += Self.uploadSlots(port)
+        for _ in 0..<4 {
             leads += Self.leads(port).prefix(1)
             Self.answer(rig, port)
         }
-        #expect(slots == [5, 3, 4, 1, 2])
-        #expect(leads == [[0x01, 0x06], [0x0D, 0x05], [0x0D, 0x05], [0x0D, 0x05], [0x0D, 0x05]])
-    }
-
-    @Test("A reconnect (the switch off and on) uploads the loading graphic to slot 5 again, first")
-    func loadingAfterReconnect() throws {
-        let rig = try Rig()
-        let (port, _) = Self.attach(rig, loading: true)
-        Self.clock(rig, 1)
-        rig.coordinator.start()
-        for _ in 0..<5 { Self.answer(rig, port) }
-        rig.coordinator.setJogDisplay(enabled: false)
-        port.wd.removeAll()
-        rig.coordinator.setJogDisplay(enabled: true)
-        #expect(Self.uploadSlots(port) == [5])
+        // Slot 3 (the master's beat) goes up first, leading with itself; once stored it's on screen, and leads the rest.
+        #expect(leads == [[0x0D, 0x03], [0x0D, 0x03], [0x0D, 0x03], [0x0D, 0x03]])
     }
 }
