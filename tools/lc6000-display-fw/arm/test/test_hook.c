@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "view.h"
 #include "hook.h"
 #include "draw.h"
 #include "upper.h"
@@ -29,6 +30,13 @@ static recording rec;
 static hook_stock stock;
 /// Our marker word as the flash holds it: present after a good placement, 0xFFFFFFFF where nothing was placed.
 static uint32_t marker_word;
+
+/// What drawing would see of the hook's unit (#573): the tests read this, never dfw_unit's fields.
+static dfw_view view(void) {
+    dfw_view v;
+    dfw_view_of(&state.unit, &v);
+    return v;
+}
 
 static void *stock_malloc(size_t size) {
     chip.mallocs++;
@@ -102,8 +110,7 @@ void a_capability_ask_allocates_the_frame_once_and_is_answered(void) {
     deliver(0, CAPABILITY_V1);
     tick();
     CHECK(chip.mallocs == 1);
-    CHECK(rec.sends == 3);
-    CHECK(state.unit.frame == chip.heap);
+    CHECK(rec.sends == 3);   // answered, so the unit has its frame (no frame, no answer)
 }
 
 void a_failed_allocation_means_no_answer_and_no_second_try(void) {
@@ -122,7 +129,7 @@ void begin_with_no_frame_allocates_it(void) {
     deliver(0, DECK_2_RED_TRACK);
     tick();
     CHECK(chip.mallocs == 1);
-    CHECK(state.unit.drawn == 1);
+    CHECK(view().drawn == 1);
     CHECK(rec.presents == 1);
 }
 
@@ -194,9 +201,9 @@ void messages_are_copied_out_of_the_stock_buffer(void) {
     deliver(0, STATE_LOADED_PLAYING);
     memset(chip.rx, 0x00, sizeof chip.rx);
     tick();
-    CHECK(state.unit.drawn == 1);
-    CHECK(state.unit.deck.number == 2 && state.unit.deck.r == 255 && state.unit.deck.g == 0);
-    CHECK(state.unit.flags == 3);
+    CHECK(view().drawn == 1);
+    CHECK(view().deck.number == 2 && view().deck.r == 255 && view().deck.g == 0);
+    CHECK(view().flags == 3);
 }
 
 void a_reboot_seen_through_the_witness_resets_drawn_mode(void) {
@@ -204,7 +211,7 @@ void a_reboot_seen_through_the_witness_resets_drawn_mode(void) {
     // uptime comparison alone can't see the reboot. The witness (cleared by every reset) does.
     cold_boot();
     drawing_session();
-    CHECK(state.unit.drawn == 1);
+    CHECK(view().drawn == 1);
     uint32_t saved = state.last_uptime;
     power_on();
     chip.uptime = saved + 100000;
@@ -213,7 +220,7 @@ void a_reboot_seen_through_the_witness_resets_drawn_mode(void) {
     CHECK(state.magic != HOOK_MAGIC);
     deliver(0, DECK_2_RED_TRACK);  // a stray message doesn't bring drawing back: the unit starts fresh, not drawn
     tick();
-    CHECK(state.unit.drawn == 0 && state.unit.frame == NULL && rec.presents == 0);
+    CHECK(!view().drawn && rec.presents == 0);   // and no frame: the next begin allocates again
     deliver(0, BEGIN_V1);
     tick();
     CHECK(chip.mallocs == 1);  // the new boot's heap, allocated afresh
@@ -229,7 +236,7 @@ void without_the_witness_a_late_first_call_keeps_the_old_session(void) {
     stock.witness = NULL;
     chip.uptime = saved + 100000;
     tick();
-    CHECK(state.magic == HOOK_MAGIC && state.unit.drawn == 1);
+    CHECK(state.magic == HOOK_MAGIC && view().drawn == 1);
 }
 
 void an_uptime_that_went_backwards_resets_too(void) {
@@ -249,7 +256,7 @@ void a_counter_wrap_keeps_the_session_and_its_frame(void) {
     drawing_session();
     chip.uptime = 0x10;
     tick();
-    CHECK(state.magic == HOOK_MAGIC && state.unit.drawn == 1);
+    CHECK(state.magic == HOOK_MAGIC && view().drawn == 1);
     deliver(0, BEGIN_V1);
     deliver(0, CAPABILITY_V1);
     tick();
@@ -302,13 +309,13 @@ void garbage_with_the_magic_but_a_bad_check_word_is_fresh_state(void) {
     cold_boot();
     state.magic = HOOK_MAGIC;
     state.check = 0;
-    state.unit.drawn = 1;
+    state.unit.drawn = 1;   // power-on garbage in SRAM, which is what this test is about: not driving the unit
     chip.witness = 0xF0;
     for (int i = 0; i < 5; i++) tick();
     CHECK(rec.presents == 0);
     deliver(0, DECK_2_RED_TRACK);
     tick();
-    CHECK(state.unit.drawn == 0);
+    CHECK(view().drawn == 0);
 }
 
 void end_hands_the_screen_back_once(void) {

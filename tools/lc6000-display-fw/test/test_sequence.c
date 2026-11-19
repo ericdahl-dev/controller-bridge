@@ -1,11 +1,19 @@
 // The sequence rules (#464): the host re-sends begin, the deck and the state once a second while drawing.
 #include "harness.h"
+#include "view.h"
 
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
 #define DECK_2_RED_TRACK "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
 #define STATE_ALL "F0 00 02 0B 7F 10 20 00 02 07 3F F7"
 
 static dfw_unit unit;
+
+/// What drawing would see now (#573): the tests read this, never dfw_unit's fields.
+static dfw_view view(void) {
+    dfw_view v;
+    dfw_view_of(&unit, &v);
+    return v;
+}
 static recording rec;
 
 void begin_while_drawing_changes_nothing(void) {
@@ -17,8 +25,8 @@ void begin_while_drawing_changes_nothing(void) {
     feed(&unit, BEGIN_V1);
     dfw_tick(&unit, 0);
     CHECK(rec.presents == 1);
-    CHECK(unit.deck.number == 2);
-    CHECK(unit.flags == 0x3F);
+    CHECK(view().deck.number == 2);
+    CHECK(view().flags == 0x3F);
 }
 
 #define DECK_3_RED_TRACK "F0 00 02 0B 7F 10 20 00 09 03 03 01 7F 00 00 00 00 01 F7"
@@ -33,7 +41,7 @@ void a_deck_clears_the_deck_flags_but_not_stale(void) {
     feed(&unit, STATE_ALL);
     feed(&unit, DECK_3_RED_TRACK);
     dfw_tick(&unit, 0);
-    CHECK(unit.flags == 0x20);
+    CHECK(view().flags == 0x20);
 }
 
 /// The heartbeat (#459, agent3's review): an unchanged deck keeps its flags, and a whole unchanged heartbeat presents
@@ -51,14 +59,14 @@ void an_unchanged_heartbeat_presents_nothing(void) {
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
     dfw_tick(&unit, 500);   // the deck and its state may land in different ticks
-    CHECK(unit.flags == 0x3F);
+    CHECK(view().flags == 0x3F);
     feed(&unit, STATE_ALL);
     feed(&unit, BEAT_2);
     feed(&unit, NEEDLE_4096);
     feed(&unit, METER_64_90);
     dfw_tick(&unit, 1000);
     CHECK(rec.presents == 1);
-    CHECK(unit.flags == 0x3F);
+    CHECK(view().flags == 0x3F);
 }
 
 #define DECK_4_BLUE_EMPTY "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7"
@@ -142,10 +150,10 @@ void a_deck_change_clears_the_text_and_tempo(void) {
     feed(&unit, TEMPO_128);
     feed(&unit, DECK_2_RED_TRACK);   // the heartbeat's same deck keeps them
     dfw_tick(&unit, 0);
-    CHECK(unit.text_length[0] == 6 && unit.tempo == 1280);
+    CHECK(view().text_length[0] == 6 && view().tempo == 1280);
     feed(&unit, DECK_3_RED_TRACK);
     dfw_tick(&unit, 100);
-    CHECK(unit.text_length[0] == 0 && unit.tempo == 0);
+    CHECK(view().text_length[0] == 0 && view().tempo == 0);
 }
 
 #define TITLE_EMPTY "F0 00 02 0B 7F 10 20 00 02 04 00 F7"
@@ -157,19 +165,19 @@ void a_new_decks_words_wait_for_its_text(void) {
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
     dfw_tick(&unit, 0);
-    CHECK(!unit.text_heard);
+    CHECK(!view().text_heard);
     feed(&unit, TITLE_STROBE);
     dfw_tick(&unit, 10);
-    CHECK(unit.text_heard);
+    CHECK(view().text_heard);
     feed(&unit, DECK_2_RED_TRACK);   // the heartbeat's same deck: still heard
     dfw_tick(&unit, 20);
-    CHECK(unit.text_heard);
+    CHECK(view().text_heard);
     feed(&unit, DECK_3_RED_TRACK);
     dfw_tick(&unit, 30);
-    CHECK(!unit.text_heard);
+    CHECK(!view().text_heard);
     feed(&unit, TITLE_EMPTY);
     dfw_tick(&unit, 40);
-    CHECK(unit.text_heard);
+    CHECK(view().text_heard);
 }
 
 #define TIME_65_OF_293 "F0 00 02 0B 7F 10 20 00 05 06 00 41 02 25 F7"
@@ -180,10 +188,10 @@ void a_new_decks_words_wait_for_its_text(void) {
 /// presents; the heartbeat's unchanged one presents nothing.
 void the_first_time_presents_and_an_unchanged_one_does_not(void) {
     drawing_deck_4();
-    CHECK(!unit.time_heard);
+    CHECK(!view().time_heard);
     feed(&unit, TIME_0_OF_0);
     dfw_tick(&unit, 10);
-    CHECK(unit.time_heard && rec.presents == 2);
+    CHECK(view().time_heard && rec.presents == 2);
     feed(&unit, TIME_65_OF_293);
     dfw_tick(&unit, 20);
     CHECK(rec.presents == 3);
@@ -192,7 +200,7 @@ void the_first_time_presents_and_an_unchanged_one_does_not(void) {
     CHECK(rec.presents == 3);
     feed(&unit, TIME_66_OF_293);
     dfw_tick(&unit, 1010);
-    CHECK(rec.presents == 4 && unit.elapsed == 66 && unit.track_length == 293);
+    CHECK(rec.presents == 4 && view().elapsed == 66 && view().track_length == 293);
 }
 
 /// A new deck's time waits for its own message, as its text does: the host sends it right after.
@@ -201,13 +209,13 @@ void a_deck_change_clears_the_time(void) {
     feed(&unit, TIME_65_OF_293);
     feed(&unit, DECK_4_BLUE_EMPTY);   // the heartbeat's same deck keeps it
     dfw_tick(&unit, 10);
-    CHECK(unit.time_heard && unit.elapsed == 65);
+    CHECK(view().time_heard && view().elapsed == 65);
     feed(&unit, DECK_3_RED_TRACK);
     dfw_tick(&unit, 20);
-    CHECK(!unit.time_heard && unit.elapsed == 0 && unit.track_length == 0);
+    CHECK(!view().time_heard && view().elapsed == 0 && view().track_length == 0);
     feed(&unit, TIME_65_OF_293);
     dfw_tick(&unit, 30);
-    CHECK(unit.time_heard && rec.presents == 4);
+    CHECK(view().time_heard && rec.presents == 4);
 }
 
 /// End forgets the time: after a new begin there is none until a time message comes.
@@ -218,7 +226,7 @@ void end_forgets_the_time(void) {
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_4_BLUE_EMPTY);
     dfw_tick(&unit, 10);
-    CHECK(!unit.time_heard);
+    CHECK(!view().time_heard);
 }
 
 /// Only drawn mode takes the time, as every other live element.
@@ -228,7 +236,7 @@ void a_time_before_begin_is_dropped(void) {
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_4_BLUE_EMPTY);
     dfw_tick(&unit, 0);
-    CHECK(!unit.time_heard);
+    CHECK(!view().time_heard);
 }
 
 #define PHASE_AHEAD "F0 00 02 0B 7F 10 20 00 03 0B 01 24 F7"
@@ -241,19 +249,19 @@ void the_phase_is_unknown_until_the_decks_own_phase_comes(void) {
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
     dfw_tick(&unit, 0);
-    CHECK(unit.phase == DFW_PHASE_UNKNOWN);
+    CHECK(view().phase == DFW_PHASE_UNKNOWN);
     feed(&unit, PHASE_AHEAD);
     feed(&unit, DECK_2_RED_TRACK);   // the heartbeat's same deck keeps it
     dfw_tick(&unit, 10);
-    CHECK(unit.phase == 164);
+    CHECK(view().phase == 164);
     feed(&unit, DECK_3_RED_TRACK);
     dfw_tick(&unit, 20);
-    CHECK(unit.phase == DFW_PHASE_UNKNOWN);
+    CHECK(view().phase == DFW_PHASE_UNKNOWN);
     feed(&unit, PHASE_AHEAD);
     feed(&unit, END_V1);
     feed(&unit, BEGIN_V1);
     dfw_tick(&unit, 30);
-    CHECK(unit.phase == DFW_PHASE_UNKNOWN);
+    CHECK(view().phase == DFW_PHASE_UNKNOWN);
 }
 
 /// The phase rides the heartbeat: sent again unchanged, it presents nothing.

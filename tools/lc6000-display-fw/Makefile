@@ -55,7 +55,7 @@ $(BUILD)/sequences.h: vectors/messages.json test/vectors_to_c.py
 	python3 -I test/vectors_to_c.py $< --sequences > $@
 
 $(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h test/layer_record.c test/layer_record.h test/present.c test/present.h $(wildcard src/*.h) $(BUILD)/vectors.h $(BUILD)/sequences.h
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c test/present.c -lm
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c test/present.c test/view.c test/messages.c -lm
 
 clean:
 	rm -rf $(BUILD)
@@ -63,11 +63,12 @@ clean:
 # The hook into the stock wd image (#467): its portable logic, tested natively (`make arm-test`).
 ARM_TESTS := $(wildcard arm/test/test_*.c)
 .PHONY: arm-test
-# The block tests build with an empty drawing (ARM_DRAW=stub) until drawing has its own block (#501).
+# The block tests' test double (#573): block A with an empty drawing table (ARM_DRAW=stub) that never reads block B
+# (ARM_UPPER_PROVEN=0), so it answers the capability ask with no B. The default `make arm` is the flashed build.
 arm-test: $(BUILD)/hook-tests $(BUILD)/frame-dump
 	$(BUILD)/hook-tests
 	sh arm/check_symbols.sh $(BUILD)/freestanding-arm
-	$(MAKE) ARM_BUILD=$(BUILD)/arm-stub ARM_DRAW=stub $(BUILD)/arm-stub/block.bin $(BUILD)/arm-stub/upper.bin
+	$(MAKE) ARM_BUILD=$(BUILD)/arm-stub ARM_DRAW=stub ARM_UPPER_PROVEN=0 $(BUILD)/arm-stub/block.bin $(BUILD)/arm-stub/upper.bin
 	ARM_BUILD=$(BUILD)/arm-stub $(PYTHON) -I arm/test/test_block.py
 
 # The block tests need the `unicorn` package, as CI pins it (pip install unicorn==2.1.4):
@@ -76,7 +77,7 @@ PYTHON ?= python3
 
 $(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c $(ARM_TESTS) test/harness.c
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c $(ARM_TESTS) test/harness.c test/view.c
 
 include arm/arm.mk
 

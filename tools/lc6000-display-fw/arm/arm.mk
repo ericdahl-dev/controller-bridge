@@ -3,9 +3,10 @@
 # (versions pinned in arm/README.md). ARM_DRAW=0 builds block A's hook path alone, inert.
 ARM_BUILD ?= $(BUILD)/arm
 ARM_DRAW ?= 1
-# 1 only once the owner's read-only read shows the upper flash exists and is erased (#501, the firmware README's
-# "Read-only checks"). Until then block A never reads 0x08080000, so the capability ask gets no answer.
-ARM_UPPER_PROVEN ?= 0
+# 1, the default since the owner's read-only checks proved the upper flash (#501, 2026-11-19) and the flashed build
+# (#573): block A reads block B at 0x08080000. 0 builds the A from before that proof, which never reads it and never
+# answers the capability ask; the block tests keep it, for the switch's own tests.
+ARM_UPPER_PROVEN ?= 1
 ARM_PREFIX ?= arm-none-eabi-
 ARM_CPU := -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
 ARM_CFLAGS := -std=c99 -Wall -Wextra -Werror -pedantic -Os $(ARM_CPU) -ffreestanding -fno-builtin -fno-common \

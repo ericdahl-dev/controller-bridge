@@ -6,6 +6,7 @@
 // rule alone.
 #include "harness.h"
 #include "draw.h"
+#include "messages.h"
 #include <string.h>
 #include <math.h>
 
@@ -122,11 +123,17 @@ static int band_matches(const ref_case *c, band which) {
     return over_cap == 0 && loose <= budget;
 }
 
+/// The unit the reference cases drive through messages (#573), as the host does.
+static dfw_unit ref_unit;
+static recording ref_rec;
+
+/// Begin and the case's deck, one tick, and the frame the unit presented.
 static void draw_case(const ref_case *c) {
-    static dfw_unit unit;
-    unit.deck = (dfw_deck_state){ c->number, c->r, c->g, c->b, c->player };
-    unit.phase = DFW_PHASE_UNKNOWN;   // the references draw the plain rule (#462)
-    dfw_draw(frame, &unit);
+    fresh(&ref_unit, &ref_rec);
+    send_begin(&ref_unit);
+    send_deck(&ref_unit, c->number, c->r, c->g, c->b, c->player);
+    dfw_tick(&ref_unit, 0);
+    memcpy(frame, ref_rec.last, sizeof frame);
 }
 
 /// The rule in the deck color, under the artist: x 50-147, y 127-128, as the renderer fills it.
@@ -174,23 +181,23 @@ static const text_case text_cases[] = {
     { "test/ref/deck3-purple-seq.ppm", 3, 180, 0, 255, 4, "", "", "", "Sequencer", 0 },
 };
 
-static void set_text(dfw_unit *unit, int field, const char *codes) {
-    unit->text_length[field] = (uint8_t)strlen(codes);
-    memcpy(unit->text[field], codes, unit->text_length[field]);
+/// One text field, its Windows-1252 codes as the host sends them.
+static void send_codes(dfw_unit *unit, int field, const char *codes) {
+    send_text(unit, (uint8_t)field, (const uint8_t *)codes, strlen(codes));
 }
 
+/// The case's deck, its four texts and its tempo, as the full state sends them; then the frame.
 static void draw_text_case(const text_case *c) {
-    static dfw_unit unit;
-    memset(&unit, 0, sizeof unit);
-    unit.deck = (dfw_deck_state){ c->number, c->r, c->g, c->b, c->player };
-    set_text(&unit, 0, c->title);
-    set_text(&unit, 1, c->artist);
-    set_text(&unit, 2, c->key);
-    set_text(&unit, 3, c->words);
-    unit.tempo = c->tenths;
-    unit.text_heard = 1;
-    unit.phase = DFW_PHASE_UNKNOWN;
-    dfw_draw(frame, &unit);
+    fresh(&ref_unit, &ref_rec);
+    send_begin(&ref_unit);
+    send_deck(&ref_unit, c->number, c->r, c->g, c->b, c->player);
+    send_codes(&ref_unit, 0, c->title);
+    send_codes(&ref_unit, 1, c->artist);
+    send_codes(&ref_unit, 2, c->key);
+    send_codes(&ref_unit, 3, c->words);
+    send_tempo(&ref_unit, (uint16_t)c->tenths);
+    dfw_tick(&ref_unit, 0);
+    memcpy(frame, ref_rec.last, sizeof frame);
 }
 
 /// The text band: below the header, inside the ring. The renderer's text is CoreText's, anti-aliased at half-pixel x
@@ -281,16 +288,22 @@ static void an_osc_clip_draws_the_osc_badge(void) { the_header_matches_the_refer
 static void a_midi_clip_draws_the_midi_badge(void) { the_header_matches_the_reference(3); }
 static void a_sequencer_draws_the_seq_badge(void) { the_header_matches_the_reference(4); }
 
+/// Every deck number and every player the protocol takes, drawn into a frame filled with garbage: no pixel is left.
+/// (Decks and players out of range never reach drawing: the decoder drops them, as the invalid vectors check.)
 static void every_pixel_is_written_whatever_the_deck(void) {
-    static const dfw_deck_state decks[] = { { 0, 1, 2, 3, 0 }, { 255, 9, 9, 9, 255 }, { 5, 0, 0, 0, 6 }, { 2, 255, 0, 0, 1 } };
-    for (size_t d = 0; d < sizeof decks / sizeof decks[0]; d++) {
-        for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = 0xDEADBEEFu;
-        static dfw_unit unit;
-        unit.deck = decks[d];
-        dfw_draw(frame, &unit);
-        int unwritten = 0;
-        for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) unwritten += (frame[i] & 0xFF000000u) != 0;
-        CHECK(unwritten == 0);
+    static dfw_pixel garbage[DFW_SIZE * DFW_SIZE];
+    for (uint8_t number = 1; number <= DFW_DECK_MAX; number++) {
+        for (uint8_t player = 0; player <= DFW_PLAYER_MAX; player++) {
+            for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) garbage[i] = 0xDEADBEEFu;
+            fresh_without_frame(&ref_unit, &ref_rec);
+            dfw_set_frame(&ref_unit, garbage);
+            send_begin(&ref_unit);
+            send_deck(&ref_unit, number, (uint8_t)(number * 60), 9, 255, player);
+            dfw_tick(&ref_unit, 0);
+            int unwritten = 0;
+            for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) unwritten += (garbage[i] & 0xFF000000u) != 0;
+            CHECK(ref_rec.presents == 1 && unwritten == 0);
+        }
     }
 }
 
@@ -330,11 +343,13 @@ static int stale_matches(void) {
 }
 
 static void stale_draws_the_logo(void) {
-    static dfw_unit stale_unit;
-    stale_unit.deck = (dfw_deck_state){ 2, 255, 0, 0, 1 };
-    stale_unit.flags = 0x21;   // loaded, feedback stale
+    fresh(&ref_unit, &ref_rec);
+    send_begin(&ref_unit);
+    send_deck(&ref_unit, 2, 255, 0, 0, 1);
+    send_state(&ref_unit, 0x21);   // loaded, feedback stale
+    dfw_tick(&ref_unit, 0);
+    memcpy(frame, ref_rec.last, sizeof frame);
     CHECK(load_reference(STALE_REF));
-    dfw_draw(frame, &stale_unit);
     CHECK(stale_matches());
 }
 

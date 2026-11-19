@@ -283,29 +283,10 @@ static void record_band(void) {
 
 static int most_writes(void) { return recorder_most_writes(&record); }
 
-/// (1), (2), (5): a present's band writes each pixel at most once, never black and then a color, and never in the square.
-/// From a black layer and from a layer holding another ring (83 then 120 of 165).
-static void the_band_writes_each_pixel_once_with_its_final_value(void) {
-    memset(record.pixels, 0, sizeof record.pixels);
-    with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
-    record_band();
-    CHECK(record.total > 1000);
-    CHECK(most_writes() == 1 && record.dark_then_lit == 0 && record.in_square == 0);
-    with_time(DECK_4_BLUE_EMPTY, PLAYING, 120, 165, 0);
-    record_band();
-    CHECK(record.total > 0);
-    CHECK(most_writes() == 1 && record.dark_then_lit == 0 && record.in_square == 0);
-}
-
-/// (3): the same ring again writes nothing: the layer already holds it.
-static void an_unchanged_ring_writes_nothing(void) {
-    memset(record.pixels, 0, sizeof record.pixels);
-    with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
-    record_band();
-    CHECK(record.total > 1000);
-    record_band();
-    CHECK(record.total == 0);
-}
+// Each pixel once with its final value, and an unchanged ring writing nothing, are checked at the whole panel, through
+// the same dfw_band_layer seam (#573: one behavior test per seam): test_panel_record.c's "every present writes each
+// pixel once and never black then lit" (no pixel twice, none black then lit, the band writing no unchanged pixel, none
+// in the square, which A's copy writes) and "an unchanged scene writes nothing".
 
 /// (4), (5): a ring that goes (an unknown length, stale, a deck change) leaves the band black outside the square, the
 /// square untouched; and writes only what was lit.
@@ -369,7 +350,8 @@ static void compare_put(void *ctx, int x, int y, dfw_pixel color) {
 }
 
 /// The table walk is the geometry, pixel for pixel: every elapsed second of a 165 s track and of a 3600 s one's first
-/// and last minutes, in the deck color, red and white; and the number of pixels is the geometry's.
+/// and last minutes, in the deck color, and in red and white where the warning shows them; and the number of pixels is
+/// the geometry's.
 static void the_band_table_walk_is_the_geometry(void) {
     int ring_pixels = 0;
     for (int y = -10; y <= 208; y++)
@@ -378,25 +360,33 @@ static void the_band_table_walk_is_the_geometry(void) {
             ring_pixels += reference_pixel(0.0f, 0, x, y, &c);
         }
     static const struct { uint16_t length, from, to; } spans[] = { { 165, 0, 165 }, { 3600, 0, 60 }, { 3600, 3540, 3600 } };
+    // Each look where the unit really shows it (#573: through messages and the clock, not a set field): normal while
+    // paused on every second; steady red while playing with 31-60 s left; with 30 s or fewer, red at the time's
+    // change and white half a second later.
     int off = 0, checked = 0;
     for (size_t s = 0; s < 3; s++)
-        for (uint16_t e = spans[s].from; e <= spans[s].to; e++)
-            for (int look = 0; look < 3; look++) {
-                with_time(DECK_2_RED_EMPTY, PAUSED, e, spans[s].length, 0);
-                unit.time_look = (uint8_t)look;
-                compare_log log = { 0, 0, (float)e / (float)spans[s].length,
-                                    look == DFW_TIME_RED ? 0xFF3B30u : look == DFW_TIME_WHITE ? 0xEDEDEAu : 0xFF0000u };
+        for (uint16_t e = spans[s].from; e <= spans[s].to; e++) {
+            int left = spans[s].length - e;
+            struct { uint8_t flags; uint32_t later; dfw_pixel fill; int shown; } looks[] = {
+                { PAUSED, 0, 0xFF0000u, 1 },
+                { PLAYING, 0, 0xFF3B30u, left <= 60 },
+                { PLAYING, 600, 0xEDEDEAu, left <= 30 },
+            };
+            for (int l = 0; l < 3; l++) {
+                if (!looks[l].shown) continue;
+                with_time(DECK_2_RED_EMPTY, looks[l].flags, e, spans[s].length, looks[l].later);
+                compare_log log = { 0, 0, (float)e / (float)spans[s].length, looks[l].fill };
                 dfw_band_pixels(&unit, compare_put, &log);
                 off += log.off + (log.count != ring_pixels);
                 checked++;
             }
-    CHECK(ring_pixels > 2000 && checked == 864 && off == 0);
+        }
+    // 288 seconds paused, 122 with a minute or less left (red), 62 with 30 s or less (white).
+    CHECK(ring_pixels > 2000 && checked == 472 && off == 0);
 }
 
 const test_case draw_band_tests[] = {
     { "the band table walk is the geometry", the_band_table_walk_is_the_geometry },
-    { "the band writes each pixel once with its final value", the_band_writes_each_pixel_once_with_its_final_value },
-    { "an unchanged ring writes nothing", an_unchanged_ring_writes_nothing },
     { "a ring that goes leaves black", a_ring_that_goes_leaves_black },
     { "the band ring is the renderer's", the_band_ring_is_the_renderers },
     { "each band reference has the ring", each_band_reference_has_the_ring },

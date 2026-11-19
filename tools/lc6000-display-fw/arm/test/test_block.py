@@ -92,6 +92,18 @@ class ReproducibleTests(unittest.TestCase):
                     self.assertEqual(a.read(), b.read(), name)
 
 
+    def test_the_default_build_is_the_flashed_one(self):
+        # #573: `make arm` builds what's on the owner's unit (block A reading block B, ARM_UPPER_PROVEN=1), not an inert
+        # variant nobody flashes.
+        with tempfile.TemporaryDirectory() as default, tempfile.TemporaryDirectory() as flashed:
+            subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={default}"], check=True, capture_output=True)
+            subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={flashed}", "ARM_UPPER_PROVEN=1"], check=True,
+                           capture_output=True)
+            for name in ("block.bin", "upper.bin"):
+                with open(os.path.join(default, name), "rb") as a, open(os.path.join(flashed, name), "rb") as b:
+                    self.assertEqual(a.read(), b.read(), name)
+
+
 class SizeTests(unittest.TestCase):
     """Each block's limit is a check on every toolchain that builds it, Mac and CI's Ubuntu GCC alike (#501): block A
     the 9,184-byte padding, block B the 512 KB upper flash."""
