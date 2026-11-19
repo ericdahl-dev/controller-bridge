@@ -66,6 +66,9 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   `src/band_geometry.h` (the code that ran per pixel before), holds each pixel's cover, start edge and track; only the
   fill's end edge is worked out per present. Don't edit it; regenerate with `make tables`. `make test` fails if it
   isn't what the generator writes now.
+  The beat ring is a table too: `src/ring_table.c`, from `gen/ring_table_gen.c` and `src/ring_geometry.h` (draw.c's
+  `ring()` and draw_live.c's `lit_section()` as they were), holds each ring pixel's unlit and all-dark gray and its
+  section's lit color.
 - `src/font_header.h`: glyph coverage for the header's two faces and the track time's (#460), generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
