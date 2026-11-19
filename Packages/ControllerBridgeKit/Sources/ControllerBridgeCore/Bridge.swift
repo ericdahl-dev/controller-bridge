@@ -146,6 +146,8 @@ final class Bridge {
     var synced = false
     var sliderEnabled = true
     var looping = false
+    /// The loop Syndicate last reported, in seconds (LoopInfo), for Loop Move (#470); nil with none.
+    var loopSeconds: Double?
     /// Syndicate's feedback has stopped (#21): its LEDs show `leds.stale_idle`.
     var feedbackStale = false
     /// An LED sweep (#26) owns the controller's LEDs.
@@ -347,6 +349,11 @@ final class Bridge {
             if value != sliderEnabled { rearmPickup() }
             sliderEnabled = value
         case "loop": looping = value
+        case "loopinfo":
+            // on, start and end in seconds.
+            let numbers = message.arguments.compactMap(\.number)
+            loopSeconds = numbers.count >= 3 && numbers[2] > numbers[1] ? numbers[2] - numbers[1] : nil
+            return
         case "cues": padModule.cuesFeedback(message.arguments)
         case "trackinfo":
             // Title, artist, key, BPM, length in seconds, …: only the length is used, for jog seeking.

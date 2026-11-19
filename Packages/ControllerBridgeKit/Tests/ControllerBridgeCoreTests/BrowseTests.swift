@@ -114,22 +114,50 @@ struct BrowseTests {
         ])
     }
 
-    @Test("Shift + the auto loop knob is Loop Move (#470): each click sends what Beat Jump ▶ or ◀ sends, so Syndicate moves the loop by its own skip amount; no resize")
+    /// A loop from `start` to `end` seconds on deck 1, as Syndicate reports it, at `bpm`.
+    static func loop(_ rig: Rig, bpm: Float, start: Float, end: Float) {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(bpm)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/LoopInfo", [.int(1), .float(start), .float(end)]))
+        rig.osc.sent.removeAll()
+    }
+
+    static func loopMoves(_ rig: Rig) -> [OSCMessage] {
+        rig.osc.sent.filter { $0.address.contains("Loop") || $0.address.contains("Skip") }
+    }
+
+    @Test("Shift + the auto loop knob is Loop Move (#470): each click moves the loop by its own length, forward clockwise; no resize")
     func loopMove() throws {
         let rig = try Self.startedRig()
+        // Hardware trace: 0.0561 s to 1.9311 s at 128 BPM is a 4-beat loop.
+        Self.loop(rig, bpm: 128, start: 0.0561, end: 1.9311)
         Self.holdingShift(rig) {
             Self.turn(rig, cc: 3, 0x01)   // one click clockwise
-            Self.turn(rig, cc: 3, 0x02)   // two clicks in one message
             Self.turn(rig, cc: 3, 0x7F)   // one click counter-clockwise
             Self.turn(rig, cc: 3, 0x00)
         }
-        let sent = rig.osc.sent.filter { $0.address.contains("Loop") || $0.address.contains("Skip") }
-        #expect(sent == [
-            OSCMessage("/Syndicate/Deck/1/SkipBeatForward", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/SkipBeatForward", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/SkipBeatForward", [.int(1)]),
-            OSCMessage("/Syndicate/Deck/1/SkipBeatBack", [.int(1)]),
+        #expect(Self.loopMoves(rig) == [
+            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(4)]),
+            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(-4)]),
         ])
+    }
+
+    @Test("Loop Move follows the loop's length: an 8-beat loop moves 8 beats; a loop under a beat moves 1")
+    func loopMoveFollowsLength() throws {
+        let rig = try Self.startedRig()
+        // Hardware trace: 104.3204 s to 108.0127 s at 130 BPM is an 8-beat loop.
+        Self.loop(rig, bpm: 130, start: 104.3204, end: 108.0127)
+        Self.holdingShift(rig) { Self.turn(rig, cc: 3, 0x01) }
+        #expect(Self.loopMoves(rig) == [OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(8)])])
+        Self.loop(rig, bpm: 120, start: 10, end: 10.25)   // half a beat
+        Self.holdingShift(rig) { Self.turn(rig, cc: 3, 0x01) }
+        #expect(Self.loopMoves(rig) == [OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(1)])])
+    }
+
+    @Test("With no loop reported, Shift + the auto loop knob sends nothing")
+    func loopMoveWithoutLoop() throws {
+        let rig = try Self.startedRig()
+        Self.holdingShift(rig) { Self.turn(rig, cc: 3, 0x01) }
+        #expect(Self.loopMoves(rig) == [])
     }
 
     @Test("Beat jump ◀ and ▶ skip a beat back and forward, on press only")

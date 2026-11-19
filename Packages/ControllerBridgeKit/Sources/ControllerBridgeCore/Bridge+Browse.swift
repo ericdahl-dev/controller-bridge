@@ -44,16 +44,25 @@ extension Bridge {
     }
 
     /// While looping, Syndicate's LoopOut doubles the loop and LoopIn halves it. One step per turn, however fast.
-    /// With Shift held it's the knob's printed Loop Move (#470): each click sends what the Beat Jump buttons send, so
-    /// Syndicate moves the loop (or, with no loop, jumps) by its own skip amount, forward clockwise.
+    /// With Shift held it's the knob's printed Loop Move (#470): each click moves the loop by its own length, forward
+    /// clockwise. With no loop reported, nothing is sent.
     func autoLoopSize(_ value: UInt8) {
         let ticks = mapping.midi.encoderFormat.ticks(value)
         guard ticks != 0 else { return }
         if shift {
-            for _ in 0..<abs(ticks) { sendDeck(ticks > 0 ? "SkipBeatForward" : "SkipBeatBack", .int(1)) }
+            guard let beats = loopBeats else { return }
+            for _ in 0..<abs(ticks) { sendDeck("LoopMoveBeat", .int(Int32(ticks > 0 ? beats : -beats))) }
         } else {
             sendDeck(ticks > 0 ? "LoopOut" : "LoopIn", .int(1))
         }
+    }
+
+    /// The reported loop's length in whole beats, at the deck's tempo: the nearest of 1, 2, 4 … 64, so a tempo that's
+    /// a little off still lands on the loop's size. A loop under a beat counts as 1. Nil with no loop or no tempo.
+    var loopBeats: Int? {
+        guard let loopSeconds, let bpm else { return nil }
+        let beats = loopSeconds * bpm / 60
+        return [1, 2, 4, 8, 16, 32, 64].min { abs(Double($0) - beats) < abs(Double($1) - beats) }
     }
 
     // MARK: Jumps

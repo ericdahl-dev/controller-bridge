@@ -22,7 +22,7 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 | Shift + pad in Hot Cue mode, deck stopped | Goes to that cue without playing, at once: `Quantize 1` (None), then a silent `WaveformSeek` to the cue, then `Quantize 0` (Use Global). The first press on each cue (per track) taps `Cue n` and pauses it on `Playing 1` instead, with a short blip, to learn where the cue is. Syndicate doesn't report a deck's own quantize, so a deck set to its own quantize is reset to Use Global. On a playing deck it's a hot cue |
 | Pads in Roll mode | `SlipLoop/ThirtySecond … Four` (hold) |
 | Pads in Loop mode | `SetCueLoop n` |
-| Loop In / Loop Out / Auto Loop, and the Auto Loop knob | `LoopIn` / `LoopOut` / `Loop`. Turning the knob halves or doubles the loop; Shift + turn is Loop Move: each click sends what Beat Jump sends, so Syndicate moves the loop by its skip amount |
+| Loop In / Loop Out / Auto Loop, and the Auto Loop knob | `LoopIn` / `LoopOut` / `Loop`. Turning the knob halves or doubles the loop; Shift + turn is Loop Move: each click moves the loop by its own length (`LoopMoveBeat`) |
 | Beat Jump ◀ ▶ (Shift for a bar) | `SkipBeatBack` / `SkipBeatForward` (`SkipBar…` with Shift) |
 | Censor (hold; Shift + Censor latches) | `Reverse` 1/0 while held; with Shift, each press turns `Reverse` on or off |
 | Key Lock / Slip | `PitchPreserve` / `CueSlip` |
