@@ -11,7 +11,7 @@ def dfuse_file(element, address=BASE, *, targets=1, elements=1, vid=0x0483, pid=
     """A DfuSe file built straight from the UM0391 layout, independent of dfupatch."""
     body = struct.pack("<II", address, len(element)) + element
     target = b"Target" + struct.pack("<BI255sII", 0, 0, b"", len(body), elements) + body
-    image_size = 11 + len(target) * targets
+    image_size = 11 + len(target) * targets + 16  # the whole file, suffix included, as in ST's own tool
     prefix = b"DfuSe" + struct.pack("<BIB", 1, image_size, targets)
     data = prefix + target * targets
     data += struct.pack("<HHHH", 0x0000, pid, vid, 0x011A) + b"UFD" + bytes([16])
@@ -19,6 +19,13 @@ def dfuse_file(element, address=BASE, *, targets=1, elements=1, vid=0x0483, pid=
 
 
 class ParseTests(unittest.TestCase):
+    def test_the_image_size_field_counts_the_whole_file_with_its_suffix(self):
+        data = bytearray(dfuse_file(bytes(32)))
+        struct.pack_into("<I", data, 6, len(data) - 16)
+        struct.pack_into("<I", data, len(data) - 4, zlib.crc32(data[:-4]) ^ 0xFFFFFFFF)
+        with self.assertRaisesRegex(dfupatch.Refused, "image size"):
+            dfupatch.parse(bytes(data))
+
     def test_it_reads_the_one_element_address_and_bytes(self):
         image = dfupatch.parse(dfuse_file(b"\x01\x02\x03\x04" * 8, address=0x08008000))
         self.assertEqual(image.address, 0x08008000)

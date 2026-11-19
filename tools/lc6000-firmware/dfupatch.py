@@ -41,7 +41,7 @@ def parse(data):
         raise Refused(f"DfuSe format version {version}, expected 1")
     if targets != 1:
         raise Refused(f"{targets} targets, expected exactly one target")
-    if image_size != len(data) - SUFFIX_SIZE:
+    if image_size != len(data):  # ST's tool counts the whole file, suffix included
         raise Refused("the DfuSe image size doesn't match the file length")
     if data[PREFIX_SIZE:PREFIX_SIZE + 6] != b"Target":
         raise Refused("no Target prefix where one target should start")
