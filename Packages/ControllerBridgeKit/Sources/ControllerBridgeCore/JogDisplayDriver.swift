@@ -591,16 +591,14 @@ public final class JogDisplayDriver {
         for (text, last) in zip(texts, lastTexts) where text != last { sendWD(text) }
     }
 
-    /// A deck's text and tempo messages (#458): title, artist and key (empty clears one), the untitled words only for
-    /// player "other" (the player type's own name; the chip knows the others'), then the tempo.
+    /// A deck's text and tempo messages (#458): title, artist and key (empty clears one), the untitled words (the big
+    /// line with no title, as the image says it; empty with a title), then the tempo.
     static func texts(_ content: JogDisplayContent) -> [[UInt8]] {
         typealias Message = DrawnDisplay.Message
-        var messages = [Message.text(.title, content.title ?? ""), .text(.artist, content.artist ?? ""),
-                        .text(.key, content.key ?? "")]
-        if DrawnDisplay.Player(playerType: content.playerType) == .other {
-            messages.append(.text(.untitled, content.playerType ?? ""))
-        }
-        messages.append(.tempo(content.bpm))
+        let title = content.title ?? ""
+        let untitled = title.isEmpty ? JogDisplayWords.untitled(content.playerType).title : ""
+        let messages = [Message.text(.title, title), .text(.artist, content.artist ?? ""), .text(.key, content.key ?? ""),
+                        .text(.untitled, untitled), .tempo(content.bpm)]
         return messages.map(\.bytes)
     }
 

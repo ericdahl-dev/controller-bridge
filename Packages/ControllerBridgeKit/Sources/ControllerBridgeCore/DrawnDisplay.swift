@@ -66,8 +66,8 @@ public enum DrawnDisplay {
         public static let stale = State(rawValue: 1 << 5)
     }
 
-    /// Which text a text message carries (#458). The untitled words go only for player "other": the player type's own
-    /// name (the chip knows the words for the others).
+    /// Which text a text message carries (#458). The untitled words are the big line with no title, as the image says
+    /// it (JogDisplayWords.untitled): "No track", "OSC clip" or the player type's own name; empty with a title.
     public enum TextField: UInt8, Sendable {
         case title = 0, artist, key, untitled
     }
