@@ -11,7 +11,7 @@ static const uint32_t nibbles[16] = {
     0xEDB88320u, 0xF00F9344u, 0xD6D6A3E8u, 0xCB61B38Cu, 0x9B64C2B0u, 0x86D3D2D4u, 0xA00AE278u, 0xBDBDF21Cu,
 };
 
-uint32_t upper_check(const uint8_t *b) {
+uint32_t upper_check(const uint8_t *b, uint32_t layout) {
     if (word(b) != UPPER_MARKER || word(b + 4) != UPPER_VERSION) return 0;
     uint32_t length = word(b + 8);
     if (length < UPPER_HEADER || length > UPPER_LIMIT) return 0;
@@ -22,7 +22,9 @@ uint32_t upper_check(const uint8_t *b) {
         crc = (crc >> 4) ^ nibbles[crc & 15u];
     }
     if (~crc != word(b + 12)) return 0;
-    uint32_t draw = word(b + 16);
+    // B built against another dfw_unit would read A's state at the wrong offsets (#516).
+    if (word(b + 16) != layout) return 0;
+    uint32_t draw = word(b + 20);
     // Thumb code (bit 0 set) past the header and before B's end.
     if (!(draw & 1u) || draw < UPPER_BASE + UPPER_HEADER || draw >= UPPER_BASE + length) return 0;
     return draw;

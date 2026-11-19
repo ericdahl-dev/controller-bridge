@@ -333,9 +333,11 @@ void nothing_is_hidden_that_was_never_shown(void) {
     CHECK(chip.hides == 0);
 }
 
-/// Block B as the upper flash holds it (#501): erased, unless a test writes one. The good one's CRC, 0x22B5DF72, is
-/// zlib's CRC-32 of its bytes from +16 to its end (worked out with Python's zlib, not this code).
+/// Block B as the upper flash holds it (#501): erased, unless a test writes one. The good one's CRC, 0x85E2FFEC, is
+/// zlib's CRC-32 of its bytes from +16 to its end (worked out with Python's zlib, not this code), for TEST_LAYOUT.
 static uint8_t upper[0x80000]; /* the upper flash: sectors 8-11 */
+/// The layout word the upper_check tests hand in as A's: any value, as long as B's header carries the same (#516).
+#define TEST_LAYOUT 0x1A2B3C4Du
 
 static void put_word(uint8_t *at, uint32_t word) {
     for (int i = 0; i < 4; i++) at[i] = (uint8_t)(word >> (8 * i));
@@ -345,73 +347,115 @@ static void good_upper(void) {
     memset(upper, 0xFF, sizeof upper);
     put_word(upper + 0, UPPER_MARKER);
     put_word(upper + 4, UPPER_VERSION);
-    put_word(upper + 8, 29);
-    put_word(upper + 12, 0x22B5DF72u);
-    put_word(upper + 16, 0x08080015u);
-    memcpy(upper + 20, "123456789", 9);
+    put_word(upper + 8, 33);
+    put_word(upper + 12, 0x85E2FFECu);
+    put_word(upper + 16, TEST_LAYOUT);
+    put_word(upper + 20, 0x08080019u);
+    memcpy(upper + 24, "123456789", 9);
 }
 
 void a_good_upper_block_gives_its_draw_entry(void) {
     good_upper();
-    CHECK(upper_check(upper) == 0x08080015u);
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0x08080019u);
 }
 
 void erased_upper_flash_has_no_block(void) {
     memset(upper, 0xFF, sizeof upper);
-    CHECK(upper_check(upper) == 0);
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
 }
 
 void a_block_for_another_version_is_refused(void) {
     good_upper();
     put_word(upper + 4, UPPER_VERSION + 1);
-    CHECK(upper_check(upper) == 0);
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+}
+
+void a_block_built_for_another_layout_is_refused(void) {
+    // B's own CRC is good (Python's zlib, 0xD678A468), so only the layout check can refuse it (#516).
+    good_upper();
+    put_word(upper + 16, TEST_LAYOUT + 1);
+    put_word(upper + 12, 0xD678A468u);
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+    CHECK(upper_check(upper, TEST_LAYOUT + 1) == 0x08080019u);
 }
 
 void a_block_whose_CRC_doesnt_match_is_refused(void) {
     good_upper();
-    upper[24] ^= 1;
-    CHECK(upper_check(upper) == 0);
+    upper[28] ^= 1;
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
 }
 
 void a_length_past_the_sector_or_inside_the_header_is_refused(void) {
     good_upper();
     put_word(upper + 8, UPPER_LIMIT + 4);
-    CHECK(upper_check(upper) == 0);
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
     put_word(upper + 8, UPPER_HEADER - 1);
-    CHECK(upper_check(upper) == 0);
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
     put_word(upper + 8, 0);
-    CHECK(upper_check(upper) == 0);
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
 }
 
 void an_entry_that_isnt_Thumb_code_inside_the_block_is_refused(void) {
     // Each entry with its own good CRC (Python's zlib), so only the entry check can refuse it.
     static const struct { uint32_t entry, crc; } bad[] = {
-        { 0x08080014u, 0xFF2306F7u }, /* no Thumb bit */
-        { 0x0808001Fu, 0x18EAB954u }, /* past the end of B */
-        { 0x08080011u, 0xE20CB5E4u }, /* inside the header */
-        { 0x00000015u, 0x8BA17EC3u }, /* nowhere near B */
+        { 0x08080018u, 0x58742669u }, /* no Thumb bit */
+        { 0x08080023u, 0xB8C474E5u }, /* past the end of B */
+        { 0x08080015u, 0x1F584617u }, /* inside the header */
+        { 0x00000019u, 0x2CF65E5Du }, /* nowhere near B */
     };
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
         good_upper();
-        put_word(upper + 16, bad[i].entry);
+        put_word(upper + 20, bad[i].entry);
         put_word(upper + 12, bad[i].crc);
-        CHECK(upper_check(upper) == 0);
+        CHECK(upper_check(upper, TEST_LAYOUT) == 0);
     }
 }
 
-/// A good B of 0x20020 bytes, past sector 8 into sector 9: zeros after the good B's bytes. CRC from Python's zlib.
+/// A good B of 0x20024 bytes, past sector 8 into sector 9: zeros after the good B's bytes. CRC from Python's zlib.
 static void long_upper(void) {
     good_upper();
-    memset(upper + 29, 0, 0x20020 - 29);
-    put_word(upper + 8, 0x20020);
-    put_word(upper + 12, 0x40575571u);
+    memset(upper + 33, 0, 0x20024 - 33);
+    put_word(upper + 8, 0x20024);
+    put_word(upper + 12, 0x3D15BEA1u);
 }
 
 void a_block_past_sector_8_is_checked_whole(void) {
     long_upper();
-    CHECK(upper_check(upper) == 0x08080015u);
-    upper[0x2001F] = 1;
-    CHECK(upper_check(upper) == 0);
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0x08080019u);
+    upper[0x20023] = 1;
+    CHECK(upper_check(upper, TEST_LAYOUT) == 0);
+}
+
+/// zlib's CRC-32 a bit at a time, for the hook tests' B: its layout word is A's own DFW_LAYOUT, which differs between
+/// the Mac and the chip, so its CRC can't be a literal. Checked against zlib's own check value below.
+static uint32_t reference_crc(const uint8_t *bytes, size_t length) {
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < length; i++) {
+        crc ^= bytes[i];
+        for (int bit = 0; bit < 8; bit++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
+
+void the_reference_crc_is_zlibs(void) {
+    CHECK(reference_crc((const uint8_t *)"123456789", 9) == 0xCBF43926u);
+}
+
+/// A fixture B as block A sees it: carrying `layout`, its CRC worked out again.
+static void seal_for(uint32_t layout) {
+    put_word(upper + 16, layout);
+    uint32_t length = (uint32_t)upper[8] | (uint32_t)upper[9] << 8 | (uint32_t)upper[10] << 16;
+    put_word(upper + 12, reference_crc(upper + 16, length - 16));
+}
+
+static void hooked_upper(void) {
+    good_upper();
+    seal_for(DFW_LAYOUT);
+}
+
+static void hooked_long_upper(void) {
+    long_upper();
+    seal_for(DFW_LAYOUT);
 }
 
 /// The hook block draws only with the table stock hands it (#501): with none (the drawing block not yet checked), the
@@ -439,7 +483,7 @@ void with_an_erased_upper_block_the_capability_ask_gets_no_answer(void) {
 void with_a_good_upper_block_the_capability_ask_is_answered(void) {
     // Only the capability ask: on the Mac, B's entry is a chip address and is never called.
     cold_boot();
-    good_upper();
+    hooked_upper();
     stock.upper = upper;
     stock.drawing = NULL;
     deliver(0, CAPABILITY_V1);
@@ -450,8 +494,8 @@ void with_a_good_upper_block_the_capability_ask_is_answered(void) {
 void an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer(void) {
     for (int bad = 0; bad < 2; bad++) {
         cold_boot();
-        good_upper();
-        if (bad == 0) upper[24] ^= 1;
+        hooked_upper();
+        if (bad == 0) upper[28] ^= 1;
         else put_word(upper + 4, UPPER_VERSION + 1);
         stock.upper = upper;
         stock.drawing = NULL;
@@ -461,13 +505,28 @@ void an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer(void) {
     }
 }
 
+void an_upper_block_built_for_another_layout_gets_no_answer(void) {
+    // A B from a commit whose dfw_unit differs would draw from the wrong offsets (#516): A stays silent, and takes no
+    // malloc, as with no B at all.
+    cold_boot();
+    hooked_upper();
+    seal_for(DFW_LAYOUT ^ 1u);
+    stock.upper = upper;
+    stock.drawing = NULL;
+    deliver(0, CAPABILITY_V1);
+    deliver(0, BEGIN_V1);
+    tick();
+    CHECK(rec.sends == 0 && rec.presents == 0);
+    CHECK(chip.mallocs == 0);
+}
+
 void a_long_upper_block_is_checked_whole_at_the_first_ask(void) {
     // The app waits 0.5 s for the answer and doesn't ask again until it reconnects: the ask checks all of B first
     // (45 ms for 512 KB at most), never answering for an unchecked B and never staying silent for a good one.
     for (int corrupt = 0; corrupt < 2; corrupt++) {
         cold_boot();
-        long_upper();
-        if (corrupt) upper[0x2001F] = 1;  // B's last byte: only a whole check sees it
+        hooked_long_upper();
+        if (corrupt) upper[0x20023] = 1;  // B's last byte: only a whole check sees it
         stock.upper = upper;
         stock.drawing = NULL;
         deliver(0, CAPABILITY_V1);
@@ -480,7 +539,7 @@ void before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block(
     // Our code runs only after our first message, so a power cycle clears any crash of ours (#501): B is
     // checked at the first ask, never at boot.
     cold_boot();
-    long_upper();
+    hooked_long_upper();
     stock.upper = upper;
     stock.drawing = NULL;
     for (int i = 0; i < 100; i++) tick();
@@ -533,6 +592,8 @@ const test_case all_tests[] = {
     { "a good upper block gives its draw entry", a_good_upper_block_gives_its_draw_entry },
     { "erased upper flash has no block", erased_upper_flash_has_no_block },
     { "a block for another version is refused", a_block_for_another_version_is_refused },
+    { "a block built for another layout is refused", a_block_built_for_another_layout_is_refused },
+    { "the reference CRC is zlib's", the_reference_crc_is_zlibs },
     { "a block whose CRC doesn't match is refused", a_block_whose_CRC_doesnt_match_is_refused },
     { "a length past the sector or inside the header is refused", a_length_past_the_sector_or_inside_the_header_is_refused },
     { "an entry that isn't Thumb code inside the block is refused", an_entry_that_isnt_Thumb_code_inside_the_block_is_refused },
@@ -540,6 +601,7 @@ const test_case all_tests[] = {
     { "with an erased upper block the capability ask gets no answer", with_an_erased_upper_block_the_capability_ask_gets_no_answer },
     { "with a good upper block the capability ask is answered", with_a_good_upper_block_the_capability_ask_is_answered },
     { "an upper block with a bad CRC or another version gets no answer", an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer },
+    { "an upper block built for another layout gets no answer", an_upper_block_built_for_another_layout_gets_no_answer },
     { "a long upper block is checked whole at the first ask", a_long_upper_block_is_checked_whole_at_the_first_ask },
     { "before our first message the tick touches nothing even with an upper block", before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block },
     { "without a drawing the ask takes no malloc", without_a_drawing_the_ask_takes_no_malloc },
