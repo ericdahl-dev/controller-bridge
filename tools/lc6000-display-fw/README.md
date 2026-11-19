@@ -48,13 +48,18 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   Under the marker, the level meter (#461, Swift's `drawMeter`): an arc 80-83 px out on the left, 240° to 300°, a
   dark track filled green to three quarters and yellow above, all red at clip, with the held peak as a 2° tick. No
   meter until a meter message has come since begin. Over the meter and under the marker, the track time (#460,
-  Swift's `drawTime`): the progress ring (r 96-98, a dark track and the deck color's fill clockwise from 12 o'clock)
-  and the time left, "-m:ss" in GeistMono-SemiBold 21 at (99, 160), drawn mode's layout (#524). None until a time message has come since begin or
+  Swift's `drawTime`): the time left, "-m:ss" in GeistMono-SemiBold 21 at (99, 160), drawn mode's layout (#524). None until a time message has come since begin or
   the deck changed, and none for an unknown length. In the last minute while playing and not looping (a loop holds it) it is steady red, and from 30 s
   left it blinks at 1 Hz: red for the first 500 ms from when the time last changed, then white, text and fill, for
   every deck (#524). The tick
   works the look out from `now_ms`, so the flip draws a frame; with no new time it keeps alternating off the last one.
   Nothing while the display is stale.
+- `src/draw_band.h`, `src/draw_band.c`: the progress ring (#524), out in the panel's black band round the frame: r 103-107
+  from the frame's center, a 0x4A4A4A track and the fill clockwise from 12 o'clock in the deck color, or the
+  warning's red or white. `dfw_band_pixels` puts its pixels in the frame's coordinates (some below 0 or past 197),
+  each over what lies under it, and keeps no state. The frame draws the ones inside its 198 square (the ring crosses
+  its corners); `dfw_draw_band`, block B's band entry, writes the rest into layer 2, turned as the frame is, after
+  clearing the band so a ring that goes leaves nothing.
 - `src/font_header.h`: glyph coverage for the header's two faces and the track time's (#460), generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
@@ -139,9 +144,11 @@ its pixels may be more than 6 off, and none more than 10 (measured worst: 8 on 7
 radius 77 out (inside that is only the chip, for deck 4 empty) as the unlit ring is: none more than 6 off (measured
 worst: 3, at the references and at 19 more angles swept round the turn). Half a degree off fails.
 
-The track time (#460) is checked against `*-time*.ppm` the same way: the progress ring from radius 95.5 out, the text in
-a box around its line. The ring is all edge, as the meter is: the dark track within 2, the fills worst 10 with up to
-65 pixels over 6, all on its circles, so 6 with a budget a little over each case's count and nothing past 16. The text
+The track time (#460) is checked against `*-time*.ppm` the same way: the ring's corners from radius 95.5 out, the text
+in a box around its line. The whole ring (#524) is checked in `test/test_draw_band.c` against `band-*.ppm`, the whole
+216 drawn image (live-reference `canvas=216`), over r 101-109. The ring is all edge, as the meter is: the track within
+3, the fills worst 10 with up to 68 pixels over 6, all on its circles, so 6 with a budget a little over each case's
+count and nothing past 16. The text
 is within 1 (2, no budget); its warning red has glyphs of its own, since light text is drawn heavier.
 
 **To add or change a reference image:**
