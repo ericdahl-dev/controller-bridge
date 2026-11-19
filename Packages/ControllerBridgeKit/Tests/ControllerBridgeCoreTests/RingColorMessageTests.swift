@@ -38,6 +38,37 @@ struct RingColorMessageTests {
         #expect(!output.sent.contains { if case .noteOn(_, 40, _) = $0 { true } else { false } })
     }
 
+    @Test("Only changes go out: ticks send the ring nothing more; a deck color change sends the new color once")
+    func onlyChanges() throws {
+        let rig = try Self.exact(deck: 2)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        let before = try Self.colors(rig).count
+        for step in 1...5 {
+            rig.clock.now += 0.05 * Double(step)
+            rig.coordinator.tick()
+        }
+        #expect(try Self.colors(rig).count == before)
+        Self.palette(rig, slot: 3, 0, 255, 0)
+        Self.palette(rig, slot: 3, 0, 255, 0)
+        #expect(try Self.colors(rig).dropFirst(before) == [[0, 127, 0]])
+    }
+
+    @Test("Layers: only the layer in front sends color messages; the hidden deck's color change waits until it's shown")
+    func layers() throws {
+        // The color message carries no channel and Denon's firmware doesn't filter it by deck (#481), so a hidden
+        // layer's message would paint the LEDs in front.
+        let rig = try LayersTests.layered()
+        rig.coordinator.setColorMessages(true)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        let output = try Self.output(rig)
+        output.colors.removeAll()
+        Self.palette(rig, slot: 3, 255, 0, 0)   // deck 2, hidden behind layer 1
+        #expect(output.colors.isEmpty)
+        LayersTests.note(rig, channel: 2, 51, 127)   // layer 2 to the front
+        #expect(try Self.colors(rig).last == [127, 0, 0])
+    }
+
     @Test("With no track the ring is off, as a color message of 0, 0, 0")
     func noTrack() throws {
         let rig = try Self.exact(deck: 2)

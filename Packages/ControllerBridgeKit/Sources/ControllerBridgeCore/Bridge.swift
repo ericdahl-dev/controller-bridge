@@ -165,6 +165,8 @@ final class Bridge {
     /// The last velocity sent to each LED, buttons and pads on their own channel (#224) apart, so an unchanged LED is
     /// never sent twice (#383).
     private var ledCache = LEDCache()
+    /// What each color-message LED shows (#530), as last sent: only a change goes out, as with the velocity cache.
+    private var colorCache: [UInt8: [UInt8]] = [:]
     /// The LEDs that take Denon's color message (#530), from the profile; nil without it.
     private(set) lazy var colorEncoder = LEDColorEncoder(mapping)
     /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
@@ -222,6 +224,7 @@ final class Bridge {
         layerShown = true
         rearmPickup()
         ledCache.flush()
+        colorCache = [:]
         refreshLEDs()
     }
 
@@ -231,6 +234,7 @@ final class Bridge {
         rearmPickup()
         rearmMixer()
         ledCache.flush()
+        colorCache = [:]
         mixerModule.forgetMeterShown()   // shown again on the next tick, on what may be a new port (#320)
         refreshLEDs()
     }
@@ -435,6 +439,7 @@ final class Bridge {
     /// Clears the LED cache and repaints every LED from the current state, as after an LED sweep.
     func repaintLEDs() {
         ledCache.flush()
+        colorCache = [:]
         // The meter shows again on its next tick (#320).
         mixerModule.forgetMeterShown()
         refreshLEDs()
@@ -447,6 +452,7 @@ final class Bridge {
         if enabled {
             ledsEnabled = true
             ledCache.flush()
+            colorCache = [:]
             mixerModule.forgetMeterShown()
             refreshLEDs()
         } else {
@@ -492,7 +498,10 @@ final class Bridge {
 
     /// A pad or the ring in exact RGB (#530), through Denon's color message.
     func colorLED(_ message: LEDColorMessage) {
-        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, let output else { return }
+        let rgb = [message.red, message.green, message.blue]
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, colorCache[message.note] != rgb else { return }
+        colorCache[message.note] = rgb
+        guard let output else { return }
         do { try output.send(color: message) } catch { outputFailed = true }
     }
 
