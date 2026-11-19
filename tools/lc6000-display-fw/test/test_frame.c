@@ -29,6 +29,20 @@ void a_frame_handed_in_later_is_drawn(void) {
     CHECK(rec.presents == 1);
 }
 
+#define END_V1 "F0 00 02 0B 7F 10 20 00 02 02 01 F7"
+
+void a_frame_handed_in_after_end_draws_nothing(void) {
+    fresh_without_frame(&unit, &rec);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, DECK_2_RED_TRACK);
+    dfw_tick(&unit);
+    feed(&unit, END_V1);
+    dfw_tick(&unit);
+    dfw_set_frame(&unit, late);
+    dfw_tick(&unit);
+    CHECK(rec.presents == 0);
+}
+
 void with_no_frame_the_capability_ask_gets_no_answer(void) {
     fresh_without_frame(&unit, &rec);
     feed(&unit, CAPABILITY_V1);
