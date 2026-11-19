@@ -145,22 +145,29 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         // The heartbeat's deck, unchanged, changes nothing: its flags stay and nothing is redrawn (#459).
         if (memcmp(&deck, &unit->deck, sizeof deck) == 0) break;
         unit->deck = deck;
-        // A new deck's play flags wait for its own state message (#464); only feedback stale carries over.
+        // A new deck's play flags wait for its own state message (#464); only feedback stale carries over. Its text
+        // and tempo wait for their own messages too (#458).
         unit->flags &= FLAG_STALE;
+        memset(unit->text_length, 0, sizeof unit->text_length);
+        unit->tempo = 0;
         unit->dirty = 1;
         break;
     }
     case OP_TEXT:
-        if (!unit->drawn) break;
+        // Unchanged (the heartbeat's), it changes nothing.
+        if (!unit->drawn || (unit->text_length[args[0]] == code_count &&
+                             memcmp(unit->text[args[0]], codes, (size_t)code_count) == 0)) break;
         memcpy(unit->text[args[0]], codes, (size_t)code_count);
         unit->text_length[args[0]] = (uint8_t)code_count;
         unit->dirty = 1;
         break;
-    case OP_TEMPO:
-        if (!unit->drawn) break;
-        unit->tempo = (uint16_t)((args[0] << 7) | args[1]);
+    case OP_TEMPO: {
+        uint16_t tempo = (uint16_t)((args[0] << 7) | args[1]);
+        if (!unit->drawn || unit->tempo == tempo) break;
+        unit->tempo = tempo;
         unit->dirty = 1;
         break;
+    }
     case OP_STATE:
         if (!unit->drawn || unit->flags == args[0]) break;
         unit->flags = args[0];
