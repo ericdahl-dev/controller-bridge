@@ -322,6 +322,31 @@ class UpperSwitchTests(unittest.TestCase):
                 self.assertEqual(chip.sent, sent)
 
 
+
+def upper_block():
+    with open(os.path.join(BUILD, "upper.bin"), "rb") as f:
+        return f.read()
+
+
+class UpperBlockTests(unittest.TestCase):
+    """Block B, the drawing, built for 0x08080000 (#501): the header block A checks, worked out here apart."""
+
+    def test_b_starts_with_a_header_block_a_will_accept(self):
+        data = upper_block()
+        marker, version, length, crc, draw = struct.unpack_from("<IIIII", data)
+        self.assertEqual(marker, 0x42574644)
+        self.assertEqual(version, 1)
+        self.assertEqual(length, len(data))
+        self.assertLessEqual(length, UPPER_SIZE)
+        self.assertEqual(crc, zlib.crc32(data[16:]))
+        out = subprocess.run(["arm-none-eabi-nm", os.path.join(BUILD, "upper.elf")], capture_output=True, text=True,
+                             check=True).stdout
+        names = {name: int(value, 16) for value, _, name in (line.split() for line in out.splitlines()
+                                                              if line.count(" ") == 2)}
+        self.assertEqual(draw & ~1, names["dfw_draw"])  # nm prints a Thumb function's address without bit 0
+        self.assertEqual(draw & 1, 1, "Thumb")
+        self.assertTrue(UPPER + 20 <= draw < UPPER + length)
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         BUILD = sys.argv.pop(1)

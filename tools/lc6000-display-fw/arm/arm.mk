@@ -22,7 +22,7 @@ ARM_EXTRA_LDFLAGS ?=
 ARM_OBJ := $(ARM_BUILD)/entry.o $(patsubst %.c,$(ARM_BUILD)/%.o,$(notdir $(ARM_C) $(ARM_EXTRA_C)))
 
 .PHONY: arm
-arm: $(ARM_BUILD)/block.bin
+arm: $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.bin
 
 $(ARM_BUILD)/block.elf: $(ARM_C) arm/entry.S arm/block.ld arm/hook.h arm/upper.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
 	@mkdir -p $(ARM_BUILD)
@@ -40,6 +40,24 @@ $(ARM_BUILD)/block.bin: $(ARM_BUILD)/block.elf
 		-j .marker $< $@
 	@test "$$(wc -c < $@ | tr -d ' ')" = 9184 || { echo "block.bin isn't the 9,184-byte padding" >&2; exit 1; }
 	@$(ARM_PREFIX)size -A $< | awk '/^\.(entry|text|data|marker)/ {used += $$2} END {printf "block: %d of 9184 bytes used\n", used}'
+
+# Block B (#501): the drawing for 0x08080000, sectors 8-11. B never calls into block A, whose addresses move from
+# build to build: it links its own copy of what the drawing uses from src/ (dfw_stale, say) and of the few C library
+# functions; --gc-sections drops the rest, so the protocol itself stays in A. Its header's length and CRC are filled
+# in after the link (upper_seal.py), and block A checks both before it calls B.
+UPPER_C := arm/upper_header.c arm/libc_min.c $(SRC)
+UPPER_OBJ := $(patsubst %.c,$(ARM_BUILD)/upper/%.o,$(notdir $(UPPER_C)))
+
+$(ARM_BUILD)/upper.elf: $(UPPER_C) arm/upper.ld arm/upper.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
+	@mkdir -p $(ARM_BUILD)/upper
+	cd $(ARM_BUILD)/upper && $(ARM_PREFIX)gcc $(ARM_CFLAGS) -I$(CURDIR)/arm/include -I$(CURDIR)/src -I$(CURDIR)/arm \
+		-c $(addprefix $(CURDIR)/,$(UPPER_C))
+	$(ARM_PREFIX)gcc $(ARM_CPU) -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--build-id=none \
+		-Wl,-T,arm/upper.ld -Wl,-Map,$(ARM_BUILD)/upper.map -o $@ $(UPPER_OBJ) -lgcc
+
+$(ARM_BUILD)/upper.bin: $(ARM_BUILD)/upper.elf arm/upper_seal.py
+	$(ARM_PREFIX)objcopy -O binary -j .upper_header -j .text -j .data $< $@
+	@$(PYTHON) -I arm/upper_seal.py $@
 
 # The 9,184-byte limit as a check on whichever toolchain runs it (the Mac's and CI's Ubuntu GCC differ in size). It
 # builds the hook-only block, which must fit, and the block with drawing, whose size is information only: drawing

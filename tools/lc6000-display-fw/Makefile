@@ -29,7 +29,7 @@ ARM_TESTS := $(wildcard arm/test/test_*.c)
 arm-test: $(BUILD)/hook-tests
 	$(BUILD)/hook-tests
 	sh arm/check_symbols.sh $(BUILD)/freestanding-arm
-	$(MAKE) ARM_BUILD=$(BUILD)/arm-stub ARM_DRAW=stub $(BUILD)/arm-stub/block.bin
+	$(MAKE) ARM_BUILD=$(BUILD)/arm-stub ARM_DRAW=stub $(BUILD)/arm-stub/block.bin $(BUILD)/arm-stub/upper.bin
 	ARM_BUILD=$(BUILD)/arm-stub $(PYTHON) -I arm/test/test_block.py
 
 # The block tests need the `unicorn` package (pip install unicorn): `make arm-test PYTHON=path/to/venv/python`.
