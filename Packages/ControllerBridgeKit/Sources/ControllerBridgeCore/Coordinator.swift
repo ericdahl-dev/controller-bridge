@@ -71,6 +71,8 @@ public final class Coordinator {
     /// Settings (#530): pads and ring in exact RGB through Denon's color message, where the profile lists them. Off,
     /// every color goes through the 64-color table. The app turns it on from its setting.
     private var colorMessages = false
+    /// Settings (#532): the color-message LEDs' brightness, in percent.
+    private var lightBrightness = 100
 
     private func makeBridge(_ mapping: Mapping) -> Bridge {
         let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
@@ -78,6 +80,7 @@ public final class Coordinator {
         bridge.deckColors = deckColors
         bridge.ringColors = ringColors
         bridge.colorMessages = colorMessages
+        bridge.lightBrightness = lightBrightness
         return bridge
     }
 
@@ -978,6 +981,15 @@ public final class Coordinator {
         return true
     }
 
+    /// A MIDI port took data again after it had stopped (#552): what was dropped meanwhile is lost, so each layer in
+    /// front paints every light again. The drawn display's heartbeat already brings the screen back.
+    public func repaintAfterRecovery() {
+        for controller in controllers where controller.source != nil && controller.bridge.layerShown {
+            controller.bridge.repaintLEDs()
+        }
+        disconnectFailedOutputs()
+    }
+
     /// Asks Syndicate to resend its state (#84): the OSC destination opened late, so what was sent before was dropped.
     public func resync() {
         // A Resend still "waiting" went out before there was anywhere to send it.
@@ -996,6 +1008,13 @@ public final class Coordinator {
     public func setColorMessages(_ on: Bool) {
         colorMessages = on
         for bridge in bridges { bridge.setColorMessages(on) }
+        disconnectFailedOutputs()
+    }
+
+    /// Settings (#532): the color-message LEDs' brightness in percent; what changes is sent at once.
+    public func setLightBrightness(_ percent: Int) {
+        lightBrightness = percent
+        for bridge in bridges { bridge.setLightBrightness(percent) }
         disconnectFailedOutputs()
     }
 

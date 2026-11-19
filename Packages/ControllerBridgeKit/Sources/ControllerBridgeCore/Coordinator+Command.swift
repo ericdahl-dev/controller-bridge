@@ -12,6 +12,8 @@ extension Coordinator {
         case setRingColors(RingColors)
         /// Pads and ring through Denon's color message, or the 64-color table (#530).
         case setColorMessages(Bool)
+        /// The color-message LEDs' brightness, in percent (#532).
+        case setLightBrightness(Int)
         /// The OSC destination opened late (#84): ask Syndicate to resend its state, since what was sent before was dropped.
         case resync
         case setControllers([ControllerSettings])
@@ -28,6 +30,9 @@ extension Coordinator {
         /// Start the LED sweep, `delay` seconds per color; or stop it part-way (#26).
         case ledSweep(delay: Double)
         case stopLEDSweep
+        /// A MIDI port that had stopped taking data takes it again (#552): the LED writes dropped meanwhile are lost,
+        /// so every light is painted again.
+        case portRecovered
 
         /// Where a command goes while the demo (#64) has its own Coordinator.
         public enum Routing: Equatable, Sendable {
@@ -44,11 +49,11 @@ extension Coordinator {
         public var routing: Routing {
             switch self {
             // A real device is captured, so the real Coordinator pauses it, demo or not.
-            case .setCapture: .real
+            case .setCapture, .portRecovered: .real
             case .ledSweep, .stopLEDSweep: .active
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
-            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setColorMessages, .resync, .setControllers, .setProfiles,
+            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setColorMessages, .setLightBrightness, .resync, .setControllers, .setProfiles,
                  .setProfileChoices, .setJogDisplay, .setDisplayFirmware:
                 .waitsForDemo
             }
@@ -65,6 +70,7 @@ extension Coordinator {
         case .setDeckColors(let follow, let custom): setDeckColors(followSyndicate: follow, custom: custom)
         case .setRingColors(let mode): setRingColors(mode)
         case .setColorMessages(let on): setColorMessages(on)
+        case .setLightBrightness(let percent): setLightBrightness(percent)
         case .resync: resync()
         case .setControllers(let entries): setControllers(entries)
         case .setProfiles(let profiles): setProfiles(profiles)
@@ -74,6 +80,7 @@ extension Coordinator {
         case .setJogPreviewDeck(let deck): setJogPreviewDeck(deck)
         case .ledSweep(let delay): startLEDSweep(delay: delay)
         case .stopLEDSweep: stopLEDSweep()
+        case .portRecovered: repaintAfterRecovery()
         }
     }
 }
