@@ -90,6 +90,38 @@ class ReproducibleTests(unittest.TestCase):
                     self.assertEqual(a.read(), b.read(), name)
 
 
+class SizeTests(unittest.TestCase):
+    """The 9,184-byte limit is a check on every toolchain that builds the block, Mac and CI's Ubuntu GCC alike."""
+
+    def test_arm_size_reports_both_builds_within_the_padding(self):
+        with tempfile.TemporaryDirectory() as out:
+            done = subprocess.run(["make", "-s", "-C", FW, "arm-size", f"ARM_SIZE_BUILD={out}"], capture_output=True,
+                                  text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        lines = [line for line in done.stdout.splitlines() if line.startswith("block ")]
+        self.assertEqual([line.split(":")[0] for line in lines], ["block (with drawing)", "block (hook only)"])
+        for line in lines:
+            used = int(line.split(":")[1].split()[0])
+            self.assertLessEqual(used, PAD_END - PAD_START, line)
+
+    def test_a_block_too_big_for_the_padding_fails_the_link(self):
+        with tempfile.TemporaryDirectory() as out:
+            subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", "ARM_DRAW=0"], check=True,
+                           capture_output=True)
+            big_c, big_o = os.path.join(out, "big.c"), os.path.join(out, "big.o")
+            with open(big_c, "w") as f:
+                f.write("const unsigned char hook_too_big[9184] = {1};\n"
+                        "const unsigned char *hook_keep(void) { return hook_too_big; }\n")
+            cpu = ["-mcpu=cortex-m4", "-mthumb", "-mfloat-abi=hard", "-mfpu=fpv4-sp-d16"]
+            subprocess.run(["arm-none-eabi-gcc", *cpu, "-c", big_c, "-o", big_o], check=True)
+            objects = sorted(os.path.join(out, name) for name in os.listdir(out) if name.endswith(".o"))
+            done = subprocess.run(["arm-none-eabi-gcc", *cpu, "-nostdlib", "-nostartfiles", "-Wl,-u,hook_keep",
+                                   "-Wl,-T," + os.path.join(FW, "arm", "block.ld"), "-o", os.path.join(out, "x.elf"),
+                                   *objects, "-lgcc"], capture_output=True, text=True)
+        self.assertNotEqual(done.returncode, 0)
+        self.assertRegex(done.stderr, r"doesn't fit|overflow")
+
+
 class Chip:
     """A synthetic display chip: flash with our block in the padding and stubs where stock's functions are."""
 

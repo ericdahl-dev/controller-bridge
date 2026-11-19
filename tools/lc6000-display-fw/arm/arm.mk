@@ -26,3 +26,14 @@ $(ARM_BUILD)/block.bin: $(ARM_BUILD)/block.elf
 		-j .marker $< $@
 	@test "$$(wc -c < $@ | tr -d ' ')" = 9184 || { echo "block.bin isn't the 9,184-byte padding" >&2; exit 1; }
 	@$(ARM_PREFIX)size -A $< | awk '/^\.(entry|text|data|marker)/ {used += $$2} END {printf "block: %d of 9184 bytes used\n", used}'
+
+# The 9,184-byte limit as a check on whichever toolchain runs it (the Mac's and CI's Ubuntu GCC differ in size): it
+# builds the block with drawing and the hook-only block, prints both sizes, and fails if either doesn't fit.
+ARM_SIZE_BUILD ?= $(BUILD)/arm-size
+.PHONY: arm-size
+arm-size:
+	@$(ARM_PREFIX)gcc --version | head -1
+	@out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/draw ARM_DRAW=1 $(ARM_SIZE_BUILD)/draw/block.bin) || exit 1; \
+		echo "$$out" | sed 's/^block:/block (with drawing):/'
+	@out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/hook ARM_DRAW=0 $(ARM_SIZE_BUILD)/hook/block.bin) || exit 1; \
+		echo "$$out" | sed 's/^block:/block (hook only):/'
