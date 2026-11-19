@@ -203,6 +203,39 @@ class CutOffTests(DrawnPlanTests):
         self.assertEqual(bytes(again.app), self.owner_element)
 
 
+
+class DeviceListTests(DrawnPlanTests):
+    """Exactly one device, and it's the display chip, before any read (#567)."""
+
+    def stopped_before_reading(self, devices, answers=None):
+        unit = FakeUnit(self.dir.name, self.current_element, devices=devices, answers=answers)
+        end = unit.run(self.plan())
+        self.assertEqual(end[0], "stop")
+        self.assertFalse([a for a in unit.log if a[0] in ("read", "write")], "nothing read or written")
+        return end[1]
+
+    def test_no_device_stops(self):
+        self.assertIn("0 update-mode devices", self.stopped_before_reading(()))
+
+    def test_two_chips_in_update_mode_stop(self):
+        why = self.stopped_before_reading((("2-1.2", DISPLAY_LAYOUT), ("2-1.3", TOP_PANEL_LAYOUT)))
+        self.assertIn("2 update-mode devices", why)
+
+    def test_the_top_panel_chip_alone_stops_with_a_plain_message(self):
+        # The owner's slip on 2026-11-19: BACK + FWD + VINYL, so the one device was the top panel chip (256 KB).
+        why = self.stopped_before_reading((("2-1.2", "@Internal Flash  /0x08000000/04*016Kg,01*064Kg,01*128Kg"),))
+        self.assertIn("top panel chip", why)
+
+    def test_another_layout_asks_and_no_stops(self):
+        other = (("2-1.2", "@Internal Flash  /0x08000000/12*016Kg"),)
+        self.assertIn("isn't the display chip's", self.stopped_before_reading(other, {"list_layout_go_on": "n"}))
+
+    def test_another_layout_answered_yes_goes_on(self):
+        unit = FakeUnit(self.dir.name, self.current_element, devices=(("2-1.2", "@Internal Flash  /0x08000000/12*016Kg"),),
+                        answers={"list_layout_go_on": "y", "list_again_layout_go_on": "y"})
+        self.assertEqual(unit.run(self.plan()), ("done",))
+
+
 class FreshnessTests(DrawnPlanTests):
     """A plan file never lets stale facts authorize a write (#567): each write rests on its own read, made in this run
     after update mode was entered."""
