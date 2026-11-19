@@ -495,6 +495,7 @@ public final class Coordinator {
 
     /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
     public func tick() {
+        settleLayer()
         runSweep()
         for bridge in bridges { bridge.tick() }
         jogController.tick(jogEntries)
@@ -620,9 +621,35 @@ public final class Coordinator {
         // The one pitch fader stayed where it was, and the unit doesn't send it again: the new layer takes its
         // position, so the pitch arrows point the right way at once (#475).
         if current != target { controllers[target].bridge.takeFader(from: controllers[current].bridge) }
+        controllers[target].bridge.rearmPickup()
+        // A lone step shows at once. Steps that follow within LayerSettle.interval wait until the steps settle
+        // (#428), then show the last layer once: a burst of steps is two repaints, not one per step.
+        let rapid = pendingLayer != nil || lastLayerStep.map { clock.now - $0 < LayerSettle.interval } ?? false
+        lastLayerStep = clock.now
+        if rapid {
+            pendingLayer = target
+            pendingLayerAt = clock.now + LayerSettle.interval
+            return
+        }
         // The display first, so its uploads hold the ring before the repaint could light it (#422).
         updateJogDisplay()
-        controllers[target].bridge.becameActiveLayer()
+        controllers[target].bridge.showLayer()
+    }
+
+    /// The layer whose LEDs and display wait for the steps to settle, and when they're due.
+    private var pendingLayer: Int?
+    private var pendingLayerAt = 0.0
+    /// When the last layer step came.
+    private var lastLayerStep: Double?
+
+    /// Shows the settled layer: the display first, so its uploads hold the ring before the repaint could light it
+    /// (#422); then every LED once.
+    private func settleLayer() {
+        guard let target = pendingLayer, clock.now >= pendingLayerAt - 1e-9 else { return }
+        pendingLayer = nil
+        guard controllers.indices.contains(target), status.controllers[target].activeLayer else { return }
+        updateJogDisplay()
+        controllers[target].bridge.showLayer()
     }
 
     /// Where a layer's LEDs go; repaints there if it moved.
@@ -1018,4 +1045,9 @@ public final class Coordinator {
         let arguments = message.arguments.map(\.pythonText).joined(separator: " ")
         trace(category, message.address + (arguments.isEmpty ? "" : " " + arguments) + note)
     }
+}
+
+/// Rapid deck layer steps (#428): the LED repaint and display switch wait this long after the last step.
+enum LayerSettle {
+    static let interval = 0.3
 }
