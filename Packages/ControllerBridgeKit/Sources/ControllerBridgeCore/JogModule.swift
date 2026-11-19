@@ -31,6 +31,12 @@ struct JogModule {
     private var seekCountRemainder = 0
     /// When the last paused seek went out, while its quantize hold is on.
     private var seekHeldSince: Double?
+    /// When `progress` was last set, and whether the music moves it on (a playing deck, VINYL's seek, #547).
+    private var progressAt = 0.0
+    private var progressRuns = false
+    /// While the hand moves, a report this many seconds of track from the jog's own place is a real jump (a cue, a
+    /// load, the strip) and is followed; a nearer one is Syndicate's lead and is not (#585).
+    static let jumpSeconds = 1.0
 
     var isBending: Bool { bendDirection != 0 }
 
@@ -38,17 +44,20 @@ struct JogModule {
 
     /// The platter's 14-bit position (#103). Movement is the change since the last position, taking the shorter way
     /// around the wrap at 16384, so 16376 → 3 is 11 forward. Read when the LSB arrives, so an MSB carry never jumps.
-    mutating func jogLSB(_ value: UInt8, wheel: Mapping.Jog, playing: Bool, duration: Double?, now: Double) -> [Send] {
+    mutating func jogLSB(_ value: UInt8, wheel: Mapping.Jog, playing: Bool, musicMoving: Bool = false, duration: Double?,
+                         now: Double) -> [Send] {
         let position = join14Bit(msb: jogMSBValue, lsb: value)
         defer { jogPosition = position }
         guard let previous = jogPosition else { return [] }
         var counts = (position - previous) % 16384
         if counts > 8192 { counts -= 16384 } else if counts < -8192 { counts += 16384 }
-        return jog(counts: counts, wheel: wheel, playing: playing, duration: duration, now: now)
+        return jog(counts: counts, wheel: wheel, playing: playing, musicMoving: musicMoving, duration: duration, now: now)
     }
 
     /// The platter moved `counts`. A relative jog's edge (#204) moves without a touch (`needsTouch` false).
-    mutating func jog(counts: Int, needsTouch: Bool = true, wheel: Mapping.Jog, playing: Bool, duration: Double?, now: Double) -> [Send] {
+    /// `playing` is whether the jog bends; `musicMoving`, whether the deck plays (VINYL's seek on a playing deck).
+    mutating func jog(counts: Int, needsTouch: Bool = true, wheel: Mapping.Jog, playing: Bool, musicMoving: Bool = false,
+                      duration: Double?, now: Double) -> [Send] {
         guard counts != 0, platterTouched || !wheel.requireTouch || !needsTouch else { return [] }
         lastJogTime = now
         if playing {
@@ -62,9 +71,9 @@ struct JogModule {
         guard countsPerRev > 0 else { return [] }
         let revolutions = Double(counts) / countsPerRev
         // Paused: move the playhead.
-        if let duration, let position = progress {
+        if let duration, let position = place(now: now, duration: duration) {
             let moved = min(1, max(0, position + revolutions * wheel.seekSecondsPerRev / duration))
-            progress = moved
+            setProgress(moved, at: now, runs: musicMoving)
             return pausedSeek(Float(moved), now: now)
         }
         // No track length: skip whole beats, keeping the remainder for the next turn.
@@ -108,7 +117,30 @@ struct JogModule {
     }
 
     /// Syndicate's Progress, or nil when the track is gone or feedback stopped.
-    mutating func progressReported(_ value: Double?) { progress = value }
+    ///
+    /// While the hand moves (the seek's quantize hold is on), the jog keeps its own place: Syndicate reports a seek's
+    /// place about 0.1 s ahead of it (#585, the owner's trace), and taking each report put every next seek further on,
+    /// so a stopped deck crept forward whichever way the platter turned. A report more than `jumpSeconds` from the
+    /// jog's own place is a real jump and is taken.
+    mutating func progressReported(_ value: Double?, duration: Double? = nil, now: Double = 0) {
+        if let value, seekHeldSince != nil, let duration, duration > 0, let own = place(now: now, duration: duration),
+           abs(value - own) * duration <= Self.jumpSeconds {
+            return
+        }
+        setProgress(value, at: now, runs: false)
+    }
+
+    /// The jog's own place at `now`: where it last was, run on with the music if it plays.
+    private func place(now: Double, duration: Double) -> Double? {
+        guard let progress else { return nil }
+        return progressRuns ? min(1, progress + max(0, now - progressAt) / duration) : progress
+    }
+
+    private mutating func setProgress(_ value: Double?, at time: Double, runs: Bool) {
+        progress = value
+        progressAt = time
+        progressRuns = runs
+    }
 
     /// The wheel stopped for bend_release_ms: the bend ends. The seeking stopped for 0.3 s: quantize back.
     mutating func tick(now: Double, wheel: Mapping.Jog?) -> [Send] {
