@@ -10,6 +10,8 @@ TESTS := $(wildcard test/test_*.c)
 test: $(BUILD)/tests $(BUILD)/band_table_gen $(BUILD)/ring_table_gen
 	$(BUILD)/tests
 	sh test/check_symbols.sh $(BUILD)/freestanding
+	@# The protocol's tables (#569) must be what vectors/messages.json describes now.
+	python3 -I vectors/gen_protocol.py --check
 	@# The generated tables (#558) must be what their generators write now, byte for byte.
 	$(BUILD)/band_table_gen > $(BUILD)/band_table.c
 	cmp src/band_table.c $(BUILD)/band_table.c || { echo "src/band_table.c is stale: make tables" >&2; exit 1; }
