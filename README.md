@@ -31,6 +31,7 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 | Shift + Pitch Bend − / + | Transposes the deck down or up a semitone (`PitchDown` / `PitchUp`, once per press). It turns the deck's key lock (P) on first, since Syndicate transposes only with it on |
 | Param ◀ ▶ | `BeatSkip ∓1` |
 | Browse knob turn and press (Shift for Enter), Back, Forward, Track ◀ ▶ | `Browser/Up`, `Browser/Down`, `Browser/L{deck}`, `Back`, `Enter` |
+| Shift + browse knob turn (ZOOM) | Zooms the deck in front's waveform, one step per click: `WaveformZoomIn` 1 clockwise, `WaveformZoomOut` 1 counter-clockwise |
 
 **LEDs:**
 - Play, Cue, Sync and Master follow Syndicate's state. Play blinks while a quantized start is pending.
