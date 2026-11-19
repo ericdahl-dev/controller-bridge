@@ -160,6 +160,9 @@ public final class JogDisplayDriver {
         case drawn(version: Int)
     }
     private(set) var mode = Mode.images
+    /// How long custom firmware has to answer the capability question: a USB round trip is milliseconds, and half a
+    /// second costs less than two image uploads (#456).
+    static let answerTimeout = 0.5
     /// The last deck message sent in drawn mode, so only a change goes out.
     private var lastDeck: [UInt8]?
 
@@ -340,6 +343,8 @@ public final class JogDisplayDriver {
         if case .asking = mode, let version = DrawnDisplay.answer(bytes) {
             return draw(version: min(version, DrawnDisplay.version))
         }
+        // Denon's firmware refuses a command it doesn't know (ack 06): no need to wait.
+        if case .asking = mode, case .refused = JogDisplay.Reply(bytes) { return showImages() }
         guard var running = upload, let reply = JogDisplay.Reply(bytes) else { return }
         switch reply {
         case .accepted where !running.finished:
@@ -384,6 +389,7 @@ public final class JogDisplayDriver {
 
     /// Times out a silent upload; starts the next one.
     public func tick() {
+        if case .asking(let since) = mode, clock.now - since >= Self.answerTimeout - 1e-9 { showImages() }
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)
         } else if let running = upload, clock.now - running.startedAt >= Self.timeout {
@@ -409,6 +415,13 @@ public final class JogDisplayDriver {
         if failures >= Self.beatTries {
             log.log("The jog display gave up on slot \(running.slot) after \(Self.beatTries) tries")
         }
+    }
+
+    /// No drawing firmware answered (#456): images, as on Denon's, until the next connect.
+    private func showImages() {
+        mode = .images
+        log.log("The jog display didn't answer as custom firmware that draws; it shows images")
+        next()
     }
 
     /// The unit draws (#456): begin, then the deck in front.

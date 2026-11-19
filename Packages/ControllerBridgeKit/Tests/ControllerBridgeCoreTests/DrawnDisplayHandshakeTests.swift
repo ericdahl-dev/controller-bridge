@@ -58,4 +58,32 @@ struct DrawnDisplayHandshakeTests {
         #expect(drawn.last?[9] == 0x03 && drawn.last?[10] == 1 && drawn.last?[17] == DrawnDisplay.Player.empty.rawValue)
         #expect(!port.wd.contains(where: Self.isUpload))
     }
+
+    static let fallbackLine = "The jog display didn't answer as custom firmware that draws; it shows images"
+
+    @Test("No answer in half a second: images, exactly as today (deck 1's slots go up), logged once")
+    func silenceFallsBack() throws {
+        let (rig, port, clock) = try Self.rig(.custom)
+        clock.now = 0.49
+        rig.coordinator.tick()
+        #expect(!port.wd.contains(where: Self.isUpload))
+        clock.now = 0.5
+        rig.coordinator.tick()
+        #expect(JogDisplaySlotCacheTests.uploadSlots(port) == [1])
+        clock.now = 9
+        rig.coordinator.tick()
+        #expect(rig.log.lines.filter { $0 == Self.fallbackLine }.count == 1)
+        // A late answer changes nothing: images until the next connect.
+        port.wd.removeAll()
+        rig.coordinator.jogDisplayReply(Self.answer)
+        #expect(Self.drawn(port).isEmpty)
+    }
+
+    @Test("Denon's firmware refuses the question (ack 06): images at once, without waiting")
+    func refusalFallsBackAtOnce() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.refused)
+        #expect(JogDisplaySlotCacheTests.uploadSlots(port) == [1])
+        #expect(rig.log.lines.contains(Self.fallbackLine))
+    }
 }
