@@ -1047,7 +1047,8 @@ public final class Coordinator {
     }
 }
 
-/// Rapid deck layer steps (#428): the LED repaint and display switch wait this long after the last step.
+/// Rapid deck layer steps (#428): the LED repaint and display switch wait this long after the last step. Longer than
+/// the widest gap in the burst seen on the unit (0.79, 0.58 and 0.38 s), so it settles into one repaint after the first.
 enum LayerSettle {
-    static let interval = 0.3
+    static let interval = 0.8
 }

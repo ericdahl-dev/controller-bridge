@@ -51,6 +51,29 @@ struct LayerSettleTests {
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
     }
 
+    @Test("The steps seen on the unit (16:35:26.47, 27.26, 27.84, 28.22): two repaints, the first layer at once and the last after the settle")
+    func observed() throws {
+        let rig = try CensorDeckSelectLightsTests.layered()
+        rig.clock.now = 26
+        rig.coordinator.tick()
+        let start = Self.ledWrites(rig)
+        var repaints = 0, last = start
+        for time in [26.47, 27.26, 27.84, 28.22] {
+            rig.clock.now = time
+            Press.note(rig, 23, down: true)
+            Press.note(rig, 23, down: false)
+            rig.coordinator.tick()
+            if Self.ledWrites(rig) - last > 30 { repaints += 1 }
+            last = Self.ledWrites(rig)
+        }
+        #expect(repaints == 1)   // the first step only
+        rig.clock.now = 28.22 + LayerSettle.interval
+        rig.coordinator.tick()
+        if Self.ledWrites(rig) - last > 30 { repaints += 1 }
+        #expect(repaints == 2)
+        #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
+    }
+
     @Test("The controls switch at once: a press right after a step goes to the new layer's deck")
     func controlsAtOnce() throws {
         let rig = try CensorDeckSelectLightsTests.layered()
