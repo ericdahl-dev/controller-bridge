@@ -29,6 +29,14 @@ static void send(void *ctx, const uint8_t *bytes, size_t length) {
     state->stock->port.send(state->stock->port.ctx, bytes, length);
 }
 
+/// Moves our clock on by the counter's step since we last looked (unsigned, so a wrap is just a step).
+static void advance(hook_state *state, uint32_t now) {
+    state->sub_ms += now - state->last_uptime;
+    state->now_ms += state->sub_ms / 10;
+    state->sub_ms %= 10;
+    state->last_uptime = now;
+}
+
 static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
     const dfw_port port = { .present = present, .send = send, .ctx = state };
     state->stock = stock;
@@ -36,6 +44,8 @@ static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
     state->malloc_tried = 0;
     state->shown = 0;
     state->last_uptime = now;
+    state->now_ms = 0;
+    state->sub_ms = 0;
     state->magic = HOOK_MAGIC;
     state->check = ~HOOK_MAGIC;
     if (stock->witness) *stock->witness = HOOK_WITNESS;
@@ -55,7 +65,7 @@ void hook_command(hook_state *state, const hook_stock *stock, uint8_t cmd, const
     if (len == 0 || total > *stock->rx_count || msg[9 + len] != 0xF7) return;
     uint32_t now = *stock->uptime;
     if (!valid(state) || reset_seen(state, stock, now)) start(state, stock, now);
-    state->last_uptime = now;
+    advance(state, now);
     state->stock = stock;
     uint8_t op = msg[9];
     if (op == OP_CAPABILITY || op == OP_BEGIN) ensure_frame(state, stock);
@@ -70,9 +80,9 @@ void hook_tick(hook_state *state, const hook_stock *stock) {
         state->magic = 0;
         return;
     }
-    state->last_uptime = now;
+    advance(state, now);
     state->stock = stock;
-    dfw_tick(&state->unit);
+    dfw_tick(&state->unit, state->now_ms);
     if (state->shown && !state->unit.drawn) {
         state->shown = 0;
         stock->hide();

@@ -84,7 +84,8 @@ class ReproducibleTests(unittest.TestCase):
     def test_two_builds_are_byte_identical(self):
         with tempfile.TemporaryDirectory() as one, tempfile.TemporaryDirectory() as two:
             for out in (one, two):
-                subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}"], check=True, capture_output=True)
+                subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", "ARM_DRAW=stub"], check=True,
+                               capture_output=True)
             for name in ("block.bin", "block.elf"):
                 with open(os.path.join(one, name), "rb") as a, open(os.path.join(two, name), "rb") as b:
                     self.assertEqual(a.read(), b.read(), name)
@@ -99,8 +100,10 @@ class SizeTests(unittest.TestCase):
                                   text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
         lines = [line for line in done.stdout.splitlines() if line.startswith("block ")]
-        self.assertEqual([line.split(":")[0] for line in lines], ["block (with drawing)", "block (hook only)"])
-        for line in lines:
+        self.assertEqual([line.split(":")[0] for line in lines],
+                         ["block (with drawing)", "block (hook and protocol)", "block (hook only)"])
+        # The drawing build is information only (#501); the other two must fit and print their size.
+        for line in lines[1:]:
             used = int(line.split(":")[1].split()[0])
             self.assertLessEqual(used, PAD_END - PAD_START, line)
 

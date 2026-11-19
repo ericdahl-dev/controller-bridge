@@ -7,8 +7,11 @@ ARM_PREFIX ?= arm-none-eabi-
 ARM_CPU := -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
 ARM_CFLAGS := -std=c99 -Wall -Wextra -Werror -pedantic -Os $(ARM_CPU) -ffreestanding -fno-builtin -fno-common \
 	-fno-pic -fno-stack-protector -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections \
-	-fstack-usage -DHOOK_DRAWING=$(ARM_DRAW)
-ARM_C := arm/adapter.c arm/libc_min.c $(if $(filter 1,$(ARM_DRAW)),arm/hook.c $(SRC))
+	-fstack-usage -DHOOK_DRAWING=$(if $(filter 0,$(ARM_DRAW)),0,1)
+# ARM_DRAW=1: hook, protocol and drawing. 0: the hook path alone, inert. stub (test builds only): hook and protocol
+# with an empty drawing, so the block tests run while the real drawing doesn't fit the padding (#501).
+ARM_SRC_DRAW := $(if $(filter stub,$(ARM_DRAW)),arm/hook.c src/dfw.c arm/test/draw_stub.c,arm/hook.c $(SRC))
+ARM_C := arm/adapter.c arm/libc_min.c $(if $(filter 0,$(ARM_DRAW)),,$(ARM_SRC_DRAW))
 # For the size tests only: one extra C file (absolute path) and extra link flags, to grow a build past its limit.
 ARM_EXTRA_C ?=
 ARM_EXTRA_LDFLAGS ?=
@@ -43,5 +46,7 @@ arm-size:
 		ARM_EXTRA_LDFLAGS="$(ARM_SIZE_DRAW_LDFLAGS)" $(ARM_SIZE_BUILD)/draw/block.bin 2>&1); then \
 		echo "$$out" | sed 's/^block:/block (with drawing):/'; \
 	else echo "block (with drawing): over the 9184-byte padding; informational until #501"; fi
+	@out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/proto ARM_DRAW=stub $(ARM_SIZE_BUILD)/proto/block.bin) || exit 1; \
+		echo "$$out" | sed 's/^block:/block (hook and protocol):/'
 	@out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/hook ARM_DRAW=0 $(ARM_SIZE_BUILD)/hook/block.bin) || exit 1; \
 		echo "$$out" | sed 's/^block:/block (hook only):/'

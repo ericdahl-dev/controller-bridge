@@ -37,6 +37,10 @@ typedef struct {
     uint32_t magic;
     uint32_t check;
     uint32_t last_uptime;
+    /// dfw's clock: milliseconds since our state started, built from the counter's steps so it runs on across the
+    /// counter's wrap (counter / 10 would jump back). `sub_ms` holds the leftover 100 us counts.
+    uint32_t now_ms;
+    uint32_t sub_ms;
     uint8_t malloc_tried;
     /// Something was presented since drawn mode last ended, so the screen is ours until hidden.
     uint8_t shown;
