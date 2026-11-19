@@ -72,15 +72,20 @@ static void every_reference_has_the_ring_and_header_to_compare(void) {
     }
 }
 
-/// A pixel is a mismatch when any channel is off by more than TOLERANCE; a band fails past MAX_MISMATCHED such pixels.
+/// Two limits per band: no pixel may be off by more than CAP in any channel, and at most BUDGET pixels may be off by
+/// more than CLOSE.
 ///
-/// Why 24 and none: CoreGraphics' anti-aliasing is not exact pixel area. Near 45° on the chip's curve it covers up to
-/// about 7% less than the true area, which is 18 levels for a white chip on the ground (244 levels apart); the ring
-/// (79 levels) is within 3, and the glyphs, rasterized by CoreText itself, within 13. 24 (9% of full scale) covers that
-/// with a little room. Real mistakes are bigger: the chip a pixel off or its radius 12, another digit or label, a glyph
-/// half a pixel off, or a ring gap of 6 each put pixels 40 to 240 levels off.
-#define TOLERANCE 24
-#define MAX_MISMATCHED 0
+/// Measured: the ring is within 3 levels everywhere, so it gets 6 and no budget. In the header, CoreGraphics' fill
+/// anti-aliasing is not exact pixel area: near 45° on the chip's curve it covers up to about 7% less, which is up to 18
+/// levels for a white chip on the ground (244 apart). That touches 8 to 16 pixels per case, all on the chip's edge; the
+/// rest of the header, glyphs and badge included, is within 8. So 8 with a budget of 24, and nothing past 24 (9% of
+/// full scale) anywhere. A color off by 17 or more (a ring section, the badge ink or outline, the deck color) fails the
+/// close limit across hundreds of pixels; a shape off by a pixel or a glyph off by half fails the cap.
+#define RING_CLOSE 6
+#define RING_BUDGET 0
+#define HEADER_CLOSE 8
+#define HEADER_BUDGET 24
+#define CAP 24
 
 static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
 
@@ -96,9 +101,10 @@ static int channel_diff(dfw_pixel a, dfw_pixel b) {
 
 typedef enum { RING, HEADER } band;
 
-/// Compares one band with the reference; prints its numbers so the tolerance stays honest.
-static int band_mismatches(const ref_case *c, band which) {
-    int mismatched = 0, worst = 0, pixels = 0;
+/// Compares one band with the reference: whether it is within its limits. Prints its numbers so they stay honest.
+static int band_matches(const ref_case *c, band which) {
+    int close = which == RING ? RING_CLOSE : HEADER_CLOSE, budget = which == RING ? RING_BUDGET : HEADER_BUDGET;
+    int loose = 0, over_cap = 0, worst = 0, pixels = 0;
     for (int y = 0; y < DFW_SIZE; y++)
         for (int x = 0; x < DFW_SIZE; x++) {
             int ring = in_ring(x, y);
@@ -106,11 +112,12 @@ static int band_mismatches(const ref_case *c, band which) {
             int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
             pixels++;
             if (d > worst) worst = d;
-            if (d > TOLERANCE) mismatched++;
+            if (d > close) loose++;
+            if (d > CAP) over_cap++;
         }
-    fprintf(stderr, "    %s %s: %d px, worst %d, %d over %d\n", c->file + 9, which == RING ? "ring" : "header", pixels,
-            worst, mismatched, TOLERANCE);
-    return mismatched;
+    fprintf(stderr, "    %s %s: %d px, worst %d, %d over %d (budget %d)\n", c->file + 9, which == RING ? "ring" : "header",
+            pixels, worst, loose, close, budget);
+    return over_cap == 0 && loose <= budget;
 }
 
 static void draw_case(const ref_case *c) {
@@ -133,7 +140,7 @@ static void the_ring_matches_the_reference(void) {
     for (size_t c = 0; c < CASES; c++) {
         CHECK(load_reference(cases[c].file));
         draw_case(&cases[c]);
-        CHECK(band_mismatches(&cases[c], RING) <= MAX_MISMATCHED);
+        CHECK(band_matches(&cases[c], RING));
     }
 }
 
@@ -142,7 +149,7 @@ static void the_header_matches_the_reference(uint8_t player) {
         if (cases[c].player != player) continue;
         CHECK(load_reference(cases[c].file));
         draw_case(&cases[c]);
-        CHECK(band_mismatches(&cases[c], HEADER) <= MAX_MISMATCHED);
+        CHECK(band_matches(&cases[c], HEADER));
     }
 }
 
