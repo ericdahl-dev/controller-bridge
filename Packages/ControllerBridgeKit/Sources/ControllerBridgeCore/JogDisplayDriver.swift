@@ -473,6 +473,12 @@ public final class JogDisplayDriver {
         sendState()
     }
 
+    /// Syndicate's feedback stopped or came back (#464): drawn mode shows the waiting look while stale.
+    public func setStale(_ stale: Bool) {
+        if stale { drawnState.insert(.stale) } else { drawnState.remove(.stale) }
+        sendState()
+    }
+
     /// Drawn mode: the state message, sent only when it changes.
     private func sendState() {
         guard connected, case .drawn = mode else { return }

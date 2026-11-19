@@ -51,4 +51,24 @@ struct DrawnDisplayReconnectTests {
         #expect(Self.ops(port).isEmpty)
         #expect(rig.coordinator.status.displayFound?.label == "Custom (images)")
     }
+
+    @Test("Syndicate's feedback stops: the state goes out with the stale flag; fresh feedback clears it; only changes go out")
+    func staleFlag() throws {
+        let (rig, port, _) = try Handshake.rig(.custom)
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        rig.clock.now = 0.5
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))
+        port.wd.removeAll()
+        for time in [10.5, 12.5, 13.0] {
+            rig.clock.now = time
+            rig.coordinator.tick()
+        }
+        #expect(rig.coordinator.status.feedback == .stale)
+        #expect(Handshake.drawn(port) == [DrawnDisplay.Message.state(.stale).bytes])
+        port.wd.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))
+        rig.coordinator.tick()
+        #expect(rig.coordinator.status.feedback == .live)
+        #expect(Handshake.drawn(port) == [DrawnDisplay.Message.state([]).bytes])
+    }
 }
