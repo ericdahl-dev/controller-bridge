@@ -86,6 +86,17 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   The generator copies how CoreText places glyphs, so the C text lands where the Swift renderer's does. Add a
   glyph by adding it to the generator's list.
 
+## The picture's numbers
+
+`layout/layout.json` (#571) holds every number the Swift renderer and this C share: the colors (ground, text, the key's
+blue, the live green, the beat ring's grays, the warning's red and white, the band's track, the meter's), the radii
+(the beat ring, the meter, the band), drawn mode's foot (key/BPM 18 px at 140.5, the time 21 px at 160), the untitled
+text tops, and the thresholds (60 and 30 s for the warning, 0.1791 for the deck number's white).
+`layout/gen_layout.py` writes `src/layout_generated.h` and the Kit's `JogLayout.generated.swift` from it, each value
+written as its literal was, so neither side's numbers changed. Don't edit either; change the JSON and run
+`make layout`. `make test` regenerates both into `build/` and fails if they differ. The font generators read their
+sizes and middles from the same file.
+
 ## The messages
 
 `vectors/messages.json` is the protocol's one description (#456, #569), shared with the Swift side.
@@ -162,8 +173,7 @@ renderer can't show (it falls back to another font), so a test checks the box's 
 wrong phase, the key's blue drawn white, or kerning left off each fails.
 
 The live elements (#459) are checked in `test/test_draw_live.c` against references with a beat lit or the marker
-drawn. The Kit's `jog-reference` tool draws neither, so `test/ref/live-reference/` is a small Swift package beside the
-references that renders the Kit's `JogDisplayRenderer.simulatorImage` with them. `make_refs.sh` builds and runs both.
+drawn. Like every reference, they come from `test/ref/manifest.json` through the Kit's `jog-reference` (#571).
 The lit section is the live green on the ground, three times the contrast of the unlit sections, so at most 10 of
 its pixels may be more than 6 off, and none more than 10 (measured worst: 8 on 7 pixels). The marker is compared from
 radius 77 out (inside that is only the chip, for deck 4 empty) as the unlit ring is: none more than 6 off (measured
@@ -171,14 +181,16 @@ worst: 3, at the references and at 19 more angles swept round the turn). Half a 
 
 The track time (#460) is checked against `*-time*.ppm` the same way: the ring's corners from radius 95.5 out, the text
 in a box around its line. The whole ring (#524) is checked in `test/test_draw_band.c` against `band-*.ppm`, the whole
-216 drawn image (live-reference `canvas=216`), over r 101-109. The ring is all edge, as the meter is: the track within
+216 drawn image (a manifest entry with `canvas` 216), over r 101-109. The ring is all edge, as the meter is: the track within
 3, the fills worst 10 with up to 68 pixels over 6, all on its circles, so 6 with a budget a little over each case's
 count and nothing past 16. The text
 is within 1 (2, no budget); its warning red has glyphs of its own, since light text is drawn heavier.
 
 **To add or change a reference image:**
 
-1. Add a line to `test/ref/make_refs.sh`, which renders it through the Kit's `jog-reference` tool, and run it:
+1. Add an entry to `test/ref/manifest.json` (its file and the renderer inputs; #571: every reference is made from that
+   one list, and the Kit's `DisplayFirmwareReferenceTests` checks every entry against the renderer, failing on a stale
+   one), then run `make_refs.sh`, which renders all of them through the Kit's `jog-reference`:
 
    ```sh
    sh tools/lc6000-display-fw/test/ref/make_refs.sh

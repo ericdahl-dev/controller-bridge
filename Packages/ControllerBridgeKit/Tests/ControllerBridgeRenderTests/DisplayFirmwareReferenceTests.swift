@@ -13,36 +13,16 @@ struct DisplayFirmwareReferenceTests {
         .deletingLastPathComponent().deletingLastPathComponent()                                 // the repo
         .appendingPathComponent("tools/lc6000-display-fw/test/ref")
 
-    /// As test/ref/make_refs.sh renders them.
-    static let references: [(file: String, content: JogDisplayContent)] = [
-        ("deck2-red-track.ppm", JogDisplayContent(deck: 2, color: [255, 0, 0], playerType: "track")),
-        ("deck4-blue-empty.ppm", JogDisplayContent(deck: 4, color: [0, 128, 255], playerType: "empty")),
-        ("deck1-white-midi.ppm", JogDisplayContent(deck: 1, color: [255, 255, 255], playerType: "midiclip")),
-        ("deck3-green-other.ppm", JogDisplayContent(deck: 3, color: [0, 200, 80])),
-        ("deck1-orange-osc.ppm", JogDisplayContent(deck: 1, color: [255, 128, 0], playerType: "osc")),
-        ("deck3-purple-seq.ppm", JogDisplayContent(deck: 3, color: [180, 0, 255], playerType: "sequencer")),
-        ("stale.ppm", JogDisplayContent(deck: 2, color: [255, 0, 0], playerType: "track", stale: true)),
-        // The text (#458): a short title, one line at 20 px, two lines, cut lines with no key or BPM, and accents.
-        ("text-strobe.ppm", JogDisplayContent(deck: 2, color: [255, 0, 0], title: "Strobe", artist: "Deadmau5", key: "F#m",
-                                              bpm: 128, playerType: "track")),
-        ("text-night-drive.ppm", JogDisplayContent(deck: 2, color: [255, 0, 0], title: "Night Drive", artist: "Café del Mar",
-                                                   key: "11B", bpm: 90, playerType: "track")),
-        ("text-ten.ppm", JogDisplayContent(deck: 1, color: [255, 255, 255], title: "Ten (Original Club Mix)",
-                                           artist: "Mark Knight", key: "8A", bpm: 124.5, playerType: "track")),
-        ("text-cut.ppm", JogDisplayContent(deck: 3, color: [0, 200, 80],
-                                           title: "Mark Knight Underworld Sander Van Doorn Remix Edition",
-                                           artist: "Wolfgang Amadeus Mozart and the Vienna Philharmonic", playerType: "track")),
-        ("text-accents.ppm", JogDisplayContent(deck: 4, color: [0, 128, 255], title: "Tänzer aus Tübingen",
-                                               artist: "Léa Seydoux & “Don’t”", key: "Ebm", bpm: 174, playerType: "track")),
-        // An untitled deck of another kind: its own name, "no title", and key and BPM ("—" for both).
-        ("text-automation.ppm", JogDisplayContent(deck: 3, color: [0, 200, 80], playerType: "Automation")),
-    ]
+    /// Every reference, from the one list make_refs.sh renders (#571): test/ref/manifest.json.
+    static let manifest: [DrawnReference.Entry] = {
+        (try? DrawnReference.manifest(at: directory.appendingPathComponent("manifest.json"))) ?? []
+    }()
 
-    /// A binary PPM's RGB bytes, or nil if it isn't a 198×198 one.
-    static func rgb(_ file: String) -> [UInt8]? {
+    /// A binary PPM's RGB bytes, or nil if it isn't a `size`×`size` one.
+    static func rgb(_ file: String, size: Int = 198) -> [UInt8]? {
         guard let data = try? Data(contentsOf: directory.appendingPathComponent(file)) else { return nil }
-        let header = Data("P6\n198 198\n255\n".utf8)
-        guard data.starts(with: header), data.count == header.count + 198 * 198 * 3 else { return nil }
+        let header = Data("P6\n\(size) \(size)\n255\n".utf8)
+        guard data.starts(with: header), data.count == header.count + size * size * 3 else { return nil }
         return Array(data.dropFirst(header.count))
     }
 
@@ -52,38 +32,35 @@ struct DisplayFirmwareReferenceTests {
     /// more pixels than the budget. Measured on CI (macos-26): worst 41, at most 51 pixels over 3; locally all exact.
     static let close = 3, budget = 150, cap = 64
 
-    @Test("Each reference is what the renderer draws now", arguments: references.map(\.file))
+    /// The manifest is every reference in the folder and nothing else: a reference can't be left out of the check.
+    @Test("The manifest lists every reference image, each once")
+    func manifestListsEveryReference() throws {
+        let files = try FileManager.default.contentsOfDirectory(atPath: Self.directory.path).filter { $0.hasSuffix(".ppm") }
+        #expect(Self.manifest.count == 46)
+        #expect(Set(Self.manifest.map(\.file)) == Set(files))
+        #expect(Set(Self.manifest.map(\.file)).count == Self.manifest.count)
+    }
+
+    @Test("Each reference is what the renderer draws now", arguments: manifest.map(\.file))
     func referenceIsCurrent(file: String) throws {
-        let content = try #require(Self.references.first { $0.file == file }?.content)
-        try compare(file, with: Self.drawnFrame(content))
+        let entry = try #require(Self.manifest.first { $0.file == file })
+        try compare(file, with: DrawnReference.render(entry), size: entry.size)
     }
 
-    /// The drawn display's 198 frame (#524): drawnImage, drawn mode's own layout, cropped to the frame, RGBA, as
-    /// make_refs.sh's tools write it. The chip draws drawn mode only.
-    static func drawnFrame(_ content: JogDisplayContent, live: DrawnLive = DrawnLive()) -> [UInt8] {
-        let rgba = JogDisplayRenderer.drawnImage(content, live: live)
-        let size = JogDisplayRenderer.size, drawn = JogDisplayRenderer.drawnSize, inset = (drawn - size) / 2
-        var out: [UInt8] = []
-        out.reserveCapacity(size * size * 4)
-        for y in 0..<size {
-            let row = ((y + inset) * drawn + inset) * 4
-            out += rgba[row..<row + size * 4]
-        }
-        return out
-    }
-
-    /// The phase rule's references (#462), as make_refs.sh renders them with live-reference: deck 4, empty, blue.
+    /// The phase rule's references (#462), from the manifest: deck 4, empty, blue.
     @Test("Each phase reference is what the renderer draws now", arguments: [0, -164, 164, -1638, 8191])
     func phaseReferenceIsCurrent(phase: Int) throws {
-        let content = JogDisplayContent(deck: 4, color: [0, 128, 255], playerType: "empty")
-        let file = "deck4-blue-empty-phase\(phase).ppm", rendered = Self.drawnFrame(content, live: DrawnLive(phase: phase))
-        try compare(file, with: rendered)
+        let file = "deck4-blue-empty-phase\(phase).ppm"
+        let entry = try #require(Self.manifest.first { $0.file == file })
+        #expect(entry.phase == phase)
+        let rendered = DrawnReference.render(entry)
+        try compare(file, with: rendered, size: entry.size)
         // The rule's rows hold no text, so no rasterizer slack: every pixel there within `close`.
         let reference = try #require(Self.rgb(file))
         var off = 0
         for pixel in 124 * 198..<132 * 198 {
             for channel in 0..<3 {
-                let difference = abs(Int(rendered[pixel * 4 + channel]) - Int(reference[pixel * 3 + channel]))
+                let difference = abs(Int(rendered[pixel * 3 + channel]) - Int(reference[pixel * 3 + channel]))
                 if difference > Self.close {
                     off += 1
                     break
@@ -93,13 +70,15 @@ struct DisplayFirmwareReferenceTests {
         #expect(off == 0, "\(file): \(off) pixels of the rule's rows off")
     }
 
-    private func compare(_ file: String, with rendered: [UInt8]) throws {
-        let reference = try #require(Self.rgb(file), "missing or malformed \(file)")
+    /// The reference against the renderer's RGB (DrawnReference.render), within the tolerance above.
+    private func compare(_ file: String, with rendered: [UInt8], size: Int) throws {
+        let reference = try #require(Self.rgb(file, size: size), "missing or malformed \(file)")
+        #expect(rendered.count == reference.count)
         var worst = 0, loose = 0
-        for pixel in 0..<(198 * 198) {
+        for pixel in 0..<min(rendered.count, reference.count) / 3 {
             var difference = 0
             for channel in 0..<3 {
-                difference = max(difference, abs(Int(rendered[pixel * 4 + channel]) - Int(reference[pixel * 3 + channel])))
+                difference = max(difference, abs(Int(rendered[pixel * 3 + channel]) - Int(reference[pixel * 3 + channel])))
             }
             worst = max(worst, difference)
             if difference > Self.close { loose += 1 }

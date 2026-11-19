@@ -2,17 +2,18 @@
 // else wrapped at words at 20 px; the artist; an untitled deck's words and caption; every line cut with an ellipsis
 // to the round screen. Only the drawing calls this: it stays out of the hook block (#501).
 #include "text.h"
+#include "layout_generated.h"
 
 #include <string.h>
 
 /// The screen's center and the safe circle's radius (JogDisplayRenderer's center and safe).
-#define CENTER 99.0
+#define CENTER ((double)DFW_CENTER)
 #define SAFE 79.0
 #define ELLIPSIS 0x85
 #define EM_DASH 0x97
 
 /// A square root by Newton's method: there's no libm on the chip, and these are line-box chords, done once a change.
-static double root(double x) {
+static double root_double(double x) {
     if (x <= 0) return 0;
     double r = x > 1 ? x : 1;
     for (int i = 0; i < 60; i++) r = (r + x / r) / 2;
@@ -25,7 +26,7 @@ static double chord(double top, double height) {
     if (a < 0) a = -a;
     if (b < 0) b = -b;
     double dy = a > b ? a : b;
-    return 2 * root(SAFE * SAFE - dy * dy);
+    return 2 * root_double(SAFE * SAFE - dy * dy);
 }
 
 /// A line's width in pixels, as CoreText measures it (to double precision, as the renderer compares).

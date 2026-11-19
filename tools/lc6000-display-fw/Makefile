@@ -17,6 +17,10 @@ test: $(BUILD)/tests $(BUILD)/band_table_gen $(BUILD)/ring_table_gen
 	cmp src/band_table.c $(BUILD)/band_table.c || { echo "src/band_table.c is stale: make tables" >&2; exit 1; }
 	$(BUILD)/ring_table_gen > $(BUILD)/ring_table.c
 	cmp src/ring_table.c $(BUILD)/ring_table.c || { echo "src/ring_table.c is stale: make tables" >&2; exit 1; }
+	@# The picture's shared numbers (#571), for C and for Swift, must be what layout/layout.json says now.
+	python3 -I layout/gen_layout.py layout/layout.json $(BUILD)/layout_generated.h $(BUILD)/JogLayout.generated.swift
+	cmp src/layout_generated.h $(BUILD)/layout_generated.h || { echo "src/layout_generated.h is stale: make layout" >&2; exit 1; }
+	cmp $(SWIFT_LAYOUT) $(BUILD)/JogLayout.generated.swift || { echo "$(SWIFT_LAYOUT) is stale: make layout" >&2; exit 1; }
 
 # The tables B walks instead of working out geometry that never changes (#558), from the same code it ran before.
 # Built for the host with the chip's float rules (no contraction into fused multiply-adds, as arm-none-eabi-gcc's
@@ -29,6 +33,12 @@ $(BUILD)/band_table_gen: gen/band_table_gen.c src/band_geometry.h src/dfw.h
 $(BUILD)/ring_table_gen: gen/ring_table_gen.c src/ring_geometry.h src/band_geometry.h src/dfw.h
 	@mkdir -p $(BUILD)
 	$(CC) $(GEN_CFLAGS) -Isrc -o $@ gen/ring_table_gen.c
+
+# The picture's shared numbers (#571): one table, layout/layout.json, for the C here and the Swift renderer.
+SWIFT_LAYOUT := ../../Packages/ControllerBridgeKit/Sources/ControllerBridgeCore/JogLayout.generated.swift
+.PHONY: layout
+layout:
+	python3 -I layout/gen_layout.py layout/layout.json src/layout_generated.h $(SWIFT_LAYOUT)
 
 tables: $(BUILD)/band_table_gen $(BUILD)/ring_table_gen
 	$(BUILD)/band_table_gen > src/band_table.c

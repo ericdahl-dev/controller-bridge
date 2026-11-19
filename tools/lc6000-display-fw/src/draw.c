@@ -2,59 +2,19 @@
 // center at +0.5. Edges are anti-aliased by coverage: a pixel is blended toward a shape by how much of it the shape
 // covers, estimated from the signed distance between the pixel's center and the shape's edge.
 #include "draw.h"
+#include "layout_generated.h"
+#include "geometry.h"
 #include "text.h"
 #include "draw_live.h"
 #include "font_header.h"
 #include "ring_table.h"
 
-#define GROUND 0x0B0B0Bu
+#define GROUND DFW_GROUND
 /// The time left (#460, #524): centered on x 99, its line box's middle at y 160 (drawn mode's layout).
-#define TIME_CENTER_X 99.0f
-#define TIME_MIDDLE 160.0f
+#define TIME_CENTER_X DFW_CENTER
+#define TIME_MIDDLE DFW_TIME_CENTER_Y
 
-#define CENTER 99.0f
-
-/// A square root by Newton's method from a bit-level first guess: three steps take it to float precision for the
-/// values drawn here (0 to 2·198²). No libm on the chip.
-static float root(float x) {
-    if (x <= 0.0f) return 0.0f;
-    union { float f; uint32_t u; } v = { x };
-    v.u = (v.u >> 1) + 0x1FBD1DF5u;
-    float r = v.f;
-    for (int i = 0; i < 3; i++) r = 0.5f * (r + x / r);
-    return r;
-}
-
-static float clamp01(float x) { return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x; }
-
-/// How much of a pixel lies inside a straight edge, from the signed distance of its center to the edge (positive
-/// inside) and the edge's unit normal: the exact area of the pixel square on the inside. A 45° edge ramps over 1.41 px,
-/// not 1, which a plain distance ramp gets visibly wrong on the chip.
-static float edge_cover(float distance, float nx, float ny) {
-    float a = nx < 0.0f ? -nx : nx, b = ny < 0.0f ? -ny : ny;
-    if (a < b) { float t = a; a = b; b = t; }
-    float s = distance + (a + b) / 2.0f;
-    if (s <= 0.0f) return 0.0f;
-    if (s >= a + b) return 1.0f;
-    if (b < 1e-6f) return clamp01(s / a);
-    if (s < b) return s * s / (2.0f * a * b);
-    if (s < a) return (s - b / 2.0f) / a;
-    float t = a + b - s;
-    return 1.0f - t * t / (2.0f * a * b);
-}
-
-/// `under` moved toward `over` by `cover` (0-1), per channel, rounded.
-static dfw_pixel blend(dfw_pixel under, dfw_pixel over, float cover) {
-    if (cover <= 0.0f) return under;
-    if (cover >= 1.0f) return over;
-    dfw_pixel out = 0;
-    for (int shift = 0; shift <= 16; shift += 8) {
-        float a = (float)(under >> shift & 0xFFu), b = (float)(over >> shift & 0xFFu);
-        float c = a + (b - a) * cover + 0.5f;
-        out |= (dfw_pixel)(c < 0.0f ? 0.0f : c > 255.0f ? 255.0f : c) << shift;
-    }
-    return out;
-}
+#define CENTER DFW_CENTER
 
 /// The four beat sections, clockwise from 12 o'clock, beat 1 a step brighter; or all dark, the waiting look. From the
 /// ring's table (#558): each pixel's gray, worked out once by the same geometry (src/ring_geometry.h) over the ground,
@@ -233,7 +193,7 @@ const float dfw_linear_channel[256] = {
 /// The deck number's face on its deck color (#542 follow-up, DeckNumberInk): the text white (its own glyphs: light text
 /// is drawn heavier) when the color's relative luminance is under 0.1791, where white contrasts more than black; the
 /// ground's black otherwise.
-#define NUMBER_WHITE_BELOW 0.1791f
+#define NUMBER_WHITE_BELOW DFW_NUMBER_WHITE_BELOW
 
 static const dfw_face *number_ink(const dfw_deck_state *deck) {
     float luminance = 0.2126f * dfw_linear_channel[deck->r] + 0.7152f * dfw_linear_channel[deck->g] +
@@ -337,22 +297,24 @@ static void fill(dfw_pixel *frame, int x, int y, int width, int height, dfw_pixe
 }
 
 /// How much of the deck color the rule keeps while off phase, over the ground (#462).
-#define PHASE_DIM 0.35
+#define PHASE_DIM DFW_PHASE_DIM
+/// The ground's level in each channel (it is a gray).
+#define GROUND_LEVEL ((int)(DFW_GROUND & 0xFFu))
 
 /// One channel of the deck color dimmed over the ground, as the renderer works it: in double, rounded half away.
 static uint8_t dimmed(uint8_t channel) {
-    double level = (double)channel / 255 * 255 * PHASE_DIM + 11 * (1 - PHASE_DIM);
+    double level = (double)channel / 255 * 255 * PHASE_DIM + GROUND_LEVEL * (1 - PHASE_DIM);
     return (uint8_t)(level + 0.5);
 }
 
 /// The renderer's phase curve, g(p) = p/(|p| + 0.02), for p ≥ 0 in beats.
-static double phase_curve(double beats) { return beats / (beats + 0.02); }
+static double phase_curve(double beats) { return beats / (beats + DFW_PHASE_CURVE); }
 
 /// The phase bar's length in whole px, as JogDisplayRenderer.phaseBar: 49 × g(p)/g(½), rounded, 1 to 49.
 static int phase_bar(int phase) {
-    double beats = (double)(phase < 0 ? -phase : phase) / 16384;
-    int length = (int)(49 * phase_curve(beats) / phase_curve(0.5) + 0.5);
-    return length < 1 ? 1 : length > 49 ? 49 : length;
+    double beats = (double)(phase < 0 ? -phase : phase) / DFW_PHASE_UNITS_PER_BEAT;
+    int length = (int)(DFW_BAR_MAX * phase_curve(beats) / phase_curve(DFW_PHASE_FULL) + 0.5);
+    return length < 1 ? 1 : length > DFW_BAR_MAX ? DFW_BAR_MAX : length;
 }
 
 /// The rule under the artist (#458) in the deck color, showing the deck's phase against the master (#462). Unknown:
@@ -363,13 +325,14 @@ static void rule(dfw_pixel *frame, const dfw_unit *unit) {
     dfw_pixel deck = (dfw_pixel)d->r << 16 | (dfw_pixel)d->g << 8 | d->b;
     int phase = unit->phase;
     if (phase == DFW_PHASE_UNKNOWN || phase == 0) {
-        fill(frame, 50, 127, 98, 2, deck);
-        if (phase == 0) fill(frame, 98, 125, 2, 6, deck);
+        fill(frame, DFW_RULE_X, DFW_RULE_Y, DFW_RULE_WIDTH, DFW_RULE_HEIGHT, deck);
+        if (phase == 0) fill(frame, DFW_TICK_X, DFW_TICK_Y, DFW_TICK_WIDTH, DFW_TICK_HEIGHT, deck);
         return;
     }
-    fill(frame, 50, 127, 98, 2, (dfw_pixel)dimmed(d->r) << 16 | (dfw_pixel)dimmed(d->g) << 8 | dimmed(d->b));
-    int length = phase_bar(phase);
-    fill(frame, phase < 0 ? 99 - length : 99, 126, length, 4, deck);
+    fill(frame, DFW_RULE_X, DFW_RULE_Y, DFW_RULE_WIDTH, DFW_RULE_HEIGHT,
+         (dfw_pixel)dimmed(d->r) << 16 | (dfw_pixel)dimmed(d->g) << 8 | dimmed(d->b));
+    int length = phase_bar(phase), middle = (int)DFW_CENTER;
+    fill(frame, phase < 0 ? middle - length : middle, DFW_BAR_Y, length, DFW_BAR_HEIGHT, deck);
 }
 
 void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {

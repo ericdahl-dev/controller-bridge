@@ -1,5 +1,5 @@
 // The live elements (#459): the lit master beat and the marker, checked against JogDisplayRenderer's simulator image:
-// test/ref/*-beat*.ppm and *-needle*.ppm, made by test/ref/make_refs.sh with the live-reference tool, never from this
+// test/ref/*-beat*.ppm and *-needle*.ppm, made by test/ref/make_refs.sh from test/ref/manifest.json, never from this
 // code. Every case is deck 4, blue, empty: its header is the chip alone, and nothing else is drawn near the ring.
 #include "harness.h"
 #include "draw.h"

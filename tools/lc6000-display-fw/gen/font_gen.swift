@@ -21,6 +21,26 @@ func fail(_ message: String) -> Never {
 
 let fontDir = "Packages/ControllerBridgeKit/Sources/ControllerBridgeRender/Fonts"
 
+/// The picture's shared numbers (#571), from layout/layout.json: the generator reads the same table the renderer does.
+let layoutTable: [String: String] = {
+    let url = URL(fileURLWithPath: "tools/lc6000-display-fw/layout/layout.json")
+    guard let data = try? Data(contentsOf: url), let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let constants = json["constants"] as? [[String: Any]] else { fail("Can't read \(url.path)") }
+    var table: [String: String] = [:]
+    for constant in constants { if let name = constant["name"] as? String { table[name] = constant["value"] as? String } }
+    return table
+}()
+
+func layout(_ name: String) -> CGFloat {
+    guard let text = layoutTable[name], let value = Double(text) else { fail("layout.json has no \(name)") }
+    return CGFloat(value)
+}
+
+func layoutColor(_ name: String) -> Int {
+    guard let text = layoutTable[name], let value = Int(text, radix: 16) else { fail("layout.json has no color \(name)") }
+    return value
+}
+
 func loadFont(_ file: String, postScriptName: String, size: CGFloat) -> CTFont {
     guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(URL(fileURLWithPath: "\(fontDir)/\(file)") as CFURL)
             as? [CTFontDescriptor], let descriptor = descriptors.first else { fail("Can't read \(fontDir)/\(file)") }
@@ -69,12 +89,12 @@ let faces = [
          ground: 0x0B0B0B, middle: 37.5, tracking: 0.04, glyphs: "CDEIKMOQRST", lines: ["TRK", "OSC", "MIDI", "SEQ"]),
     // The time left (#460, #524): drawn mode's GeistMono-SemiBold 21 in 0xEDEDEA on the ground, untracked, centered
     // at y 160.
-    Face(name: "time", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 21, ink: 0xEDEDEA,
-         ground: 0x0B0B0B, middle: 160, tracking: 0, glyphs: "-0123456789:", lines: ["-2:45", "-1:22", "-99:59", "-0:00"]),
+    Face(name: "time", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: layout("timeSize"),
+         ink: layoutColor("text"), ground: layoutColor("ground"), middle: layout("timeCenterY"), tracking: 0, glyphs: "-0123456789:", lines: ["-2:45", "-1:22", "-99:59", "-0:00"]),
     // The same in the last minute's warning red, 0xFF3B30 (#460): light text is drawn heavier, so red has its own
     // coverage, read from the red channel (its green is only 48 levels off the ground).
-    Face(name: "time_red", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 21, ink: 0xFF3B30,
-         ground: 0x0B0B0B, middle: 160, tracking: 0, glyphs: "-0123456789:", lines: ["-0:30", "-0:59"], channel: 0),
+    Face(name: "time_red", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: layout("timeSize"),
+         ink: layoutColor("warningRed"), ground: layoutColor("ground"), middle: layout("timeCenterY"), tracking: 0, glyphs: "-0123456789:", lines: ["-0:30", "-0:59"], channel: 0),
 ]
 
 let pad = 16, box = 48
