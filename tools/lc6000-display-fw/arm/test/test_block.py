@@ -3,7 +3,7 @@ in an emulator (unicorn) against a synthetic flash. The stock functions the shim
 
 Run from tools/lc6000-display-fw after `make arm`:  python3 -I arm/test/test_block.py [BUILD_DIR]
 Needs arm-none-eabi binutils and the `unicorn` Python package (pip install unicorn)."""
-import os, shutil, struct, subprocess, sys, tempfile, unittest
+import os, shutil, struct, subprocess, sys, tempfile, unittest, zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FW = os.path.dirname(os.path.dirname(HERE))
@@ -183,15 +183,21 @@ class Chip:
                 self.sent.append(bytes(uc.mem_read(uc.reg_read(A.UC_ARM_REG_R1), length)))
         uc.hook_add(unicorn.UC_HOOK_CODE, on_code)
 
-    def call(self, entry, **regs):
+    def call(self, entry, count=2_000_000, **regs):
         uc = self.uc
         uc.reg_write(A.UC_ARM_REG_SP, 0x10010000 - 0x100)
         uc.reg_write(A.UC_ARM_REG_LR, RETURN | 1)
         for name, value in regs.items():
             uc.reg_write(getattr(A, f"UC_ARM_REG_{name.upper()}"), value)
-        uc.emu_start(entry | 1, RETURN, count=2_000_000)
+        self.instructions = 0
+        counting = uc.hook_add(unicorn.UC_HOOK_CODE, self.count_instruction)
+        uc.emu_start(entry | 1, RETURN, count=count)
+        uc.hook_del(counting)
         return {name: uc.reg_read(getattr(A, f"UC_ARM_REG_{name.upper()}"))
                 for name in ("r0", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "sp")}
+
+    def count_instruction(self, uc, address, size, _):
+        self.instructions += 1
 
     def receive(self, hexbytes):
         message = bytes.fromhex(hexbytes)
@@ -264,8 +270,35 @@ def good_upper():
     return struct.pack("<IIIII", 0x42574644, 1, 29, 0x22B5DF72, 0x08080015) + b"123456789"
 
 
+def proven_block():
+    with tempfile.TemporaryDirectory() as out:
+        subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", "ARM_UPPER_PROVEN=1"], check=True,
+                       capture_output=True)
+        with open(os.path.join(out, "block.bin"), "rb") as f:
+            return f.read()
+
+
+def full_upper():
+    """A good B filling all 512 KB, so the check is as long as it can ever be."""
+    body = struct.pack("<I", 0x08080015) + bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 20))
+    return struct.pack("<IIII", 0x42574644, 1, UPPER_SIZE, zlib.crc32(body)) + body
+
+
 class UpperSwitchTests(unittest.TestCase):
     """Block A reads B only when built with the "upper flash proven" switch (#501)."""
+
+    def test_the_check_costs_a_tick_under_a_millisecond_and_an_ask_well_under_the_apps_half_second(self):
+        # Measured at 99k instructions a tick and 6.1M for an ask that finishes all 512 KB: at 180 MHz and about
+        # 1.3 cycles an instruction (flash wait states), about 0.7 ms and 45 ms. The app waits 0.5 s.
+        chip = Chip(data=proven_block(), upper=full_upper())
+        chip.call(dfupatch.HOOK_RENDER_ENTRY)
+        self.assertLess(chip.instructions, 120_000)
+        message = chip.receive(CAPABILITY)
+        chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8],
+                  r8=0)
+        self.assertLess(chip.instructions, 7_500_000)
+        chip.call(dfupatch.HOOK_RENDER_ENTRY)
+        self.assertEqual(chip.sent, [bytes.fromhex("F000020B01102000020001F7")])
 
     def ask(self, chip):
         message = chip.receive(CAPABILITY)
@@ -280,11 +313,7 @@ class UpperSwitchTests(unittest.TestCase):
         self.assertEqual(chip.upper_reads, 0)
 
     def test_with_the_switch_only_a_good_block_b_gets_the_ask_answered(self):
-        with tempfile.TemporaryDirectory() as out:
-            subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", "ARM_UPPER_PROVEN=1"], check=True,
-                           capture_output=True)
-            with open(os.path.join(out, "block.bin"), "rb") as f:
-                proven = f.read()
+        proven = proven_block()
         answer = bytes.fromhex("F000020B01102000020001F7")
         for upper, sent in ((None, []), (good_upper(), [answer])):
             with self.subTest(upper=upper is not None):
