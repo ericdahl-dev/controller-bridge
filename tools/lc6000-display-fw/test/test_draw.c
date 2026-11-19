@@ -231,6 +231,27 @@ static void three_silent_seconds_present_the_logo(void) {
     CHECK(stale_matches());
 }
 
+/// The state's feedback-stale bit (#464): set, the presented frame is the logo; cleared, it's the deck again.
+static void the_stale_flag_draws_the_logo_and_fresh_feedback_clears_it(void) {
+    fresh(&unit, &rec);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");   // deck 2, red, track
+    dfw_tick(&unit, 0);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 21 F7");                         // loaded, feedback stale
+    dfw_tick(&unit, 100);
+    CHECK(rec.presents == 2);
+    CHECK(load_reference(STALE_REF));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(stale_matches());
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 01 F7");                         // loaded, fresh
+    dfw_tick(&unit, 200);
+    CHECK(rec.presents == 3);
+    CHECK(load_reference(cases[0].file));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(band_matches(&cases[0], RING));
+    CHECK(band_matches(&cases[0], HEADER));
+}
+
 const test_case draw_tests[] = {
     { "outside the bands is plain ground", outside_the_bands_is_plain_ground },
     { "the ring matches the reference", the_ring_matches_the_reference },
@@ -245,5 +266,7 @@ const test_case draw_tests[] = {
     { "begin then deck presents the reference", begin_then_deck_presents_the_reference },
     { "stale draws the logo", stale_draws_the_logo },
     { "three silent seconds present the logo", three_silent_seconds_present_the_logo },
+    { "the stale flag draws the logo and fresh feedback clears it",
+      the_stale_flag_draws_the_logo_and_fresh_feedback_clears_it },
     { 0, 0 },
 };
