@@ -73,4 +73,21 @@ struct DrawnDisplayTextTests {
         let text = String(repeating: "a", count: cap - 1) + "é" + "b"
         #expect(DrawnDisplay.Message.text(.title, text).bytes == Self.text(0, Array(repeating: 0x61, count: cap - 1)))
     }
+
+    static func tempo(_ tenths: Int) -> [UInt8] { head + [0x00, 0x03, 0x05, UInt8(tenths >> 7), UInt8(tenths & 0x7F)] + [0xF7] }
+
+    @Test("Tempo in tenths of a BPM, rounded once, 14-bit hi/lo: 128.0 is 1280, 127.96 is 1280, 99.94 is 999")
+    func tempo() {
+        #expect(DrawnDisplay.Message.tempo(128).bytes == Self.tempo(1280))
+        #expect(DrawnDisplay.Message.tempo(127.96).bytes == Self.tempo(1280))
+        #expect(DrawnDisplay.Message.tempo(99.94).bytes == Self.tempo(999))
+    }
+
+    @Test("No tempo is 0: nil, NaN, zero or negative. Above 1638.3 BPM it clamps to 16383")
+    func tempoEdges() {
+        for bpm in [nil, Double.nan, 0, -120] as [Double?] { #expect(DrawnDisplay.Message.tempo(bpm).bytes == Self.tempo(0)) }
+        #expect(DrawnDisplay.Message.tempo(2000).bytes == Self.tempo(16383))
+        #expect(DrawnDisplay.Message.tempo(.infinity).bytes == Self.tempo(16383))
+        #expect(DrawnDisplay.Message.tempo(0.01).bytes == Self.tempo(0))
+    }
 }

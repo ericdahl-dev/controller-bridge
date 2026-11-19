@@ -115,6 +115,15 @@ public enum DrawnDisplay {
         case needle(Int)
         /// One of the deck's texts (#458); empty clears that field.
         case text(TextField, String)
+        /// The deck's tempo in tenths of a BPM, 1-16383; 0 is none, drawn as "—" (#458).
+        case tempo(tenths: Int)
+
+        /// The tempo message for a BPM: rounded once to tenths, clamped to 16383; 0 for none, NaN, zero or below.
+        public static func tempo(_ bpm: Double?) -> Message {
+            guard let bpm, bpm > 0 else { return .tempo(tenths: 0) }
+            let tenths = (bpm * 10).rounded()
+            return .tempo(tenths: tenths >= 16383 ? 16383 : Int(tenths))
+        }
 
         /// The SysEx frame for the WD port.
         public var bytes: [UInt8] {
@@ -133,6 +142,8 @@ public enum DrawnDisplay {
             case .needle(let angle):
                 DrawnDisplay.frame(0x09, [UInt8(angle >> 7 & 0x7F), UInt8(angle & 0x7F)])
             case .text(let field, let text): DrawnDisplay.frame(0x04, [field.rawValue] + DrawnDisplay.escaped(text))
+            case .tempo(let tenths):
+                DrawnDisplay.frame(0x05, [UInt8(tenths >> 7 & 0x7F), UInt8(tenths & 0x7F)])
             }
         }
     }
