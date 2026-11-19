@@ -48,4 +48,40 @@ struct JogDisplaySlotCacheTests {
         #expect(port.wd == [JogDisplay.show(slot: 5)])
         #expect(!driver.uploading)
     }
+
+    @Test("A new track on deck 3 (not in front) goes up into its slots 9-12 only; deck 1 stays on screen, beat by beat")
+    func backgroundDeckReuploads() throws {
+        let (driver, port) = try Self.cached()
+        driver.keep(Self.content(3, title: "Night Drive"))
+        #expect(Self.settle(driver, port) == [9, 10, 11, 12])
+        port.wd.removeAll()
+        driver.masterBeat(2)
+        #expect(port.wd == [JogDisplay.show(slot: 2)])
+    }
+
+    @Test("New tracks on deck 3 and on deck 1 in front at once: deck 1's slots go first")
+    func frontDeckFirst() throws {
+        let (driver, port) = try Self.cached()
+        driver.keep(Self.content(3, title: "Night Drive"))   // slot 9 is on the wire
+        driver.show(Self.content(1, title: "Daybreak"))
+        #expect(Self.settle(driver, port) == [9, 1, 2, 3, 4, 10, 11, 12])
+    }
+
+    @Test("Deck 4 has three slots, 13-15: on beat 4 nothing is sent, so its screen holds beat 3's image")
+    func deckFourHoldsBeatFour() throws {
+        let (driver, port) = try Self.cached()
+        driver.show(Self.content(4))
+        #expect(Self.settle(driver, port) == [13, 14, 15])
+        port.wd.removeAll()
+        for beat in [2, 3, 4, 1] { driver.masterBeat(beat) }
+        #expect(port.wd == [JogDisplay.show(slot: 14), JogDisplay.show(slot: 15), JogDisplay.show(slot: 13)])
+    }
+
+    @Test("A reconnect forgets what the unit held (it may have lost power): every deck goes up again")
+    func reconnectUploadsAgain() throws {
+        let (driver, port) = try Self.cached()
+        driver.disconnect()
+        driver.connect()
+        #expect(Self.settle(driver, port) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    }
 }
