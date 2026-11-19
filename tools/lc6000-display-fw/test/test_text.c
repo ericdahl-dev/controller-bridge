@@ -4,6 +4,7 @@
 #include "text.h"
 #include "ref/text_widths.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 static const dfw_text_face *face_named(const char *name) {
@@ -33,7 +34,26 @@ static void every_width_matches_coretext(void) {
     }
 }
 
+/// Every Camelot code (#590) the host may send as the key, "1A" to "12B", is drawn in the key face's own glyphs, none
+/// as the box: GeistMono's glyphs are all 600 units wide, the box 500, so a line of n real glyphs is n * 600.
+static void every_camelot_code_has_its_glyphs_in_the_key_face(void) {
+    const uint8_t box[] = { 0x81 };
+    CHECK(dfw_text_units(dfw_mono18, box, 1, 0) == 500);   // the box is told apart by its width
+    for (int number = 1; number <= 12; number++) {
+        for (int minor = 0; minor <= 1; minor++) {
+            char code[4];
+            int count = snprintf(code, sizeof code, "%d%c", number, minor ? 'A' : 'B');
+            int32_t units = dfw_text_units(dfw_mono18, (const uint8_t *)code, (size_t)count, 0);
+            if (units != 600 * count) {
+                harness_failures++;
+                fprintf(stderr, "  %s: %d units, not %d: a glyph is the box\n", code, units, 600 * count);
+            }
+        }
+    }
+}
+
 const test_case text_tests[] = {
     { "every width matches CoreText", every_width_matches_coretext },
+    { "every Camelot code has its glyphs in the key face", every_camelot_code_has_its_glyphs_in_the_key_face },
     { 0, 0 },
 };

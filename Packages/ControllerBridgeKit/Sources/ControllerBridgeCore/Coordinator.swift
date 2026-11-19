@@ -187,6 +187,12 @@ public final class Coordinator {
         holdRing()
     }
 
+    /// Settings' Key display (#590): the jog display, its images and the preview write the key this way from now on.
+    public func setKeyDisplay(_ notation: KeyNotation) {
+        jogController.setKeyDisplay(notation)
+        updateJogDisplay()
+    }
+
     /// Picks the deck the jog display preview follows while no controller is connected; nil, the first loaded deck.
     public func setJogPreviewDeck(_ deck: Int?) {
         jogController.setPreviewDeck(deck)

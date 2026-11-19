@@ -191,6 +191,13 @@ struct SettingsView: View {
                                    selection: settings.displayFirmware)
                         .accessibilityElement(children: .contain).accessibilityLabel("Firmware")
                 }
+                // Syndicate sends the key as traditional text whatever its own Camelot setting is (#590).
+                row("Key display", hint: "Match Syndicate's own key setting.") {
+                    SegmentedPills(options: [KeyNotation.traditional, .camelot],
+                                   title: { $0 == .traditional ? "Traditional" : "Camelot" },
+                                   selection: settings.keyDisplay)
+                        .accessibilityElement(children: .contain).accessibilityLabel("Key display")
+                }
             }
             ForEach(settings.wrappedValue.warnings, id: \.self) { note($0, color: Theme.attention) }
             if settings.wrappedValue.controllers.count < 4 {

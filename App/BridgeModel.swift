@@ -244,6 +244,7 @@ final class BridgeModel {
         if new.profileChoices != old.profileChoices { producer.send(.setProfileChoices(new.profileChoices)) }
         if new.jogDisplay != old.jogDisplay { producer.send(.setJogDisplay(enabled: new.jogDisplay)) }
         if new.displayFirmware != old.displayFirmware { producer.send(.setDisplayFirmware(new.displayFirmware)) }
+        if new.keyDisplay != old.keyDisplay { producer.send(.setKeyDisplay(new.keyDisplay)) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
 
@@ -358,6 +359,8 @@ final class BridgeModel {
         pipe.producer.send(.setProfileChoices(settings.profileChoices))
         // Before the switch, so the first uploads already know how many slots the unit shows (#425).
         pipe.producer.send(.setDisplayFirmware(settings.displayFirmware))
+        // How the key is written (#590), before the first content is shown.
+        pipe.producer.send(.setKeyDisplay(settings.keyDisplay))
         pipe.producer.send(.setJogDisplay(enabled: settings.jogDisplay))
 
     }
