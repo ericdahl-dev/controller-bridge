@@ -144,4 +144,30 @@ struct PitchArrowTests {
         rig.coordinator.midi(.noteOn(channel: 0, note: 22, velocity: 127), source: Rig.lc6000.id)   // Key Lock
         #expect(rig.leds[Self.back] == 127 && rig.leds[Self.forward] == 0)
     }
+
+    @Test("No arrow while the tempo slider is disabled (a synced follower)")
+    func sliderDisabled() throws {
+        let rig = try Self.pending()
+        ContinuousTests.feedback(rig, "TempoSliderEnabled", [.int(0)])
+        Self.fader(rig, 0x1000)
+        #expect(rig.leds[Self.forward] == 0 && rig.leds[Self.back] == 0)
+    }
+
+    @Test("No arrow with no track loaded")
+    func notLoaded() throws {
+        let rig = try ContinuousTests.started()
+        ContinuousTests.feedback(rig, "TempoSlider", [.float(0.5)])
+        Self.fader(rig, 0x1000)
+        #expect(rig.leds[Self.forward] == 0 && rig.leds[Self.back] == 0)
+    }
+
+    @Test("No arrow with the controller's LEDs off: nothing is sent to either")
+    func ledsOff() throws {
+        let rig = try Rig()
+        rig.coordinator.start(ledsEnabled: false)
+        ContinuousTests.feedback(rig, "Loaded", [.int(1)])
+        ContinuousTests.feedback(rig, "TempoSlider", [.float(0.5)])
+        Self.fader(rig, 0x1000)
+        #expect(rig.leds[Self.forward] == nil && rig.leds[Self.back] == nil)
+    }
 }
