@@ -22,6 +22,8 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     public var appearance = Appearance.matchMacOS
     /// "Show the deck on the jog display" (#165). On for new settings since the v1.1 hardware check.
     public var jogDisplay = true
+    /// The LC6000's jog display firmware (#425): Denon's (15 image slots) or custom (16, after the slot 16 patch).
+    public var displayFirmware = DisplayFirmware.denon
     /// A controller profile chosen by hand for a MIDI device (#200): device name → profile id. A device not listed is
     /// Automatic, matched by its name; so is one whose chosen profile no longer exists.
     public var profileChoices: [String: String] = [:]
@@ -29,6 +31,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
         case followSyndicateDeckColors, customDeckColors, appearance, ringColors, jogDisplay, profileChoices
+        case displayFirmware
     }
 
     /// Settings saved before #123 have no deck colors: they load with the defaults.
@@ -47,6 +50,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         // Settings saved before the switch existed keep it off; new settings have it on (v1.1, RELEASE step 3).
         jogDisplay = try c.decodeIfPresent(Bool.self, forKey: .jogDisplay) ?? false
         profileChoices = try c.decodeIfPresent([String: String].self, forKey: .profileChoices) ?? [:]
+        displayFirmware = try c.decodeIfPresent(DisplayFirmware.self, forKey: .displayFirmware) ?? .denon
     }
 
     public init(
@@ -93,6 +97,7 @@ extension BridgeSettings {
         out.appearance = pick(\.appearance)
         out.ringColors = pick(\.ringColors)
         out.jogDisplay = pick(\.jogDisplay)
+        out.displayFirmware = pick(\.displayFirmware)
         out.profileChoices = pick(\.profileChoices)
         // Controllers: the draft's list (an add or remove is the DJ's edit), each field rebased where both had it.
         out.controllers = draft.controllers.indices.map { index in

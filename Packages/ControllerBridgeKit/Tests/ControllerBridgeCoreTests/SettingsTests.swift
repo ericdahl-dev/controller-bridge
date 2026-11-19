@@ -326,6 +326,26 @@ struct SettingsTests {
         #expect(BridgeSettings.rebased(draft: exact, base: Self.defaults, onto: saved).ringColors == .exact)
     }
 
+    // #425: the LC6000's display firmware, Denon's or custom.
+
+    @Test("Display firmware defaults to Denon's; old settings load as Denon's; Custom round-trips and survives a rebase")
+    func displayFirmwareSetting() {
+        #expect(Self.defaults.displayFirmware == .denon)
+        let store = MemoryStore()
+        store.values[BridgeSettings.storageKey] = Data(#"""
+            {"controllers":[{"deck":1}],"syndicateHost":"127.0.0.1","syndicatePort":9090,"feedbackPort":9096,
+             "feedbackListen":"thisMac","ledsEnabled":true}
+            """#.utf8)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).displayFirmware == .denon)
+        var custom = Self.defaults
+        custom.displayFirmware = .custom
+        try? custom.save(to: store)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).displayFirmware == .custom)
+        var saved = Self.defaults
+        saved.controllers[0].deck = 2
+        #expect(BridgeSettings.rebased(draft: custom, base: Self.defaults, onto: saved).displayFirmware == .custom)
+    }
+
     @Test("A field the DJ also edited in Settings keeps the DJ's value")
     func editedFieldWins() {
         let base = Self.defaults

@@ -183,6 +183,16 @@ struct SettingsView: View {
             switchRow("Controller LEDs", isOn: settings.ledsEnabled)
             switchRow("Show the deck on the jog display", hint: "LC6000 only.",
                       isOn: settings.jogDisplay)
+            if settings.wrappedValue.jogDisplay {
+                // Denon's firmware shows 15 image slots; a unit flashed with the slot 16 patch shows 16 (#425).
+                row("Firmware", hint: settings.wrappedValue.displayFirmware == .denon
+                    ? "Denon's own: 15 image slots, so deck 4 shows three of its four beats"
+                    : "Custom: 16 image slots. Only for a unit flashed with the slot 16 patch") {
+                    SegmentedPills(options: [DisplayFirmware.denon, .custom], title: { $0 == .denon ? "Denon" : "Custom" },
+                                   selection: settings.displayFirmware)
+                        .accessibilityElement(children: .contain).accessibilityLabel("Firmware")
+                }
+            }
             ForEach(settings.wrappedValue.warnings, id: \.self) { note($0, color: Theme.attention) }
             if settings.wrappedValue.controllers.count < 4 {
                 Button("Add controller") {

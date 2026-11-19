@@ -8,6 +8,15 @@ public enum RingColors: String, Equatable, Sendable, Codable, CaseIterable {
     case vivid, exact
 }
 
+/// The LC6000's jog display firmware (#425), the DJ's pick in Settings: Denon's own, or one flashed with the slot 16
+/// patch (tools/lc6000-firmware). Denon's is the default, and the only safe choice for a unit that wasn't flashed.
+public enum DisplayFirmware: String, Equatable, Sendable, Codable, CaseIterable {
+    case denon, custom
+
+    /// How many image slots the firmware will show.
+    public var showableSlots: Int { self == .custom ? 16 : 15 }
+}
+
 public struct DeckColors: Equatable, Sendable, Codable {
     /// [r, g, b] for decks 1-4.
     public var rgb: [Int: [Int]]

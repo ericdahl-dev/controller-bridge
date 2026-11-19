@@ -77,6 +77,31 @@ struct JogDisplaySlotCacheTests {
         #expect(port.wd == [JogDisplay.show(slot: 14), JogDisplay.show(slot: 15), JogDisplay.show(slot: 13)])
     }
 
+    @Test("Custom display firmware shows 16 slots (#425): deck 4 gets all four, and beat 4 shows slot 16")
+    func customFirmwareGivesDeckFourItsFourthBeat() throws {
+        let (driver, port) = try Self.cached()
+        driver.displayFirmware = .custom
+        driver.show(Self.content(4))
+        #expect(Self.settle(driver, port) == [13, 14, 15, 16])
+        port.wd.removeAll()
+        for beat in [2, 3, 4, 1] { driver.masterBeat(beat) }
+        #expect(port.wd == [14, 15, 16, 13].map { JogDisplay.show(slot: $0) })
+    }
+
+    @Test("Switching to custom firmware while deck 4 is in front uploads only its missing slot 16; back to Denon's, beat 4 holds again")
+    func switchingFirmwareWhileShowing() throws {
+        let (driver, port) = try Self.cached()
+        driver.show(Self.content(4))
+        _ = Self.settle(driver, port)
+        driver.displayFirmware = .custom
+        #expect(Self.settle(driver, port) == [16])
+        driver.displayFirmware = .denon
+        port.wd.removeAll()
+        driver.masterBeat(3)
+        driver.masterBeat(4)
+        #expect(port.wd == [JogDisplay.show(slot: 15)])
+    }
+
     @Test("A reconnect forgets what the unit held (it may have lost power): every deck goes up again")
     func reconnectUploadsAgain() throws {
         let (driver, port) = try Self.cached()
@@ -121,5 +146,17 @@ struct JogDisplaySlotCacheTests {
         #expect(port.wd.contains(JogDisplay.show(slot: 5)))
         let since = JogDisplayRingHoldTests.ring(rig).dropFirst(before)
         #expect(!since.isEmpty && !since.contains(0))
+    }
+
+    @Test("Settings' display firmware through the pipe: with Custom, the layers' images fill all 16 slots")
+    func firmwareSettingThroughThePipe() async throws {
+        let (rig, port, slots) = try Self.layered()
+        #expect(slots == Array(1...15))
+        port.wd.removeAll()
+        let pipe = EventPipe()
+        pipe.producer.send(.setDisplayFirmware(.custom))
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        #expect(Self.uploadSlots(port) == [16])
     }
 }
