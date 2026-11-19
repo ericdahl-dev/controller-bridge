@@ -4,7 +4,7 @@
 #include <string.h>
 
 enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE, KIND_BEAT, KIND_NEEDLE,
-       KIND_TEXT, KIND_TEMPO, KIND_METER };
+       KIND_TEXT, KIND_TEMPO, KIND_METER, KIND_PHASE };
 typedef struct {
     const char *name;
     int kind, from_unit, version, number;
@@ -15,6 +15,8 @@ typedef struct {
     size_t code_count;
     uint8_t codes[DFW_TEXT_MAX];
     int tenths;
+    /// Phase: 1/16384 beats from the master's beat, negative behind (#462).
+    int offset;
     size_t length;
     uint8_t bytes[DFW_MESSAGE_MAX];
 } vector;
@@ -116,6 +118,13 @@ void every_vector_decodes(void) {
             dfw_tick(&unit, 0);
             check(unit.tempo == v->tenths, v->name);
             break;
+        case KIND_PHASE:
+            feed(&unit, BEGIN_V1);
+            feed(&unit, DECK_3_GREEN_SEQ);
+            dfw_message(&unit, v->bytes, v->length);
+            dfw_tick(&unit, 0);
+            check(unit.phase == v->offset, v->name);
+            break;
         default:
             check(0, v->name);
         }
@@ -134,13 +143,15 @@ void every_invalid_vector_is_ignored(void) {
         dfw_deck_state before = unit.deck;
         uint8_t flags = unit.flags, beat = unit.beat;
         uint16_t needle = unit.needle, tempo = unit.tempo;
+        int16_t phase = unit.phase;
         uint8_t text_length = unit.text_length[0];
         uint8_t level = unit.level, peak = unit.peak;
         dfw_message(&unit, v->bytes, v->length);
         dfw_tick(&unit, 0);
         check(unit.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&unit.deck, &before, sizeof before) == 0 &&
               unit.flags == flags && unit.beat == beat && unit.needle == needle && unit.tempo == tempo &&
-                  unit.text_length[0] == text_length && unit.level == level && unit.peak == peak,
+                  unit.text_length[0] == text_length && unit.level == level && unit.peak == peak &&
+                  unit.phase == phase,
               v->name);
     }
 }
