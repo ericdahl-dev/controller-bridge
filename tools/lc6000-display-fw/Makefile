@@ -66,7 +66,7 @@ PYTHON ?= python3
 
 $(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c $(ARM_TESTS) test/harness.c
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c $(ARM_TESTS) test/harness.c test/view.c
 
 include arm/arm.mk
 
