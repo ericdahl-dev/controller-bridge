@@ -161,3 +161,37 @@ struct JogDisplayPreviewAllDecksTests {
         #expect(JogDisplayPreviewNoControllerTests.decks(events) == [3], "only deck 3, the one followed, uploads")
     }
 }
+
+/// Stale feedback in the preview (#502): the Diagnostics simulator shows the logo, as the drawn display does (#464),
+/// from the same stale signal as the state message's stale bit. Uploads stay as they were.
+@Suite("Jog display preview when feedback goes stale")
+struct JogDisplayPreviewStaleTests {
+    static func lastPreview(_ events: [JogDisplayEvent], deck: Int) -> JogDisplayContent? {
+        events.compactMap { if case .preview(let content) = $0, content.deck == deck { return content }; return nil }.last
+    }
+
+    @Test("Feedback stops: deck 3's preview goes stale; fresh feedback brings the deck back; no upload carries stale")
+    func staleAndBack() throws {
+        let (rig, take) = try JogDisplayPreviewNoControllerTests.rig()
+        rig.coordinator.setJogPreviewDeck(3)
+        rig.clock.now = 0.5
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3, title: "Night Drive"))
+        rig.coordinator.tick()
+        #expect(Self.lastPreview(take(), deck: 3)?.stale == false)
+        for time in [10.5, 12.5, 13.0] {
+            rig.clock.now = time
+            rig.coordinator.tick()
+        }
+        #expect(rig.coordinator.status.feedback == .stale)
+        var events = take()
+        let stale = try #require(Self.lastPreview(events, deck: 3))
+        #expect(stale.stale)
+        #expect(stale.title == "Night Drive")
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3, title: "Night Drive"))
+        rig.coordinator.tick()
+        events += take()
+        #expect(rig.coordinator.status.feedback == .live)
+        #expect(Self.lastPreview(events, deck: 3)?.stale == false)
+        #expect(!events.contains { if case .uploadStarted(_, let content, _) = $0 { return content.stale }; return false })
+    }
+}

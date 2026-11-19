@@ -363,11 +363,18 @@ public final class JogDisplayDriver {
         onEvent?(.playLight(on))
     }
 
-    /// A deck's content for the simulator (#221), reported on change; nothing is sent to the unit.
+    /// A deck's content for the simulator (#221), reported on change; nothing is sent to the unit. While feedback is
+    /// stale it shows the waiting look (#502), from the same flag as the drawn state's stale bit.
     public func preview(_ content: JogDisplayContent) {
         guard previews[content.deck] != content else { return }
         previews[content.deck] = content
-        onEvent?(.preview(content))
+        reportPreview(content)
+    }
+
+    private func reportPreview(_ content: JogDisplayContent) {
+        var shown = content
+        shown.stale = drawnState.contains(.stale)
+        onEvent?(.preview(shown))
     }
 
     /// A message from the WD port.
@@ -529,8 +536,10 @@ public final class JogDisplayDriver {
 
     /// Syndicate's feedback stopped or came back (#464): drawn mode shows the waiting look while stale.
     public func setStale(_ stale: Bool) {
+        let changed = drawnState.contains(.stale) != stale
         if stale { drawnState.insert(.stale) } else { drawnState.remove(.stale) }
         sendState()
+        if changed { for deck in previews.keys.sorted() { reportPreview(previews[deck]!) } }
     }
 
     /// Drawn mode: the state message, sent only when it changes.
