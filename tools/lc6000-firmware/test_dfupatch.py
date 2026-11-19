@@ -1,6 +1,6 @@
 """Tests for dfupatch.py. They build synthetic DfuSe files, so they need no vendor data.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import struct, unittest, zlib
+import contextlib, io, os, struct, tempfile, unittest, zlib
 
 import dfupatch
 
@@ -157,6 +157,72 @@ class PatchTests(unittest.TestCase):
     def test_a_malformed_line_is_refused_with_its_line_number(self):
         with self.assertRaisesRegex(dfupatch.Refused, "line 2"):
             dfupatch.patch(self.data, "# fine\nnot a patch line")
+
+
+def run(*argv):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = dfupatch.main(list(argv))
+    return code, out.getvalue(), err.getvalue()
+
+
+class CommandLineTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.element = wd_element()
+        self.input = self.path("in.dfu", dfuse_file(self.element))
+
+    def path(self, name, content=None):
+        path = os.path.join(self.dir.name, name)
+        if content is not None:
+            with open(path, "wb" if isinstance(content, bytes) else "w") as f:
+                f.write(content)
+        return path
+
+    def test_verify_passes_a_good_wd_file(self):
+        code, out, _ = run("verify", self.input)
+        self.assertEqual(code, 0)
+        self.assertIn("bit for bit", out)
+
+    def test_verify_refuses_a_tp_file(self):
+        code, _, err = run("verify", self.path("tp.dfu", dfuse_file(tp_element())))
+        self.assertEqual(code, 1)
+        self.assertIn("undecoded", err)
+
+    def test_apply_writes_the_patched_file(self):
+        old = self.element[0x40]
+        patch = self.path("p.txt", f"0x{BASE + 0x40:08X} {old:02x} {old ^ 0xFF:02x}\n")
+        output = self.path("out.dfu")
+        code, out, _ = run("apply", self.input, patch, output)
+        self.assertEqual(code, 0)
+        with open(output, "rb") as f:
+            self.assertEqual(dfupatch.parse(f.read()).element[0x40], old ^ 0xFF)
+        self.assertIn("trailer CRC", out)
+
+    def test_apply_writes_nothing_when_refused(self):
+        patch = self.path("p.txt", f"0x{BASE + 0x40:08X} {self.element[0x40] ^ 1:02x} 00\n")
+        output = self.path("out.dfu")
+        code, _, err = run("apply", self.input, patch, output)
+        self.assertEqual(code, 1)
+        self.assertIn("old bytes", err)
+        self.assertFalse(os.path.exists(output))
+
+    def test_apply_wont_overwrite_a_file(self):
+        patch = self.path("p.txt", "")
+        output = self.path("out.dfu", b"keep")
+        code, _, err = run("apply", self.input, patch, output)
+        self.assertEqual(code, 1)
+        with open(output, "rb") as f:
+            self.assertEqual(f.read(), b"keep")
+
+    def test_apply_wont_write_inside_the_repository(self):
+        # patched images are never committed: the output has to land outside the repo
+        output = os.path.join(os.path.dirname(os.path.abspath(dfupatch.__file__)), "patched-test-output.dfu")
+        code, _, err = run("apply", self.input, self.path("p.txt", ""), output)
+        self.assertEqual(code, 1)
+        self.assertIn("outside the repository", err)
+        self.assertFalse(os.path.exists(output))
 
 
 if __name__ == "__main__":

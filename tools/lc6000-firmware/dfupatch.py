@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Patch an LC6000 PRIME wd firmware image inside its DfuSe file, and fix its checksums.
 
-Standard library only. Run with python3 -I. See README.md in this folder."""
-import struct, zlib
+  python3 -I dfupatch.py verify IN.dfu
+  python3 -I dfupatch.py apply IN.dfu PATCH.txt OUT.dfu
+
+Standard library only. See README.md in this folder."""
+import argparse, os, struct, sys, zlib
 from dataclasses import dataclass
 
 PREFIX_SIZE = 11
@@ -141,3 +144,73 @@ def parse(data):
         raise Refused("the element size doesn't match the target and file sizes")
     body = start + ELEMENT_HEADER_SIZE
     return DfuSeImage(address, bytes(data[body:body + size]), bytes(data[:body]), bytes(suffix[:-4]))
+
+
+def repository_root():
+    """The git working tree this tool lives in, or its own folder when it has been copied out of one."""
+    here = os.path.dirname(os.path.realpath(__file__))
+    path = here
+    while True:
+        if os.path.exists(os.path.join(path, ".git")):
+            return path
+        parent = os.path.dirname(path)
+        if parent == path:
+            return here
+        path = parent
+
+
+def inside(path, root):
+    path, root = os.path.realpath(path), os.path.realpath(root)
+    return os.path.commonpath([path, root]) == root
+
+
+def read(path, mode="rb"):
+    with open(path, mode) as f:
+        return f.read()
+
+
+def verify(args):
+    data = read(args.input)
+    image = parse(data)
+    covered = covered_length(image.element)
+    if patch(data, "") != data:
+        raise Refused("a no-op patch didn't reproduce the input bit for bit")
+    crc = struct.unpack_from("<I", image.element, covered)[0]
+    print(f"ok: trailer CRC 0x{crc:08X} over {covered:#x} bytes; a no-op patch reproduces the file bit for bit")
+
+
+def apply(args):
+    if inside(args.output, repository_root()):
+        raise Refused("write the patched image outside the repository: patched images are never committed")
+    if os.path.exists(args.output):
+        raise Refused(f"{args.output} already exists; not overwriting it")
+    out = patch(read(args.input), read(args.patch, "r"))
+    image = parse(out)
+    crc = struct.unpack_from("<I", image.element, covered_length(image.element))[0]
+    with open(args.output, "xb") as f:
+        f.write(out)
+    print(f"wrote {args.output}: new trailer CRC 0x{crc:08X}, DfuSe suffix CRC 0x{suffix_crc(out[:-4]):08X}")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Patch an LC6000 PRIME wd image in its DfuSe file.")
+    commands = parser.add_subparsers(dest="command", required=True)
+    check = commands.add_parser("verify", help="check a file's CRCs and that a no-op patch round-trips")
+    check.add_argument("input")
+    check.set_defaults(run=verify)
+    write = commands.add_parser("apply", help="apply a patch description and write a new .dfu")
+    write.add_argument("input")
+    write.add_argument("patch")
+    write.add_argument("output")
+    write.set_defaults(run=apply)
+    args = parser.parse_args(argv)
+    try:
+        args.run(args)
+    except (Refused, OSError) as error:
+        print(f"refused: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
