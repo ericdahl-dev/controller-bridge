@@ -45,7 +45,7 @@ $(BUILD)/sequences.h: vectors/messages.json test/vectors_to_c.py
 	python3 -I test/vectors_to_c.py $< --sequences > $@
 
 $(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h test/layer_record.c test/layer_record.h test/present.c test/present.h $(wildcard src/*.h) $(BUILD)/vectors.h $(BUILD)/sequences.h
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c test/present.c test/view.c -lm
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c test/present.c test/view.c test/messages.c -lm
 
 clean:
 	rm -rf $(BUILD)
