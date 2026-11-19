@@ -956,6 +956,15 @@ public final class Coordinator {
         return true
     }
 
+    /// A MIDI port took data again after it had stopped (#552): what was dropped meanwhile is lost, so each layer in
+    /// front paints every light again. The drawn display's heartbeat already brings the screen back.
+    public func repaintAfterRecovery() {
+        for controller in controllers where controller.source != nil && controller.bridge.layerShown {
+            controller.bridge.repaintLEDs()
+        }
+        disconnectFailedOutputs()
+    }
+
     /// Asks Syndicate to resend its state (#84): the OSC destination opened late, so what was sent before was dropped.
     public func resync() {
         // A Resend still "waiting" went out before there was anywhere to send it.

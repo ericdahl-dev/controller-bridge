@@ -204,3 +204,40 @@ struct MIDISendQueueTests {
         #expect(inner.sent.count == 2 && inner.sent.last == "\(MIDIEvent.noteOn(channel: 0, note: 3, velocity: 1))")
     }
 }
+
+/// A port that went stuck and came back without reconnecting (#552): the LED writes dropped meanwhile left the unit
+/// stale, so the queue says so and the Coordinator repaints every light once.
+@Suite("MIDI send queue recovery")
+struct MIDISendQueueRecoveryTests {
+    typealias Queue = MIDISendQueueTests
+
+    @Test("When a stuck port's send returns, the queue says so once, with the port's name")
+    func recovered() throws {
+        let inner = Queue.BlockingOutput()
+        final class Names: @unchecked Sendable {
+            let lock = NSLock()
+            var names: [String] = []
+        }
+        let names = Names()
+        let queue = MIDISendQueue(label: "test", stuckAfter: 0.05, onRecovered: { name in
+            names.lock.withLock { names.names.append(name) }
+        })
+        let output = queue.output(inner, name: "LC6000")
+        try output.send(.noteOn(channel: 0, note: 1, velocity: 1))
+        Thread.sleep(forTimeInterval: 0.1)
+        try output.send(.noteOn(channel: 0, note: 2, velocity: 1))   // stuck
+        inner.release()
+        queue.drain()
+        #expect(names.lock.withLock { names.names } == ["LC6000"])
+    }
+
+    @Test("The Coordinator's port-recovered command repaints every light of the layer in front")
+    func repaints() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        let painted = Set(rig.leds.keys)
+        rig.midi.outputs[Rig.lc6000Out.id]?.sent.removeAll()
+        rig.coordinator.apply(.portRecovered)
+        #expect(Set(rig.leds.keys).isSuperset(of: painted))
+    }
+}
