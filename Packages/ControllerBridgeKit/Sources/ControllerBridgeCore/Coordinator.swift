@@ -575,12 +575,9 @@ public final class Coordinator {
             if velocity > 0, let at = layers.firstIndex(of: current) {
                 let target = layers[(at + 1) % layers.count]
                 activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
-                // Its light (#477) flashes full on the layer it stepped to, and goes back to idle on release.
-                controllers[target].bridge.pressLit("deck_select", true)
-            } else if velocity == 0 {
-                controllers[current].bridge.pressLit("deck_select", false)
             }
-            // Lit here; no layer handles the note itself, or a hidden one would keep it held.
+            // No layer handles the note itself. Its light stays at its idle level, sent with the new layer's repaint:
+            // the unit showed no brighter level for it on a press (#480), so a press sends it nothing.
             return (event, Self.noLayer)
         }
         let onPads = layers.filter {
