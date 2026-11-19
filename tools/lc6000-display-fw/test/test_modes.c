@@ -82,6 +82,9 @@ static void a_second_begin_doesnt_redraw_the_old_deck(void) {
     CHECK(rec.presents == 1);
 }
 
+void the_state_flags_decode(void);
+void a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored(void);
+
 const test_case all_tests[] = {
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
     { "a deck before begin draws nothing", a_deck_before_begin_draws_nothing },
@@ -105,5 +108,8 @@ const test_case all_tests[] = {
     { "an end before the tick draws nothing", an_end_before_the_tick_draws_nothing },
     { "a state before any deck draws nothing", a_state_before_any_deck_draws_nothing },
     { "a second begin doesn't redraw the old deck", a_second_begin_doesnt_redraw_the_old_deck },
+    { "the state flags decode", the_state_flags_decode },
+    { "a state with the reserved bit or a wrong length is ignored",
+      a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored },
     { 0, 0 },
 };
