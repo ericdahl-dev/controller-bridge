@@ -41,7 +41,8 @@ struct MappingTests {
         #expect(mapping.notes.pads == [32, 33, 34, 35, 36, 37, 38, 39])
         #expect(mapping.leds == .init(
             pitchCenter: 42, ring: 40, ringColor: [0, 128, 255], rollPadColor: [255, 140, 0],
-            loopPadColor: [0, 255, 0], dimUnlitButtons: true, beatPulse: .off, pulseMs: 100, staleIdle: .dim
+            loopPadColor: [0, 255, 0], dimUnlitButtons: true, beatPulse: .off, pulseMs: 100, staleIdle: .dim,
+            pitchArrowBack: 41, pitchArrowForward: 43
         ))
     }
 
