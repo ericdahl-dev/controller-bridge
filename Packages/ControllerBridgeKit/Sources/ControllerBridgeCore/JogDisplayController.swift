@@ -148,7 +148,12 @@ final class JogDisplayController {
     /// The deck in front's meter to the drawn display, at most 30 times a second; the peak falls to the level once
     /// it has held. Nothing until its channel has reported.
     private func meterTick(deck: Int, driver: JogDisplayDriver) {
-        guard var meter = meters[deck] else { return }
+        // A channel that hasn't reported shows an empty meter, not the last deck's (#461).
+        guard var meter = meters[deck] else {
+            lastMeterDeck = deck
+            driver.meter(level: 0, peak: 0)
+            return
+        }
         if deck == lastMeterDeck, let sent = lastMeterSent, clock.now - sent < 1 / Self.markerRate - 1e-9 { return }
         lastMeterDeck = deck
         if clock.now - meter.peakAt > Self.peakHold {

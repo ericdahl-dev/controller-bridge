@@ -496,6 +496,8 @@ public final class JogDisplayDriver {
     private func sendLive() {
         sendWD(DrawnDisplay.Message.beat(lastMasterBeat ?? 0).bytes)
         if let lastMarker { sendWD(DrawnDisplay.Message.needle(lastMarker).bytes) }
+        // The level meter (#461): empty until the deck's channel reports.
+        sendWD(DrawnDisplay.Message.meter(level: lastMeter.level, peak: lastMeter.peak).bytes)
     }
 
     /// The heartbeat: begin, the deck and the state again, unchanged or not.

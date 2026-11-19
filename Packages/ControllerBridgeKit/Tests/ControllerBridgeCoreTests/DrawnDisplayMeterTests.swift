@@ -76,4 +76,21 @@ struct DrawnDisplayMeterTests {
         rig.coordinator.tick()   // same instant: the rate limit doesn't hold the new deck back
         #expect(Self.meters(port).last == DrawnDisplay.Message.meter(level: 32, peak: 32).bytes)
     }
+
+    @Test("With no mixer feedback the meter is empty (0, 0) in the full state, not stale; a deck with none shows empty too")
+    func noFeedbackIsEmpty() throws {
+        let (rig, port, _) = try Handshake.rig(.custom)
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        #expect(Self.meters(port) == [DrawnDisplay.Message.meter(level: 0, peak: 0).bytes])
+        #expect(!Handshake.drawn(port).contains { $0[9] == 0x07 && $0[10] & 0x20 != 0 })   // not stale
+
+        let (layers, wd) = try Handshake.drawnLayers()
+        Self.level(layers, channel: 1, 0.5)
+        layers.coordinator.tick()
+        let unit = JogDisplayRingHoldTests.lc6000.id
+        layers.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: unit)
+        layers.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: unit)
+        layers.coordinator.tick()
+        #expect(Self.meters(wd).last == DrawnDisplay.Message.meter(level: 0, peak: 0).bytes)
+    }
 }
