@@ -493,9 +493,8 @@ struct SettingsView: View {
                 hint("On the LC6000")
                 RoundedRectangle(cornerRadius: Theme.Radius.small)
                     .fill(Color(RGB(deckColor: DeckColors.ledPreview(
-                        shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors,
-                        // The LC6000's own table, as the label says (#313), not whichever profile is first.
-                        table: model.profiles.first { $0.id == "denon-lc6000-prime" }?.mapping.leds.colorTable ?? .rgb222
+                        // rgb222, the LC6000's table, as the label says and #197 planned (#313): not a profile lookup.
+                        shown ?? [0, 0, 0], mode: settings.wrappedValue.ringColors, table: .rgb222
                     ))))
                     .frame(width: 26, height: 26)
                     .accessibilityLabel("Deck \(deck) on the LC6000")

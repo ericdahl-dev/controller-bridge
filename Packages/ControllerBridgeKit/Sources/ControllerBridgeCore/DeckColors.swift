@@ -30,8 +30,8 @@ public struct DeckColors: Equatable, Sendable, Codable {
     /// [r, g, b] for a deck, or nil for a deck outside 1-4.
     public subscript(deck: Int) -> [Int]? { rgb[deck] }
 
-    /// The color as the controller shows it, for Settings' preview swatch: the ring's velocity through the running
-    /// profile's color table (#197), read back as RGB.
+    /// The color as the controller shows it, for Settings' preview swatch: the ring's velocity through a color table
+    /// (#197), read back as RGB. Settings' swatch is labeled "On the LC6000", so it passes rgb222 (#313).
     public static func ledPreview(_ rgb: [Int], mode: RingColors = .exact, table: ColorTable = .rgb222) -> [Int] {
         guard rgb.count == 3 else { return [0, 0, 0] }
         return table.shown(mode == .vivid ? table.vivid(for: rgb) : table.velocity(for: rgb))

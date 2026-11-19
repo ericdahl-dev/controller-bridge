@@ -1,7 +1,7 @@
 import ControllerBridgeCore
 import Testing
 
-/// Syndicate's mixer addresses (#207), feedback and (provisionally) input, from the real Resend capture on #207.
+/// Syndicate's mixer addresses (#207): feedback from the real Resend capture on #207, and input as its spike confirmed.
 @Suite("Mixer OSC addresses")
 struct MixerOSCTests {
     @Test("Each mixer value's address on channel 2")
