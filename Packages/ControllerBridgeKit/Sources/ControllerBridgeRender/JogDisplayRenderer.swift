@@ -18,10 +18,11 @@ public enum JogDisplayRenderer {
     /// RGBA bytes, row by row, top first, upright: what `JogImage.forUnit` turns and encodes. `litBeat` (1–4) lights
     /// that beat's section; `marker` draws the marker that many turns clockwise from 12 o'clock.
     public static func render(_ content: JogDisplayContent, litBeat: Int? = nil, marker: Double? = nil,
-                              meter: (level: Int, peak: Int)? = nil) -> [UInt8] {
+                              meter: (level: Int, peak: Int)? = nil, time: (elapsed: Int, length: Int)? = nil) -> [UInt8] {
         drawing { context in
             draw(content, litBeat: litBeat, in: context)
             if let meter, !content.stale { drawMeter(level: meter.level, peak: meter.peak, in: context) }
+            if let time, time.length > 0, !content.stale { drawTime(elapsed: time.elapsed, length: time.length, in: context) }
             if let marker { drawMarker(turns: marker, in: context) }
         }
     }
@@ -55,6 +56,9 @@ public enum JogDisplayRenderer {
     /// 12 o'clock. Green to `meterYellowFrom` of the arc, yellow above; the whole fill red at clip (127).
     static let meterInner: CGFloat = 80, meterOuter: CGFloat = 83
     static let meterFrom: CGFloat = 240, meterSpan: CGFloat = 60, meterYellowFrom: CGFloat = 0.75
+    /// Track time (#460): the remaining time's size and the middle of its line box, under key/BPM. The largest that
+    /// keeps "-99:59" inside the text-safe circle with a gap under key/BPM; the user asked for about 18, which reaches r 83.
+    static let timeSize: CGFloat = 14, timeCenterY: CGFloat = 169
     /// The peak tick's width, in degrees.
     static let meterTick: CGFloat = 2
     static let meterYellow = rgb(0xFFD400), meterClip = rgb(0xFF3B30), meterPeak = rgb(0xFFFFFF)
@@ -76,8 +80,9 @@ public enum JogDisplayRenderer {
     /// draw over it. With neither, it is the upload's exactly (a test pins it).
     /// `meter` is the front deck's mixer level and held peak, 0–127 each (#461), as the drawn display shows them.
     public static func simulatorImage(_ content: JogDisplayContent, litBeat: Int?, marker: Double?,
-                                      meter: (level: Int, peak: Int)? = nil) -> [UInt8] {
-        render(content, litBeat: litBeat, marker: marker, meter: meter)
+                                      meter: (level: Int, peak: Int)? = nil,
+                                      time: (elapsed: Int, length: Int)? = nil) -> [UInt8] {
+        render(content, litBeat: litBeat, marker: marker, meter: meter, time: time)
     }
 
     /// The Geist faces the design uses, bundled with this target (#221) so the image is the same in the app and under
@@ -206,6 +211,14 @@ public enum JogDisplayRenderer {
         // Not cut to the safe circle, as in the design: a key and a BPM are short, and both must show whole.
         let height = lineBoxHeight(font, lineHeight: nil)
         draw(CTLineCreateWithAttributedString(string), font: font, centerX: center, centerY: 136 + height / 2, in: context)
+    }
+
+    /// Track time (#460): the time left, "-m:ss" (minutes past 59 stay minutes), in the slot under key/BPM. Seconds.
+    private static func drawTime(elapsed: Int, length: Int, in context: CGContext) {
+        let left = max(length - max(elapsed, 0), 0)
+        let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, timeSize, nil)
+        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: text), font: font,
+             centerX: center, centerY: timeCenterY, in: context)
     }
 
     /// The level meter (#461): the dark track, the fill from the bottom, the held peak as a tick. Levels 0–127.
