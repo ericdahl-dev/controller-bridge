@@ -107,10 +107,15 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_tp_update_00_31
 `build_owner_image.py` builds the one file to flash. It takes the stock file and our block, applies the hook patch, places the block in the padding, and recomputes both CRCs.
 - The output must be outside the repository.
 - It refuses a block that isn't exactly the 9,184-byte padding or doesn't end with our marker, so the hook never goes out without its block.
-- **Not yet buildable with drawing:** the drawing code has outgrown the padding, so `make arm` fails until drawing gets its own block (#501).
+
+**Two blocks (#501).** `make arm` builds both:
+- **Block A,** `block.bin`: the hook and the protocol, placed in the image's padding by `build_owner_image.py`.
+- **Block B,** `upper.bin`: the drawing, with its own `.dfu` at `0x08080000` (see "Block B's own file" below).
+
+Block A reads B only when it is built with `ARM_UPPER_PROVEN=1`, and that waits for the read-only checks below. Built without it (the default), A never reads `0x08080000`, so it never answers the app's capability ask: DeckBridge stays on images and the unit behaves as stock.
 
 ```sh
-make -C tools/lc6000-display-fw arm
+make -C tools/lc6000-display-fw arm                       # after the read-only checks: add ARM_UPPER_PROVEN=1
 python3 -I tools/lc6000-firmware/build_owner_image.py ~/lc6000/jc20_wd_update_00_50_3A7CE2CA.dfu \
   tools/lc6000-display-fw/build/arm/block.bin ~/lc6000/jc20_wd_00_50_drawn.dfu --show-slot-16
 ```
@@ -125,12 +130,13 @@ python3 -I tools/lc6000-firmware/build_owner_image.py ~/lc6000/jc20_wd_update_00
 
 | What | Address | How |
 |---|---|---|
-| The owner's image: stock code, the hook, our block in the padding, the trailer | `0x08008000`-`0x0807FFFF` (sectors 2-7) | One `.dfu`, by the same route as slot 16 (#425), then read back and compare with `dfupatch.py compare` |
-| Nothing | `0x08080000` and up (sectors 8-11) | Not written. Our block is inside the image, under its CRC |
+| The owner's image: stock code, the hook, block A in the padding, the trailer | `0x08008000`-`0x0807FFFF` (sectors 2-7) | One `.dfu`, by the same route as slot 16 (#425), then read back and compare with `dfupatch.py compare` |
+| Block B, the drawing | `0x08080000` and up (sectors 8-11, up to 512 KB) | Its own `.dfu` (`build_upper_dfu.py`). **Never before the read-only checks below** show that flash exists and is erased |
 | Nothing | sectors 0-1, option bytes | Never written |
 
 **Way back:** the same as for every `wd` image. Put it in update mode and flash the stock file, or use Denon's updater.
-- The block lives inside the image, so restoring stock removes it with the hook.
+- Block A lives inside the image, so restoring stock removes it with the hook.
+- Block B is outside the image, and Denon's updater never erases sector 8 (#434), so B stays after a restore. That's harmless: only block A ever calls into B, and stock never does. A without B, or B without A, behaves exactly like stock.
 - A crash in our code after boot is cleared by a power cycle: drawn mode starts only on our message (see `tools/lc6000-display-fw/arm/README.md`).
 - A crash before the update-mode command can run needs SWD (#433), as for any changed `wd` image (#434).
 
@@ -141,7 +147,7 @@ python3 -I tools/lc6000-firmware/build_owner_image.py ~/lc6000/jc20_wd_update_00
 **You need:** `dfu-util` (`brew install dfu-util`), and `enter-update-mode`, built as the flash day kit builds it:
 `swiftc -O -swift-version 5 tools/lc6000-firmware/enter-update-mode.swift -o ~/lc6000/enter-update-mode`, then `~/lc6000/enter-update-mode selftest`, which sends nothing.
 
-They answer what static analysis can't (#466): whether flash above the image exists and is erased, and how the chip's option bytes are set. Our block doesn't use that flash today, but these reads make sure nothing up there is a surprise.
+They answer what static analysis can't (#466): whether flash above the image exists and is erased, and how the chip's option bytes are set. Block B (#501) goes in that flash, and it is never flashed before these reads. `build_upper_dfu.py` checks step 4's read itself before it writes B's file.
 
 1. Quit DeckBridge and anything else that talks to the unit.
 2. Put the display chip in update mode:
@@ -166,6 +172,22 @@ They answer what static analysis can't (#466): whether flash above the image exi
    - It isn't inside any alt setting the ROM lists, so the ROM may refuse it. Then it is a read for SWD (#433). The layout string in step 3 already says 1 MB.
 7. **Leave update mode:** switch the unit off, wait 5 s, and switch it on with no buttons held. Update mode only reads, and nothing was written, so the display chip comes back in its own app with the stock picture. If the screen stays dark and `dfu-util -l` still lists the bootloader, do as the flash day kit does: open Denon's updater, which restores a chip that is in update mode (#434).
 8. Post the results on #467. Never write anything in this session.
+
+### Block B's own file (#501)
+
+`build_upper_dfu.py` writes block B as its own `.dfu`: one element at `0x08080000`, for the ST bootloader (`0483:df11`). Nothing here talks to the unit.
+
+```sh
+python3 -I tools/lc6000-firmware/build_upper_dfu.py tools/lc6000-display-fw/build/arm/upper.bin \
+  ~/lc6000/wd-upper-drawing.dfu --proof ~/lc6000/wd-upper-512k.bin
+```
+
+It refuses:
+- **The proof:** if `--proof` is missing, or the file isn't the whole read of step 4 above (524,288 bytes, all `0xFF`), or it is inside the repository. A flag anyone can type isn't proof, so the tool reads the file itself.
+- **The block:** if its header doesn't check out the way block A checks it: marker `DFWB`, version, a length equal to the file and at most 512 KB, CRC-32, and a draw entry that is Thumb code inside B.
+- **The output:** if it is inside the repository, or the file already exists.
+
+**Order, after the read-only checks:** build with `ARM_UPPER_PROVEN=1`, flash B's `.dfu`, then the owner's image. Either order is safe: A checks B's header before it calls anything in B, and stays silent until B checks out. Each flash is a separate step the owner runs, with its own OK.
 
 ## Flash day kit (#435)
 

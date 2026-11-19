@@ -1,24 +1,32 @@
-# The drawn display on the chip: our block and its hook (#467)
+# The drawn display on the chip: our two blocks and the hook (#467, #501)
 
-The same C sources the Mac tests (`src/`) run on the display chip (`wd`, STM32F429). They are built into one raw block that fills the stock 00.50 image's own padding, `0x0807DC00`-`0x0807FFDF` (9,184 bytes, inside the image's CRC; #466). The hook patch (`tools/lc6000-firmware/patches/wd-00.50-drawn-hook.patch`) makes two stock instructions call the block's entries.
+The same C sources the Mac tests (`src/`) run on the display chip (`wd`, STM32F429). They are built into two raw blocks:
+
+| Block | Where | What | Limit |
+|---|---|---|---|
+| **A**, `block.bin` | The stock 00.50 image's own padding, `0x0807DC00`-`0x0807FFDF`, inside the image's CRC (#466) | The two entries, the reset witness, the protocol (`dfw.c`), the one malloc, the layer adapter | 9,184 bytes |
+| **B**, `upper.bin` | `0x08080000`-`0x080FFFFF`, sectors 8-11, outside the image | The drawing (`draw.c`, `draw_live.c`, fonts) behind a header block A checks | 512 KB |
+
+The hook patch (`tools/lc6000-firmware/patches/wd-00.50-drawn-hook.patch`) makes two stock instructions call block A's entries. Only block A ever calls into B.
 
 Nothing here is flashed. Nothing here holds vendor bytes: the stock addresses come from the static analysis on #466.
 
 ## Build
 
 ```sh
-make -C tools/lc6000-display-fw arm              # build/arm/block.bin, 9,184 bytes, with the marker last
+make -C tools/lc6000-display-fw arm                       # build/arm/block.bin (A) and build/arm/upper.bin (B)
+make -C tools/lc6000-display-fw arm ARM_UPPER_PROVEN=1    # A that reads B: only after the owner's read-only checks
 make -C tools/lc6000-display-fw arm-test PYTHON=<python with unicorn>
-make -C tools/lc6000-display-fw arm ARM_DRAW=0   # the hook path alone, inert (if drawing ever doesn't fit)
-make -C tools/lc6000-display-fw arm-size         # sizes on this toolchain: drawing (information only), hook and protocol, hook only
+make -C tools/lc6000-display-fw arm ARM_DRAW=0            # A's hook path alone, inert
+make -C tools/lc6000-display-fw arm-size                  # A (hook and protocol), A (hook only), B; any one over fails
 ```
 
-**The drawing no longer fits the padding,** so `make arm` with drawing fails the link on purpose. Drawing moves to its own block at `0x08080000` (#501). Until that lands, there is no flashable drawn-display block. The block tests build with an empty drawing (`ARM_DRAW=stub`, test builds only).
-
-- The build prints how much of the padding is used. If the code doesn't fit below the marker, the link fails with "our code doesn't fit in the wd padding". Nothing is ever placed above `0x08080000`.
+- **`ARM_UPPER_PROVEN`, 0 by default.** Block A reads `0x08080000` only when built with 1, which waits for the owner's read-only read of that flash (`tools/lc6000-firmware/README.md`, "Read-only checks"). Built with 0, A never reads it and never answers the app's capability ask, so the app stays on images.
+- The build prints how much of each block is used. If A doesn't fit below its marker, the link fails with "our code doesn't fit in the wd padding". If B is over 512 KB, its link fails.
+- The block tests build A with an empty drawing table (`ARM_DRAW=stub`, test builds only) so they see the capability answer without B.
 - **Toolchain, pinned:** `arm-none-eabi-gcc` 16.2.0 with GNU Binutils 2.47 (Homebrew, macOS). CI builds with Ubuntu's `gcc-arm-none-eabi` package.
 - **Reproducible per toolchain version:** two builds with the same toolchain are byte-identical (a test checks this). Builds from different toolchain versions, for example Mac and CI, are not expected to match.
-- There is no C library. `libc_min.c` provides the four functions the sources may use, and `include/string.h` declares them.
+- There is no C library. `libc_min.c` provides the four functions the sources may use, and `include/string.h` declares them. Each block links its own copy.
 
 ## Layout
 
@@ -26,11 +34,29 @@ make -C tools/lc6000-display-fw arm-size         # sizes on this toolchain: draw
 |---|---|
 | `0x0807DC00` | Command entry (`entry.S`), called from `0x0800F464` |
 | `0x0807DC40` | Render entry (`entry.S`), called from `0x08012456` |
-| after that | Our code and constants (`hook.c`, `adapter.c`, `src/`) |
+| after that | Block A's code and constants (`hook.c`, `upper.c`, `adapter.c`, `dfw.c`) |
 | `0x0807FFDC` | The marker word, `"DFW1"`, last |
+| `0x08080000` | Block B's header (`upper.h`), then the drawing and its fonts |
 | `0x2002AE94` | Our state (`hook_state`), in SRAM stock never uses. Nothing zeroes it, so it carries a magic and a check word |
 
-There is no startup code. The link refuses any `.data` or `.bss`.
+There is no startup code. Both links refuse any `.data` or `.bss`.
+
+## Block B's header
+
+Five little-endian words at `0x08080000` (`upper.h`):
+
+| Offset | Field |
+|---|---|
+| +0 | Marker `"DFWB"` |
+| +4 | Version, changed whenever A and B's shared layout (`dfw_unit`, the entry table) changes |
+| +8 | Length of B, header included, at most 512 KB |
+| +12 | CRC-32 (zlib's) of B from +16 to its end |
+| +16 | The draw entry: Thumb code inside B |
+
+- `upper_header.c` puts the header first, and `upper_seal.py` fills in its length and CRC after the link.
+- B never calls into A, whose addresses move from build to build. It links its own copy of what the drawing uses (`dfw_stale`, say).
+- **When A checks B:** once per boot, at the first capability ask or begin, never at boot, so a power cycle still clears any crash of ours. The CRC goes a nibble at a time with a 64-byte table, never the chip's CRC unit (stock uses it). On the chip build: about 1 ms for today's B (about 10 KB), and 45 ms for all 512 KB (6.1M instructions, measured in the emulator), well under the app's 0.5 s wait.
+- If anything fails (marker, version, length, CRC or entry), A doesn't answer the capability ask, and the app falls back to images. That's the same path as a failed malloc.
 
 ## The entries
 
