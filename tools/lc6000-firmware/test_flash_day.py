@@ -44,15 +44,23 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(re.findall(r'flash "[^\n]*" (?:app|upper) (\w+)', self.stages), ["REWRITE"])
 
     def test_no_dangerous_dfu_util_options_appear(self):
-        for word in (":mass-erase", ":unprotect", ":force", "0x1FFF", "-s 0x08000000"):
+        # 0x1FFF only as the option bytes' 16-byte read (#468): never the system memory or anything else up there.
+        option_line = 'OPTION_ADDRESS="0x1FFFC000"; OPTION_SIZE="16"'
+        self.assertEqual(self.stages.count("0x1FFF"), self.stages.count(option_line))
+        for word in (":mass-erase", ":unprotect", ":force", "-s 0x08000000"):
             self.assertNotIn(word, self.stages)
 
-    def test_every_read_stays_in_the_settings_app_and_upper_sectors(self):
+    def test_every_read_stays_in_the_settings_app_upper_and_option_bytes(self):
         self.assertIn('APP_ADDRESS="0x08008000"; APP_SIZE="0x78000"', self.stages)
         self.assertIn('SETTINGS_ADDRESS="0x08004000"; SETTINGS_SIZE="0x4000"', self.stages)
         self.assertIn('UPPER_ADDRESS="0x08080000"; UPPER_SIZE="0x80000"', self.stages)
-        for upload in re.findall(r"dfu-util[^\n]*-U[^\n]*", self.stages):
-            self.assertRegex(upload, r'-s "\$(APP|SETTINGS|UPPER)_ADDRESS:\$\1_SIZE"')
+        self.assertIn('OPTION_ADDRESS="0x1FFFC000"; OPTION_SIZE="16"', self.stages)
+        uploads = re.findall(r"dfu-util[^\n]*-U[^\n]*", self.stages)
+        for upload in uploads:
+            # Flash on alt 0, the option bytes on alt 1, each only at its own address and size.
+            self.assertRegex(upload, r'-a 0 -s "\$(APP|SETTINGS|UPPER)_ADDRESS:\$\1_SIZE"|'
+                                     r'-a 1 -s "\$OPTION_ADDRESS:\$OPTION_SIZE"')
+        self.assertTrue(any("$OPTION_ADDRESS" in upload for upload in uploads))
 
     def test_the_stock_flash_is_denons_own_updater_before_any_patched_image(self):
         # Seen on hardware (2026-11-19): the updater flashes a chip that's in update mode, and refuses a running,
@@ -122,6 +130,13 @@ class DrawnPathTests(unittest.TestCase):
         upper = self.drawn.index('flash "$UPPER_DFU" "upper" upper')
         owner = self.drawn.index('flash "$OWNER_DFU" "owner" app')
         self.assertLess(upper, owner)
+
+    def test_the_option_bytes_are_read_and_judged_before_step_1(self):
+        before = self.drawn[self.drawn.index('stage "Before'):self.drawn.index('stage "Step 1 of 2')]
+        read = before.index('read_options "$WORK/wd-option-bytes-$STAMP.bin"')
+        judged = before.index('drawn options "$WORK/wd-option-bytes-$STAMP.bin"')
+        self.assertLess(read, judged)
+        self.assertIn("way_back", before[judged:before.index("read_upper")])
 
     def test_part_of_this_b_or_another_good_b_is_rewritten_behind_its_own_word(self):
         before = self.drawn[self.drawn.index('stage "Before'):self.drawn.index('stage "Step 1 of 2')]

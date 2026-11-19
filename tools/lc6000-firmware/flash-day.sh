@@ -204,6 +204,8 @@ APP_ADDRESS="0x08008000"; APP_SIZE="0x78000"
 SETTINGS_ADDRESS="0x08004000"; SETTINGS_SIZE="0x4000"
 # Sectors 8-11, above the image: block B's home (#501), only on the drawn path.
 UPPER_ADDRESS="0x08080000"; UPPER_SIZE="0x80000"
+# The option bytes, bank 1 (alt 1): read only, on the drawn path, to check protection before step 1.
+OPTION_ADDRESS="0x1FFFC000"; OPTION_SIZE="16"
 DFU_PATH=""
 
 dfupatch() { python3 -I "$HERE/dfupatch.py" "$@"; }
@@ -281,6 +283,11 @@ read_app() {
 # read_upper FILE reads all of the flash above the image, sectors 8-11, back from the chip (read-only).
 read_upper() {
   dfu-util -p "$DFU_PATH" -a 0 -s "$UPPER_ADDRESS:$UPPER_SIZE" -U "$1"
+}
+
+# read_options FILE reads the option bytes (alt 1, read-only).
+read_options() {
+  dfu-util -p "$DFU_PATH" -a 1 -s "$OPTION_ADDRESS:$OPTION_SIZE" -U "$1"
 }
 
 # flash IMAGE LABEL [AREA] [WORD] writes one .dfu to the display chip, after the typed WORD (FLASH unless named), then
@@ -559,6 +566,15 @@ if read_app "$WORK/wd-app-before-$STAMP.bin" && dfupatch compare "$CURRENT_WD" "
   printf '  %s✓%s the chip holds the image it runs now\n' "$GREEN" "$RESET"
 else
   warn "Couldn't confirm the chip holds $CURRENT_WD (the read failed or it differs). Stopping."
+  way_back
+fi
+if ! read_options "$WORK/wd-option-bytes-$STAMP.bin"; then
+  warn "The option bytes couldn't be read, so the chip's protection can't be checked. Stopping."
+  way_back
+fi
+if ! drawn options "$WORK/wd-option-bytes-$STAMP.bin"; then
+  warn "The chip's protection isn't what block B needs (the line above says what). Nothing is written."
+  note "Post that line on #468."
   way_back
 fi
 if ! read_upper "$WORK/wd-upper-before-$STAMP.bin"; then
