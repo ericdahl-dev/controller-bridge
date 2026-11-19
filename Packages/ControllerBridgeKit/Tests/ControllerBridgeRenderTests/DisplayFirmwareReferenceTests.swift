@@ -32,20 +32,27 @@ struct DisplayFirmwareReferenceTests {
         return Array(data.dropFirst(header.count))
     }
 
-    /// A few levels of slack, for another Mac's rasterizer; a design change moves far more.
-    static let tolerance = 3
+    /// Slack for another Mac's rasterizer: CI's macOS draws text edges up to about 40 levels off this renderer's on
+    /// a developer's Mac, and nothing else. So most pixels must be within a few levels, a bounded number of text edge
+    /// pixels may be further off, and none by more than `cap`. A design change (a color, a size, a shape) moves far
+    /// more pixels than the budget.
+    static let close = 3, budget = 400, cap = 64
 
     @Test("Each reference is what the renderer draws now", arguments: references.map(\.file))
     func referenceIsCurrent(file: String) throws {
         let content = try #require(Self.references.first { $0.file == file }?.content)
         let reference = try #require(Self.rgb(file), "missing or malformed \(file)")
         let rendered = JogDisplayRenderer.render(content)
-        var worst = 0
+        var worst = 0, loose = 0
         for pixel in 0..<(198 * 198) {
+            var difference = 0
             for channel in 0..<3 {
-                worst = max(worst, abs(Int(rendered[pixel * 4 + channel]) - Int(reference[pixel * 3 + channel])))
+                difference = max(difference, abs(Int(rendered[pixel * 4 + channel]) - Int(reference[pixel * 3 + channel])))
             }
+            worst = max(worst, difference)
+            if difference > Self.close { loose += 1 }
         }
-        #expect(worst <= Self.tolerance, "\(file): worst difference \(worst)")
+        print("\(file): worst \(worst), \(loose) pixels over \(Self.close)")
+        #expect(worst <= Self.cap && loose <= Self.budget, "\(file): worst \(worst), \(loose) pixels over \(Self.close)")
     }
 }
