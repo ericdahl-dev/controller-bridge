@@ -266,10 +266,20 @@ class RenderEntryTests(unittest.TestCase):
         self.assertEqual(chip.sent, [])
 
 
+def built_layout():
+    """The layout word (#516) the built B carries: the chip's DFW_LAYOUT, which the Mac can't work out."""
+    return struct.unpack_from("<I", upper_block(), 16)[0]
+
+
+def sealed_upper(layout, entry, body):
+    """A block B with its header's length and CRC (zlib's, from +16) worked out here."""
+    rest = struct.pack("<II", layout, entry) + body
+    return struct.pack("<IIII", 0x42574644, 3, 16 + len(rest), zlib.crc32(rest)) + rest
+
+
 def good_upper():
-    """A literal block B (the C header tests' own): CRC 0x22B5DF72 is zlib's, worked out apart. Its entry is never
-    called by a capability ask."""
-    return struct.pack("<IIIII", 0x42574644, 2, 29, 0x22B5DF72, 0x08080015) + b"123456789"
+    """A small block B for the chip's layout. Its entry is never called by a capability ask."""
+    return sealed_upper(built_layout(), 0x08080019, b"123456789")
 
 
 def proven_block():
@@ -282,8 +292,7 @@ def proven_block():
 
 def full_upper():
     """A good B filling all 512 KB, so the check is as long as it can ever be."""
-    body = struct.pack("<I", 0x08080015) + bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 20))
-    return struct.pack("<IIII", 0x42574644, 2, UPPER_SIZE, zlib.crc32(body)) + body
+    return sealed_upper(built_layout(), 0x08080019, bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 24)))
 
 
 class UpperSwitchTests(unittest.TestCase):
@@ -354,9 +363,9 @@ class UpperBlockTests(unittest.TestCase):
 
     def test_b_starts_with_a_header_block_a_will_accept(self):
         data = upper_block()
-        marker, version, length, crc, draw = struct.unpack_from("<IIIII", data)
+        marker, version, length, crc, layout, draw = struct.unpack_from("<IIIIII", data)
         self.assertEqual(marker, 0x42574644)
-        self.assertEqual(version, 2)
+        self.assertEqual(version, 3)
         self.assertEqual(length, len(data))
         self.assertLessEqual(length, UPPER_SIZE)
         self.assertEqual(crc, zlib.crc32(data[16:]))
@@ -366,14 +375,18 @@ class UpperBlockTests(unittest.TestCase):
                                                               if line.count(" ") == 2)}
         self.assertEqual(draw & ~1, names["dfw_draw"])  # nm prints a Thumb function's address without bit 0
         self.assertEqual(draw & 1, 1, "Thumb")
-        self.assertTrue(UPPER + 20 <= draw < UPPER + length)
+        self.assertTrue(UPPER + 24 <= draw < UPPER + length)
 
     def test_block_a_draws_through_a_good_b_and_stays_silent_for_a_corrupted_one(self):
         proven = proven_block()
         answer = bytes.fromhex("F000020B01102000020001F7")
         corrupted = bytearray(upper_block())
         corrupted[len(corrupted) // 2] ^= 0x01
-        for upper, drawn in ((upper_block(), True), (bytes(corrupted), False)):
+        # B's own bytes, resealed for another dfw_unit (#516): its CRC is good, only the layout is A's no longer.
+        built = upper_block()
+        layout, entry = struct.unpack_from("<II", built, 16)
+        other_layout = sealed_upper(layout ^ 1, entry, built[24:])
+        for upper, drawn in ((built, True), (bytes(corrupted), False), (other_layout, False)):
             with self.subTest(drawn=drawn):
                 chip = Chip(data=proven, upper=upper)
                 for hexbytes in (CAPABILITY, BEGIN, DECK_2_RED_TRACK):
@@ -401,6 +414,39 @@ class UpperBlockTests(unittest.TestCase):
             top, bottom = 21 + 197 - 90, 21 + 197 - 60
             rows.append(bytes(chip.uc.mem_read(LAYER_AT + top * 320 * 2, (bottom - top + 1) * 320 * 2)))
         self.assertNotEqual(rows[0], rows[1], "the title changed the title rows")
+
+
+def struct_fields(source, opening, closing):
+    """The field names declared between `opening` and `closing` in a C header, comments dropped."""
+    import re
+    end = source.index(closing)
+    body = source[source.rindex(opening, 0, end) + len(opening):end]
+    body = re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)
+    names = []
+    for declaration in body.split(";"):
+        declaration = re.sub(r"\[[^\]]*\]", "", declaration).strip()
+        if declaration:
+            names += [re.findall(r"\w+$", part.strip())[0] for part in declaration.split(",")]
+    return names
+
+
+class LayoutWordTests(unittest.TestCase):
+    """DFW_LAYOUT (#516) is only a guard if it counts every field B can read: a field added into padding moves nothing
+    else, so only its own term changes the word."""
+
+    def test_every_dfw_unit_and_deck_field_is_in_the_layout_word(self):
+        with open(os.path.join(FW, "src", "dfw.h")) as f:
+            source = f.read()
+        layout = source[source.index("#define DFW_LAYOUT"):]
+        layout = layout[:layout.index("\n\n")]
+        for struct_name, opening, closing in (
+                ("dfw_unit", "typedef struct dfw_unit {", "} dfw_unit;"),
+                ("dfw_deck_state", "typedef struct {", "} dfw_deck_state;")):
+            fields = struct_fields(source, opening, closing)
+            self.assertGreater(len(fields), 4, struct_name)
+            for field in fields:
+                with self.subTest(struct=struct_name, field=field):
+                    self.assertIn(f"offsetof({struct_name}, {field})", layout)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
