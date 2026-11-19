@@ -166,7 +166,7 @@ public final class JogDisplayDriver {
         case asking(since: Double)
         case drawn(version: Int)
     }
-    private(set) var mode = Mode.images
+    private(set) var mode = Mode.images { didSet { reportPreviewsIfStaleChanged() } }
     /// The firmware found (#456): nil before the hello and while asking.
     var found: DisplayFound? {
         guard connected else { return nil }
@@ -371,10 +371,21 @@ public final class JogDisplayDriver {
         reportPreview(content)
     }
 
+    /// Whether the previews show the waiting look: only while the unit draws, as only then does its screen (#502).
+    private var previewStale: Bool { drawing && drawnState.contains(.stale) }
+    private var reportedStale = false
+
     private func reportPreview(_ content: JogDisplayContent) {
         var shown = content
-        shown.stale = drawnState.contains(.stale)
+        shown.stale = previewStale
         onEvent?(.preview(shown))
+    }
+
+    /// Every deck's preview again when the waiting look comes or goes.
+    private func reportPreviewsIfStaleChanged() {
+        guard previewStale != reportedStale else { return }
+        reportedStale = previewStale
+        for deck in previews.keys.sorted() { reportPreview(previews[deck]!) }
     }
 
     /// A message from the WD port.
@@ -536,10 +547,9 @@ public final class JogDisplayDriver {
 
     /// Syndicate's feedback stopped or came back (#464): drawn mode shows the waiting look while stale.
     public func setStale(_ stale: Bool) {
-        let changed = drawnState.contains(.stale) != stale
         if stale { drawnState.insert(.stale) } else { drawnState.remove(.stale) }
         sendState()
-        if changed { for deck in previews.keys.sorted() { reportPreview(previews[deck]!) } }
+        reportPreviewsIfStaleChanged()
     }
 
     /// Drawn mode: the state message, sent only when it changes.
