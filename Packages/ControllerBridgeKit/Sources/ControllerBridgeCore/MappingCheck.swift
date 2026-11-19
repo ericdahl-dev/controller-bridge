@@ -20,7 +20,9 @@ extension Mapping {
         var out: [String] = []
         walk(document, schema: schema, path: "", into: &out)
         let checked = known(document, schema: schema)
-        out += duplicates(in: whole ? checked : merge(schema, checked), written: Set(leafPaths(document)))
+        let merged = whole ? checked : merge(schema, checked)
+        out += duplicates(in: merged, written: Set(leafPaths(document)))
+        out += arrowClashes(in: merged, written: Set(leafPaths(document)))
         // Document order: by where the problem's path first appears in what the user wrote.
         let order = Dictionary(leafPaths(document).enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         return out.enumerated().sorted { a, b in
@@ -129,6 +131,20 @@ extension Mapping {
             }
         }
         return out
+    }
+
+    /// A pitch arrow (#475) on a note another light uses: the center light, the ring, the other arrow, or a deck
+    /// button (which lights its own note). Other LED notes may share a button's note, so only the arrows are checked.
+    private static func arrowClashes(in merged: OrderedJSON, written: Set<String>) -> [String] {
+        let arrows = ["leds.pitch_arrow_back", "leds.pitch_arrow_forward"]
+        func number(_ path: String) -> Double? { if case .number(let n, _)? = value(at: path, in: merged) { n } else { nil } }
+        let buttons = uses(merged).notes.filter { !$0.0.hasPrefix("notes.pads[") && !$0.0.hasPrefix("pads.mode_notes.") }
+        let lights = (["leds.pitch_center", "leds.ring"] + arrows).compactMap { path in number(path).map { (path, $0) } } + buttons
+        return arrows.filter(written.contains).compactMap { arrow in
+            guard let n = number(arrow) else { return nil }
+            let others = lights.filter { $0.0 != arrow && $0.1 == n }.map(\.0)
+            return others.isEmpty ? nil : "\(arrow): note \(Int(n)) is also \(others.joined(separator: " and "))"
+        }
     }
 
     /// The channels the deck's buttons arrive on (midi.channel and every layer's) and the pads' (pads.channel, or each
