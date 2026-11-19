@@ -238,6 +238,7 @@ final class BridgeModel {
         }
         if new.ringColors != old.ringColors { producer.send(.setRingColors(new.ringColors)) }
         if new.colorMessages != old.colorMessages { producer.send(.setColorMessages(new.colorMessages)) }
+        if new.lightBrightness != old.lightBrightness { producer.send(.setLightBrightness(new.lightBrightness)) }
         if new.profileChoices != old.profileChoices { producer.send(.setProfileChoices(new.profileChoices)) }
         if new.jogDisplay != old.jogDisplay { producer.send(.setJogDisplay(enabled: new.jogDisplay)) }
         if new.displayFirmware != old.displayFirmware { producer.send(.setDisplayFirmware(new.displayFirmware)) }
@@ -347,6 +348,7 @@ final class BridgeModel {
         pipe.producer.send(.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors))
         pipe.producer.send(.setRingColors(settings.ringColors))
         pipe.producer.send(.setColorMessages(settings.colorMessages))
+        pipe.producer.send(.setLightBrightness(LightBrightness.snapped(settings.lightBrightness)))
         // Profiles chosen by hand (#200): a device only they name connects now.
         pipe.producer.send(.setProfileChoices(settings.profileChoices))
         // Before the switch, so the first uploads already know how many slots the unit shows (#425).
