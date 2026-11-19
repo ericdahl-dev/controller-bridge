@@ -43,6 +43,8 @@ typedef struct {
     uint8_t flags;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
+    /// The clock at the tick that is drawing, for anything drawn over time.
+    uint32_t now_ms;
     uint8_t silent;
     uint8_t dirty;
     /// The back buffer, DFW_SIZE * DFW_SIZE pixels, owned by the caller: on the unit it lives in SDRAM (#466).

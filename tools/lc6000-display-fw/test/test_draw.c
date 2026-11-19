@@ -121,8 +121,9 @@ static int band_matches(const ref_case *c, band which) {
 }
 
 static void draw_case(const ref_case *c) {
-    dfw_deck_state deck = { c->number, c->r, c->g, c->b, c->player };
-    dfw_draw(frame, &deck);
+    static dfw_unit unit;
+    unit.deck = (dfw_deck_state){ c->number, c->r, c->g, c->b, c->player };
+    dfw_draw(frame, &unit);
 }
 
 static void outside_the_bands_is_plain_ground(void) {
@@ -165,7 +166,9 @@ static void every_pixel_is_written_whatever_the_deck(void) {
     static const dfw_deck_state decks[] = { { 0, 1, 2, 3, 0 }, { 255, 9, 9, 9, 255 }, { 5, 0, 0, 0, 6 }, { 2, 255, 0, 0, 1 } };
     for (size_t d = 0; d < sizeof decks / sizeof decks[0]; d++) {
         for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = 0xDEADBEEFu;
-        dfw_draw(frame, &decks[d]);
+        static dfw_unit unit;
+        unit.deck = decks[d];
+        dfw_draw(frame, &unit);
         int unwritten = 0;
         for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) unwritten += (frame[i] & 0xFF000000u) != 0;
         CHECK(unwritten == 0);

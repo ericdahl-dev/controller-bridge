@@ -241,8 +241,8 @@ static void header(dfw_pixel *frame, const dfw_deck_state *deck) {
     draw_line(frame, &badge_face, label, x + badge / 2.0f - text / 2.0f, HEADER_MIDDLE + 0.5f);
 }
 
-void dfw_draw(dfw_pixel *frame, const dfw_deck_state *deck) {
+void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
     for (int i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = GROUND;
     ring(frame);
-    header(frame, deck);
+    header(frame, &unit->deck);
 }

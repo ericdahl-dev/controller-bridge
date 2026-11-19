@@ -134,6 +134,7 @@ void dfw_tick(dfw_unit *unit, uint32_t now_ms) {
     // Only drawn mode draws, and only once a deck is known.
     if (!unit->dirty || !unit->frame || !unit->drawn || unit->deck.number == 0) return;
     unit->dirty = 0;
-    dfw_draw(unit->frame, &unit->deck);
+    unit->now_ms = now_ms;
+    dfw_draw(unit->frame, unit);
     unit->port.present(unit->port.ctx, unit->frame);
 }
