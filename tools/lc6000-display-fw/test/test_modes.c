@@ -42,6 +42,7 @@ void random_bytes_change_nothing(void);
 void a_capability_ask_gets_the_answer(void);
 void a_newer_host_gets_our_version(void);
 void a_capability_ask_with_version_0_gets_no_answer(void);
+void with_no_drawing_the_capability_ask_gets_no_answer(void);
 
 void every_vector_decodes(void);
 void every_invalid_vector_is_ignored(void);
@@ -50,6 +51,7 @@ void with_no_frame_nothing_is_drawn(void);
 void a_frame_handed_in_after_end_draws_nothing(void);
 void a_frame_handed_in_later_is_drawn(void);
 void with_no_frame_the_capability_ask_gets_no_answer(void);
+void the_tick_draws_with_the_drawing_it_was_given(void);
 
 #define STATE_LOADED "F0 00 02 0B 7F 10 20 00 02 07 01 F7"
 
@@ -109,12 +111,14 @@ const test_case all_tests[] = {
     { "a capability ask gets the answer", a_capability_ask_gets_the_answer },
     { "a newer host gets our version", a_newer_host_gets_our_version },
     { "a capability ask with version 0 gets no answer", a_capability_ask_with_version_0_gets_no_answer },
+    { "with no drawing the capability ask gets no answer", with_no_drawing_the_capability_ask_gets_no_answer },
     { "every vector decodes", every_vector_decodes },
     { "every invalid vector is ignored", every_invalid_vector_is_ignored },
     { "with no frame nothing is drawn", with_no_frame_nothing_is_drawn },
     { "a frame handed in after end draws nothing", a_frame_handed_in_after_end_draws_nothing },
     { "a frame handed in later is drawn", a_frame_handed_in_later_is_drawn },
     { "with no frame the capability ask gets no answer", with_no_frame_the_capability_ask_gets_no_answer },
+    { "the tick draws with the drawing it was given", the_tick_draws_with_the_drawing_it_was_given },
     { "an end before the tick draws nothing", an_end_before_the_tick_draws_nothing },
     { "a state before any deck draws nothing", a_state_before_any_deck_draws_nothing },
     { "a second begin doesn't redraw the old deck", a_second_begin_doesnt_redraw_the_old_deck },

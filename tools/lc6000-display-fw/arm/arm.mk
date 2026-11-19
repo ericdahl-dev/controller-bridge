@@ -7,7 +7,8 @@ ARM_PREFIX ?= arm-none-eabi-
 ARM_CPU := -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
 ARM_CFLAGS := -std=c99 -Wall -Wextra -Werror -pedantic -Os $(ARM_CPU) -ffreestanding -fno-builtin -fno-common \
 	-fno-pic -fno-stack-protector -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections \
-	-fstack-usage -DHOOK_DRAWING=$(if $(filter 0,$(ARM_DRAW)),0,1)
+	-fstack-usage -DHOOK_DRAWING=$(if $(filter 0,$(ARM_DRAW)),0,1) \
+	-DHOOK_STUB_DRAWING=$(if $(filter stub,$(ARM_DRAW)),1,0)
 # ARM_DRAW=1: hook, protocol and drawing. 0: the hook path alone, inert. stub (test builds only): hook and protocol
 # with an empty drawing, so the block tests run while the real drawing doesn't fit the padding (#501).
 ARM_SRC_DRAW := $(if $(filter stub,$(ARM_DRAW)),arm/hook.c src/dfw.c arm/test/draw_stub.c,arm/hook.c $(SRC))
@@ -26,6 +27,10 @@ $(ARM_BUILD)/block.elf: $(ARM_C) arm/entry.S arm/block.ld arm/hook.h arm/include
 	$(ARM_PREFIX)gcc $(ARM_CPU) -c arm/entry.S -o $(ARM_BUILD)/entry.o
 	$(ARM_PREFIX)gcc $(ARM_CPU) -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--build-id=none \
 		-Wl,-T,arm/block.ld -Wl,-Map,$(ARM_BUILD)/block.map $(ARM_EXTRA_LDFLAGS) -o $@ $(ARM_OBJ) -lgcc
+	@# The hook block never links the drawing (#501): it gets the drawing's table from stock, NULL until the drawing
+	@# block checks out. Only the stub test build carries an (empty) drawing.
+	@if [ "$(ARM_DRAW)" != stub ] && $(ARM_PREFIX)nm $@ | grep -q ' dfw_draw'; then \
+		echo "the hook block links the drawing (dfw_draw*); it must take the table from stock" >&2; rm -f $@; exit 1; fi
 
 $(ARM_BUILD)/block.bin: $(ARM_BUILD)/block.elf
 	$(ARM_PREFIX)objcopy -O binary --gap-fill 0xFF -j .entry_command -j .entry_render -j .text -j .data \

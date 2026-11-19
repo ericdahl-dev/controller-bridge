@@ -30,6 +30,9 @@ typedef struct {
     /// Hands the screen back to stock (on the unit: our overlay layer off). Called once when drawn mode ends.
     void (*hide)(void);
     dfw_port port;
+    /// The drawing's table, or NULL while there is none we trust: then the capability ask gets no answer (#501).
+    /// On the unit, NULL until the drawing block at 0x08080000 checks out.
+    const dfw_drawing *drawing;
 } hook_stock;
 
 /// Our state, in SRAM stock never uses (0x2002AE94 on the unit), which no boot zeroes.

@@ -30,11 +30,21 @@ typedef struct {
     uint8_t bytes[DFW_MESSAGE_MAX];
 } dfw_slot;
 
+struct dfw_unit;
+/// The drawing, as a table of entry points: the protocol calls it only through this, so it can live in its own
+/// block (#501). The hook passes NULL until it has a drawing it trusts; then nothing is drawn and the capability ask
+/// gets no answer.
+typedef struct {
+    /// Writes all DFW_SIZE x DFW_SIZE pixels for the unit's deck in front.
+    void (*draw)(dfw_pixel *frame, const struct dfw_unit *unit);
+} dfw_drawing;
+
 /// The deck in front, as the deck message gave it.
 typedef struct { uint8_t number, r, g, b, player; } dfw_deck_state;
 
-typedef struct {
+typedef struct dfw_unit {
     dfw_port port;
+    const dfw_drawing *drawing;
     volatile uint8_t head, tail;
     dfw_slot inbox[DFW_INBOX];
     uint8_t drawn;
@@ -56,8 +66,9 @@ typedef struct {
     dfw_pixel *frame;
 } dfw_unit;
 
-/// Starts the unit. `frame` may be NULL until the hook has one (see dfw_set_frame).
-void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame);
+/// Starts the unit. `frame` may be NULL until the hook has one (see dfw_set_frame); `drawing` is NULL when there is
+/// none to call.
+void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame, const dfw_drawing *drawing);
 /// Hands in the back buffer. Until there is one, nothing is drawn and the capability ask gets no answer.
 void dfw_set_frame(dfw_unit *unit, dfw_pixel *frame);
 /// One whole display message, F0 through F7. Only copies it; the tick acts on it.
