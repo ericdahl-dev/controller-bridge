@@ -42,6 +42,23 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 - an edit falls outside the image, reaches into the 32-byte trailer, overlaps another edit, or has old and new bytes of different lengths;
 - the output already exists, or is inside the repository.
 
+## Patches in this folder
+
+Patch descriptions live in `patches/`. Each one is a few bytes for one firmware version; it holds no vendor image.
+
+### `patches/wd-00.50-show-slot-16.patch` (#425)
+
+- **For:** `wd` firmware 00.50 only, the stock file `jc20_wd_update_00_50_3A7CE2CA.dfu` (trailer CRC `0x3A7CE2CA`). `apply` refuses any other image, because the old bytes won't match.
+- **What it changes:** one byte. The show command (`0A`) drops any slot index above 15, although uploads (`0E`) take slots 1-16 and the slot table has room for 16. At `0x0800BDA4`, `cmp r0, #0xf` becomes `cmp r0, #0x10` (`0f 28` to `10 28`), so "show 16" works. The tool then rewrites the trailer CRC (to `0x36DF3956`) and the DfuSe suffix CRC.
+- **Why slot 16 is safe to show:** slot N is table entry N + 29, and the table has 46 entries (0-45), so slot 16 is the last entry, set up at boot exactly like slots 1-15. Nothing else in the firmware compares a slot index with 15 or loops over the slots. The details are on #425.
+- **Status: unproven on hardware.** Nobody has flashed it. Whether the bootloader accepts a patched image at all is what the flash tests in #435 will show. Follow the runbook on #431, and flash the stock image by the same route first.
+
+```sh
+python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50_3A7CE2CA.dfu \
+  tools/lc6000-firmware/patches/wd-00.50-show-slot-16.patch ~/lc6000/jc20_wd_00_50_show16.dfu
+# wrote ...: new trailer CRC 0x36DF3956, DfuSe suffix CRC 0x5F321B11
+```
+
 ## What it recomputes
 
 1. **The `wd` trailer CRC.** The last 32 bytes of the image are a trailer: version, `0xDEADBEEF`, the number of bytes covered (element size − 20), the CRC, then `EndOfFlashToken\0`. The CRC is the **STM32 hardware CRC unit**'s algorithm (CRC-32, polynomial `0x04C11DB7`, init `0xFFFFFFFF`, little-endian 32-bit words, no reflection, no final XOR) over element bytes `0` to `0x77FEB`, so it includes the length field. On the stock image it gives `0x3A7CE2CA`, the hex in the file name.
