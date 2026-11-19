@@ -14,7 +14,8 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 | LC6000 | Syndicate (`/Syndicate/Deck/{n}/…`) |
 |---|---|
 | Pitch fader (14-bit CC 8 + 40) | `TempoSlider` −1…+1 at full resolution, with pickup so the tempo never jumps |
-| Jog while playing | `PhaseBend` ±1, released 80 ms after the wheel stops |
+| Jog while playing | `PhaseBend` ±1, released 80 ms after the wheel stops. With VINYL on, it seeks instead, as the paused jog does |
+| VINYL | Toggles the playing jog between bending (off, the default) and seeking (on), per deck layer. Its light is full while seeking is on |
 | Jog while paused | `WaveformSeek`, using the track length from feedback, with the deck's `Quantize` at None (1) while seeking so Syndicate doesn't snap it to the grid, then Use Global (0) 300 ms after the last move. Falls back to `BeatSkip` |
 | Needle Drop strip, while touched | `WaveformSeek`. On a paused deck, the deck's `Quantize` is None while touched, then Use Global |
 | Play / Cue / Sync / Master | `PlayPause` / `Cue` (hold) / `TempoSync` / `TempoMaster` |
@@ -25,18 +26,23 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 | Loop In / Loop Out / Auto Loop, and the Auto Loop knob | `LoopIn` / `LoopOut` / `Loop`. Turning the knob halves or doubles the loop; Shift + turn is Loop Move: each click moves the loop by its own length (`LoopMoveBeat`) |
 | Beat Jump ◀ ▶ (Shift for a bar) | `SkipBeatBack` / `SkipBeatForward` (`SkipBar…` with Shift) |
 | Censor (hold; Shift + Censor latches) | `Reverse` 1/0 while held; with Shift, each press turns `Reverse` on or off |
-| Key Lock / Slip | `PitchPreserve` / `CueSlip` |
+| Key Lock | `PitchPreserve` |
+| Deck select (printed Slip) | Steps the bridge to the next deck layer (#420); nothing goes to Syndicate. Shift + deck select steps the unit's own layer, and the bridge follows. |
+| Shift + Sync (OFF) | Turns sync off: `TempoSync` 1 only while the deck is synced (Syndicate's `Sync` feedback); nothing otherwise, so it never turns sync on |
 | Shift + Key Lock (pitch reset) | `TempoSlider` 0.0, then the fader waits to meet 0.0. Nothing while the tempo slider is disabled (a synced follower) |
 | Pitch Bend − / + (hold) | `PhaseMinus` / `PhasePlus` 1/0, nudging the tempo while held |
 | Shift + Pitch Bend − / + | Transposes the deck down or up a semitone (`PitchDown` / `PitchUp`, once per press). It turns the deck's key lock (P) on first, since Syndicate transposes only with it on |
 | Param ◀ ▶ | `BeatSkip ∓1` |
 | Browse knob turn and press (Shift for Enter), Back, Forward, Track ◀ ▶ | `Browser/Up`, `Browser/Down`, `Browser/L{deck}`, `Back`, `Enter` |
+| Shift + browse knob turn (ZOOM) | Zooms the deck in front's waveform, one step per click: `WaveformZoomIn` 1 clockwise, `WaveformZoomOut` 1 counter-clockwise |
 
 **LEDs:**
 - Play, Cue, Sync and Master follow Syndicate's state. Play blinks while a quantized start is pending.
-- Key Lock, Slip, Shift and the pad-mode buttons show the bridge's own state.
+- Key Lock, Shift and the pad-mode buttons show the bridge's own state. Censor is lit while Reverse is on, held or latched with Shift.
+- The pitch arrows by the fader show pickup: while the fader waits to meet Syndicate's tempo, the arrow pointing the way to move it is lit, and both go out when it catches. No arrow is lit while the deck's tempo slider is disabled (a synced follower) or no track is loaded.
+- Buttons with no state of their own are lit dim so the panel reads in the dark, and full while held: Beat Jump, Track ◀ ▶, Pitch Bend − / +, Param ◀ ▶, the browse knob's ring and the deck select button. Vinyl is lit the same way, and also full while its seek mode is on.
 - Pads show your hot cues in Syndicate's cue colors, quantized to the LC6000's 64-color table. A held pad lights brighter.
-- The platter ring lights when a track is loaded, in its deck's color, the same as the deck's badge in the app, so switching layers changes it. Deck colors follow Syndicate's cue palette (slots 1, 3, 5 and 7, under CUE COLORS) as you change it, or set your own under **Settings › Decks**. It can also pulse on each beat or on the downbeat.
+- The platter ring lights when a track is loaded, in its deck's color, the same as the deck's badge in the app, so switching layers changes it. On the LC6000 it shows the exact color through Denon's own color message; turn off **Exact colors on the LC6000** in Settings to go back to the 64-color table. Deck colors follow Syndicate's cue palette (slots 1, 3, 5 and 7, under CUE COLORS) as you change it, or set your own under **Settings › Decks**. It can also pulse on each beat or on the downbeat.
 
 **Recovery:**
 - Unplugging the LC6000, sleeping the Mac, switching layers or quitting releases every held control first, including a held Pitch Bend or a latched Reverse.
@@ -66,7 +72,7 @@ The **Setup guide** button in the panel, and **Setup Guide…** in Settings, sho
 
 ## Four decks from one LC6000
 
-The LC6000 has four deck layers: **Shift + deck select** steps through them, and the bridge follows. A plain **Slip** press, with no Shift, steps them too (#420); that moves only the bridge, not the unit's own layer. Layer N drives Syndicate deck N, so one unit plays all four decks. On its own the LC6000 keeps every control on MIDI channel 1 and only signals the layer; the bridge sends those controls to the active layer's deck. (Another DJ app can switch it to one channel per layer until it restarts; the bridge follows that too, but quit those apps first.)
+The LC6000 has four deck layers: **Shift + deck select** steps through them, and the bridge follows. A plain press of the deck select button (printed **Slip**), with no Shift, steps them too (#420); that moves only the bridge, not the unit's own layer. Layer N drives Syndicate deck N, so one unit plays all four decks. On its own the LC6000 keeps every control on MIDI channel 1 and only signals the layer; the bridge sends those controls to the active layer's deck. (Another DJ app can switch it to one channel per layer until it restarts; the bridge follows that too, but quit those apps first.)
 
 - **Switching layers:** anything held on the old layer is released on its deck, and the LEDs repaint from the new deck's state.
 - **Pitch fader:** all layers share the one fader, so on the new layer it waits until it meets that deck's tempo (pickup), and the tempo doesn't jump.

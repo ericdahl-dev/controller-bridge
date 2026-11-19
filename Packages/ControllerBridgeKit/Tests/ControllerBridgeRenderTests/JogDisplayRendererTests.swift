@@ -49,16 +49,18 @@ struct JogDisplayRendererTests {
     }
 
     /// The waiting look (#464): our logo (design/icon/icon-1-deck-ring.svg, its deck ring without the tile) centered at
-    /// 0.24 scale, the beat ring all dark, and nothing of the deck. Points are the SVG's, scaled: arcs at radius 62.9
-    /// (262 × 0.24), the inner disc to 49.4, the hub 17.8 with a 6.2 hole; the arcs leave a gap on each axis.
-    @Test("Stale feedback draws our logo, the beat ring dark and nothing of the deck")
+    /// 0.24 scale, the beat ring all dark, and (#524, the user's pick) the deck in its hub: the hub in the deck's color
+    /// with its number in black, no hole. Points are the SVG's, scaled: arcs at radius 62.9 (262 × 0.24), the inner disc
+    /// to 49.4, the hub 17.8; the arcs leave a gap on each axis.
+    @Test("Stale feedback draws our logo with the deck in its hub, the beat ring dark, nothing else of the deck")
     func staleDrawsTheLogo() {
         let image = JogDisplayRenderer.render(JogDisplayContent(deck: 2, color: [255, 0, 0], title: "Daybreak",
                                                                 artist: "Night Drive", key: "A#m", bpm: 128,
                                                                 playerType: "track", stale: true))
         func at(_ x: Int, _ y: Int) -> [UInt8] { Self.pixel(image, x: x, y: y) }
-        #expect(at(99, 99) == [0x14, 0x14, 0x15, 255])     // the hub's hole
-        #expect(at(99, 111) == [0xD5, 0xD5, 0xD5, 255])    // the hub
+        #expect(at(99, 111) == [0xFF, 0x00, 0x00, 255])    // the hub, in the deck's color, under its number
+        // The number, in black, across the middle where the hole was.
+        #expect((92...106).contains { y in (93...105).contains { x in at(x, y) == [0x0B, 0x0B, 0x0B, 255] } })
         #expect(at(99, 135) == [0x1D, 0x1D, 0x1E, 255])    // the inner disc
         #expect(at(143, 55) == [0x6C, 0x72, 0x77, 255])    // the arcs, clockwise from the top right
         #expect(at(143, 143) == [0xEC, 0xCF, 0x65, 255])
@@ -66,6 +68,10 @@ struct JogDisplayRendererTests {
         #expect(at(55, 55) == [0x62, 0x92, 0x9E, 255])
         #expect(at(99, 154) == [0x0B, 0x0B, 0x0B, 255])    // the gap below: no key or BPM
         #expect(at(99, 37) == [0x0B, 0x0B, 0x0B, 255])     // the gap above: no deck chip
+        // Another deck: the hub follows its color and number.
+        let other = JogDisplayRenderer.render(JogDisplayContent(deck: 3, color: [0, 0, 255], stale: true))
+        #expect(Self.pixel(other, x: 99, y: 111) == [0x00, 0x00, 0xFF, 255])
+        #expect(other != JogDisplayRenderer.render(JogDisplayContent(deck: 4, color: [0, 0, 255], stale: true)))
         #expect(at(163, 35) == [0x2C, 0x2C, 0x2C, 255])    // beat 1's section, dark like the others
     }
 
