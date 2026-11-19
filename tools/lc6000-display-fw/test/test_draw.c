@@ -172,6 +172,23 @@ static void every_pixel_is_written_whatever_the_deck(void) {
     }
 }
 
+/// The whole path (#457): begin then a deck message, and the tick presents design B for that deck.
+static dfw_unit unit;
+static recording rec;
+
+static void begin_then_deck_presents_the_reference(void) {
+    fresh(&unit, &rec);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");   // deck 2, red, track
+    dfw_tick(&unit);
+    CHECK(rec.presents == 1);
+    const ref_case *c = &cases[0];
+    CHECK(load_reference(c->file));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(band_matches(c, RING));
+    CHECK(band_matches(c, HEADER));
+}
+
 const test_case draw_tests[] = {
     { "outside the bands is plain ground", outside_the_bands_is_plain_ground },
     { "the ring matches the reference", the_ring_matches_the_reference },
@@ -183,5 +200,6 @@ const test_case draw_tests[] = {
     { "a sequencer draws the SEQ badge", a_sequencer_draws_the_seq_badge },
     { "every pixel is written whatever the deck", every_pixel_is_written_whatever_the_deck },
     { "every reference has the ring and header to compare", every_reference_has_the_ring_and_header_to_compare },
+    { "begin then deck presents the reference", begin_then_deck_presents_the_reference },
     { 0, 0 },
 };

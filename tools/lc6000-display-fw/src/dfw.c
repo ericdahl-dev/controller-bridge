@@ -1,4 +1,5 @@
 #include "dfw.h"
+#include "draw.h"
 
 #include <string.h>
 
@@ -93,5 +94,6 @@ void dfw_tick(dfw_unit *unit) {
     }
     if (!unit->dirty || !unit->frame) return;
     unit->dirty = 0;
+    dfw_draw(unit->frame, &unit->deck);
     unit->port.present(unit->port.ctx, unit->frame);
 }
