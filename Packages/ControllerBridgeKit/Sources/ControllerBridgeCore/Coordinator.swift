@@ -701,6 +701,8 @@ public final class Coordinator {
         if jogController.enabled { needed.insert(.barRamp) }
         // The drawn display's level meter reads the mixer's Meter (#461): asked for only while the unit draws.
         if jogController.drawing { needed.insert(.mixerMeter) }
+        // Its phase rule reads the deck's PhaseOffset (#462): asked for only while the unit draws.
+        if jogController.drawing { needed.insert(.phaseOffset) }
         return Subscription.allCases.filter(needed.contains)
     }
 

@@ -520,6 +520,8 @@ public final class JogDisplayDriver {
         if let lastTime { sendWD(lastTime) }
         // The level meter (#461): empty until the deck's channel reports.
         sendWD(DrawnDisplay.Message.meter(level: lastMeter.level, peak: lastMeter.peak).bytes)
+        // The phase (#462), once known: the chip's own is unknown until it comes.
+        if lastPhase != DrawnPhase.unknown { sendWD(DrawnDisplay.Message.phase(lastPhase).bytes) }
     }
 
     /// The heartbeat: begin, the deck and the state again, unchanged or not.
@@ -554,6 +556,19 @@ public final class JogDisplayDriver {
         lastMeter = (level, peak)
         guard connected, drawing else { return false }
         sendWD(DrawnDisplay.Message.meter(level: level, peak: peak).bytes)
+        return true
+    }
+
+    /// The deck in front's phase for drawn mode (#462), as op 0B carries it (DrawnPhase's value). Sent only while
+    /// drawing, and only on a change; whether it went out. A known one is in the full state and the heartbeat too. The
+    /// chip starts each deck at unknown, so a deck change forgets the last one.
+    private var lastPhase = DrawnPhase.unknown
+    @discardableResult
+    public func phase(_ value: Int) -> Bool {
+        guard value != lastPhase else { return false }
+        lastPhase = value
+        guard connected, drawing else { return false }
+        sendWD(DrawnDisplay.Message.phase(value).bytes)
         return true
     }
 
@@ -606,6 +621,8 @@ public final class JogDisplayDriver {
         guard deck != lastDeck else { return sendChangedTexts(content) }
         lastDeck = deck
         sendWD(deck)
+        // The chip's phase is unknown for the new deck (#462): the controller's next value for it goes.
+        lastPhase = DrawnPhase.unknown
         // Every deck message is followed by its state: the flags are the deck's (#464). A new deck clears the chip's
         // texts and tempo, so they follow (#458).
         lastState = nil
