@@ -80,4 +80,38 @@ struct DrawnDisplayReconnectTests {
         rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: JogDisplayRingHoldTests.lc6000.id)
         #expect(DrawnDisplayHandshakeTests.drawn(port).map { $0[9] } == [0x03, 0x07])
     }
+
+    @Test("Heartbeat while drawing: begin, the deck and the state again once a second, unchanged or not")
+    func heartbeat() throws {
+        let (rig, port, clock) = try Handshake.rig(.custom)
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        let full = Handshake.drawn(port).dropFirst()   // begin, deck, state
+        port.wd.removeAll()
+        clock.now = 0.99
+        rig.coordinator.tick()
+        #expect(Self.ops(port).isEmpty)
+        clock.now = 1.0
+        rig.coordinator.tick()
+        #expect(Handshake.drawn(port) == Array(full))
+        port.wd.removeAll()
+        clock.now = 1.5
+        rig.coordinator.tick()
+        #expect(Self.ops(port).isEmpty)
+        clock.now = 2.0
+        rig.coordinator.tick()
+        #expect(Self.ops(port) == [0x01, 0x03, 0x07])
+    }
+
+    @Test("No heartbeat in image mode")
+    func noHeartbeatForImages() throws {
+        let (rig, port, clock) = try Handshake.rig(.custom)
+        clock.now = 0.5
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        for time in [1.5, 2.5, 5.0] {
+            clock.now = time
+            rig.coordinator.tick()
+        }
+        #expect(Self.ops(port).isEmpty)
+    }
 }

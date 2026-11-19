@@ -181,6 +181,10 @@ public final class JogDisplayDriver {
     /// The deck in front's state flags for drawn mode (#464), and the last state message sent.
     private var drawnState: DrawnDisplay.State = []
     private var lastState: [UInt8]?
+    /// When drawn mode last sent begin and the full state (#464): the heartbeat sends them again every second, so a
+    /// chip that reset without its port going away is brought back, and one whose host is gone goes stale on its own.
+    private var lastFullState: Double?
+    static let heartbeat = 1.0
 
     /// Whether it has said hello to a unit (#165); the Coordinator repaints the LEDs after the hello (#426).
     public private(set) var connected = false
@@ -411,6 +415,7 @@ public final class JogDisplayDriver {
     /// Times out a silent upload; starts the next one.
     public func tick() {
         if case .asking(let since) = mode, clock.now - since >= Self.answerTimeout - 1e-9 { showImages() }
+        if case .drawn = mode, let last = lastFullState, clock.now - last >= Self.heartbeat - 1e-9 { beat() }
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)
         } else if let running = upload, clock.now - running.startedAt >= Self.timeout {
@@ -474,6 +479,18 @@ public final class JogDisplayDriver {
         // The full state, every message once, in a fixed order: the deck, then the state.
         next()
         sendState()
+        lastFullState = clock.now
+    }
+
+    /// The heartbeat: begin, the deck and the state again, unchanged or not.
+    private func beat() {
+        guard connected, case .drawn(let version) = mode else { return }
+        sendWD(DrawnDisplay.Message.begin(version: version).bytes)
+        if let lastDeck { sendWD(lastDeck) }
+        let state = DrawnDisplay.Message.state(drawnState).bytes
+        lastState = state
+        sendWD(state)
+        lastFullState = clock.now
     }
 
     /// Syndicate's feedback stopped or came back (#464): drawn mode shows the waiting look while stale.
