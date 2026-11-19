@@ -359,6 +359,12 @@ void erased_upper_flash_has_no_block(void) {
     CHECK(upper_check(upper) == 0);
 }
 
+void a_block_for_another_version_is_refused(void) {
+    good_upper();
+    put_word(upper + 4, UPPER_VERSION + 1);
+    CHECK(upper_check(upper) == 0);
+}
+
 const test_case all_tests[] = {
     { "end hands the screen back once", end_hands_the_screen_back_once },
     { "nothing is hidden that was never shown", nothing_is_hidden_that_was_never_shown },
@@ -383,6 +389,7 @@ const test_case all_tests[] = {
     { "the millisecond clock runs on across a counter wrap", the_millisecond_clock_runs_on_across_a_counter_wrap },
     { "a good upper block gives its draw entry", a_good_upper_block_gives_its_draw_entry },
     { "erased upper flash has no block", erased_upper_flash_has_no_block },
+    { "a block for another version is refused", a_block_for_another_version_is_refused },
     { 0, 0 },
 };
 
