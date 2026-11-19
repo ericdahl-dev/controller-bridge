@@ -294,7 +294,10 @@ final class Bridge {
             refreshLEDs()
             return
         }
-        guard let name = buttonNames[note], let handler = Self.buttonHandlers[name] else { return }
+        guard let name = buttonNames[note] else { return }
+        // A dark button's light (#476) shows the press, whether or not the button does anything.
+        pressLit(name, pressed)
+        guard let handler = Self.buttonHandlers[name] else { return }
         handler(self)(pressed)
     }
 
@@ -467,6 +470,8 @@ final class Bridge {
     /// This bridge is a deck layer the controller is showing (#79). A hidden layer keeps its state and repaints when
     /// it comes to the front.
     var layerShown = true
+    /// The dark buttons held down now (#476): their lights are full.
+    var pressLitHeld: Set<String> = []
     /// The channel this layer's LEDs go out on, if not its own (#79): ch1 (0) while the controller sends every
     /// control on ch1 and only signals the layer.
     var ledChannel: UInt8?

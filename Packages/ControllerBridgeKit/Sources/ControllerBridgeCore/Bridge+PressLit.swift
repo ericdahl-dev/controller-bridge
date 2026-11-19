@@ -9,6 +9,13 @@ extension Bridge {
 
     /// Each one's light: full while held, else idle.
     func pressLitLEDs() {
-        for name in Self.pressLitButtons { buttonLED(name, on: false) }
+        for name in Self.pressLitButtons { buttonLED(name, on: pressLitHeld.contains(name)) }
+    }
+
+    /// A press or release of a button: one of these lights full while it's held.
+    func pressLit(_ name: String, _ pressed: Bool) {
+        guard Self.pressLitButtons.contains(name) else { return }
+        if pressed { pressLitHeld.insert(name) } else { pressLitHeld.remove(name) }
+        buttonLED(name, on: pressed)
     }
 }

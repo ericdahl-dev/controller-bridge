@@ -33,4 +33,41 @@ struct PressLitButtonsTests {
         rig.coordinator.start()
         for note in Self.notes { #expect(rig.leds[note] == nil, "note \(note)") }
     }
+
+    static func note(_ rig: Rig, _ note: UInt8, down: Bool) {
+        rig.coordinator.midi(down ? .noteOn(channel: 0, note: note, velocity: 127) : .noteOff(channel: 0, note: note, velocity: 0),
+                             source: Rig.lc6000.id)
+    }
+
+    @Test("Each goes full (127) while held and back to dim (1) on release, Vinyl too, though it does nothing")
+    func held() throws {
+        let rig = try Self.started()
+        for note in Self.notes {
+            Self.note(rig, note, down: true)
+            #expect(rig.leds[note] == 127, "note \(note) held")
+            Self.note(rig, note, down: false)
+            #expect(rig.leds[note] == 1, "note \(note) released")
+        }
+    }
+
+    @Test("With Shift held a press lights it too (Shift + Pitch Bend transposes, Shift + Beat Jump jumps a bar)")
+    func shifted() throws {
+        let rig = try Self.started()
+        Self.note(rig, 26, down: true)   // Shift
+        Self.note(rig, 24, down: true)
+        #expect(rig.leds[24] == 127)
+        Self.note(rig, 24, down: false)
+        #expect(rig.leds[24] == 1)
+    }
+
+    @Test("Only changes go out: holding sends one full, releasing one dim")
+    func onlyChanges() throws {
+        let rig = try Self.started()
+        let before = rig.midi.outputs[Rig.lc6000Out.id]?.sent.count ?? 0
+        Self.note(rig, 3, down: true)
+        Self.note(rig, 3, down: false)
+        let sent = (rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).dropFirst(before)
+        let note3 = sent.compactMap { if case .noteOn(_, 3, let velocity) = $0 { return velocity }; return nil }
+        #expect(note3 == [127, 1])
+    }
 }
