@@ -172,6 +172,9 @@ final class Bridge {
     /// What each light shows (#383, #530, #554): shared with the other layers on this output, so an unchanged light
     /// is never sent twice, and a layer change sends only the lights that differ.
     var shown = LEDShown()
+    /// The gap between color messages (#531): 0, since the burst test on the unit (9 at once, three ways) was clean.
+    static let colorMessageGap = 0.0
+    private var colorPacer = ColorPacer(gap: Bridge.colorMessageGap)
     /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
     var colorMessages = false
     /// The color-message LEDs' brightness, in percent (#532).
@@ -527,8 +530,20 @@ final class Bridge {
         let light = LEDShown.Light(note: Int(message.note), onPads: mapping.pads.channel != nil
                                    && mapping.notes.pads.contains(Int(message.note)))
         guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, shown.write(light, .color(rgb)) else { return }
+        sendColors(colorPacer.send(message, at: clock.now))
+    }
+
+    /// Color messages the pacer lets go (#531).
+    func sendColors(_ messages: [LEDColorMessage]) {
         guard let output else { return }
-        do { try output.send(color: message) } catch { outputFailed = true }
+        for message in messages {
+            do { try output.send(color: message) } catch { outputFailed = true }
+        }
+    }
+
+    /// Lets the pacer's waiting color messages out, on the timing tick (#531).
+    func colorTick() {
+        sendColors(colorPacer.tick(at: clock.now))
     }
 
     /// An LED driven by a CC, such as a VU meter (#207): straight out, as the caller limits how often. False when held,

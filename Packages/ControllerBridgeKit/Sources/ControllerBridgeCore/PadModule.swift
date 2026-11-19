@@ -108,6 +108,24 @@ struct PadModule {
         }
     }
 
+    /// Each pad's color in the current mode, as 8-bit RGB, for the color message (#531): what `velocities` shows,
+    /// without the 64-color table. An empty pad is off, as with the table.
+    func colors(held: Set<Int>) -> [[Int]] {
+        switch mode {
+        case .hotCue:
+            return cues.enumerated().map { index, slot in
+                guard slot != 0 else { return [0, 0, 0] }
+                let color = palette[slot] ?? [255, 255, 255]
+                // Held: brighter in its own color, exact (no vivid rounding with the color message).
+                return held.contains(index) ? Self.brightest(color) : color
+            }
+        // As `velocities`: Loop on the pads with a cue, Roll on the pads with a roll size (#311), Slicer off.
+        case .loop: return cues.map { $0 == 0 ? [0, 0, 0] : leds.loopPadColor }
+        case .roll: return cues.indices.map { $0 < rollSizes.count ? leds.rollPadColor : [0, 0, 0] }
+        case .slicer: return Array(repeating: [0, 0, 0], count: cues.count)
+        }
+    }
+
     /// The color scaled up so its strongest channel is 255.
     static func brightest(_ rgb: [Int]) -> [Int] {
         guard let top = rgb.max(), top > 0 else { return rgb }
