@@ -7,11 +7,14 @@ static int marker_present(const hook_stock *stock) { return *stock->marker == HO
 
 static int valid(const hook_state *state) { return state->magic == HOOK_MAGIC && state->check == ~HOOK_MAGIC; }
 
-/// A reset since our state was last good: the witness was cleared, or the uptime counter went back (a reboot whose
-/// first call came early, or the counter wrapping after 4.97 days, which is treated the same).
+/// The counter wraps after 4.97 days: a backwards step from within 10 s of the top is that, not a reboot.
+#define HOOK_WRAP_WINDOW 100000u
+
+/// A reset since our state was last good: the witness was cleared, or the uptime counter went back other than by
+/// wrapping (a reboot whose first call came early).
 static int reset_seen(const hook_state *state, const hook_stock *stock, uint32_t now) {
     if (stock->witness && *stock->witness == 0) return 1;
-    return now < state->last_uptime;
+    return now < state->last_uptime && state->last_uptime < 0xFFFFFFFFu - HOOK_WRAP_WINDOW;
 }
 
 /// Our port to dfw: it notes that the screen is ours, then presents through stock's side.

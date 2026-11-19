@@ -238,13 +238,33 @@ void an_uptime_that_went_backwards_resets_too(void) {
     CHECK(state.magic != HOOK_MAGIC);
 }
 
-void a_counter_wrap_is_treated_as_a_reset(void) {
+void a_counter_wrap_keeps_the_session_and_its_frame(void) {
+    // The 100 us counter wraps after 4.97 days. A false reset there would drop the frame and allocate again later:
+    // a 157 KB leak every wrap. A backwards step from within 10 s of the top is a wrap, not a reboot.
     cold_boot();
     chip.uptime = 0xFFFFFF00u;
     drawing_session();
     chip.uptime = 0x10;
     tick();
+    CHECK(state.magic == HOOK_MAGIC && state.unit.drawn == 1);
+    deliver(0, BEGIN_V1);
+    deliver(0, CAPABILITY_V1);
+    tick();
+    CHECK(chip.mallocs == 1);
+}
+
+void a_backwards_step_from_low_in_the_count_is_a_reboot(void) {
+    cold_boot();
+    chip.uptime = 0xFFFFFFFFu - 200000u;  // 20 s below the top: outside the 10 s wrap window
+    drawing_session();
+    chip.witness = HOOK_WITNESS;  // only the counter can tell here
+    chip.uptime = 0x10;
+    chip.mallocs = 0;
+    tick();
     CHECK(state.magic != HOOK_MAGIC);
+    deliver(0, BEGIN_V1);
+    tick();
+    CHECK(chip.mallocs == 1);  // one malloc in the new boot's heap
 }
 
 void garbage_with_the_magic_but_a_bad_check_word_is_fresh_state(void) {
@@ -299,7 +319,8 @@ const test_case all_tests[] = {
     { "a reboot seen through the witness resets drawn mode", a_reboot_seen_through_the_witness_resets_drawn_mode },
     { "without the witness a late first call keeps the old session", without_the_witness_a_late_first_call_keeps_the_old_session },
     { "an uptime that went backwards resets too", an_uptime_that_went_backwards_resets_too },
-    { "a counter wrap is treated as a reset", a_counter_wrap_is_treated_as_a_reset },
+    { "a counter wrap keeps the session and its frame", a_counter_wrap_keeps_the_session_and_its_frame },
+    { "a backwards step from low in the count is a reboot", a_backwards_step_from_low_in_the_count_is_a_reboot },
     { "garbage with the magic but a bad check word is fresh state", garbage_with_the_magic_but_a_bad_check_word_is_fresh_state },
     { 0, 0 },
 };
