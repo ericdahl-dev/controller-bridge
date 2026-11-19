@@ -12,6 +12,7 @@ final class Bridge {
             "cue": { $0.cue },
             "censor": { $0.censor },
             "sync": { $0.sync },
+            "vinyl": { $0.vinyl },
             "master": { $0.master },
             "pitch_minus": { $0.pitchMinus },
             "pitch_plus": { $0.pitchPlus },
@@ -148,6 +149,8 @@ final class Bridge {
     var lastClockTime: Double?
     var loaded = false
     var synced = false
+    /// VINYL's mode (#540): on, a playing deck's jog seeks instead of bending. This deck's own; it starts off.
+    var vinylSeek = false
     var sliderEnabled = true
     var looping = false
     /// The loop Syndicate last reported, in seconds (LoopInfo), for Loop Move (#470); nil with none.
