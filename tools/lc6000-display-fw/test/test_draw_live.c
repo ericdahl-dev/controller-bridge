@@ -318,6 +318,13 @@ static void the_play_flags_change_no_pixels(void) {
 /// over each case's count, and nothing past 16 in any: a quarter pixel off is 60 levels on every edge pixel of the fill.
 #define METER_CLOSE 6
 #define METER_CAP 16
+/// The progress ring (#460), r 96-98, is all edge as the meter is, and its circles land the same way. Measured: the dark
+/// track alone within 2 everywhere; the blue fill at 83/165, worst 7 with 30 pixels over 6, every one on a circle,
+/// none on the fill's two radial edges. So 6 with a budget a little over the count, nothing past 16.
+#define PROGRESS_CLOSE 6
+#define PROGRESS_CAP 16
+#define PROGRESS_BUDGET_START 0
+#define PROGRESS_BUDGET_FILL 35
 
 typedef struct { const char *file; uint8_t level, peak; int budget; } meter_case;
 static const meter_case meters[] = {
@@ -417,7 +424,117 @@ static void stale_draws_no_meter(void) {
     CHECK(memcmp(frame, without, sizeof frame) == 0);
 }
 
+/// Track time (#460): the progress ring (r 96-98, just outside the beat ring) and the time left under key/BPM, against
+/// test/ref/*-time*.ppm. The ring is compared from PROGRESS_FROM out: only the ring there for these decks.
+#define PROGRESS_FROM 95.5f
+
+/// Everything from PROGRESS_FROM out against `reference`: at most `budget` pixels more than `close` off, none past `cap`.
+static int progress_matches(const char *name, int close, int budget, int cap) {
+    int worst = 0, loose = 0, over = 0;
+    for (int y = 0; y < DFW_SIZE; y++)
+        for (int x = 0; x < DFW_SIZE; x++) {
+            if (radius2(x, y) < PROGRESS_FROM * PROGRESS_FROM) continue;
+            int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
+            if (d > worst) worst = d;
+            if (d > close) loose++;
+            if (d > cap) over++;
+        }
+    fprintf(stderr, "    %s ring from %.1f out: worst %d, %d over %d (budget %d)\n", name, (double)PROGRESS_FROM, worst,
+            loose, close, budget);
+    return over == 0 && loose <= budget;
+}
+
+#define PLAYING 0x03
+#define PAUSED 0x01
+
+/// Begin, the deck, the state, then a time message, then a tick at `now`.
+static void begin_with_time(const char *deck, uint8_t flags, uint16_t elapsed, uint16_t length, uint32_t now) {
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, deck);
+    char message[64];
+    snprintf(message, sizeof message, "F0 00 02 0B 7F 10 20 00 02 07 %02X F7", flags);
+    feed(&live, message);
+    snprintf(message, sizeof message, "F0 00 02 0B 7F 10 20 00 05 06 %02X %02X %02X %02X F7", elapsed >> 7,
+             elapsed & 0x7F, length >> 7, length & 0x7F);
+    feed(&live, message);
+    dfw_tick(&live, now);
+}
+
+#define DECK_4_BLUE_EMPTY "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7"
+#define DECK_2_RED_EMPTY "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 00 F7"
+
+typedef struct { const char *file; uint16_t elapsed, length; int budget; } time_case;
+static const time_case times[] = {
+    // The start: the dark track all round, no fill.
+    { "test/ref/deck4-blue-empty-time0-165.ppm", 0, 165, PROGRESS_BUDGET_START },
+    // Just past half: the fill past 180°.
+    { "test/ref/deck4-blue-empty-time83-165.ppm", 83, 165, PROGRESS_BUDGET_FILL },
+    { "test/ref/deck4-blue-empty-time0-5999.ppm", 0, 5999, PROGRESS_BUDGET_START },
+};
+#define TIMES (sizeof times / sizeof times[0])
+
+static void the_progress_ring_is_drawn(void) {
+    for (size_t n = 0; n < TIMES; n++) {
+        CHECK(load_reference(times[n].file));
+        begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, times[n].elapsed, times[n].length, 0);
+        CHECK(rec.presents == 1);
+        memcpy(frame, rec.last, sizeof frame);
+        CHECK(progress_matches(times[n].file + 9, PROGRESS_CLOSE, times[n].budget, PROGRESS_CAP));
+    }
+}
+
+/// Not vacuous: each time reference has the ring the plain one doesn't.
+static void each_time_reference_differs_from_the_plain_one(void) {
+    static dfw_pixel plain[DFW_SIZE * DFW_SIZE];
+    CHECK(load_reference(UNLIT));
+    memcpy(plain, reference, sizeof plain);
+    for (size_t n = 0; n < TIMES; n++) {
+        CHECK(load_reference(times[n].file));
+        int changed = 0;
+        for (int y = 0; y < DFW_SIZE; y++)
+            for (int x = 0; x < DFW_SIZE; x++)
+                changed += radius2(x, y) >= PROGRESS_FROM * PROGRESS_FROM && reference[y * DFW_SIZE + x] != plain[y * DFW_SIZE + x];
+        CHECK(changed > 1000);
+    }
+}
+
+/// An unknown length (0) draws no time and no ring: the whole frame is the plain one's, as Swift's
+/// deck4-blue-empty-time42-0 is, and as a fresh unit with no time draws.
+static void an_unknown_length_draws_nothing(void) {
+    static dfw_pixel without[DFW_SIZE * DFW_SIZE];
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, DECK_4_BLUE_EMPTY);
+    dfw_tick(&live, 0);
+    memcpy(without, rec.last, sizeof without);
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 42, 0, 0);
+    CHECK(rec.presents == 1);
+    CHECK(memcmp(rec.last, without, sizeof without) == 0);
+    CHECK(load_reference("test/ref/deck4-blue-empty-time42-0.ppm"));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(progress_matches("deck4-blue-empty-time42-0.ppm", RING_CLOSE, 0, RING_CLOSE));
+}
+
+/// The waiting look is agent3's; whatever it is, the time changes none of it.
+static void stale_draws_no_time(void) {
+    static dfw_pixel without[DFW_SIZE * DFW_SIZE];
+    memset(&unit, 0, sizeof unit);
+    unit.flags = 0x20;
+    draw_beat(0);
+    memcpy(without, frame, sizeof without);
+    unit.time_heard = 1;
+    unit.elapsed = 83;
+    unit.track_length = 165;
+    draw_beat(0);
+    CHECK(memcmp(frame, without, sizeof frame) == 0);
+}
+
 const test_case draw_live_tests[] = {
+    { "the progress ring is drawn", the_progress_ring_is_drawn },
+    { "each time reference differs from the plain one", each_time_reference_differs_from_the_plain_one },
+    { "an unknown length draws nothing", an_unknown_length_draws_nothing },
+    { "stale draws no time", stale_draws_no_time },
     { "the meter is drawn", the_meter_is_drawn },
     { "each meter reference differs from the unlit one", each_meter_reference_differs_from_the_unlit_one },
     { "stale draws no meter", stale_draws_no_meter },
