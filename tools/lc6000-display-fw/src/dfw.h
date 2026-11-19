@@ -48,6 +48,8 @@ typedef struct {
     uint8_t level, peak;
     /// Whether a needle message has come since begin: until one does, no marker is drawn.
     uint8_t needle_heard;
+    /// Whether a meter message has come since begin: until one does, no meter is drawn.
+    uint8_t meter_heard;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
     /// The clock at the tick that is drawing, for anything drawn over time.

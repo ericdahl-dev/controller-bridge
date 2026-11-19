@@ -110,6 +110,7 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->needle_heard = 0;
         unit->level = 0;
         unit->peak = 0;
+        unit->meter_heard = 0;
         break;
     case OP_DECK: {
         if (!unit->drawn) break;
@@ -134,9 +135,11 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->dirty = 1;
         break;
     case OP_METER:
-        if (!unit->drawn || (unit->level == args[0] && unit->peak == args[1])) break;
+        // The first one draws the meter, whatever its values; after that, only a change.
+        if (!unit->drawn || (unit->meter_heard && unit->level == args[0] && unit->peak == args[1])) break;
         unit->level = args[0];
         unit->peak = args[1];
+        unit->meter_heard = 1;
         unit->dirty = 1;
         break;
     case OP_NEEDLE: {
