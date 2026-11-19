@@ -21,8 +21,10 @@ int main(int argc, char **argv) {
         memset(flash, 0xFF, sizeof flash);
         FILE *f = fopen(argv[3], "rb");
         if (!f) return 2;
-        fread(flash, 1, sizeof flash, f);
+        size_t got = fread(flash, 1, sizeof flash, f);
+        int bad = got == 0 && ferror(f);
         fclose(f);
+        if (bad) return 2;
         upper_entries entries;
         if (upper_check(flash, number(argv[2]), &entries)) printf("ok %u %u\n", entries.draw, entries.band);
         else printf("refused\n");
