@@ -166,6 +166,8 @@ def decide(plan):
     if problem:
         return problem
     # Before (read-only): the app, the option bytes, the upper flash.
+    if unreadable(plan, "app_read"):
+        return unreadable(plan, "app_read")
     if not fresh(plan, "app_read"):
         return ("read", "app", dfu_path, out(plan, "wd-app-before"), "app_read")
     ok, why = judged(dfupatch.compare, input=files["current"], readback=fact(plan, "app_read"))
@@ -174,11 +176,15 @@ def decide(plan):
     ok, app_state = judged(drawn_flash.app, owner=files["owner"], read=fact(plan, "app_read"))
     if not ok:
         return ("stop", f"The app area couldn't be judged against the owner's image: {app_state}")
+    if unreadable(plan, "options_read"):
+        return unreadable(plan, "options_read")
     if not fresh(plan, "options_read"):
         return ("read", "options", dfu_path, out(plan, "wd-option-bytes"), "options_read")
     ok, why = judged(drawn_flash.options, read=fact(plan, "options_read"))
     if not ok:
         return ("stop", f"The chip's protection isn't what block B needs: {why}. Nothing was written.")
+    if unreadable(plan, "upper_read"):
+        return unreadable(plan, "upper_read")
     if not fresh(plan, "upper_read"):
         return ("read", "upper", dfu_path, out(plan, "wd-upper-before"), "upper_read")
     ok, upper_state = judged(drawn_flash.upper, upper=files["upper"], read=fact(plan, "upper_read"))
@@ -205,6 +211,18 @@ def decide(plan):
     if look != "y":
         return ("stop", "The display doesn't look like stock with no host.")
     return ("done",)
+
+
+WHAT = {"app_read": "the app area", "options_read": "the option bytes", "upper_read": "the flash above the image",
+        "upper_back": "block B's read-back", "app_back": "the owner's image's read-back"}
+
+
+def unreadable(plan, key):
+    """A stop when this run's read of `key` failed (dfu-util refused it), so it's never just asked for again."""
+    if fact(plan, key) != "failed":
+        return None
+    return ("stop", f"{WHAT[key][0].upper()}{WHAT[key][1:]} couldn't be read, so it can't be checked. Nothing more is "
+                    f"written.")
 
 
 def one_display_chip(plan, key):
@@ -259,6 +277,8 @@ def step_upper(plan, dfu_path, upper_state):
                         "on, the image there now runs as before: a part of B is never called.")
     if fact(plan, "upper_back") is None:
         return ("read", "upper", dfu_path, out(plan, "wd-upper-after"), "upper_back")
+    if unreadable(plan, "upper_back"):
+        return unreadable(plan, "upper_back")
     ok, state = judged(drawn_flash.upper, upper=files["upper"], read=fact(plan, "upper_back"))
     if not ok or not state.startswith("holds"):
         return ("stop", "The upper flash isn't exactly block B after the write. Block A checks B's CRC before calling "
@@ -292,6 +312,8 @@ def step_app(plan, dfu_path, app_state):
                         "in update mode, so Denon's updater or the slot 16 image can go on now.")
     if fact(plan, "app_back") is None:
         return ("read", "app", dfu_path, out(plan, "wd-app-after"), "app_back")
+    if unreadable(plan, "app_back"):
+        return unreadable(plan, "app_back")
     ok, why = judged(dfupatch.compare, input=files["owner"], readback=fact(plan, "app_back"))
     if not ok:
         return ("stop", f"What's on the chip differs from the owner's image ({why}). Don't power-cycle into it: "

@@ -27,7 +27,7 @@ class FakeUnit:
     """The display chip in update mode, and the owner at the keyboard: runs each action the plan asks for."""
 
     def __init__(self, folder, app, upper=None, options=OPTIONS_OK, devices=(("2-1.2", DISPLAY_LAYOUT),),
-                 answers=None, words=None, cut_upper_write_at=None, cut_reports_ok=False):
+                 answers=None, words=None, cut_upper_write_at=None, cut_reports_ok=False, failing_reads=()):
         self.folder = folder
         self.app = bytearray(app)
         self.upper = bytearray(upper if upper is not None else b"\xff" * UPPER_SIZE)
@@ -37,6 +37,7 @@ class FakeUnit:
         self.words = words or {}
         self.cut_upper_write_at = cut_upper_write_at
         self.cut_reports_ok = cut_reports_ok
+        self.failing_reads = failing_reads
         self.log = []
         self.writes = []
 
@@ -68,6 +69,9 @@ class FakeUnit:
             record(action[2], action[1])
         elif kind == "read":
             area, path, out = action[1], action[2], action[3]
+            if action[4] in self.failing_reads:
+                record(action[4], "failed")   # dfu-util -U refused, as the shell records it
+                return
             data = {"app": self.app, "upper": self.upper, "options": self.options}[area]
             with open(out, "wb") as f:
                 f.write(bytes(data))
@@ -298,6 +302,15 @@ class RefusalTests(DrawnPlanTests):
 
     def test_a_display_not_like_stock_after_the_power_cycle_stops(self):
         self.refused("doesn't look like stock", writes=["upper", "app"], answers={"stock_look": "n"})
+
+
+    def test_a_read_dfu_util_refuses_stops_and_isnt_asked_forever(self):
+        for key in ("app_read", "options_read", "upper_read"):
+            with self.subTest(key):
+                self.refused("couldn't be read", failing_reads=(key,))
+
+    def test_a_failed_read_back_stops_after_the_write(self):
+        self.refused("couldn't be read", writes=["upper"], failing_reads=("upper_back",))
 
 
 class FreshnessTests(DrawnPlanTests):
