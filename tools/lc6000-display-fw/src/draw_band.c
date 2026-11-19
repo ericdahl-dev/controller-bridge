@@ -3,59 +3,8 @@
 // fill clockwise from 12 o'clock in the deck color, or the warning's red or white. Anti-aliased by coverage as
 // draw_live.c is; its helpers are static there, so the few this needs are repeated here. No state of its own.
 #include "draw_band.h"
-
-#define CENTER 99.0f
-#define BAND_INNER 103.0f
-#define BAND_OUTER 107.0f
-#define BAND_TRACK 0x4A4A4Au
-/// Under the ring: the frame's ground inside the 198 square, the panel's black outside it.
-#define GROUND 0x0B0B0Bu
-#define PANEL 0x000000u
-/// The time's white (the blink's other half) and the warning's red, as draw_live.c's.
-#define WARNING_WHITE 0xEDEDEAu
-#define WARNING_RED 0xFF3B30u
-/// The band's reach either side, for the frame (x, y) loops: center ± (outer + 1).
-#define REACH 109
-
-/// A square root by Newton's method from a bit-level first guess, as draw.c's. No libm on the chip.
-static float root(float x) {
-    if (x <= 0.0f) return 0.0f;
-    union { float f; uint32_t u; } v = { x };
-    v.u = (v.u >> 1) + 0x1FBD1DF5u;
-    float r = v.f;
-    for (int i = 0; i < 3; i++) r = 0.5f * (r + x / r);
-    return r;
-}
-
-static float clamp01(float x) { return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x; }
-
-/// How much of a pixel lies inside a straight edge, from the signed distance of its center to the edge (positive
-/// inside) and the edge's unit normal: the exact area of the pixel square on the inside, as draw.c's.
-static float edge_cover(float distance, float nx, float ny) {
-    float a = nx < 0.0f ? -nx : nx, b = ny < 0.0f ? -ny : ny;
-    if (a < b) { float t = a; a = b; b = t; }
-    float s = distance + (a + b) / 2.0f;
-    if (s <= 0.0f) return 0.0f;
-    if (s >= a + b) return 1.0f;
-    if (b < 1e-6f) return clamp01(s / a);
-    if (s < b) return s * s / (2.0f * a * b);
-    if (s < a) return (s - b / 2.0f) / a;
-    float t = a + b - s;
-    return 1.0f - t * t / (2.0f * a * b);
-}
-
-/// `under` moved toward `over` by `cover` (0-1), per channel, rounded.
-static dfw_pixel blend(dfw_pixel under, dfw_pixel over, float cover) {
-    if (cover <= 0.0f) return under;
-    if (cover >= 1.0f) return over;
-    dfw_pixel out = 0;
-    for (int shift = 0; shift <= 16; shift += 8) {
-        float a = (float)(under >> shift & 0xFFu), b = (float)(over >> shift & 0xFFu);
-        float c = a + (b - a) * cover + 0.5f;
-        out |= (dfw_pixel)(c < 0.0f ? 0.0f : c > 255.0f ? 255.0f : c) << shift;
-    }
-    return out;
-}
+#include "band_geometry.h"
+#include "band_table.h"
 
 /// sin and cos of `turns` (0-1) of a turn clockwise from 12 o'clock: folded to the nearest quarter turn, so the series
 /// to the ninth power only sees up to an eighth of a turn, where it is within float precision.
@@ -72,41 +21,55 @@ static void turn_sin_cos(float turns, float *sin_out, float *cos_out) {
     }
 }
 
-static int in_frame(int x, int y) { return x >= 0 && x < DFW_SIZE && y >= 0 && y < DFW_SIZE; }
+/// The ring as the unit has it: whether there is one, how far round its fill goes and in what color, and the end ray's
+/// normal into the fill.
+typedef struct { int on; float turns; dfw_pixel fill; float end_nx, end_ny; } ring_state;
 
-void dfw_band_pixels(const dfw_unit *unit, dfw_put put, void *ctx) {
+static ring_state ring_of(const dfw_unit *unit) {
+    ring_state ring = { 0, 0.0f, 0, 0.0f, 0.0f };
     if (!unit->drawn || unit->deck.number == 0 || dfw_stale(unit) || !unit->time_heard || unit->track_length == 0)
-        return;
+        return ring;
     uint16_t elapsed = unit->elapsed < unit->track_length ? unit->elapsed : unit->track_length;
-    float turns = (float)elapsed / (float)unit->track_length;
-    dfw_pixel fill = unit->time_look == DFW_TIME_RED ? WARNING_RED : unit->time_look == DFW_TIME_WHITE ? WARNING_WHITE
+    ring.on = 1;
+    ring.turns = (float)elapsed / (float)unit->track_length;
+    ring.fill = unit->time_look == DFW_TIME_RED ? WARNING_RED : unit->time_look == DFW_TIME_WHITE ? WARNING_WHITE
         : (dfw_pixel)unit->deck.r << 16 | (dfw_pixel)unit->deck.g << 8 | unit->deck.b;
     float sn, cs;
-    turn_sin_cos(turns, &sn, &cs);
-    // Into the fill across the end's ray: counterclockwise of it. The fill is the band on the clockwise side of the
-    // 12 o'clock ray and before the end's: up to half a turn both half-planes (their covers' sum less one), past it
-    // either (their sum). Swift draws no fill at 0 and the whole band, with no edge, at 1.
-    const float end_nx = -cs, end_ny = -sn;
-    for (int y = (int)CENTER - REACH; y <= (int)CENTER + REACH; y++) {
-        float dy = (float)y + 0.5f - CENTER;
-        for (int x = (int)CENTER - REACH; x <= (int)CENTER + REACH; x++) {
-            float dx = (float)x + 0.5f - CENTER;
-            float d2 = dx * dx + dy * dy;
-            if (d2 > (BAND_OUTER + 1.0f) * (BAND_OUTER + 1.0f) || d2 < (BAND_INNER - 1.0f) * (BAND_INNER - 1.0f)) continue;
-            float r = root(d2), nx = dx / r, ny = dy / r;
-            float band = edge_cover(BAND_OUTER - r, nx, ny) + edge_cover(r - BAND_INNER, nx, ny) - 1.0f;
-            if (band <= 0.0f) continue;
-            dfw_pixel color = blend(in_frame(x, y) ? GROUND : PANEL, BAND_TRACK, band);
-            if (turns > 0.0f) {
-                float cover = 1.0f;
-                if (turns < 1.0f) {
-                    float start = edge_cover(dx, 1.0f, 0.0f), end = edge_cover(dx * end_nx + dy * end_ny, end_nx, end_ny);
-                    cover = clamp01(turns <= 0.5f ? start + end - 1.0f : start + end);
-                }
-                color = blend(color, fill, band * cover);
-            }
-            put(ctx, x, y, color);
+    turn_sin_cos(ring.turns, &sn, &cs);
+    // Into the fill across the end's ray: counterclockwise of it.
+    ring.end_nx = -cs;
+    ring.end_ny = -sn;
+    return ring;
+}
+
+/// The ring's color at one of the table's pixels (#558): the track and the band's cover come from the table, worked
+/// out once; only the fill's end edge, which moves with the progress, is worked out here. The fill is the band on the
+/// clockwise side of the 12 o'clock ray and before the end's: up to half a turn both half-planes (their covers' sum less
+/// one), past it either (their sum). Swift draws no fill at 0 and the whole band, with no edge, at 1.
+static dfw_pixel ring_color(const ring_state *ring, const dfw_band_entry *e) {
+    dfw_pixel c = e->track;
+    if (ring->turns > 0.0f) {
+        float cover = 1.0f;
+        if (ring->turns < 1.0f) {
+            float dx = (float)e->x + 0.5f - CENTER, dy = (float)e->y + 0.5f - CENTER;
+            // A pixel's center 0.75 px or more from the end's line is wholly on one side: edge_cover gives exactly 1
+            // or 0 there (half its corner-to-corner reach is at most √2/2), so only the pixels on the line need it.
+            float distance = dx * ring->end_nx + dy * ring->end_ny;
+            float end = distance >= 0.75f ? 1.0f : distance <= -0.75f ? 0.0f
+                : edge_cover(distance, ring->end_nx, ring->end_ny);
+            cover = clamp01(ring->turns <= 0.5f ? e->start + end - 1.0f : e->start + end);
         }
+        c = blend(c, ring->fill, e->band * cover);
+    }
+    return c;
+}
+
+void dfw_band_pixels(const dfw_unit *unit, dfw_put put, void *ctx) {
+    ring_state ring = ring_of(unit);
+    if (!ring.on) return;
+    for (int i = 0; i < dfw_band_entries; i++) {
+        const dfw_band_entry *e = &dfw_band_table[i];
+        if (e->ring) put(ctx, e->x, e->y, ring_color(&ring, e));
     }
 }
 
@@ -121,25 +84,26 @@ static int layer_index(int x, int y) {
     return py * DFW_LAYER_W + px;
 }
 
-static void layer_put(void *ctx, int x, int y, dfw_pixel color) {
-    if (in_frame(x, y)) return;
-    int i = layer_index(x, y);
-    if (i >= 0) ((uint16_t *)ctx)[i] = rgb565(color);
+/// The band in the layer: every pixel of its clear annulus outside the square, once, with its final value (the ring, or
+/// black where it doesn't reach), written only if the layer doesn't hold it already. So the visible layer never shows a
+/// pixel between two values (#468: a clear pass turned the ring black on screen for the few ms the ring took to draw,
+/// every present: the shimmer), and an unchanged ring writes nothing.
+void dfw_band_layer(const dfw_unit *unit, const dfw_layer_io *io) {
+    ring_state ring = ring_of(unit);
+    for (int i = 0; i < dfw_band_entries; i++) {
+        const dfw_band_entry *e = &dfw_band_table[i];
+        if (!e->layer) continue;
+        int index = layer_index(e->x, e->y);
+        if (index < 0) continue;
+        uint16_t value = ring.on && e->ring ? rgb565(ring_color(&ring, e)) : 0;
+        if (io->read(io->ctx, index) != value) io->write(io->ctx, index, value);
+    }
 }
 
-/// The band's annulus as far as any of its pixels reach (r 102-108, with half a pixel to spare).
-#define CLEAR_INNER 101.5f
-#define CLEAR_OUTER 108.5f
+static uint16_t memory_read(void *ctx, int index) { return ((const uint16_t *)ctx)[index]; }
+static void memory_write(void *ctx, int index, uint16_t value) { ((uint16_t *)ctx)[index] = value; }
 
 void dfw_draw_band(uint16_t *layer, const dfw_unit *unit) {
-    for (int y = (int)CENTER - REACH; y <= (int)CENTER + REACH; y++) {
-        float dy = (float)y + 0.5f - CENTER;
-        for (int x = (int)CENTER - REACH; x <= (int)CENTER + REACH; x++) {
-            float dx = (float)x + 0.5f - CENTER, d2 = dx * dx + dy * dy;
-            if (in_frame(x, y) || d2 < CLEAR_INNER * CLEAR_INNER || d2 > CLEAR_OUTER * CLEAR_OUTER) continue;
-            int i = layer_index(x, y);
-            if (i >= 0) layer[i] = 0;
-        }
-    }
-    dfw_band_pixels(unit, layer_put, layer);
+    const dfw_layer_io io = { memory_read, memory_write, layer };
+    dfw_band_layer(unit, &io);
 }

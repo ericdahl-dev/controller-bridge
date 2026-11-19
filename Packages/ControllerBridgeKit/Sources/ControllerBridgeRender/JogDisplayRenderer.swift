@@ -86,6 +86,9 @@ public enum JogDisplayRenderer {
 
     static let background = rgb(0x0B0B0B), text = rgb(0xEDEDEA), caption = rgb(0xBDBDBD), keyColor = rgb(0x9DC3EE)
     static let live = rgb(0x00FF48), beatOff = rgb(0x2C2C2C), downbeatOff = rgb(0x5A5A5A)
+    /// The deck number's ink on its color: black, or white on a dark one (DeckNumberInk).
+    private static func numberInk(_ deck: [Int]) -> CGColor { DeckNumberInk.white(on: deck) ? text : background }
+
     /// The level meter (#461): an arc just inside the ring on the left, from 240° (bottom) to 300° clockwise from
     /// 12 o'clock. Green to `meterYellowFrom` of the arc, yellow above; the whole fill red at clip (127).
     static let meterInner: CGFloat = 80, meterOuter: CGFloat = 83
@@ -150,13 +153,14 @@ public enum JogDisplayRenderer {
             // is the controller's own and can change while Syndicate is silent.
             JogLogo.draw(in: context, center: CGPoint(x: center, y: center), scale: JogLogo.scale, hub: color(content.color))
             let number = CTFontCreateWithName("Geist-Bold" as CFString, 18, nil)
-            draw(makeLine("\(content.deck)", font: number, color: background), font: number, centerX: center,
+            draw(makeLine("\(content.deck)", font: number, color: numberInk(content.color)), font: number, centerX: center,
                  centerY: center, in: context)
             return
         }
         ring(litBeat: litBeat, in: context)
         let deckColor = color(content.color)
-        header(deck: content.deck, color: deckColor, badge: badge(content.playerType), in: context)
+        header(deck: content.deck, color: deckColor, ink: numberInk(content.color), badge: badge(content.playerType),
+               in: context)
 
         let block = textBlock(content)
         for text in block.lines { line(text, in: context) }
@@ -261,7 +265,8 @@ public enum JogDisplayRenderer {
     }
 
     /// The deck chip (a 26 px circle in the deck color, its number in black) and the player badge, centered at y 37.
-    private static func header(deck: Int, color deckColor: CGColor, badge label: String?, in context: CGContext) {
+    private static func header(deck: Int, color deckColor: CGColor, ink: CGColor, badge label: String?,
+                               in context: CGContext) {
         let chip: CGFloat = 26, gap: CGFloat = 6, mid: CGFloat = 37
         let badgeFont = CTFontCreateWithName("GeistMono-SemiBold" as CFString, 14, nil)
         let badgeLine = label.map { makeLine($0, font: badgeFont, color: text, tracking: 0.04) }
@@ -271,7 +276,7 @@ public enum JogDisplayRenderer {
         context.setFillColor(deckColor)
         context.fillEllipse(in: CGRect(x: left, y: mid - chip / 2, width: chip, height: chip))
         let number = CTFontCreateWithName("Geist-Bold" as CFString, 18, nil)
-        draw(makeLine("\(deck)", font: number, color: background), font: number, centerX: left + chip / 2, centerY: mid,
+        draw(makeLine("\(deck)", font: number, color: ink), font: number, centerX: left + chip / 2, centerY: mid,
              in: context)
         guard let badgeLine else { return }
         // A 1.5 px outline, 5 px corners, 22 px tall.

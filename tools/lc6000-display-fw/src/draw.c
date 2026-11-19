@@ -5,19 +5,14 @@
 #include "text.h"
 #include "draw_live.h"
 #include "font_header.h"
+#include "ring_table.h"
 
 #define GROUND 0x0B0B0Bu
-#define DOWNBEAT_OFF 0x5A5A5Au
-#define BEAT_OFF 0x2C2C2Cu
 /// The time left (#460, #524): centered on x 99, its line box's middle at y 160 (drawn mode's layout).
 #define TIME_CENTER_X 99.0f
 #define TIME_MIDDLE 160.0f
 
 #define CENTER 99.0f
-#define RING_OUTER 95.0f
-#define RING_INNER 85.0f
-/// The gap between beat sections, measured at mid-band.
-#define RING_GAP 7.0f
 
 /// A square root by Newton's method from a bit-level first guess: three steps take it to float precision for the
 /// values drawn here (0 to 2·198²). No libm on the chip.
@@ -61,44 +56,14 @@ static dfw_pixel blend(dfw_pixel under, dfw_pixel over, float cover) {
     return out;
 }
 
-/// sin and cos of a small angle by their series; ample for the ring's half gap (0.04 rad).
-static void small_sin_cos(float a, float *s, float *c) {
-    float a2 = a * a;
-    *s = a * (1.0f - a2 / 6.0f * (1.0f - a2 / 20.0f));
-    *c = 1.0f - a2 / 2.0f * (1.0f - a2 / 12.0f);
-}
-
-/// The four beat sections, clockwise from 12 o'clock, beat 1 a step brighter. Angles run from 12 o'clock clockwise,
-/// which on screen (y down) is the direction (sin a, −cos a), and clockwise from it is (cos a, sin a). Each section is
-/// under half a turn, so it is the band between the two radii cut by two half-planes through the center.
+/// The four beat sections, clockwise from 12 o'clock, beat 1 a step brighter; or all dark, the waiting look. From the
+/// ring's table (#558): each pixel's gray, worked out once by the same geometry (src/ring_geometry.h) over the ground,
+/// which is all there is under the ring when it is drawn.
 static void ring(dfw_pixel *frame, int all_dark) {
-    float s, c;
-    small_sin_cos(RING_GAP / ((RING_OUTER + RING_INNER) / 2.0f) / 2.0f, &s, &c);
-    // Beat 1's edges, at half and π/2 − half, as normals pointing into the section.
-    const float start_nx = c, start_ny = s, end_nx = -s, end_ny = -c;
-    for (int y = 0; y < DFW_SIZE; y++) {
-        float dy = (float)y + 0.5f - CENTER;
-        for (int x = 0; x < DFW_SIZE; x++) {
-            float dx = (float)x + 0.5f - CENTER;
-            float d2 = dx * dx + dy * dy;
-            if (d2 > (RING_OUTER + 1.0f) * (RING_OUTER + 1.0f) || d2 < (RING_INNER - 1.0f) * (RING_INNER - 1.0f)) continue;
-            float r = root(d2);
-            float nx = r > 0.0f ? dx / r : 1.0f, ny = r > 0.0f ? dy / r : 0.0f;
-            float band = edge_cover(RING_OUTER - r, nx, ny) + edge_cover(r - RING_INNER, nx, ny) - 1.0f;
-            if (band <= 0.0f) continue;
-            // Each step turns the point a quarter turn back, so beat b's section lands where beat 1's is.
-            float px = dx, py = dy;
-            for (int beat = 0; beat < 4; beat++) {
-                // The edge normals turn with the point, so they are taken in its turned frame.
-                float cover = band * edge_cover(px * start_nx + py * start_ny, start_nx, start_ny)
-                    * edge_cover(px * end_nx + py * end_ny, end_nx, end_ny);
-                dfw_pixel *p = &frame[y * DFW_SIZE + x];
-                *p = blend(*p, beat == 0 && !all_dark ? DOWNBEAT_OFF : BEAT_OFF, cover);
-                float t = px;
-                px = py;
-                py = -t;
-            }
-        }
+    for (int i = 0; i < dfw_ring_entries; i++) {
+        const dfw_ring_entry *e = &dfw_ring_table[i];
+        dfw_pixel level = all_dark ? e->dark : e->normal;
+        frame[e->index] = level << 16 | level << 8 | level;
     }
 }
 
@@ -228,6 +193,54 @@ void dfw_draw_time_text(dfw_pixel *frame, const char *text, int warning_red) {
 #define BADGE_OUTLINE 0xBDBDBDu
 #define HEADER_MIDDLE 37.0f
 
+/// Each sRGB channel value linearized, c/255 as WCAG has it: c/12.92 up to 0.04045, else ((c + 0.055)/1.055)^2.4.
+/// Worked out off the chip (no libm here), each to float precision; test_draw.c checks every entry against the formula.
+const float dfw_linear_channel[256] = {
+    0.000000000e+00f, 3.035269835e-04f, 6.070539671e-04f, 9.105809506e-04f, 1.214107934e-03f, 1.517634918e-03f, 1.821161901e-03f, 2.124688885e-03f,
+    2.428215868e-03f, 2.731742852e-03f, 3.035269835e-03f, 3.346535764e-03f, 3.676507324e-03f, 4.024717018e-03f, 4.391442037e-03f, 4.776953481e-03f,
+    5.181516702e-03f, 5.605391624e-03f, 6.048833023e-03f, 6.512090793e-03f, 6.995410187e-03f, 7.499032043e-03f, 8.023192985e-03f, 8.568125618e-03f,
+    9.134058702e-03f, 9.721217320e-03f, 1.032982303e-02f, 1.096009401e-02f, 1.161224518e-02f, 1.228648836e-02f, 1.298303234e-02f, 1.370208305e-02f,
+    1.444384360e-02f, 1.520851442e-02f, 1.599629337e-02f, 1.680737575e-02f, 1.764195449e-02f, 1.850022013e-02f, 1.938236096e-02f, 2.028856306e-02f,
+    2.121901038e-02f, 2.217388479e-02f, 2.315336618e-02f, 2.415763245e-02f, 2.518685963e-02f, 2.624122189e-02f, 2.732089164e-02f, 2.842603950e-02f,
+    2.955683444e-02f, 3.071344373e-02f, 3.189603307e-02f, 3.310476657e-02f, 3.433980681e-02f, 3.560131488e-02f, 3.688945040e-02f, 3.820437160e-02f,
+    3.954623528e-02f, 4.091519691e-02f, 4.231141062e-02f, 4.373502926e-02f, 4.518620439e-02f, 4.666508634e-02f, 4.817182423e-02f, 4.970656598e-02f,
+    5.126945837e-02f, 5.286064702e-02f, 5.448027644e-02f, 5.612849005e-02f, 5.780543019e-02f, 5.951123816e-02f, 6.124605423e-02f, 6.301001765e-02f,
+    6.480326669e-02f, 6.662593864e-02f, 6.847816984e-02f, 7.036009570e-02f, 7.227185068e-02f, 7.421356838e-02f, 7.618538148e-02f, 7.818742181e-02f,
+    8.021982031e-02f, 8.228270713e-02f, 8.437621154e-02f, 8.650046204e-02f, 8.865558629e-02f, 9.084171118e-02f, 9.305896285e-02f, 9.530746663e-02f,
+    9.758734714e-02f, 9.989872825e-02f, 1.022417331e-01f, 1.046164841e-01f, 1.070231030e-01f, 1.094617108e-01f, 1.119324278e-01f, 1.144353738e-01f,
+    1.169706678e-01f, 1.195384280e-01f, 1.221387722e-01f, 1.247718176e-01f, 1.274376804e-01f, 1.301364767e-01f, 1.328683216e-01f, 1.356333297e-01f,
+    1.384316150e-01f, 1.412632911e-01f, 1.441284709e-01f, 1.470272665e-01f, 1.499597898e-01f, 1.529261520e-01f, 1.559264637e-01f, 1.589608351e-01f,
+    1.620293756e-01f, 1.651321945e-01f, 1.682694002e-01f, 1.714411007e-01f, 1.746474037e-01f, 1.778884160e-01f, 1.811642442e-01f, 1.844749945e-01f,
+    1.878207723e-01f, 1.912016827e-01f, 1.946178304e-01f, 1.980693196e-01f, 2.015562538e-01f, 2.050787364e-01f, 2.086368701e-01f, 2.122307574e-01f,
+    2.158605001e-01f, 2.195261997e-01f, 2.232279573e-01f, 2.269658735e-01f, 2.307400485e-01f, 2.345505822e-01f, 2.383975738e-01f, 2.422811225e-01f,
+    2.462013267e-01f, 2.501582847e-01f, 2.541520943e-01f, 2.581828529e-01f, 2.622506575e-01f, 2.663556048e-01f, 2.704977910e-01f, 2.746773121e-01f,
+    2.788942635e-01f, 2.831487404e-01f, 2.874408377e-01f, 2.917706498e-01f, 2.961382708e-01f, 3.005437944e-01f, 3.049873141e-01f, 3.094689228e-01f,
+    3.139887134e-01f, 3.185467781e-01f, 3.231432091e-01f, 3.277780981e-01f, 3.324515363e-01f, 3.371636150e-01f, 3.419144249e-01f, 3.467040564e-01f,
+    3.515325995e-01f, 3.564001441e-01f, 3.613067798e-01f, 3.662525956e-01f, 3.712376805e-01f, 3.762621230e-01f, 3.813260114e-01f, 3.864294338e-01f,
+    3.915724777e-01f, 3.967552307e-01f, 4.019777798e-01f, 4.072402119e-01f, 4.125426135e-01f, 4.178850708e-01f, 4.232676700e-01f, 4.286904966e-01f,
+    4.341536362e-01f, 4.396571738e-01f, 4.452011945e-01f, 4.507857828e-01f, 4.564110232e-01f, 4.620769997e-01f, 4.677837961e-01f, 4.735314961e-01f,
+    4.793201831e-01f, 4.851499401e-01f, 4.910208498e-01f, 4.969329951e-01f, 5.028864580e-01f, 5.088813209e-01f, 5.149176654e-01f, 5.209955732e-01f,
+    5.271151257e-01f, 5.332764040e-01f, 5.394794890e-01f, 5.457244614e-01f, 5.520114015e-01f, 5.583403896e-01f, 5.647115057e-01f, 5.711248295e-01f,
+    5.775804404e-01f, 5.840784179e-01f, 5.906188409e-01f, 5.972017884e-01f, 6.038273389e-01f, 6.104955708e-01f, 6.172065624e-01f, 6.239603917e-01f,
+    6.307571363e-01f, 6.375968740e-01f, 6.444796820e-01f, 6.514056374e-01f, 6.583748173e-01f, 6.653872983e-01f, 6.724431570e-01f, 6.795424696e-01f,
+    6.866853124e-01f, 6.938717613e-01f, 7.011018919e-01f, 7.083757799e-01f, 7.156935005e-01f, 7.230551289e-01f, 7.304607401e-01f, 7.379104088e-01f,
+    7.454042095e-01f, 7.529422168e-01f, 7.605245047e-01f, 7.681511472e-01f, 7.758222183e-01f, 7.835377915e-01f, 7.912979403e-01f, 7.991027380e-01f,
+    8.069522577e-01f, 8.148465722e-01f, 8.227857544e-01f, 8.307698768e-01f, 8.387990117e-01f, 8.468732315e-01f, 8.549926081e-01f, 8.631572135e-01f,
+    8.713671192e-01f, 8.796223969e-01f, 8.879231179e-01f, 8.962693534e-01f, 9.046611744e-01f, 9.130986518e-01f, 9.215818563e-01f, 9.301108584e-01f,
+    9.386857285e-01f, 9.473065367e-01f, 9.559733532e-01f, 9.646862479e-01f, 9.734452904e-01f, 9.822505503e-01f, 9.911020971e-01f, 1.000000000e+00f,
+};
+
+/// The deck number's face on its deck color (#542 follow-up, DeckNumberInk): the text white (its own glyphs: light text
+/// is drawn heavier) when the color's relative luminance is under 0.1791, where white contrasts more than black; the
+/// ground's black otherwise.
+#define NUMBER_WHITE_BELOW 0.1791f
+
+static const dfw_face *number_ink(const dfw_deck_state *deck) {
+    float luminance = 0.2126f * dfw_linear_channel[deck->r] + 0.7152f * dfw_linear_channel[deck->g] +
+                      0.0722f * dfw_linear_channel[deck->b];
+    return luminance < NUMBER_WHITE_BELOW ? &number_white_face : &number_face;
+}
+
 /// The player badge for each player (#209): none for empty (0) and other (5), whose name the deck message doesn't carry.
 static const char *const badges[] = { 0, "TRK", "OSC", "MIDI", "SEQ", 0 };
 
@@ -240,9 +253,10 @@ static void header(dfw_pixel *frame, const dfw_deck_state *deck) {
     dfw_pixel color = (dfw_pixel)deck->r << 16 | (dfw_pixel)deck->g << 8 | deck->b;
     disc(frame, left + CHIP / 2.0f, HEADER_MIDDLE, CHIP / 2.0f, color);
     // A number outside 1-4 has no glyph: the chip alone.
-    const dfw_glyph *number = glyph(&number_face, (char)('0' + (deck->number <= 9 ? deck->number : 0)));
+    const dfw_face *ink = number_ink(deck);
+    const dfw_glyph *number = glyph(ink, (char)('0' + (deck->number <= 9 ? deck->number : 0)));
     if (number && deck->number >= 1 && deck->number <= 4)
-        draw_glyph(frame, &number_face, number, left + CHIP / 2.0f - number->advance / 2.0f,
+        draw_glyph(frame, ink, number, left + CHIP / 2.0f - number->advance / 2.0f,
                    baseline_row(&number_face, HEADER_MIDDLE));
     if (!label) return;
     float inset = BADGE_STROKE / 2.0f, x = left + CHIP + BADGE_GAP;
@@ -368,9 +382,11 @@ void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
         ring(frame, 1);
         const dfw_deck_state *d = &unit->deck;
         logo(frame, (dfw_pixel)d->r << 16 | (dfw_pixel)d->g << 8 | d->b);
-        const dfw_glyph *number = glyph(&number_face, (char)('0' + (d->number <= 9 ? d->number : 0)));
+        const dfw_face *ink = number_ink(d);
+        const dfw_glyph *number = glyph(ink, (char)('0' + (d->number <= 9 ? d->number : 0)));
         if (number && d->number >= 1 && d->number <= 4)
-            draw_glyph(frame, &number_face, number, CENTER - number->advance / 2.0f, baseline_row(&number_face, CENTER));
+            draw_glyph(frame, ink, number, CENTER - number->advance / 2.0f,
+                       baseline_row(&number_face, CENTER));
         return;
     }
     ring(frame, 0);
