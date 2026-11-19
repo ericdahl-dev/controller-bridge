@@ -19,10 +19,11 @@
       8-11 not write-protected, one bank. Anything else is refused.
 
 Standard library only."""
-import argparse, struct, sys, zlib
+import argparse, os, struct, sys, zlib
 
-import build_upper_dfu
-import dfupatch
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))  # -I leaves this folder off sys.path (#468)
+import build_upper_dfu  # noqa: E402
+import dfupatch  # noqa: E402
 
 APP_BASE = 0x08008000
 
