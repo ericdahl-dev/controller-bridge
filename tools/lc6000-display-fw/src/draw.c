@@ -2,6 +2,7 @@
 // center at +0.5. Edges are anti-aliased by coverage: a pixel is blended toward a shape by how much of it the shape
 // covers, estimated from the signed distance between the pixel's center and the shape's edge.
 #include "draw.h"
+#include "draw_live.h"
 #include "font_header.h"
 
 #define GROUND 0x0B0B0Bu
@@ -245,4 +246,5 @@ void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
     for (int i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = GROUND;
     ring(frame);
     header(frame, &unit->deck);
+    dfw_draw_live(frame, unit);
 }

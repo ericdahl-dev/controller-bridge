@@ -33,6 +33,8 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   - With no frame, nothing is drawn and the capability ask gets no answer, so DeckBridge falls back to images.
 - `src/draw.h`, `src/draw.c`: `dfw_draw` draws design B for the deck in front. For now that is the ground, the
   unlit ring, the deck chip and the player badge. It uses `float` only, with no `double` and no libm (Cortex-M4F).
+- `src/draw_live.h`, `src/draw_live.c`: `dfw_draw_live`, called last by `dfw_draw`, draws the live elements over
+  design B (#459): the master beat's section lit in the live green. Nothing while the display is stale.
 - `src/font_header.h`: glyph coverage for the header's two faces, generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
@@ -90,6 +92,12 @@ CoreGraphics and this code anti-alias curves slightly differently: up to 18 leve
 chip, and within 8 everywhere else. The limits are tight enough that a wrong color, a 1 px shift or a wrong glyph
 fails, and each of those was checked. The test prints each case's worst difference, so a change shows up in the
 log.
+
+The live elements (#459) are checked in `test/test_draw_live.c` against references with a beat lit or the marker
+drawn. The Kit's `jog-reference` tool draws neither, so `test/ref/live-reference/` is a small Swift package beside the
+references that renders the Kit's `JogDisplayRenderer.simulatorImage` with them. `make_refs.sh` builds and runs both.
+The lit section is the live green on the ground, three times the contrast of the unlit sections, so its limit is 10
+levels with no budget (measured worst: 8).
 
 **To add or change a reference image:**
 

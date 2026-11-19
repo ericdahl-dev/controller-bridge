@@ -14,3 +14,11 @@ bin=$(swift build --package-path "$kit" --show-bin-path)/jog-reference
 "$bin" 3 0 200 80 - "$here/deck3-green-other.ppm"
 "$bin" 1 255 128 0 osc "$here/deck1-orange-osc.ppm"
 "$bin" 3 180 0 255 sequencer "$here/deck3-purple-seq.ppm"
+# The live elements (#459): the lit master beat and the marker, as the Diagnostics simulator draws them, from the
+# live-reference tool beside this script (the Kit's JogDisplayRenderer.simulatorImage). Deck 4, empty: its header is
+# the chip alone, and nothing else is drawn near the ring.
+swift build --package-path "$here/live-reference" >&2
+live=$(swift build --package-path "$here/live-reference" --show-bin-path)/live-reference
+for beat in 1 2 3 4; do
+    "$live" 4 0 128 255 empty "$beat" - "$here/deck4-blue-empty-beat$beat.ppm"
+done
