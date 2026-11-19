@@ -109,16 +109,20 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->needle = 0;
         unit->needle_heard = 0;
         break;
-    case OP_DECK:
+    case OP_DECK: {
         if (!unit->drawn) break;
-        unit->deck = (dfw_deck_state){ args[0], (uint8_t)channel(args + 1), (uint8_t)channel(args + 3),
-                                       (uint8_t)channel(args + 5), args[7] };
+        dfw_deck_state deck = { args[0], (uint8_t)channel(args + 1), (uint8_t)channel(args + 3),
+                                (uint8_t)channel(args + 5), args[7] };
+        // The heartbeat's deck, unchanged, changes nothing: its flags stay and nothing is redrawn (#459).
+        if (memcmp(&deck, &unit->deck, sizeof deck) == 0) break;
+        unit->deck = deck;
         // A new deck's play flags wait for its own state message (#464); only feedback stale carries over.
         unit->flags &= FLAG_STALE;
         unit->dirty = 1;
         break;
+    }
     case OP_STATE:
-        if (!unit->drawn) break;
+        if (!unit->drawn || unit->flags == args[0]) break;
         unit->flags = args[0];
         unit->dirty = 1;
         break;
