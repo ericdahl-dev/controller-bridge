@@ -68,4 +68,30 @@ struct PitchArrowTests {
         Self.fader(rig, 0x0800)   // raw near the bottom: tempo near +1 inverted, above +0.5
         #expect(rig.leds[Self.forward] == 127 && rig.leds[Self.back] == 0)
     }
+
+    /// The lowest raw position whose tempo is within the LC6000's pickup tolerance (0.02) of 0.5, as sent (rounded).
+    static let catchEdge: Int = (0...16383).first { raw in
+        abs((tempoSlider(from: raw, invert: false, deadZone: 0.005) * 100_000).rounded() / 100_000 - 0.5) <= 0.02
+    }!
+
+    @Test("The arrows go out exactly where pickup catches: one step short, still lit and waiting; at the edge, both off and the fader drives")
+    func catchEdgeTurnsBothOff() throws {
+        let rig = try Self.pending()
+        Self.fader(rig, 0x2000)
+        Self.fader(rig, Self.catchEdge - 1)
+        #expect(rig.leds[Self.forward] == 127)
+        #expect(rig.osc.sent.filter { $0.address.hasSuffix("TempoSlider") }.isEmpty)
+        Self.fader(rig, Self.catchEdge)
+        #expect(rig.leds[Self.forward] == 0 && rig.leds[Self.back] == 0)
+        #expect(rig.osc.sent.contains { $0.address.hasSuffix("TempoSlider") })
+    }
+
+    @Test("Crossing the value in one jump catches too: both off in that step")
+    func crossingCatches() throws {
+        let rig = try Self.pending()
+        Self.fader(rig, 0x2000)
+        Self.fader(rig, 0x3F00)   // past +0.5 in one move
+        #expect(rig.leds[Self.forward] == 0 && rig.leds[Self.back] == 0)
+        #expect(rig.osc.sent.contains { $0.address.hasSuffix("TempoSlider") })
+    }
 }
