@@ -211,6 +211,8 @@ class Chip:
 
 CALLEE_SAVED = dict(r4=0x44444444, r6=0x66666666, r9=0x99999999, r11=0xBBBBBBBB)
 CAPABILITY = "F000020B7F1020000200 01F7".replace(" ", "")
+BEGIN = "F000020B7F102000020101F7"
+DECK_2_RED_TRACK = "F000020B7F10200009030201 7F0000000001F7".replace(" ", "")
 
 
 class CommandEntryTests(unittest.TestCase):
@@ -346,6 +348,23 @@ class UpperBlockTests(unittest.TestCase):
         self.assertEqual(draw & ~1, names["dfw_draw"])  # nm prints a Thumb function's address without bit 0
         self.assertEqual(draw & 1, 1, "Thumb")
         self.assertTrue(UPPER + 20 <= draw < UPPER + length)
+
+    def test_block_a_draws_through_a_good_b_and_stays_silent_for_a_corrupted_one(self):
+        proven = proven_block()
+        answer = bytes.fromhex("F000020B01102000020001F7")
+        corrupted = bytearray(upper_block())
+        corrupted[len(corrupted) // 2] ^= 0x01
+        for upper, drawn in ((upper_block(), True), (bytes(corrupted), False)):
+            with self.subTest(drawn=drawn):
+                chip = Chip(data=proven, upper=upper)
+                for hexbytes in (CAPABILITY, BEGIN, DECK_2_RED_TRACK):
+                    message = chip.receive(hexbytes)
+                    chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX,
+                              r5=(message[7] << 7) | message[8], r8=0)
+                chip.call(dfupatch.HOOK_RENDER_ENTRY, count=50_000_000)
+                self.assertEqual(chip.sent, [answer] if drawn else [])
+                layer = bytes(chip.uc.mem_read(LAYER_AT, 320 * 240 * 2))
+                self.assertEqual(any(layer), drawn, "B's drawing reached the screen" if drawn else "nothing drawn")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
