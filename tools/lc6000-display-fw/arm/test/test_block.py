@@ -211,6 +211,8 @@ CALLEE_SAVED = dict(r4=0x44444444, r6=0x66666666, r9=0x99999999, r11=0xBBBBBBBB)
 CAPABILITY = "F000020B7F1020000200 01F7".replace(" ", "")
 BEGIN = "F000020B7F102000020101F7"
 DECK_2_RED_TRACK = "F000020B7F10200009030201 7F0000000001F7".replace(" ", "")
+TITLE_STROBE = "F000020B7F102000080400 5374726F6265F7".replace(" ", "")  # title "Strobe", as test/test_sequence.c
+TEMPO_128 = "F000020B7F10200003050A00F7"
 
 
 class CommandEntryTests(unittest.TestCase):
@@ -382,6 +384,23 @@ class UpperBlockTests(unittest.TestCase):
                 self.assertEqual(chip.sent, [answer] if drawn else [])
                 layer = bytes(chip.uc.mem_read(LAYER_AT, 320 * 240 * 2))
                 self.assertEqual(any(layer), drawn, "B's drawing reached the screen" if drawn else "nothing drawn")
+
+    def test_block_b_draws_a_title_on_the_chip(self):
+        # The text path off the Mac for the first time (#458, #501): layout's soft-double math (__aeabi_d*), the kern
+        # search and the 4-bit glyph blits. Frame rows 60-90 hold the title; the layer shows the frame turned 180
+        # degrees at (61, 21), so they are layer rows 21 + 197 - 90 to 21 + 197 - 60.
+        proven = proven_block()
+        rows = []
+        for extra in ((), (TITLE_STROBE, TEMPO_128)):
+            chip = Chip(data=proven, upper=upper_block())
+            for hexbytes in (CAPABILITY, BEGIN, DECK_2_RED_TRACK, *extra):
+                message = chip.receive(hexbytes)
+                chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX,
+                          r5=(message[7] << 7) | message[8], r8=0)
+            chip.call(dfupatch.HOOK_RENDER_ENTRY, count=200_000_000)
+            top, bottom = 21 + 197 - 90, 21 + 197 - 60
+            rows.append(bytes(chip.uc.mem_read(LAYER_AT + top * 320 * 2, (bottom - top + 1) * 320 * 2)))
+        self.assertNotEqual(rows[0], rows[1], "the title changed the title rows")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
