@@ -30,8 +30,8 @@ extension DisplayFirmware {
 }
 
 public enum DrawnDisplay {
-    /// The command byte of every drawn-display message. A placeholder until #466 finds one Denon's dispatcher leaves
-    /// free; the vectors file and the C side carry the same number.
+    /// The command byte of every drawn-display message. Denon's display firmware (wd 00.50) drops it silently, with no
+    /// reply (#466); the vectors file and the C side carry the same number. Never 78 or 79: they write its settings flash.
     public static let command: UInt8 = 0x20
     /// The protocol version this app speaks.
     public static let version = 1

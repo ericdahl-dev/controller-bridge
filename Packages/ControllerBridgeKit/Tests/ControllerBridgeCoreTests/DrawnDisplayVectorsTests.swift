@@ -64,4 +64,14 @@ struct DrawnDisplayVectorsTests {
         #expect(DrawnDisplay.Player(playerType: "Sequencer") == .sequencer)
         #expect(DrawnDisplay.Player(playerType: "Automation") == .other)
     }
+
+    @Test("Every message goes out under our one command byte, never one Denon's firmware acts on (#466: 0F, 10 and 72; 78 and 79 write its settings flash)")
+    func oneCommandByte() {
+        let messages: [DrawnDisplay.Message] = [
+            .capability(version: 1), .begin(version: 1), .end(version: 127),
+            .deck(number: 4, color: [255, 255, 255], player: .other), .deck(number: 1, color: [], player: .empty),
+        ]
+        for message in messages { #expect(message.bytes[6] == DrawnDisplay.command) }
+        #expect(![0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x72, 0x78, 0x79, 0x7C, 0x7F].contains(DrawnDisplay.command))
+    }
 }

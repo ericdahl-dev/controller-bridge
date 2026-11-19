@@ -73,7 +73,7 @@ struct DrawnDisplayHandshakeTests {
 
     static let fallbackLine = "The jog display didn't answer as custom firmware that draws; it shows images"
 
-    @Test("No answer in half a second: images, exactly as today (deck 1's slots go up), logged once")
+    @Test("No reply at all, as Denon's firmware does (#466: it drops the command silently): images after half a second, exactly as today, logged once")
     func silenceFallsBack() throws {
         let (rig, port, clock) = try Self.rig(.custom)
         clock.now = 0.49
@@ -91,7 +91,7 @@ struct DrawnDisplayHandshakeTests {
         #expect(Self.drawn(port).isEmpty)
     }
 
-    @Test("Denon's firmware refuses the question (ack 06): images at once, without waiting")
+    @Test("A refusal (ack 06), which Denon's firmware never sends for this command (#466): images at once, without waiting")
     func refusalFallsBackAtOnce() throws {
         let (rig, port, _) = try Self.rig(.custom)
         rig.coordinator.jogDisplayReply(JogDisplayDriverTests.refused)

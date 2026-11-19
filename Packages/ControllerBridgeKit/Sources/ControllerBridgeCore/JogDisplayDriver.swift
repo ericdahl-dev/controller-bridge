@@ -359,7 +359,8 @@ public final class JogDisplayDriver {
         if case .asking = mode, let version = DrawnDisplay.answer(bytes) {
             return draw(version: min(version, DrawnDisplay.version))
         }
-        // Denon's firmware refuses a command it doesn't know (ack 06): no need to wait.
+        // A refusal (ack 06) ends the wait at once. Denon's firmware never sends one for this command: it says nothing,
+        // so the timeout is its path (#466).
         if case .asking = mode, upload == nil, case .refused = JogDisplay.Reply(bytes) { return showImages() }
         guard var running = upload, let reply = JogDisplay.Reply(bytes) else { return }
         switch reply {
