@@ -1,0 +1,276 @@
+// The hook's portable logic (#467), built natively: what the stock firmware's two hook sites hand our code, and what
+// our code does with it. The stock side (uptime counter, receive count, malloc, reset witness) is simulated here.
+#include <string.h>
+
+#include "harness.h"
+#include "hook.h"
+
+#define CAPABILITY_V1 "F0 00 02 0B 7F 10 20 00 02 00 01 F7"
+#define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+#define DECK_2_RED_TRACK "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+#define STATE_LOADED_PLAYING "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+
+/// The simulated stock firmware: its RAM, its malloc, and our state's untouched top-of-SRAM home.
+static struct {
+    uint32_t uptime;
+    uint8_t witness;
+    uint16_t rx_count;
+    uint8_t rx[0x200];
+    int mallocs;
+    int malloc_fails;
+    dfw_pixel heap[DFW_SIZE * DFW_SIZE];
+} chip;
+static hook_state state;
+static recording rec;
+static hook_stock stock;
+/// Our marker word as the flash holds it: present after a good placement, 0xFFFFFFFF where nothing was placed.
+static uint32_t marker_word;
+
+static void *stock_malloc(size_t size) {
+    chip.mallocs++;
+    if (chip.malloc_fails || size > sizeof chip.heap) return NULL;
+    return chip.heap;
+}
+
+static void present(void *ctx, const dfw_pixel *frame) { (void)frame; ((recording *)ctx)->presents++; }
+static void send(void *ctx, const uint8_t *bytes, size_t length) {
+    recording *r = ctx;
+    r->sends++;
+    r->sent_length = length;
+    memcpy(r->sent, bytes, length < sizeof r->sent ? length : sizeof r->sent);
+}
+
+/// Power-on: stock RAM is zeroed (.bss) and the witness reads 0; our state keeps whatever was there.
+static void power_on(void) {
+    chip.uptime = 0;
+    chip.witness = 0;
+    chip.rx_count = 0;
+    chip.mallocs = 0;
+    chip.malloc_fails = 0;
+    memset(&rec, 0, sizeof rec);
+    marker_word = HOOK_MARKER;
+    stock = (hook_stock){ .marker = &marker_word, .uptime = &chip.uptime, .witness = &chip.witness, .rx_count = &chip.rx_count,
+                          .malloc = stock_malloc, .port = { .present = present, .send = send, .ctx = &rec } };
+}
+
+/// A cold first boot: our state is SRAM garbage too.
+static void cold_boot(void) {
+    memset(&state, 0xA5, sizeof state);
+    power_on();
+}
+
+/// Puts one message in the stock receive buffer as the dispatcher sees it, and calls the command entry.
+static void deliver(uint8_t cmd_override, const char *hex) {
+    size_t n = parse_hex(hex, chip.rx, sizeof chip.rx);
+    if (cmd_override) chip.rx[6] = cmd_override;
+    chip.rx_count = (uint16_t)n;
+    uint32_t len = ((uint32_t)chip.rx[7] << 7) | chip.rx[8];
+    hook_command(&state, &stock, chip.rx[6], chip.rx, len);
+    chip.uptime += 10;
+}
+
+static void tick(void) {
+    hook_tick(&state, &stock);
+    chip.uptime += 10;
+}
+
+static void drawing_session(void) {
+    deliver(0, CAPABILITY_V1);
+    deliver(0, BEGIN_V1);
+    deliver(0, DECK_2_RED_TRACK);
+    tick();
+}
+
+void the_tick_does_nothing_before_our_first_message(void) {
+    cold_boot();
+    for (int i = 0; i < 100; i++) tick();
+    CHECK(rec.presents == 0 && rec.sends == 0 && chip.mallocs == 0);
+}
+
+void a_capability_ask_allocates_the_frame_once_and_is_answered(void) {
+    cold_boot();
+    deliver(0, CAPABILITY_V1);
+    deliver(0, CAPABILITY_V1);
+    deliver(0, CAPABILITY_V1);
+    tick();
+    CHECK(chip.mallocs == 1);
+    CHECK(rec.sends == 3);
+    CHECK(state.unit.frame == chip.heap);
+}
+
+void a_failed_allocation_means_no_answer_and_no_second_try(void) {
+    cold_boot();
+    chip.malloc_fails = 1;
+    deliver(0, CAPABILITY_V1);
+    deliver(0, CAPABILITY_V1);
+    tick();
+    CHECK(chip.mallocs == 1);
+    CHECK(rec.sends == 0);
+}
+
+void begin_with_no_frame_allocates_it(void) {
+    cold_boot();
+    deliver(0, BEGIN_V1);
+    deliver(0, DECK_2_RED_TRACK);
+    tick();
+    CHECK(chip.mallocs == 1);
+    CHECK(state.unit.drawn == 1);
+    CHECK(rec.presents == 1);
+}
+
+void begin_after_a_failed_allocation_stays_in_stock_mode(void) {
+    cold_boot();
+    chip.malloc_fails = 1;
+    deliver(0, BEGIN_V1);
+    deliver(0, DECK_2_RED_TRACK);
+    deliver(0, BEGIN_V1);
+    tick();
+    CHECK(chip.mallocs == 1);
+    CHECK(state.unit.drawn == 0);
+    CHECK(rec.presents == 0);
+}
+
+void a_repeated_begin_never_allocates_again(void) {
+    cold_boot();
+    drawing_session();
+    for (int i = 0; i < 5; i++) deliver(0, BEGIN_V1);
+    tick();
+    CHECK(chip.mallocs == 1);
+}
+
+void other_commands_are_left_to_stock(void) {
+    cold_boot();
+    deliver(0x7F, CAPABILITY_V1);
+    deliver(0x21, BEGIN_V1);
+    deliver(0x72, BEGIN_V1);
+    tick();
+    CHECK(chip.mallocs == 0 && rec.sends == 0 && state.magic != HOOK_MAGIC);
+}
+
+void a_message_longer_than_the_bytes_received_is_ignored(void) {
+    cold_boot();
+    size_t n = parse_hex(CAPABILITY_V1, chip.rx, sizeof chip.rx);
+    chip.rx_count = (uint16_t)(n - 1);  // the F7 hasn't arrived
+    hook_command(&state, &stock, 0x20, chip.rx, 2);
+    tick();
+    CHECK(chip.mallocs == 0 && rec.sends == 0);
+}
+
+void a_message_without_f7_at_its_declared_end_is_ignored(void) {
+    cold_boot();
+    size_t n = parse_hex(CAPABILITY_V1, chip.rx, sizeof chip.rx);
+    chip.rx[n - 1] = 0x00;
+    chip.rx[n] = 0xF7;
+    chip.rx_count = (uint16_t)(n + 1);
+    hook_command(&state, &stock, 0x20, chip.rx, 2);
+    tick();
+    CHECK(chip.mallocs == 0 && rec.sends == 0);
+}
+
+void without_the_marker_nothing_runs(void) {
+    cold_boot();
+    marker_word = 0xFFFFFFFFu;
+    deliver(0, CAPABILITY_V1);
+    deliver(0, BEGIN_V1);
+    tick();
+    CHECK(chip.mallocs == 0 && rec.sends == 0 && rec.presents == 0);
+}
+
+void messages_are_copied_out_of_the_stock_buffer(void) {
+    // begin, deck and state can share one USB packet; stock reuses its buffer, so nothing may point into it.
+    cold_boot();
+    deliver(0, BEGIN_V1);
+    memset(chip.rx, 0x00, sizeof chip.rx);
+    deliver(0, DECK_2_RED_TRACK);
+    memset(chip.rx, 0x00, sizeof chip.rx);
+    deliver(0, STATE_LOADED_PLAYING);
+    memset(chip.rx, 0x00, sizeof chip.rx);
+    tick();
+    CHECK(state.unit.drawn == 1);
+    CHECK(state.unit.deck.number == 2 && state.unit.deck.r == 255 && state.unit.deck.g == 0);
+    CHECK(state.unit.flags == 3);
+}
+
+void a_reboot_seen_through_the_witness_resets_drawn_mode(void) {
+    // The required case: the first call after the reboot comes later than the count saved before it, so the
+    // uptime comparison alone can't see the reboot. The witness (cleared by every reset) does.
+    cold_boot();
+    drawing_session();
+    CHECK(state.unit.drawn == 1);
+    uint32_t saved = state.last_uptime;
+    power_on();
+    chip.uptime = saved + 100000;
+    for (int i = 0; i < 10; i++) tick();
+    CHECK(rec.presents == 0);
+    CHECK(state.magic != HOOK_MAGIC);
+    deliver(0, DECK_2_RED_TRACK);  // a stray message doesn't bring drawing back: the unit starts fresh, not drawn
+    tick();
+    CHECK(state.unit.drawn == 0 && state.unit.frame == NULL && rec.presents == 0);
+    deliver(0, BEGIN_V1);
+    tick();
+    CHECK(chip.mallocs == 1);  // the new boot's heap, allocated afresh
+}
+
+void without_the_witness_a_late_first_call_keeps_the_old_session(void) {
+    // What the uptime comparison alone would do in the required case: it misses the reboot, keeps drawn mode and a
+    // frame pointer into the old boot's heap. That's why the hook doesn't rely on it alone.
+    cold_boot();
+    drawing_session();
+    uint32_t saved = state.last_uptime;
+    power_on();
+    stock.witness = NULL;
+    chip.uptime = saved + 100000;
+    tick();
+    CHECK(state.magic == HOOK_MAGIC && state.unit.drawn == 1);
+}
+
+void an_uptime_that_went_backwards_resets_too(void) {
+    cold_boot();
+    drawing_session();
+    chip.witness = 0xF0;  // say the witness survived (it can't, but the counter alone must still catch this)
+    chip.uptime = 5;
+    tick();
+    CHECK(state.magic != HOOK_MAGIC);
+}
+
+void a_counter_wrap_is_treated_as_a_reset(void) {
+    cold_boot();
+    chip.uptime = 0xFFFFFF00u;
+    drawing_session();
+    chip.uptime = 0x10;
+    tick();
+    CHECK(state.magic != HOOK_MAGIC);
+}
+
+void garbage_with_the_magic_but_a_bad_check_word_is_fresh_state(void) {
+    cold_boot();
+    state.magic = HOOK_MAGIC;
+    state.check = 0;
+    state.unit.drawn = 1;
+    chip.witness = 0xF0;
+    for (int i = 0; i < 5; i++) tick();
+    CHECK(rec.presents == 0);
+    deliver(0, DECK_2_RED_TRACK);
+    tick();
+    CHECK(state.unit.drawn == 0);
+}
+
+const test_case all_tests[] = {
+    { "the tick does nothing before our first message", the_tick_does_nothing_before_our_first_message },
+    { "a capability ask allocates the frame once and is answered", a_capability_ask_allocates_the_frame_once_and_is_answered },
+    { "a failed allocation means no answer and no second try", a_failed_allocation_means_no_answer_and_no_second_try },
+    { "begin with no frame allocates it", begin_with_no_frame_allocates_it },
+    { "begin after a failed allocation stays in stock mode", begin_after_a_failed_allocation_stays_in_stock_mode },
+    { "a repeated begin never allocates again", a_repeated_begin_never_allocates_again },
+    { "other commands are left to stock", other_commands_are_left_to_stock },
+    { "a message longer than the bytes received is ignored", a_message_longer_than_the_bytes_received_is_ignored },
+    { "a message without F7 at its declared end is ignored", a_message_without_f7_at_its_declared_end_is_ignored },
+    { "without the marker nothing runs", without_the_marker_nothing_runs },
+    { "messages are copied out of the stock buffer", messages_are_copied_out_of_the_stock_buffer },
+    { "a reboot seen through the witness resets drawn mode", a_reboot_seen_through_the_witness_resets_drawn_mode },
+    { "without the witness a late first call keeps the old session", without_the_witness_a_late_first_call_keeps_the_old_session },
+    { "an uptime that went backwards resets too", an_uptime_that_went_backwards_resets_too },
+    { "a counter wrap is treated as a reset", a_counter_wrap_is_treated_as_a_reset },
+    { "garbage with the magic but a bad check word is fresh state", garbage_with_the_magic_but_a_bad_check_word_is_fresh_state },
+    { 0, 0 },
+};

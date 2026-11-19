@@ -21,3 +21,14 @@ $(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h $(wildcard src/*.h
 
 clean:
 	rm -rf $(BUILD)
+
+# The hook into the stock wd image (#467): its portable logic, tested natively (`make arm-test`).
+ARM_TESTS := $(wildcard arm/test/test_*.c)
+.PHONY: arm-test
+arm-test: $(BUILD)/hook-tests
+	$(BUILD)/hook-tests
+	sh arm/check_symbols.sh $(BUILD)/freestanding-arm
+
+$(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c $(ARM_TESTS) test/harness.c
