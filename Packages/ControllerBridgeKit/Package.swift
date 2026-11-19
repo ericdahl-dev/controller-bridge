@@ -37,6 +37,9 @@ let package = Package(
         // scripts/capture_to_profile: the draft tool's command line, a thin shell over ControllerBridgeDraft.
         // scripts/appstore_screenshots.sh: frames a Debug snapshot for the Mac App Store, a thin shell over AppStoreFrame.
         .executableTarget(name: "appstore-frames", dependencies: ["ControllerBridgeRender"]),
+        // tools/lc6000-display-fw/test/ref/make_refs.sh: the drawn display firmware's reference images (#457), from the
+        // renderer itself, so the C code is never checked against its own output.
+        .executableTarget(name: "jog-reference", dependencies: ["ControllerBridgeRender", "ControllerBridgeCore"]),
         .executableTarget(name: "capture-to-profile", dependencies: ["ControllerBridgeDraft", "ControllerBridgeCapture"]),
         .testTarget(name: "ControllerBridgeDraftTests", dependencies: ["ControllerBridgeDraft", "ControllerBridgeCapture", "ControllerBridgeCore"]),
     ]

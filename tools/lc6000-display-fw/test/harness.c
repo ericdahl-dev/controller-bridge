@@ -39,14 +39,18 @@ void feed(dfw_unit *unit, const char *hex) {
     dfw_message(unit, bytes, parse_hex(hex, bytes, sizeof bytes));
 }
 
-extern const test_case all_tests[];
+// Each test file's own table, each ending in { 0, 0 }. A new file adds its table here.
+extern const test_case all_tests[], draw_tests[];
+static const test_case *const tables[] = { all_tests, draw_tests };
 
 int main(void) {
     int run = 0;
-    for (const test_case *t = all_tests; t->name; t++, run++) {
-        int before = harness_failures;
-        t->fn();
-        fprintf(stderr, "%s %s\n", harness_failures == before ? "ok  " : "FAIL", t->name);
+    for (size_t i = 0; i < sizeof tables / sizeof tables[0]; i++) {
+        for (const test_case *t = tables[i]; t->name; t++, run++) {
+            int before = harness_failures;
+            t->fn();
+            fprintf(stderr, "%s %s\n", harness_failures == before ? "ok  " : "FAIL", t->name);
+        }
     }
     fprintf(stderr, "%d tests, %d failed checks\n", run, harness_failures);
     return harness_failures == 0 && run > 0 ? 0 : 1;
