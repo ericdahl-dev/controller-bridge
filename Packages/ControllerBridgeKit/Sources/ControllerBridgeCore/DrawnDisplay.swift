@@ -2,6 +2,8 @@
 // instead of uploaded images. Denon's frame on the WD port, one command byte for all of them and an op byte. The shared
 // vectors (tools/lc6000-display-fw/vectors/messages.json) hold examples both this and the firmware's C are tested on.
 
+import Foundation
+
 /// The jog display firmware DeckBridge found on the unit (#456).
 public enum DisplayFound: Equatable, Sendable {
     case denon
@@ -64,6 +66,34 @@ public enum DrawnDisplay {
         public static let stale = State(rawValue: 1 << 5)
     }
 
+    /// Which text a text message carries (#458). The untitled words go only for player "other": the player type's own
+    /// name (the chip knows the words for the others).
+    public enum TextField: UInt8, Sendable {
+        case title = 0, artist, key, untitled
+    }
+
+    /// A text as the wire carries it (#458): Windows-1252, a code 0x80-0xFF as 7F then code − 0x80. Control codes and
+    /// DEL aren't text and are dropped; a character with no cp1252 code goes as 0x81, which the chip draws as a box.
+    static func escaped(_ text: String) -> [UInt8] {
+        var out: [UInt8] = []
+        for character in text.precomposedStringWithCanonicalMapping {
+            let code = cp1252(character)
+            if code < 0x20 || code == 0x7F { continue }
+            out += code < 0x80 ? [code] : [0x7F, code - 0x80]
+        }
+        return out
+    }
+
+    /// The character's cp1252 code; 0x81 (the box) for one with none. C1 controls have no glyph: cp1252's undefined
+    /// slots must not pass as themselves.
+    private static func cp1252(_ character: Character) -> UInt8 {
+        let scalars = character.unicodeScalars
+        if scalars.count == 1, let scalar = scalars.first, scalar.value < 0x80 { return UInt8(scalar.value) }
+        if scalars.contains(where: { (0x80...0x9F).contains($0.value) }) { return 0x81 }
+        guard let data = String(character).data(using: .windowsCP1252), data.count == 1 else { return 0x81 }
+        return data[data.startIndex]
+    }
+
     public enum Message: Equatable, Sendable {
         /// "Can you draw?", with the newest version the host speaks.
         case capability(version: Int)
@@ -76,6 +106,8 @@ public enum DrawnDisplay {
         case beat(Int)
         /// The deck's place in its bar, 0-16383 for a turn clockwise from 12 o'clock: the pitch-bend needle's scale.
         case needle(Int)
+        /// One of the deck's texts (#458); empty clears that field.
+        case text(TextField, String)
 
         /// The SysEx frame for the WD port.
         public var bytes: [UInt8] {
@@ -93,6 +125,7 @@ public enum DrawnDisplay {
             case .beat(let beat): DrawnDisplay.frame(0x08, [UInt8(min(max(beat, 0), 4))])
             case .needle(let angle):
                 DrawnDisplay.frame(0x09, [UInt8(angle >> 7 & 0x7F), UInt8(angle & 0x7F)])
+            case .text(let field, let text): DrawnDisplay.frame(0x04, [field.rawValue] + DrawnDisplay.escaped(text))
             }
         }
     }
