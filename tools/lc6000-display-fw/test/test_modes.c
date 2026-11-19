@@ -96,6 +96,8 @@ void the_same_meter_does_not_present_again(void);
 void end_forgets_the_meter(void);
 void an_unchanged_text_or_tempo_presents_nothing(void);
 void a_deck_change_clears_the_text_and_tempo(void);
+void the_phase_is_unknown_until_the_decks_own_phase_comes(void);
+void an_unchanged_phase_presents_nothing(void);
 void a_new_decks_words_wait_for_its_text(void);
 
 void three_seconds_of_silence_is_stale(void);
@@ -141,6 +143,8 @@ const test_case all_tests[] = {
     { "end forgets the meter", end_forgets_the_meter },
     { "an unchanged text or tempo presents nothing", an_unchanged_text_or_tempo_presents_nothing },
     { "a deck change clears the text and tempo", a_deck_change_clears_the_text_and_tempo },
+    { "the phase is unknown until the deck's own phase comes", the_phase_is_unknown_until_the_decks_own_phase_comes },
+    { "an unchanged phase presents nothing", an_unchanged_phase_presents_nothing },
     { "a new deck's words wait for its text", a_new_decks_words_wait_for_its_text },
     { "three seconds of silence is stale", three_seconds_of_silence_is_stale },
     { "any message clears the silence", any_message_clears_the_silence },

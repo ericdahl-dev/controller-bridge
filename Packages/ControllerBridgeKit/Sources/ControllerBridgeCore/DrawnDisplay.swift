@@ -119,6 +119,10 @@ public enum DrawnDisplay {
         case text(TextField, String)
         /// The deck's tempo in tenths of a BPM, 1-16383; 0 is none, drawn as "—" (#458).
         case tempo(tenths: Int)
+        /// How far the deck in front is from the master clock's beat (#462), in 1/16384 beats: -8191 to 8191,
+        /// negative behind, 0 in phase; -8192 is unknown (not playing, no master clock). Sent as 14-bit two's
+        /// complement.
+        case phase(Int)
 
         /// How far into its track the deck is, and the track's length, in whole seconds, each 0-16383; length 0 is
         /// unknown (#460). The chip works out what's left.
@@ -165,6 +169,8 @@ public enum DrawnDisplay {
                                           UInt8(length >> 7 & 0x7F), UInt8(length & 0x7F)])
             case .tempo(let tenths):
                 DrawnDisplay.frame(0x05, [UInt8(tenths >> 7 & 0x7F), UInt8(tenths & 0x7F)])
+            case .phase(let offset):
+                DrawnDisplay.frame(0x0B, [UInt8(offset >> 7 & 0x7F), UInt8(offset & 0x7F)])
             }
         }
     }

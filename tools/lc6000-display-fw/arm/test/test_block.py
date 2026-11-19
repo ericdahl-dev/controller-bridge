@@ -269,7 +269,7 @@ class RenderEntryTests(unittest.TestCase):
 def good_upper():
     """A literal block B (the C header tests' own): CRC 0x22B5DF72 is zlib's, worked out apart. Its entry is never
     called by a capability ask."""
-    return struct.pack("<IIIII", 0x42574644, 1, 29, 0x22B5DF72, 0x08080015) + b"123456789"
+    return struct.pack("<IIIII", 0x42574644, 2, 29, 0x22B5DF72, 0x08080015) + b"123456789"
 
 
 def proven_block():
@@ -283,7 +283,7 @@ def proven_block():
 def full_upper():
     """A good B filling all 512 KB, so the check is as long as it can ever be."""
     body = struct.pack("<I", 0x08080015) + bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 20))
-    return struct.pack("<IIII", 0x42574644, 1, UPPER_SIZE, zlib.crc32(body)) + body
+    return struct.pack("<IIII", 0x42574644, 2, UPPER_SIZE, zlib.crc32(body)) + body
 
 
 class UpperSwitchTests(unittest.TestCase):
@@ -356,7 +356,7 @@ class UpperBlockTests(unittest.TestCase):
         data = upper_block()
         marker, version, length, crc, draw = struct.unpack_from("<IIIII", data)
         self.assertEqual(marker, 0x42574644)
-        self.assertEqual(version, 1)
+        self.assertEqual(version, 2)
         self.assertEqual(length, len(data))
         self.assertLessEqual(length, UPPER_SIZE)
         self.assertEqual(crc, zlib.crc32(data[16:]))

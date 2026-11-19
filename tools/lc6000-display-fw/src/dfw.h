@@ -46,6 +46,9 @@ typedef struct {
 /// The deck in front, as the deck message gave it.
 typedef struct { uint8_t number, r, g, b, player; } dfw_deck_state;
 
+/// The phase message's reserved value (#462): not measured (not playing, no master clock, none since load).
+#define DFW_PHASE_UNKNOWN (-8192)
+
 typedef struct dfw_unit {
     dfw_port port;
     const dfw_drawing *drawing;
@@ -70,6 +73,9 @@ typedef struct dfw_unit {
     uint16_t tempo;
     /// Whether a text message has come since the deck last changed: until one has, no words are drawn (#458).
     uint8_t text_heard;
+    /// How far the deck is from the master clock's beat (#462), in 1/16384 beats, -8191 to 8191; negative is behind,
+    /// 0 in phase, DFW_PHASE_UNKNOWN not measured.
+    int16_t phase;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
     /// The clock at the tick that is drawing, for anything drawn over time.
