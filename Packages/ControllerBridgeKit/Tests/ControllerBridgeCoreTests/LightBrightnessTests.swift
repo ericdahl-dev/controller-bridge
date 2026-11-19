@@ -53,4 +53,16 @@ struct LightBrightnessTests {
         rig.coordinator.apply(.setLightBrightness(50))
         #expect(try Ring.colors(rig) == [[63, 35, 0]])
     }
+
+    /// The user's pick: a slider from 10% to 100% in 10% steps, with no 0 (the lights never go fully off from it).
+    @Test("The slider's steps are 10% to 100% in tens; any value snaps to the nearest, kept within them")
+    func steps() {
+        #expect(LightBrightness.steps == [10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+        #expect(LightBrightness.snapped(44) == 40)
+        #expect(LightBrightness.snapped(45) == 50)
+        #expect(LightBrightness.snapped(0) == 10)
+        #expect(LightBrightness.snapped(-20) == 10)
+        #expect(LightBrightness.snapped(130) == 100)
+        #expect(LightBrightness.label(70) == "70%")
+    }
 }

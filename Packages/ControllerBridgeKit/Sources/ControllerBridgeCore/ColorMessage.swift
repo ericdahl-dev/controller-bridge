@@ -48,3 +48,15 @@ public struct LEDColorEncoder: Sendable {
         return LEDColorMessage(note: UInt8(note), red: seven[0], green: seven[1], blue: seven[2])
     }
 }
+
+/// Settings' brightness slider for the color-message LEDs (#532), the user's pick: 10% to 100% in 10% steps, no 0.
+public enum LightBrightness {
+    public static let steps = Array(stride(from: 10, through: 100, by: 10))
+
+    /// `percent` on the nearest step, within 10-100 (a half rounds up).
+    public static func snapped(_ percent: Int) -> Int {
+        min(max((percent + 5) / 10 * 10, 10), 100)
+    }
+
+    public static func label(_ percent: Int) -> String { "\(percent)%" }
+}
