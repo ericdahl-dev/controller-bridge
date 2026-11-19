@@ -67,3 +67,44 @@ struct DrawnPreviewImageTests {
         #expect(Self.state([]).preview(now: 0, timeAt: nil) == nil)
     }
 }
+
+/// The Diagnostics preview's drawn side (#465), as the view keeps it: each deck's state from the events, when its time
+/// last changed, and whether the previews are drawn at all.
+@Suite("Drawn display: the preview's model")
+struct DrawnPreviewsTests {
+    typealias Message = DrawnDisplay.Message
+
+    static func state(deck: Int, _ messages: [Message]) -> DrawnDisplayState {
+        DrawnPreviewImageTests.state([.deck(number: deck, color: [0, 0, 255], player: .track)] + messages)
+    }
+
+    @Test("Each deck's drawn preview draws until the previews go back to images; a deck never drawn has none")
+    func drawnUntilEnded() {
+        var previews = DrawnPreviews()
+        previews.apply(.drawnPreview(Self.state(deck: 2, [.text(.title, "Strobe")])), at: 0)
+        #expect(previews.image(deck: 2, now: 0)?.content.title == "Strobe")
+        #expect(previews.image(deck: 1, now: 0) == nil)
+        previews.apply(.drawnPreviewsEnded, at: 1)
+        #expect(previews.image(deck: 2, now: 1) == nil)
+    }
+
+    @Test("The blink is timed off when the deck's time last changed, not off any other change")
+    func timeAt() throws {
+        var previews = DrawnPreviews()
+        let playing: [Message] = [.state([.loaded, .playing]), .time(elapsedSeconds: 250, lengthSeconds: 293)]
+        previews.apply(.drawnPreview(Self.state(deck: 1, playing)), at: 10)
+        previews.apply(.drawnPreview(Self.state(deck: 1, playing + [.needle(4096)])), at: 10.6)
+        #expect(previews.image(deck: 1, now: 10.7)?.live.look == .warningNormal)
+        previews.apply(.drawnPreview(Self.state(deck: 1, [.state([.loaded, .playing]),
+                                                         .time(elapsedSeconds: 251, lengthSeconds: 293)])), at: 10.8)
+        #expect(previews.image(deck: 1, now: 10.9)?.live.look == .warningRed)
+    }
+
+    @Test("Other events change nothing")
+    func otherEvents() {
+        var previews = DrawnPreviews()
+        previews.apply(.masterBeat(2), at: 0)
+        previews.apply(.preview(JogDisplayContent(deck: 1, color: [0, 0, 255])), at: 0)
+        #expect(previews.image(deck: 1, now: 0) == nil)
+    }
+}

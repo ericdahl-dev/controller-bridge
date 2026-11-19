@@ -56,3 +56,32 @@ extension DrawnDisplayState {
         })
     }
 }
+
+/// The Diagnostics preview's drawn side (#465): each deck's drawn state from the driver's events, and when its time
+/// last changed (the warning's blink starts there, as on the chip). Empty while the previews show images.
+public struct DrawnPreviews: Sendable {
+    private var states: [Int: DrawnDisplayState] = [:]
+    private var timeAt: [Int: Double] = [:]
+
+    public init() {}
+
+    public mutating func apply(_ event: JogDisplayEvent, at now: Double) {
+        switch event {
+        case .drawnPreview(let state):
+            guard let deck = state.deck?.number else { return }
+            if states[deck]?.time.map({ [$0.elapsed, $0.length] }) != state.time.map({ [$0.elapsed, $0.length] }) {
+                timeAt[deck] = now
+            }
+            states[deck] = state
+        case .drawnPreviewsEnded:
+            states.removeAll()
+            timeAt.removeAll()
+        default: break
+        }
+    }
+
+    /// What the deck's preview draws with drawnImage at `now`; nil to draw today's image preview instead.
+    public func image(deck: Int, now: Double) -> DrawnPreviewImage? {
+        states[deck]?.preview(now: now, timeAt: timeAt[deck])
+    }
+}
