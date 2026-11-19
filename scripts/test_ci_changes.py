@@ -47,6 +47,11 @@ class NeedsMacTests(unittest.TestCase):
         # the vectors file (#456) is walked by the Kit tests too, so a change to it alone must still run them
         self.assertTrue(ci_changes.needs_mac(["tools/lc6000-display-fw/vectors/messages.json"]))
 
+    def test_the_drawn_display_reference_images_run_the_mac_jobs(self):
+        # the reference images (#464) are checked against the Swift renderer by the Kit tests too
+        self.assertTrue(ci_changes.needs_mac(["tools/lc6000-display-fw/test/ref/stale.ppm"]))
+        self.assertTrue(ci_changes.needs_mac(["tools/lc6000-display-fw/test/ref/make_refs.sh"]))
+
     def test_workflow_and_release_script_changes_run_the_mac_jobs(self):
         for path in [".github/workflows/ci.yml", "scripts/ci_profile.py", "scripts/smoke.sh", "project.yml",
                      ".github/pull_request_template.md"]:
