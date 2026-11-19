@@ -42,6 +42,17 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 - an edit falls outside the image, reaches into the 32-byte trailer, overlaps another edit, or has old and new bytes of different lengths;
 - the output already exists, or is inside the repository.
 
+## Placing our block (`place`, #467)
+
+`place` writes a raw block (our drawn-display code, built by `tools/lc6000-display-fw`'s `make arm`) into the `wd` image's own padding: `0x0807DC00`-`0x0807FFDF`, 9,184 bytes that are `0xFF` in stock 00.50 and lie inside the trailer CRC (#466). It then recomputes the trailer CRC and the DfuSe suffix CRC.
+
+```sh
+python3 -I tools/lc6000-firmware/dfupatch.py place ~/lc6000/wd-patched.dfu block.bin ~/lc6000/wd-placed.dfu
+# wrote ...: N bytes at 0x0807DC00, new trailer CRC 0x........, DfuSe suffix CRC 0x........
+```
+
+It refuses, and writes nothing, if the image isn't `wd` or doesn't hold that range, if the block is empty or bigger than 9,184 bytes, if any byte it would write over isn't `0xFF` (wrong image, or a block is already there), or if the output exists or is inside the repository.
+
 ## Patches in this folder
 
 Patch descriptions live in `patches/`. Each one is a few bytes for one firmware version; it holds no vendor image.

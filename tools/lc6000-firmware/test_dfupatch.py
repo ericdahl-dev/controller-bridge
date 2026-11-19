@@ -184,6 +184,69 @@ class PatchTests(unittest.TestCase):
             dfupatch.patch(self.data, "# fine\nnot a patch line")
 
 
+# The wd 00.50 layout: the image fills 0x08008000-0x0807FFFF; its own padding, 0xFF inside the CRC, runs from
+# 0x0807DC00 to the trailer (#466).
+WD_SIZE = 0x78000
+PAD_START, PAD_END = 0x0807DC00, 0x0807FFE0
+
+
+def full_wd_element():
+    """A synthetic full-size wd image: invented code bytes, 0xFF padding where the real image has it, the trailer."""
+    body = bytearray(wd_element(WD_SIZE))
+    body[PAD_START - BASE:PAD_END - BASE] = b"\xff" * (PAD_END - PAD_START)
+    covered = WD_SIZE - 20
+    struct.pack_into("<I", body, covered, dfupatch.stm32_crc(bytes(body[:covered])))
+    return bytes(body)
+
+
+class PlaceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.element = full_wd_element()
+        cls.data = dfuse_file(cls.element)
+        cls.element_start = len(cls.data) - 16 - len(cls.element)
+
+    def test_a_block_lands_at_the_start_of_the_padding_and_the_crcs_are_redone(self):
+        block = bytes(range(1, 101))
+        out = dfupatch.place(self.data, block)
+        image = dfupatch.parse(out)
+        at = PAD_START - BASE
+        self.assertEqual(image.element[at:at + len(block)], block)
+        crc_at = self.element_start + WD_SIZE - 20
+        allowed = {*range(self.element_start + at, self.element_start + at + len(block)),
+                   *range(crc_at, crc_at + 4), *range(len(out) - 4, len(out))}
+        self.assertTrue(set(changed_offsets(self.data, out)) <= allowed)
+        self.assertEqual(dfupatch.patch(out, ""), out)  # trailer CRC and suffix CRC both check out
+
+    def test_a_block_that_fills_the_padding_exactly_fits(self):
+        out = dfupatch.place(self.data, b"\x11" * (PAD_END - PAD_START))
+        self.assertEqual(dfupatch.parse(out).element[PAD_END - BASE - 1], 0x11)
+
+    def test_a_block_one_byte_too_big_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "too big"):
+            dfupatch.place(self.data, b"\x11" * (PAD_END - PAD_START + 1))
+
+    def test_an_empty_block_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "empty"):
+            dfupatch.place(self.data, b"")
+
+    def test_padding_that_isnt_all_ff_is_refused(self):
+        element = bytearray(self.element)
+        element[PAD_START - BASE + 50] = 0x00
+        covered = WD_SIZE - 20
+        struct.pack_into("<I", element, covered, dfupatch.stm32_crc(bytes(element[:covered])))
+        with self.assertRaisesRegex(dfupatch.Refused, "0xFF"):
+            dfupatch.place(dfuse_file(bytes(element)), b"\x11" * 100)
+
+    def test_an_image_without_the_padding_range_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "0x0807DC00"):
+            dfupatch.place(dfuse_file(wd_element()), b"\x11" * 4)
+
+    def test_a_tp_image_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "wd"):
+            dfupatch.place(dfuse_file(tp_element(WD_SIZE)), b"\x11" * 4)
+
+
 def run(*argv):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -257,6 +320,22 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("old bytes", err)
         self.assertFalse(os.path.exists(output))
+
+    def test_place_writes_the_file_and_refuses_inside_the_repository(self):
+        data = dfuse_file(full_wd_element())
+        source = self.path("full.dfu", data)
+        block = self.path("block.bin", b"\x42" * 64)
+        output = self.path("placed.dfu")
+        code, out, _ = run("place", source, block, output)
+        self.assertEqual(code, 0, out)
+        self.assertIn("0x0807DC00", out)
+        with open(output, "rb") as f:
+            self.assertEqual(dfupatch.parse(f.read()).element[PAD_START - BASE], 0x42)
+        inside = os.path.join(dfupatch.repository_root(), "placed-test.dfu")
+        code, _, err = run("place", source, block, inside)
+        self.assertEqual(code, 1)
+        self.assertIn("outside the repository", err)
+        self.assertFalse(os.path.exists(inside))
 
     def test_apply_wont_overwrite_a_file(self):
         patch = self.path("p.txt", "")
