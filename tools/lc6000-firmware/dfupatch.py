@@ -3,6 +3,7 @@
 
   python3 -I dfupatch.py verify IN.dfu
   python3 -I dfupatch.py apply IN.dfu PATCH.txt OUT.dfu
+  python3 -I dfupatch.py place IN.dfu BLOCK.bin OUT.dfu
 
 Standard library only. See README.md in this folder."""
 import argparse, os, struct, sys, zlib
@@ -16,6 +17,27 @@ SUFFIX_SIZE = 16
 TRAILER_SIZE = 32
 TRAILER_MAGIC = 0xDEADBEEF
 END_TOKEN = b"EndOfFlashToken\x00"
+
+# wd 00.50's own padding: 0xFF from the end of its data to the trailer, inside the CRC range (#466). Our block goes
+# here, so the hook's stubs are always present with the hook and are covered by the image's own CRC.
+PAD_START, PAD_END = 0x0807DC00, 0x0807FFE0
+# Our block's two fixed entries, which the drawn-display hook patch calls (#467). The linker script puts them here.
+HOOK_COMMAND_ENTRY, HOOK_RENDER_ENTRY = 0x0807DC00, 0x0807DC40
+
+
+def thumb_bl(at, target):
+    """The 4-byte Thumb-2 `bl target` placed at `at` (ARMv7-M encoding T1), little-endian halfwords."""
+    if at % 2 or target % 2:
+        raise Refused("a Thumb BL needs even addresses for both the call and its target")
+    offset = target - (at + 4)
+    if not -(1 << 24) <= offset < (1 << 24):
+        raise Refused(f"0x{target:08X} is out of a BL's reach from 0x{at:08X} (+/-16 MB)")
+    s = (offset >> 24) & 1
+    j1 = (1 - ((offset >> 23) & 1)) ^ s
+    j2 = (1 - ((offset >> 22) & 1)) ^ s
+    first = 0xF000 | (s << 10) | ((offset >> 12) & 0x3FF)
+    second = 0xD000 | (j1 << 13) | (j2 << 11) | ((offset >> 1) & 0x7FF)
+    return struct.pack("<HH", first, second)
 
 
 class Refused(Exception):
@@ -125,6 +147,28 @@ def patch(data, patch_text):
     return build(image, bytes(element))
 
 
+def place(data, block):
+    """Writes a raw block at the start of the wd image's padding (PAD_START) and returns the new file, with the
+    trailer CRC and the DfuSe suffix CRC recomputed. Refuses unless every byte it writes over is still 0xFF."""
+    image = parse(data)
+    if chip(image.element) != "wd":
+        raise Refused("place needs a wd image: the block goes into the wd padding, under its CRC")
+    covered = covered_length(image.element)
+    if not block:
+        raise Refused("the block is empty")
+    if not (image.address <= PAD_START and PAD_END <= image.address + len(image.element) - TRAILER_SIZE):
+        raise Refused(f"this image doesn't hold the padding 0x{PAD_START:08X}-0x{PAD_END - 1:08X}")
+    if len(block) > PAD_END - PAD_START:
+        raise Refused(f"the block is {len(block)} bytes, too big for the {PAD_END - PAD_START}-byte padding")
+    start = PAD_START - image.address
+    element = bytearray(image.element)
+    if any(b != 0xFF for b in element[start:start + len(block)]):
+        raise Refused(f"the padding at 0x{PAD_START:08X} isn't all 0xFF: wrong image, or a block is already there")
+    element[start:start + len(block)] = block
+    struct.pack_into("<I", element, covered, stm32_crc(bytes(element[:covered])))
+    return build(image, bytes(element))
+
+
 def parse(data):
     """Reads a one-target, one-element DfuSe file. Refuses anything else."""
     if len(data) < PREFIX_SIZE + TARGET_PREFIX_SIZE + ELEMENT_HEADER_SIZE + SUFFIX_SIZE or data[:5] != b"DfuSe":
@@ -192,13 +236,44 @@ def verify(args):
     print(f"ok: trailer CRC 0x{crc:08X} over {covered:#x} bytes; a no-op patch reproduces the file bit for bit")
 
 
+def bl_target(at, code):
+    """The target of a 4-byte Thumb-2 `bl` at `at`, or None if `code` isn't one (the inverse of thumb_bl)."""
+    if len(code) != 4:
+        return None
+    first, second = struct.unpack("<HH", code)
+    if first & 0xF800 != 0xF000 or second & 0xD000 != 0xD000:
+        return None
+    s = (first >> 10) & 1
+    i1 = 1 - (((second >> 13) & 1) ^ s)
+    i2 = 1 - (((second >> 11) & 1) ^ s)
+    offset = (s << 24) | (i1 << 23) | (i2 << 22) | ((first & 0x3FF) << 12) | ((second & 0x7FF) << 1)
+    if s:
+        offset -= 1 << 25
+    return at + 4 + offset
+
+
+def refuse_calls_into_empty_padding(image, edits):
+    """A call into the padding while it's still 0xFF faults on the chip under a valid CRC, before any way back over
+    USB (#434, #467): the hook must never go out without our block."""
+    for at, _, new in edits:
+        target = bl_target(at, new)
+        if target is None or not PAD_START <= target < PAD_END:
+            continue
+        offset = target - image.address
+        if image.element[offset:offset + 2] == b"\xff\xff":
+            raise Refused(f"the call at 0x{at:08X} goes to 0x{target:08X} in empty padding: place our block "
+                          "in the same image (build_owner_image.py), never the hook alone")
+
+
 def apply(args):
     if inside(args.output, repository_root()):
         raise Refused("write the patched image outside the repository: patched images are never committed")
     if os.path.exists(args.output):
         raise Refused(f"{args.output} already exists; not overwriting it")
-    out = patch(read(args.input), read(args.patch, "r"))
+    patch_text = read(args.patch, "r")
+    out = patch(read(args.input), patch_text)
     image = parse(out)
+    refuse_calls_into_empty_padding(image, parse_patch(patch_text))
     with open(args.output, "xb") as f:
         f.write(out)
     if chip(image.element) == "tp":
@@ -207,6 +282,21 @@ def apply(args):
         return
     crc = struct.unpack_from("<I", image.element, covered_length(image.element))[0]
     print(f"wrote {args.output}: new trailer CRC 0x{crc:08X}, DfuSe suffix CRC 0x{suffix_crc(out[:-4]):08X}")
+
+
+def place_command(args):
+    if inside(args.output, repository_root()):
+        raise Refused("write the image outside the repository: built images are never committed")
+    if os.path.exists(args.output):
+        raise Refused(f"{args.output} already exists; not overwriting it")
+    block = read(args.block)
+    out = place(read(args.input), block)
+    image = parse(out)
+    with open(args.output, "xb") as f:
+        f.write(out)
+    crc = struct.unpack_from("<I", image.element, covered_length(image.element))[0]
+    print(f"wrote {args.output}: {len(block)} bytes at 0x{PAD_START:08X}, new trailer CRC 0x{crc:08X}, "
+          f"DfuSe suffix CRC 0x{suffix_crc(out[:-4]):08X}")
 
 
 def compare(args):
@@ -234,6 +324,11 @@ def main(argv=None):
     write.add_argument("patch")
     write.add_argument("output")
     write.set_defaults(run=apply)
+    put = commands.add_parser("place", help="write a raw block into the wd padding at 0x0807DC00")
+    put.add_argument("input")
+    put.add_argument("block")
+    put.add_argument("output")
+    put.set_defaults(run=place_command)
     match = commands.add_parser("compare", help="check a raw read-back of the app area against a .dfu's image")
     match.add_argument("input")
     match.add_argument("readback")

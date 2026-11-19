@@ -42,6 +42,17 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 - an edit falls outside the image, reaches into the 32-byte trailer, overlaps another edit, or has old and new bytes of different lengths;
 - the output already exists, or is inside the repository.
 
+## Placing our block (`place`, #467)
+
+`place` writes a raw block (our drawn-display code, built by `tools/lc6000-display-fw`'s `make arm`) into the `wd` image's own padding: `0x0807DC00`-`0x0807FFDF`, 9,184 bytes that are `0xFF` in stock 00.50 and lie inside the trailer CRC (#466). It then recomputes the trailer CRC and the DfuSe suffix CRC.
+
+```sh
+python3 -I tools/lc6000-firmware/dfupatch.py place ~/lc6000/wd-patched.dfu block.bin ~/lc6000/wd-placed.dfu
+# wrote ...: N bytes at 0x0807DC00, new trailer CRC 0x........, DfuSe suffix CRC 0x........
+```
+
+It refuses, and writes nothing, if the image isn't `wd` or doesn't hold that range, if the block is empty or bigger than 9,184 bytes, if any byte it would write over isn't `0xFF` (wrong image, or a block is already there), or if the output exists or is inside the repository.
+
 ## Patches in this folder
 
 Patch descriptions live in `patches/`. Each one is a few bytes for one firmware version; it holds no vendor image.
@@ -80,6 +91,80 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_tp_update_00_31
   tools/lc6000-firmware/patches/tp-00.31-no-deck-select-on-hello.patch ~/lc6000/jc20_tp_00_31_no_deck_select.dfu
 # wrote ...: tp image, trailer unchanged (no trailer CRC), DfuSe suffix CRC 0x7AA5BB38
 ```
+
+### `patches/wd-00.50-drawn-hook.patch` (#466, #467)
+
+- **For:** `wd` firmware 00.50 only, and **only together with our block** (`build_owner_image.py` below does both). The hook calls into the block. A hook pointing at bare `0xFF` padding would fault on the first unknown command and on the first main-loop pass.
+- **What it changes:** two instructions, each turned into a `bl` into the block's fixed entries:
+  - `0x0800F464`: `mov.w r8, #1`, the SysEx dispatcher's unknown-command fallthrough. It becomes `bl 0x0807DC00`.
+  - `0x08012456`: `bl 0x0800BEA0`, the main loop's render step. It becomes `bl 0x0807DC40`.
+- **The update-mode command (`72`) never reaches either site.** It branches away at `0x0800F29E`.
+- Each entry checks our marker word at `0x0807FFDC` before running our code; without it, it does only what the replaced instruction did. See `tools/lc6000-display-fw/arm/README.md`.
+- **Status: unproven on hardware.**
+
+## Drawn display: the owner's image and what gets flashed where (#467)
+
+`build_owner_image.py` builds the one file to flash. It takes the stock file and our block, applies the hook patch, places the block in the padding, and recomputes both CRCs.
+- The output must be outside the repository.
+- It refuses a block that isn't exactly the 9,184-byte padding or doesn't end with our marker, so the hook never goes out without its block.
+
+```sh
+make -C tools/lc6000-display-fw arm
+python3 -I tools/lc6000-firmware/build_owner_image.py ~/lc6000/jc20_wd_update_00_50_3A7CE2CA.dfu \
+  tools/lc6000-display-fw/build/arm/block.bin ~/lc6000/jc20_wd_00_50_drawn.dfu --show-slot-16
+```
+
+**Options:**
+- **Slot 16: you must choose; there is no default.** `--show-slot-16` keeps the slot 16 patch (#425), and `--no-show-slot-16` leaves it out. A build that names neither is refused.
+  - **The owner's unit runs slot 16 now, and DeckBridge (Firmware = Custom) uploads 16 slots. Keep it on.** Without it, image mode loses slot 16 (deck 4, beat 4) after the flash.
+  - With it on, the first drawn flash changes only one thing: the hook and its block.
+- `--vos-scale-1` adds the core voltage fix (#438). **It is off by default.** Flash it on its own later, so a problem can be traced to one change.
+
+**What goes where:**
+
+| What | Address | How |
+|---|---|---|
+| The owner's image: stock code, the hook, our block in the padding, the trailer | `0x08008000`-`0x0807FFFF` (sectors 2-7) | One `.dfu`, by the same route as slot 16 (#425), then read back and compare with `dfupatch.py compare` |
+| Nothing | `0x08080000` and up (sectors 8-11) | Not written. Our block is inside the image, under its CRC |
+| Nothing | sectors 0-1, option bytes | Never written |
+
+**Way back:** the same as for every `wd` image. Put it in update mode and flash the stock file, or use Denon's updater.
+- The block lives inside the image, so restoring stock removes it with the hook.
+- A crash in our code after boot is cleared by a power cycle: drawn mode starts only on our message (see `tools/lc6000-display-fw/arm/README.md`).
+- A crash before the update-mode command can run needs SWD (#433), as for any changed `wd` image (#434).
+
+### Read-only checks before the first drawn flash (the owner runs these; nothing is written)
+
+**Where the files go:** every file these steps write goes in `~/lc6000`, never in the repository. They are reads of your unit, and they are never committed or posted; post only what the checks print. `dfu-util -U` won't overwrite an existing file, so move an old one aside first.
+
+**You need:** `dfu-util` (`brew install dfu-util`), and `enter-update-mode`, built as the flash day kit builds it:
+`swiftc -O -swift-version 5 tools/lc6000-firmware/enter-update-mode.swift -o ~/lc6000/enter-update-mode`, then `~/lc6000/enter-update-mode selftest`, which sends nothing.
+
+They answer what static analysis can't (#466): whether flash above the image exists and is erased, and how the chip's option bytes are set. Our block doesn't use that flash today, but these reads make sure nothing up there is a surprise.
+
+1. Quit DeckBridge and anything else that talks to the unit.
+2. Put the display chip in update mode:
+   - Run `~/lc6000/enter-update-mode check`. It sends nothing and must find exactly one WD port.
+   - Then run `~/lc6000/enter-update-mode send --yes-enter-update-mode`. The jog screen goes dark.
+   - If `check` fails, stop here and post what it printed on #467. The BACK + FWD + VINYL buttons enter update mode on the top panel chip, not the display chip.
+3. Run `dfu-util -l`. Expect one `0483:df11` device, `STM32  BOOTLOADER`, at the WD path (`0-1.2` on the owner's unit).
+   - Alt 0 should read `@Internal Flash  /0x08000000/04*016Kg,01*064Kg,07*128Kg`, which is 1 MB, single bank (#432).
+   - If there is more than one device, or the layout differs, stop.
+4. Read the flash above the image, 512 KB:
+   `dfu-util -p 0-1.2 -a 0 -s 0x08080000:0x80000 -U ~/lc6000/wd-upper-512k.bin`
+   - Expect 524,288 bytes, all `0xFF`: `python3 -I -c "import sys; d=open(sys.argv[1],'rb').read(); print(len(d), set(d))" ~/lc6000/wd-upper-512k.bin`.
+   - A read error here means that flash isn't there. Record it.
+5. Read the option bytes, both blocks the ROM lists (alt 1):
+   - `dfu-util -p 0-1.2 -a 1 -s 0x1FFFC000:16 -U ~/lc6000/wd-option-bytes-1.bin`
+   - `dfu-util -p 0-1.2 -a 1 -s 0x1FFEC000:16 -U ~/lc6000/wd-option-bytes-2.bin`
+   - What to read, per RM0090's option-byte table:
+     - RDP is the byte at offset 1. `0xAA` means level 0, which matches the reads already done on #432.
+     - nWRP is the low 12 bits of the half-word at offset 8, one bit per sector, 1 = not write-protected. Sectors 8-11 must read 1.
+     - DB1M is bit 14 of that same half-word. 0 means single bank, matching the layout string.
+6. Try the flash-size word, `dfu-util -p 0-1.2 -a 0 -s 0x1FFF7A22:2 -U ~/lc6000/wd-flash-size.bin`. Expect `00 04` (0x0400, 1,024 KB).
+   - It isn't inside any alt setting the ROM lists, so the ROM may refuse it. Then it is a read for SWD (#433). The layout string in step 3 already says 1 MB.
+7. **Leave update mode:** switch the unit off, wait 5 s, and switch it on with no buttons held. Update mode only reads, and nothing was written, so the display chip comes back in its own app with the stock picture. If the screen stays dark and `dfu-util -l` still lists the bootloader, do as the flash day kit does: open Denon's updater, which restores a chip that is in update mode (#434).
+8. Post the results on #467. Never write anything in this session.
 
 ## Flash day kit (#435)
 
