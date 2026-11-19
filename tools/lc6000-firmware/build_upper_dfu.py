@@ -4,11 +4,14 @@
   python3 -I build_upper_dfu.py UPPER.bin OUT.dfu --proof ~/lc6000/wd-upper-512k.bin
 
 Nothing here talks to the unit. Standard library only."""
-import argparse, struct, sys
+import argparse, struct, sys, zlib
 
 import dfupatch
 
 UPPER_BASE = 0x08080000
+# B's header (arm/upper.h): marker "DFWB", version, length, CRC-32 (zlib's) from +16 to length, the draw entry.
+UPPER_MARKER, UPPER_VERSION, UPPER_HEADER = 0x42574644, 1, 20
+UPPER_LIMIT = 0x80000  # sectors 8-11
 # The owner's read covers sectors 8-11, 0x08080000-0x080FFFFF.
 PROOF_SIZE = 512 * 1024
 # The ST ROM bootloader's USB IDs, which the owner's unit shows in update mode (README, "Read-only checks"). Any
@@ -23,6 +26,24 @@ def dfuse(block):
     prefix = b"DfuSe" + struct.pack("<BIB", 1, dfupatch.PREFIX_SIZE + len(target) + dfupatch.SUFFIX_SIZE, 1)
     data = prefix + target + struct.pack("<HHHH", 0xFFFF, PID, VID, 0x011A) + b"UFD" + bytes([dfupatch.SUFFIX_SIZE])
     return data + struct.pack("<I", dfupatch.suffix_crc(data))
+
+
+def check_block(block):
+    """B as built (`make arm`): refused unless its header checks out the way block A will check it on the chip."""
+    if len(block) < UPPER_HEADER:
+        raise dfupatch.Refused(f"the block is {len(block)} bytes, shorter than B's {UPPER_HEADER}-byte header")
+    marker, version, length, crc, draw = struct.unpack_from("<IIIII", block)
+    if marker != UPPER_MARKER:
+        raise dfupatch.Refused("the block doesn't start with B's marker \"DFWB\": it isn't block B")
+    if version != UPPER_VERSION:
+        raise dfupatch.Refused(f"the block is header version {version}, and block A takes version {UPPER_VERSION}")
+    if length != len(block) or length > UPPER_LIMIT:
+        raise dfupatch.Refused(f"the header's length {length} isn't the file's {len(block)} bytes, or is over "
+                               f"the upper flash's {UPPER_LIMIT}")
+    if zlib.crc32(block[16:]) != crc:
+        raise dfupatch.Refused("the header's CRC doesn't match the block")
+    if not draw & 1 or not UPPER_BASE + UPPER_HEADER <= draw < UPPER_BASE + length:
+        raise dfupatch.Refused(f"the draw entry 0x{draw:08X} isn't Thumb code inside the block")
 
 
 def check_proof(path):
@@ -51,7 +72,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         check_proof(args.proof)
-        out = dfuse(dfupatch.read(args.block))
+        block = dfupatch.read(args.block)
+        check_block(block)
+        out = dfuse(block)
         with open(args.output, "xb") as f:
             f.write(out)
     except (dfupatch.Refused, OSError) as error:

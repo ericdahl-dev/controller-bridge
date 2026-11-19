@@ -84,5 +84,22 @@ class BuildUpperDfuTests(unittest.TestCase):
         self.assertRefused((code, out, err, output), "outside the repository")
 
 
+    def test_a_block_whose_header_doesnt_check_out_is_refused(self):
+        good = good_block()
+        bad_crc = bytearray(good)
+        bad_crc[24] ^= 1
+        cases = {
+            "marker": b"\xff\xff\xff\xff" + good[4:],
+            "version": good[:4] + struct.pack("<I", 2) + good[8:],
+            "CRC": bytes(bad_crc),
+            "length": good + b"\xff",  # the file is longer than the header's length
+            # No Thumb bit, with its own good CRC (worked out with zlib apart), so only the entry check can refuse it.
+            "entry": good[:12] + struct.pack("<II", 0xFF2306F7, 0x08080014) + good[20:],
+        }
+        for reason, block in cases.items():
+            with self.subTest(reason):
+                self.assertRefused(self.build(block=block), reason)
+
+
 if __name__ == "__main__":
     unittest.main()
