@@ -3,20 +3,26 @@
 #include "harness.h"
 #include <string.h>
 
-enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE, KIND_BEAT, KIND_NEEDLE };
+enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE, KIND_BEAT, KIND_NEEDLE,
+       KIND_TEXT, KIND_TEMPO };
 typedef struct {
     const char *name;
     int kind, from_unit, version, number;
     int color[3];
     int player, flags, beat, angle;
+    /// Text: the field, and the Windows-1252 codes the chip decodes. Tempo: tenths of a BPM.
+    int field;
+    size_t code_count;
+    uint8_t codes[DFW_TEXT_MAX];
+    int tenths;
     size_t length;
-    uint8_t bytes[64];
+    uint8_t bytes[DFW_MESSAGE_MAX];
 } vector;
 typedef struct {
     const char *name;
     int from_unit;
     size_t length;
-    uint8_t bytes[64];
+    uint8_t bytes[DFW_MESSAGE_MAX];
 } bad_vector;
 
 #include "vectors.h"
@@ -89,6 +95,21 @@ void every_vector_decodes(void) {
             dfw_tick(&unit, 0);
             check(unit.needle == v->angle, v->name);
             break;
+        case KIND_TEXT:
+            feed(&unit, BEGIN_V1);
+            feed(&unit, DECK_3_GREEN_SEQ);
+            dfw_message(&unit, v->bytes, v->length);
+            dfw_tick(&unit, 0);
+            check(unit.text_length[v->field] == v->code_count &&
+                  memcmp(unit.text[v->field], v->codes, v->code_count) == 0, v->name);
+            break;
+        case KIND_TEMPO:
+            feed(&unit, BEGIN_V1);
+            feed(&unit, DECK_3_GREEN_SEQ);
+            dfw_message(&unit, v->bytes, v->length);
+            dfw_tick(&unit, 0);
+            check(unit.tempo == v->tenths, v->name);
+            break;
         default:
             check(0, v->name);
         }
@@ -106,11 +127,13 @@ void every_invalid_vector_is_ignored(void) {
         dfw_tick(&unit, 0);
         dfw_deck_state before = unit.deck;
         uint8_t flags = unit.flags, beat = unit.beat;
-        uint16_t needle = unit.needle;
+        uint16_t needle = unit.needle, tempo = unit.tempo;
+        uint8_t text_length = unit.text_length[0];
         dfw_message(&unit, v->bytes, v->length);
         dfw_tick(&unit, 0);
         check(unit.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&unit.deck, &before, sizeof before) == 0 &&
-              unit.flags == flags && unit.beat == beat && unit.needle == needle,
+              unit.flags == flags && unit.beat == beat && unit.needle == needle && unit.tempo == tempo &&
+                  unit.text_length[0] == text_length,
               v->name);
     }
 }
