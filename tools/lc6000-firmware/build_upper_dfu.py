@@ -11,7 +11,7 @@ import dfupatch
 UPPER_BASE = 0x08080000
 # B's header (arm/upper.h): marker "DFWB", version, length, CRC-32 (zlib's) from +16 to length, the dfw_unit layout
 # B was built for (#516; only block A, built from the same src/dfw.h, can judge it), the draw entry.
-UPPER_MARKER, UPPER_VERSION, UPPER_HEADER = 0x42574644, 2, 24
+UPPER_MARKER, UPPER_VERSION, UPPER_HEADER = 0x42574644, 3, 24
 UPPER_LIMIT = 0x80000  # sectors 8-11
 # The owner's read covers sectors 8-11, 0x08080000-0x080FFFFF.
 PROOF_SIZE = 512 * 1024

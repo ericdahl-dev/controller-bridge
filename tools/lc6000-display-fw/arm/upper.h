@@ -17,7 +17,7 @@
 /// Sectors 8-11 (128 KB each), 0x08080000-0x080FFFFF: all of the upper flash, once the owner's read proves it.
 #define UPPER_LIMIT 0x80000u
 #define UPPER_MARKER 0x42574644u /* "DFWB" */
-#define UPPER_VERSION 2u
+#define UPPER_VERSION 3u
 #define UPPER_HEADER 24u
 
 /// B's draw entry (a Thumb address on the chip) if the B at `b`, which the chip sees at UPPER_BASE, checks out:

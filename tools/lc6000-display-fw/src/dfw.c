@@ -8,7 +8,7 @@ static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
 /// The protocol version this code speaks.
 #define DFW_VERSION 1
 enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_TEXT = 0x04, OP_TEMPO = 0x05,
-       OP_STATE = 0x07, OP_BEAT = 0x08, OP_NEEDLE = 0x09, OP_METER = 0x0A };
+       OP_STATE = 0x07, OP_BEAT = 0x08, OP_NEEDLE = 0x09, OP_METER = 0x0A, OP_PHASE = 0x0B };
 /// A text escape: the next byte plus 0x80 is the Windows-1252 code.
 #define TEXT_ESCAPE 0x7F
 /// Bit 6 of the state flags is reserved: a message with it set is malformed.
@@ -40,7 +40,7 @@ void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {
 static uint8_t op_length(uint8_t op) {
     switch (op) {
     case OP_CAPABILITY: case OP_BEGIN: case OP_END: case OP_STATE: case OP_BEAT: return 2;
-    case OP_NEEDLE: case OP_TEMPO: case OP_METER: return 3;
+    case OP_NEEDLE: case OP_TEMPO: case OP_METER: case OP_PHASE: return 3;
     case OP_DECK: return 9;
     default: return 0;
     }
@@ -62,8 +62,8 @@ static int in_range(uint8_t op, const uint8_t *args) {
         return !(args[0] & STATE_RESERVED);
     case OP_BEAT:
         return args[0] <= 4;
-    case OP_NEEDLE: case OP_TEMPO: case OP_METER:
-        return 1;   // any two 7-bit bytes are an angle, a tempo, or a level and a peak
+    case OP_NEEDLE: case OP_TEMPO: case OP_METER: case OP_PHASE:
+        return 1;   // any two 7-bit bytes are an angle, a tempo, a level and a peak, or a phase
     default:
         return 0;
     }
@@ -140,6 +140,7 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->level = 0;
         unit->peak = 0;
         unit->meter_heard = 0;
+        unit->phase = DFW_PHASE_UNKNOWN;
         break;
     case OP_DECK: {
         if (!unit->drawn) break;
@@ -149,11 +150,12 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         if (memcmp(&deck, &unit->deck, sizeof deck) == 0) break;
         unit->deck = deck;
         // A new deck's play flags wait for its own state message (#464); only feedback stale carries over. Its text
-        // and tempo wait for their own messages too (#458).
+        // and tempo wait for their own messages too (#458), and its phase is unknown until its own comes (#462).
         unit->flags &= FLAG_STALE;
         memset(unit->text_length, 0, sizeof unit->text_length);
         unit->tempo = 0;
         unit->text_heard = 0;
+        unit->phase = DFW_PHASE_UNKNOWN;
         unit->dirty = 1;
         break;
     }
@@ -175,6 +177,15 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         uint16_t tempo = (uint16_t)((args[0] << 7) | args[1]);
         if (!unit->drawn || unit->tempo == tempo) break;
         unit->tempo = tempo;
+        unit->dirty = 1;
+        break;
+    }
+    case OP_PHASE: {
+        // 14-bit two's complement: 8192 and up are behind.
+        int raw = (args[0] << 7) | args[1];
+        int16_t phase = (int16_t)(raw >= 8192 ? raw - 16384 : raw);
+        if (!unit->drawn || unit->phase == phase) break;
+        unit->phase = phase;
         unit->dirty = 1;
         break;
     }

@@ -184,7 +184,7 @@ python3 -I tools/lc6000-firmware/build_upper_dfu.py tools/lc6000-display-fw/buil
 
 It refuses:
 - **The proof:** if `--proof` is missing, or the file isn't the whole read of step 4 above (524,288 bytes, all `0xFF`), or it is inside the repository. A flag anyone can type isn't proof, so the tool reads the file itself.
-- **The block:** if its header doesn't check out the way block A checks it: marker `DFWB`, version 2, a length equal to the file and at most 512 KB, CRC-32, and a draw entry that is Thumb code inside B. It can't check the layout word (#516): only block A can, on the chip, so A and B come from the same commit.
+- **The block:** if its header doesn't check out the way block A checks it: marker `DFWB`, version 3, a length equal to the file and at most 512 KB, CRC-32, and a draw entry that is Thumb code inside B. It can't check the layout word (#516): only block A can, on the chip, so A and B come from the same commit.
 - **The output:** if it is inside the repository, or the file already exists.
 
 **Order, after the read-only checks:** build with `ARM_UPPER_PROVEN=1`, flash B's `.dfu`, then the owner's image. Either order is safe: A checks B's header before it calls anything in B, and stays silent until B checks out. Each flash is a separate step the owner runs, with its own OK.

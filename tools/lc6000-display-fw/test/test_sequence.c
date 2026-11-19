@@ -171,3 +171,41 @@ void a_new_decks_words_wait_for_its_text(void) {
     dfw_tick(&unit, 40);
     CHECK(unit.text_heard);
 }
+
+#define PHASE_AHEAD "F0 00 02 0B 7F 10 20 00 03 0B 01 24 F7"
+#define END_V1 "F0 00 02 0B 7F 10 20 00 02 02 01 F7"
+
+/// The phase is unknown until the deck's own phase message comes (#462): a new deck, or a new begin after end, draws
+/// the plain rule rather than the last deck's bar.
+void the_phase_is_unknown_until_the_decks_own_phase_comes(void) {
+    fresh(&unit, &rec);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, DECK_2_RED_TRACK);
+    dfw_tick(&unit, 0);
+    CHECK(unit.phase == DFW_PHASE_UNKNOWN);
+    feed(&unit, PHASE_AHEAD);
+    feed(&unit, DECK_2_RED_TRACK);   // the heartbeat's same deck keeps it
+    dfw_tick(&unit, 10);
+    CHECK(unit.phase == 164);
+    feed(&unit, DECK_3_RED_TRACK);
+    dfw_tick(&unit, 20);
+    CHECK(unit.phase == DFW_PHASE_UNKNOWN);
+    feed(&unit, PHASE_AHEAD);
+    feed(&unit, END_V1);
+    feed(&unit, BEGIN_V1);
+    dfw_tick(&unit, 30);
+    CHECK(unit.phase == DFW_PHASE_UNKNOWN);
+}
+
+/// The phase rides the heartbeat: sent again unchanged, it presents nothing.
+void an_unchanged_phase_presents_nothing(void) {
+    fresh(&unit, &rec);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, DECK_2_RED_TRACK);
+    feed(&unit, PHASE_AHEAD);
+    dfw_tick(&unit, 0);
+    CHECK(rec.presents == 1);
+    feed(&unit, PHASE_AHEAD);
+    dfw_tick(&unit, 1000);
+    CHECK(rec.presents == 1);
+}

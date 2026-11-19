@@ -274,7 +274,7 @@ def built_layout():
 def sealed_upper(layout, entry, body):
     """A block B with its header's length and CRC (zlib's, from +16) worked out here."""
     rest = struct.pack("<II", layout, entry) + body
-    return struct.pack("<IIII", 0x42574644, 2, 16 + len(rest), zlib.crc32(rest)) + rest
+    return struct.pack("<IIII", 0x42574644, 3, 16 + len(rest), zlib.crc32(rest)) + rest
 
 
 def good_upper():
@@ -365,7 +365,7 @@ class UpperBlockTests(unittest.TestCase):
         data = upper_block()
         marker, version, length, crc, layout, draw = struct.unpack_from("<IIIIII", data)
         self.assertEqual(marker, 0x42574644)
-        self.assertEqual(version, 2)
+        self.assertEqual(version, 3)
         self.assertEqual(length, len(data))
         self.assertLessEqual(length, UPPER_SIZE)
         self.assertEqual(crc, zlib.crc32(data[16:]))

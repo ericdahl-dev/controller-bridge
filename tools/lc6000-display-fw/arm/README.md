@@ -48,7 +48,7 @@ Six little-endian words at `0x08080000` (`upper.h`), 24 bytes:
 | Offset | Field |
 |---|---|
 | +0 | Marker `"DFWB"` |
-| +4 | Version (2), changed whenever this header or the entry table changes |
+| +4 | Version (3), changed whenever this header or the entry table changes |
 | +8 | Length of B, header included, at most 512 KB |
 | +12 | CRC-32 (zlib's) of B from +16 to its end |
 | +16 | Layout: `DFW_LAYOUT` (`src/dfw.h`) as B was built (#516) |

@@ -11,9 +11,9 @@ PROOF_SIZE = 512 * 1024
 
 
 def good_block():
-    """The same B as the C header tests (arm/test/test_hook.c): header version 2 with its layout word (#516), CRC
+    """The same B as the C header tests (arm/test/test_hook.c): header version 3 with its layout word (#516), CRC
     0x85E2FFEC zlib's, worked out apart."""
-    return struct.pack("<IIIIII", 0x42574644, 2, 33, 0x85E2FFEC, 0x1A2B3C4D, 0x08080019) + b"123456789"
+    return struct.pack("<IIIIII", 0x42574644, 3, 33, 0x85E2FFEC, 0x1A2B3C4D, 0x08080019) + b"123456789"
 
 
 def run(*argv):
