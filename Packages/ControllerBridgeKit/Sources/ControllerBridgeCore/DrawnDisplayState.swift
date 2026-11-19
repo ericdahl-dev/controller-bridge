@@ -49,18 +49,10 @@ public struct DrawnDisplayState: Equatable, Sendable {
         return self != before
     }
 
-    private static let header: [UInt8] = [0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10, DrawnDisplay.command]
+    private static let header: [UInt8] = DrawnDisplayProtocol.header + [DrawnDisplay.command]
 
-    /// Each op's one exact length, counting the op; nil for text (framed by len) and for an op this version doesn't take.
-    private static func length(_ op: UInt8) -> Int? {
-        switch op {
-        case 0x00, 0x01, 0x02, 0x07, 0x08: 2
-        case 0x05, 0x09, 0x0A, 0x0B: 3
-        case 0x06: 5
-        case 0x03: 9
-        default: nil
-        }
-    }
+    /// Each op's one exact length, counting the op; nil for text and for an op this version doesn't take (#569).
+    private static func length(_ op: UInt8) -> Int? { DrawnDisplayProtocol.length(op) }
 
     private mutating func act(_ bytes: [UInt8]) {
         let header = Self.header
@@ -69,9 +61,10 @@ public struct DrawnDisplayState: Equatable, Sendable {
         let declared = Int(bytes[header.count]) << 7 | Int(bytes[header.count + 1])
         guard bytes.count == header.count + 3 + declared, declared > 0 else { return }
         let op = bytes[header.count + 2]
+        guard let kind = DrawnDisplayProtocol.Op(rawValue: op) else { return }
         let args = Array(bytes[(header.count + 3)..<(bytes.count - 1)])
         func word() -> Int { Int(args[0]) << 7 | Int(args[1]) }
-        if op == 0x04 {
+        if kind == .text {
             guard declared >= 2, declared <= 2 + DrawnDisplay.textCap,
                   let field = DrawnDisplay.TextField(rawValue: args[0]), let codes = Self.decode(args.dropFirst()) else { return }
             guard drawn else { return }
@@ -81,10 +74,10 @@ public struct DrawnDisplayState: Equatable, Sendable {
         }
         guard let length = Self.length(op), declared == length else { return }
         // Version 0 is malformed.
-        if op <= 0x02, args[0] == 0 { return }
-        switch op {
-        case 0x01: drawn = true
-        case 0x02:
+        if [.capability, .begin, .end].contains(kind), args[0] == 0 { return }
+        switch kind {
+        case .begin: drawn = true
+        case .end:
             drawn = false
             deck = nil
             flags = []
@@ -93,8 +86,9 @@ public struct DrawnDisplayState: Equatable, Sendable {
             meter = nil
             phase = DrawnPhase.unknown
             time = nil
-        case 0x03:
-            guard args[0] >= 1, args[0] <= 4, args[1] <= 1, args[3] <= 1, args[5] <= 1,
+        case .deck:
+            guard args[0] >= 1, args[0] <= DrawnDisplayProtocol.deckMax, args[1] <= 1, args[3] <= 1, args[5] <= 1,
+                  args[7] <= DrawnDisplayProtocol.playerMax,
                   let player = DrawnDisplay.Player(rawValue: args[7]) else { return }
             guard drawn else { return }
             let new = Deck(number: Int(args[0]),
@@ -109,18 +103,18 @@ public struct DrawnDisplayState: Equatable, Sendable {
             textHeard = false
             phase = DrawnPhase.unknown
             time = nil
-        case 0x05: if drawn { tempo = word() }
-        case 0x07:
-            guard args[0] & 0x40 == 0 else { return }
+        case .tempo: if drawn { tempo = word() }
+        case .state:
+            guard args[0] & UInt8(1 << DrawnDisplayProtocol.flagBits["reserved"]!) == 0 else { return }
             if drawn { flags = DrawnDisplay.State(rawValue: args[0]) }
-        case 0x08:
-            guard args[0] <= 4 else { return }
+        case .beat:
+            guard args[0] <= DrawnDisplayProtocol.beatMax else { return }
             if drawn { beat = Int(args[0]) }
-        case 0x09: if drawn { needle = word() }
-        case 0x0A: if drawn { meter = (Int(args[0]), Int(args[1])) }
-        case 0x06: if drawn { time = (Int(args[0]) << 7 | Int(args[1]), Int(args[2]) << 7 | Int(args[3])) }
-        case 0x0B: if drawn { phase = word() >= 8192 ? word() - 16384 : word() }
-        default: break
+        case .needle: if drawn { needle = word() }
+        case .meter: if drawn { meter = (Int(args[0]), Int(args[1])) }
+        case .time: if drawn { time = (Int(args[0]) << 7 | Int(args[1]), Int(args[2]) << 7 | Int(args[3])) }
+        case .phase: if drawn { phase = word() >= 8192 ? word() - 16384 : word() }
+        case .capability, .text: break
         }
     }
 
