@@ -58,7 +58,7 @@ Seven little-endian words at `0x08080000` (`upper.h`), 28 bytes:
 - **The band.** The ring sits in layer 2's black border, outside our 198 px frame. B draws it straight into the layer: `band(layer, unit)`, 320 × 240 RGB565.
   - The hook keeps the band entry only once B checks out, and calls it from its present wrapper, right after stock's present. So it never runs on a tick that presented nothing, or after end.
   - The adapter hands over the layer's pixels through `hook_stock.layer`, so B never learns an address.
-  - Until the real `dfw_draw_band` is in `src/`, B links `arm/test/band_stub.c`, which writes one pixel the block tests look for.
+  - B's band is `dfw_draw_band` in `src/draw_band.c`: the ring's pixels outside the frame, turned as the frame is, after clearing the band's annulus.
 
 - **The layout word.** B reads A's `dfw_unit`, so both must agree on it. `DFW_LAYOUT` is worked out at compile time from every `dfw_unit` and `dfw_deck_state` field's offset and the shared sizes. A calls B only when B's word equals its own. Otherwise a B and an A from commits whose `dfw_unit` differs stay silent together, instead of B drawing from the wrong offsets. A new field in `dfw_unit` goes into `DFW_LAYOUT` too.
 

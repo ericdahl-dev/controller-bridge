@@ -1,10 +1,11 @@
 // live-reference <deck> <r> <g> <b> <player-type|-> <lit-beat|-> <needle|-> [<level> <peak>] [phase=<n>]
-//     [time=<elapsed>/<length>] [look=red|white] <out.ppm> (#459, #461, #462, #460)
+//     [time=<elapsed>/<length>] [look=red|white] [canvas=216] <out.ppm> (#459, #461, #462, #460, #524)
 // Writes the drawn display as JogDisplayRenderer.drawnImage draws it (#524: drawn mode's own layout) for that deck, with master beat <lit-beat> (1-4) lit and the marker at
 // <needle> (0-16383, a turn clockwise from 12 o'clock, as op 09 carries it) and, if given, the level meter at <level>
 // with <peak> held (0-127 each, as op 0A carries them), the phase rule at <n> (1/16384 beats, -8191 to 8191, as op 0B
 // carries it; with none, the phase is unknown), and the track time in whole seconds as op 06 carries it, in the
-// warning's red or white if `look` is given, cropped to the 198×198 frame, as a binary PPM (P6, RGB): the reference
+// warning's red or white if `look` is given, cropped to the 198×198 frame (or, with canvas=216, the whole 216×216
+// drawn image, the progress ring's band round the frame too), as a binary PPM (P6, RGB): the reference
 // the drawn display firmware's C tests compare with. "-" is none. The image is opaque, so premultiplied RGBA is RGB.
 import ControllerBridgeCore
 import ControllerBridgeRender
@@ -18,16 +19,16 @@ func fail(_ message: String) -> Never {
 let all = Array(CommandLine.arguments.dropFirst())
 let flags = Dictionary(all.compactMap { argument -> (String, String)? in
     let parts = argument.split(separator: "=", maxSplits: 1).map(String.init)
-    return parts.count == 2 && ["time", "look", "phase"].contains(parts[0]) ? (parts[0], parts[1]) : nil
+    return parts.count == 2 && ["time", "look", "phase", "canvas"].contains(parts[0]) ? (parts[0], parts[1]) : nil
 }, uniquingKeysWith: { $1 })
-let arguments = all.filter { argument in !["time=", "look=", "phase="].contains { argument.hasPrefix($0) } }
+let arguments = all.filter { argument in !["time=", "look=", "phase=", "canvas="].contains { argument.hasPrefix($0) } }
 var phase: Int?
 if let option = flags["phase"] {
     guard let value = Int(option) else { fail("Bad phase=\(option)") }
     phase = value
 }
 let usage = "Usage: live-reference <deck> <r> <g> <b> <player-type|-> <lit-beat|-> <needle|-> [<level> <peak>] "
-    + "[phase=<n>] [time=<elapsed>/<length>] [look=red|white] <out.ppm>"
+    + "[phase=<n>] [time=<elapsed>/<length>] [look=red|white] [canvas=216] <out.ppm>"
 guard arguments.count == 8 || arguments.count == 10, let deck = Int(arguments[0]), let r = Int(arguments[1]), let g = Int(arguments[2]),
       let b = Int(arguments[3]) else { fail(usage) }
 let litBeat = arguments[5] == "-" ? nil : Int(arguments[5])
@@ -55,7 +56,10 @@ let output = arguments[arguments.count - 1]
 let content = JogDisplayContent(deck: deck, color: [r, g, b], playerType: arguments[4] == "-" ? nil : arguments[4])
 let live = DrawnLive(beat: litBeat, needle: needle, meter: meter, phase: phase, time: time, look: look)
 let rgba = JogDisplayRenderer.drawnImage(content, live: live)
-let size = JogDisplayRenderer.size, drawn = JogDisplayRenderer.drawnSize, inset = (drawn - size) / 2
+let drawn = JogDisplayRenderer.drawnSize
+// canvas=216 writes the whole drawn image, the band round the frame too (#524); otherwise the 198 frame.
+guard flags["canvas"] == nil || flags["canvas"] == "\(drawn)" else { fail(usage) }
+let size = flags["canvas"] == nil ? JogDisplayRenderer.size : drawn, inset = (drawn - size) / 2
 var ppm = Data("P6\n\(size) \(size)\n255\n".utf8)
 for y in 0..<size {
     for x in 0..<size {
