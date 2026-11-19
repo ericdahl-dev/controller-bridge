@@ -9,8 +9,9 @@ import argparse, os, struct, sys, zlib
 import dfupatch
 
 UPPER_BASE = 0x08080000
-# B's header (arm/upper.h): marker "DFWB", version, length, CRC-32 (zlib's) from +16 to length, the draw entry.
-UPPER_MARKER, UPPER_VERSION, UPPER_HEADER = 0x42574644, 1, 20
+# B's header (arm/upper.h): marker "DFWB", version, length, CRC-32 (zlib's) from +16 to length, the dfw_unit layout
+# B was built for (#516; only block A, built from the same src/dfw.h, can judge it), the draw entry.
+UPPER_MARKER, UPPER_VERSION, UPPER_HEADER = 0x42574644, 3, 24
 UPPER_LIMIT = 0x80000  # sectors 8-11
 # The owner's read covers sectors 8-11, 0x08080000-0x080FFFFF.
 PROOF_SIZE = 512 * 1024
@@ -32,7 +33,7 @@ def check_block(block):
     """B as built (`make arm`): refused unless its header checks out the way block A will check it on the chip."""
     if len(block) < UPPER_HEADER:
         raise dfupatch.Refused(f"the block is {len(block)} bytes, shorter than B's {UPPER_HEADER}-byte header")
-    marker, version, length, crc, draw = struct.unpack_from("<IIIII", block)
+    marker, version, length, crc, _layout, draw = struct.unpack_from("<IIIIII", block)
     if marker != UPPER_MARKER:
         raise dfupatch.Refused("the block doesn't start with B's marker \"DFWB\": it isn't block B")
     if version != UPPER_VERSION:
