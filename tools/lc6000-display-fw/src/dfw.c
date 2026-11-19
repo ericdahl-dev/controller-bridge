@@ -8,7 +8,8 @@ static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
 #define DFW_CMD 0x20
 /// The protocol version this code speaks.
 #define DFW_VERSION 1
-enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_STATE = 0x07 };
+enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_STATE = 0x07, OP_BEAT = 0x08,
+       OP_NEEDLE = 0x09 };
 /// Bit 6 of the state flags is reserved: a message with it set is malformed.
 #define STATE_RESERVED 0x40
 /// Bit 5 of the state flags: Syndicate's feedback has stopped.
@@ -36,7 +37,8 @@ void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {
 /// Each op's one exact length, counting the op itself; 0 for an op this version doesn't take.
 static uint8_t op_length(uint8_t op) {
     switch (op) {
-    case OP_CAPABILITY: case OP_BEGIN: case OP_END: case OP_STATE: return 2;
+    case OP_CAPABILITY: case OP_BEGIN: case OP_END: case OP_STATE: case OP_BEAT: return 2;
+    case OP_NEEDLE: return 3;
     case OP_DECK: return 9;
     default: return 0;
     }
@@ -56,6 +58,10 @@ static int in_range(uint8_t op, const uint8_t *args) {
                channel(args + 5) >= 0 && args[7] <= 5;
     case OP_STATE:
         return !(args[0] & STATE_RESERVED);
+    case OP_BEAT:
+        return args[0] <= 4;
+    case OP_NEEDLE:
+        return 1;   // any two 7-bit bytes are an angle
     default:
         return 0;
     }
@@ -99,20 +105,41 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->dirty = 0;
         unit->deck = (dfw_deck_state){ 0, 0, 0, 0, 0 };
         unit->flags = 0;
+        unit->beat = 0;
+        unit->needle = 0;
+        unit->needle_heard = 0;
         break;
-    case OP_DECK:
+    case OP_DECK: {
         if (!unit->drawn) break;
-        unit->deck = (dfw_deck_state){ args[0], (uint8_t)channel(args + 1), (uint8_t)channel(args + 3),
-                                       (uint8_t)channel(args + 5), args[7] };
+        dfw_deck_state deck = { args[0], (uint8_t)channel(args + 1), (uint8_t)channel(args + 3),
+                                (uint8_t)channel(args + 5), args[7] };
+        // The heartbeat's deck, unchanged, changes nothing: its flags stay and nothing is redrawn (#459).
+        if (memcmp(&deck, &unit->deck, sizeof deck) == 0) break;
+        unit->deck = deck;
         // A new deck's play flags wait for its own state message (#464); only feedback stale carries over.
         unit->flags &= FLAG_STALE;
         unit->dirty = 1;
         break;
+    }
     case OP_STATE:
-        if (!unit->drawn) break;
+        if (!unit->drawn || unit->flags == args[0]) break;
         unit->flags = args[0];
         unit->dirty = 1;
         break;
+    case OP_BEAT:
+        if (!unit->drawn || unit->beat == args[0]) break;
+        unit->beat = args[0];
+        unit->dirty = 1;
+        break;
+    case OP_NEEDLE: {
+        uint16_t angle = (uint16_t)((args[0] << 7) | args[1]);
+        // The first one draws the marker, whatever its angle; after that, only a change.
+        if (!unit->drawn || (unit->needle_heard && unit->needle == angle)) break;
+        unit->needle = angle;
+        unit->needle_heard = 1;
+        unit->dirty = 1;
+        break;
+    }
     default:
         break;
     }

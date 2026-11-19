@@ -38,6 +38,10 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   unlit ring, the deck chip and the player badge. When stale it draws the waiting look instead: our logo (the app
   icon's deck ring) with the beat ring dark. The logo is drawn from the icon SVG's own numbers, not stored as an
   image. It uses `float` only, with no `double` and no libm (Cortex-M4F).
+- `src/draw_live.h`, `src/draw_live.c`: `dfw_draw_live`, called last by `dfw_draw`, draws the live elements over
+  design B (#459): the master beat's section lit in the live green, and the marker (Swift's `drawMarker`: a white
+  wedge with a 2 px black keyline) at the needle's angle. No marker until a needle message has come since begin.
+  Nothing while the display is stale.
 - `src/font_header.h`: glyph coverage for the header's two faces, generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
@@ -100,6 +104,14 @@ CoreGraphics and this code anti-alias curves slightly differently: up to 18 leve
 chip, and within 8 everywhere else. The limits are tight enough that a wrong color, a 1 px shift or a wrong glyph
 fails, and each of those was checked. The test prints each case's worst difference, so a change shows up in the
 log.
+
+The live elements (#459) are checked in `test/test_draw_live.c` against references with a beat lit or the marker
+drawn. The Kit's `jog-reference` tool draws neither, so `test/ref/live-reference/` is a small Swift package beside the
+references that renders the Kit's `JogDisplayRenderer.simulatorImage` with them. `make_refs.sh` builds and runs both.
+The lit section is the live green on the ground, three times the contrast of the unlit sections, so at most 10 of
+its pixels may be more than 6 off, and none more than 10 (measured worst: 8 on 7 pixels). The marker is compared from
+radius 77 out (inside that is only the chip, for deck 4 empty) as the unlit ring is: none more than 6 off (measured
+worst: 3, at the references and at 19 more angles swept round the turn). Half a degree off fails.
 
 **To add or change a reference image:**
 

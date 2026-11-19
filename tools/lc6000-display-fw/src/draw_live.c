@@ -1,0 +1,233 @@
+// The live elements (#459) as JogDisplayRenderer's simulator image draws them over design B, in its pixels: y down,
+// (0, 0) the top-left corner, a pixel's center at +0.5. Anti-aliased by coverage as draw.c is; its helpers are static
+// there, so the few this needs are repeated here.
+#include "draw_live.h"
+
+#define GROUND 0x0B0B0Bu
+#define LIVE 0x00FF48u
+#define KEYLINE 0x000000u
+#define MARKER 0xFFFFFFu
+
+#define CENTER 99.0f
+#define RING_OUTER 95.0f
+#define RING_INNER 85.0f
+#define RING_GAP 7.0f
+
+/// A square root by Newton's method from a bit-level first guess, as draw.c's. No libm on the chip.
+static float root(float x) {
+    if (x <= 0.0f) return 0.0f;
+    union { float f; uint32_t u; } v = { x };
+    v.u = (v.u >> 1) + 0x1FBD1DF5u;
+    float r = v.f;
+    for (int i = 0; i < 3; i++) r = 0.5f * (r + x / r);
+    return r;
+}
+
+static float clamp01(float x) { return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x; }
+
+/// How much of a pixel lies inside a straight edge, from the signed distance of its center to the edge (positive
+/// inside) and the edge's unit normal: the exact area of the pixel square on the inside, as draw.c's.
+static float edge_cover(float distance, float nx, float ny) {
+    float a = nx < 0.0f ? -nx : nx, b = ny < 0.0f ? -ny : ny;
+    if (a < b) { float t = a; a = b; b = t; }
+    float s = distance + (a + b) / 2.0f;
+    if (s <= 0.0f) return 0.0f;
+    if (s >= a + b) return 1.0f;
+    if (b < 1e-6f) return clamp01(s / a);
+    if (s < b) return s * s / (2.0f * a * b);
+    if (s < a) return (s - b / 2.0f) / a;
+    float t = a + b - s;
+    return 1.0f - t * t / (2.0f * a * b);
+}
+
+/// `under` moved toward `over` by `cover` (0-1), per channel, rounded.
+static dfw_pixel blend(dfw_pixel under, dfw_pixel over, float cover) {
+    if (cover <= 0.0f) return under;
+    if (cover >= 1.0f) return over;
+    dfw_pixel out = 0;
+    for (int shift = 0; shift <= 16; shift += 8) {
+        float a = (float)(under >> shift & 0xFFu), b = (float)(over >> shift & 0xFFu);
+        float c = a + (b - a) * cover + 0.5f;
+        out |= (dfw_pixel)(c < 0.0f ? 0.0f : c > 255.0f ? 255.0f : c) << shift;
+    }
+    return out;
+}
+
+/// sin and cos of a small angle by their series; ample for the ring's half gap (0.04 rad).
+static void small_sin_cos(float a, float *s, float *c) {
+    float a2 = a * a;
+    *s = a * (1.0f - a2 / 6.0f * (1.0f - a2 / 20.0f));
+    *c = 1.0f - a2 / 2.0f * (1.0f - a2 / 12.0f);
+}
+
+/// Beat `beat`'s (1-4) section in the live green. Swift fills the lit section once over the ground, so it is drawn
+/// from the ground here too, not over the unlit section ring() left: that would leave the unlit color in its edges.
+/// The sections and the ground are all there is in the band, so the result is Swift's.
+static void lit_section(dfw_pixel *frame, int beat) {
+    float s, c;
+    small_sin_cos(RING_GAP / ((RING_OUTER + RING_INNER) / 2.0f) / 2.0f, &s, &c);
+    // Beat 1's edges, as normals pointing into the section (see draw.c's ring()).
+    const float start_nx = c, start_ny = s, end_nx = -s, end_ny = -c;
+    for (int y = 0; y < DFW_SIZE; y++) {
+        float dy = (float)y + 0.5f - CENTER;
+        for (int x = 0; x < DFW_SIZE; x++) {
+            float dx = (float)x + 0.5f - CENTER;
+            float d2 = dx * dx + dy * dy;
+            if (d2 > (RING_OUTER + 1.0f) * (RING_OUTER + 1.0f) || d2 < (RING_INNER - 1.0f) * (RING_INNER - 1.0f)) continue;
+            float r = root(d2);
+            float nx = r > 0.0f ? dx / r : 1.0f, ny = r > 0.0f ? dy / r : 0.0f;
+            float band = edge_cover(RING_OUTER - r, nx, ny) + edge_cover(r - RING_INNER, nx, ny) - 1.0f;
+            if (band <= 0.0f) continue;
+            // A quarter turn back per beat after the first lands the point where beat 1's section is.
+            float px = dx, py = dy;
+            for (int step = 1; step < beat; step++) {
+                float t = px;
+                px = py;
+                py = -t;
+            }
+            float cover = band * edge_cover(px * start_nx + py * start_ny, start_nx, start_ny)
+                * edge_cover(px * end_nx + py * end_ny, end_nx, end_ny);
+            if (cover > 0.0f) frame[y * DFW_SIZE + x] = blend(GROUND, LIVE, cover);
+        }
+    }
+}
+
+/// sin and cos of the needle's angle, `needle` sixteen-thousandths (16384ths) of a turn clockwise from 12 o'clock.
+/// Folded to the nearest quarter turn, so the series only sees up to an eighth of a turn (π/4), where its terms to
+/// the ninth power are within float precision.
+static void needle_sin_cos(uint16_t needle, float *sin_out, float *cos_out) {
+    int quarter = ((int)(needle & 0x3FFF) + 2048) / 4096;
+    float a = (float)((int)(needle & 0x3FFF) - quarter * 4096) * 3.8349519697e-4f;   // 2π / 16384
+    float a2 = a * a;
+    float s = a * (1.0f - a2 / 6.0f * (1.0f - a2 / 20.0f * (1.0f - a2 / 42.0f * (1.0f - a2 / 72.0f))));
+    float c = 1.0f - a2 / 2.0f * (1.0f - a2 / 12.0f * (1.0f - a2 / 30.0f * (1.0f - a2 / 56.0f)));
+    switch (quarter & 3) {
+    case 0: *sin_out = s; *cos_out = c; break;
+    case 1: *sin_out = c; *cos_out = -s; break;
+    case 2: *sin_out = -s; *cos_out = -c; break;
+    default: *sin_out = -c; *cos_out = s; break;
+    }
+}
+
+/// The marker's corners in its own frame: u out from the center along the needle, v clockwise across it. The tip is
+/// 6 px inside the ring (85 − 6), and the base corners 4.2° either side at radius 98.5, as Swift's drawMarker.
+static const float tip_u = 79.0f, base_u = 98.235476f, base_v = 7.2139624f;
+/// Swift strokes the triangle with a 2 px keyline (round joins) and then fills it.
+#define KEYLINE_WIDTH 2.0f
+
+/// The distance from (u, v) to the segment from (au, av) to (bu, bv), and the direction from its nearest point.
+static float segment_distance(float u, float v, float au, float av, float bu, float bv, float *wu, float *wv) {
+    float eu = bu - au, ev = bv - av;
+    float t = ((u - au) * eu + (v - av) * ev) / (eu * eu + ev * ev);
+    t = clamp01(t);
+    *wu = u - (au + t * eu);
+    *wv = v - (av + t * ev);
+    return root(*wu * *wu + *wv * *wv);
+}
+
+/// The area of a triangle inside the pixel square [x, x + 1] × [y, y + 1]: the triangle clipped to each of the square's
+/// four sides in turn (Sutherland–Hodgman), then the shoelace formula. Exact, where a product of edge covers is not:
+/// at the marker's 41° tip that product is twice the true area.
+static float triangle_in_pixel(const float *tx, const float *ty, float x, float y) {
+    float px[2][8], py[2][8];
+    int n = 3, from = 0;
+    for (int i = 0; i < 3; i++) { px[0][i] = tx[i]; py[0][i] = ty[i]; }
+    for (int side = 0; side < 4 && n > 0; side++) {
+        int to = 1 - from, m = 0;
+        for (int i = 0; i < n; i++) {
+            int j = (i + 1) % n;
+            float ax = px[from][i], ay = py[from][i], bx = px[from][j], by = py[from][j];
+            // How far inside this side each end is: x ≥ left, x ≤ right, y ≥ top, y ≤ bottom.
+            float da = side == 0 ? ax - x : side == 1 ? x + 1.0f - ax : side == 2 ? ay - y : y + 1.0f - ay;
+            float db = side == 0 ? bx - x : side == 1 ? x + 1.0f - bx : side == 2 ? by - y : y + 1.0f - by;
+            if (da >= 0.0f && m < 8) { px[to][m] = ax; py[to][m] = ay; m++; }
+            if ((da >= 0.0f) != (db >= 0.0f) && m < 8) {
+                float t = da / (da - db);
+                px[to][m] = ax + t * (bx - ax);
+                py[to][m] = ay + t * (by - ay);
+                m++;
+            }
+        }
+        n = m;
+        from = to;
+    }
+    float area = 0.0f;
+    for (int i = 0; i < n; i++) {
+        int j = (i + 1) % n;
+        area += px[from][i] * py[from][j] - px[from][j] * py[from][i];
+    }
+    return clamp01((area < 0.0f ? -area : area) / 2.0f);
+}
+
+/// The marker as Swift draws it: a white wedge riding the ring's edge, pointing in, with a black 2 px keyline. Each
+/// pixel's signed distance to the triangle (positive outside) gives the keyline's band (within 1 px of the edge,
+/// rounded at the corners as the round joins are); the fill is the triangle's exact area in the pixel. Keyline, then
+/// fill.
+static void marker(dfw_pixel *frame, uint16_t needle) {
+    float sn, cs;
+    needle_sin_cos(needle, &sn, &cs);
+    // On screen (y down), u runs along (sin, −cos) and v along (cos, sin).
+    const float corner_u[3] = { tip_u, base_u, base_u }, corner_v[3] = { 0.0f, -base_v, base_v };
+    float left = (float)DFW_SIZE, right = 0.0f, top = (float)DFW_SIZE, bottom = 0.0f, corner_x[3], corner_y[3];
+    for (int i = 0; i < 3; i++) {
+        float x = CENTER + corner_u[i] * sn + corner_v[i] * cs, y = CENTER - corner_u[i] * cs + corner_v[i] * sn;
+        corner_x[i] = x;
+        corner_y[i] = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+    }
+    const float reach = KEYLINE_WIDTH / 2.0f + 1.0f;
+    int x0 = (int)(left - reach), x1 = (int)(right + reach) + 1, y0 = (int)(top - reach), y1 = (int)(bottom + reach) + 1;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > DFW_SIZE) x1 = DFW_SIZE;
+    if (y1 > DFW_SIZE) y1 = DFW_SIZE;
+    for (int y = y0; y < y1; y++) {
+        float dy = (float)y + 0.5f - CENTER;
+        for (int x = x0; x < x1; x++) {
+            float dx = (float)x + 0.5f - CENTER;
+            float u = dx * sn - dy * cs, v = dx * cs + dy * sn;
+            float distance = 1e9f, wu = 1.0f, wv = 0.0f, fill = 1.0f;
+            int inside = 1;
+            for (int i = 0; i < 3; i++) {
+                int j = (i + 1) % 3;
+                float eu, ev;
+                float d = segment_distance(u, v, corner_u[i], corner_v[i], corner_u[j], corner_v[j], &eu, &ev);
+                if (d < distance) { distance = d; wu = eu; wv = ev; }
+                // The corners run counterclockwise in (u, v): inside is to the left of every edge.
+                float lu = corner_u[j] - corner_u[i], lv = corner_v[j] - corner_v[i], l = root(lu * lu + lv * lv);
+                float cross = (lu * (v - corner_v[i]) - lv * (u - corner_u[i])) / l;
+                if (cross < 0.0f) inside = 0;
+                // Whether the pixel is wholly inside or outside the fill: each edge's cover, by its inward normal.
+                float mu = -lv / l, mv = lu / l;
+                fill *= edge_cover(cross, mu * sn + mv * cs, -mu * cs + mv * sn);
+            }
+            // On an edge, the exact area: a distance field would round the corners that CoreGraphics fills sharp.
+            if (fill > 0.0f && fill < 1.0f) fill = triangle_in_pixel(corner_x, corner_y, (float)x, (float)y);
+            float signed_distance = inside ? -distance : distance;
+            // The direction the distance is measured in, on screen; on the edge itself any will do.
+            float length = root(wu * wu + wv * wv);
+            float nx = 1.0f, ny = 0.0f;
+            if (length > 1e-4f) {
+                wu /= length;
+                wv /= length;
+                nx = wu * sn + wv * cs;
+                ny = -wu * cs + wv * sn;
+            }
+            float half = KEYLINE_WIDTH / 2.0f;
+            float keyline = edge_cover(half - signed_distance, nx, ny) + edge_cover(half + signed_distance, nx, ny) - 1.0f;
+            dfw_pixel *p = &frame[y * DFW_SIZE + x];
+            *p = blend(*p, KEYLINE, keyline);
+            *p = blend(*p, MARKER, fill);
+        }
+    }
+}
+
+void dfw_draw_live(dfw_pixel *frame, const dfw_unit *unit) {
+    if (dfw_stale(unit)) return;
+    if (unit->beat >= 1 && unit->beat <= 4) lit_section(frame, unit->beat);
+    // Over everything, as Swift draws it last.
+    if (unit->needle_heard) marker(frame, unit->needle);
+}

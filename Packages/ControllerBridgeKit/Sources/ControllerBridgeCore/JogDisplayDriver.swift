@@ -261,7 +261,7 @@ public final class JogDisplayDriver {
     public func disconnect() {
         guard connected else { return }
         // Drawn mode ends first, so the unit's own screen comes back (#456).
-        if case .drawn(let version) = mode { sendWD(DrawnDisplay.Message.end(version: version).bytes) }
+        if case .drawn(let version) = mode { endDrawing(version) }
         mode = .images
         connected = false
         upload = nil
@@ -320,7 +320,10 @@ public final class JogDisplayDriver {
     public func marker(_ pitchBend: Int) {
         guard pitchBend != lastMarker else { return }
         lastMarker = pitchBend
-        if connected { sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)]) }
+        // Drawing, the chip draws the needle from our message, and stock's pitch bend would only make it recompose
+        // its own hidden layer (#459, agent2's #466 reading).
+        if connected, case .drawn = mode { sendWD(DrawnDisplay.Message.needle(pitchBend).bytes) }
+        else if connected { sendWD([0xE0, UInt8(pitchBend & 0x7F), UInt8(pitchBend >> 7 & 0x7F)]) }
         onEvent?(.marker(pitchBend: pitchBend))
     }
 
@@ -336,6 +339,8 @@ public final class JogDisplayDriver {
         guard beat != lastMasterBeat else { return }
         lastMasterBeat = beat
         onEvent?(.masterBeat(beat))
+        // Drawing, the chip lights the section itself (#459); no image is shown.
+        if case .drawn = mode { return connected ? sendWD(DrawnDisplay.Message.beat(beat).bytes) : () }
         // Beat mode (#215): show the beat's slot, if it holds what's current; otherwise the screen holds. Never in the
         // middle of an upload: a show between its chunks can spoil it (ack 06). The upload's end shows the beat now.
         guard renderBeat != nil, upload == nil else { return }
@@ -353,7 +358,8 @@ public final class JogDisplayDriver {
     public func playLight(_ on: Bool) {
         guard on != lastPlayLight else { return }
         lastPlayLight = on
-        if connected { sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
+        // Drawing, stock's play light does nothing (#459, agent2's #466 reading): it isn't sent.
+        if connected, !drawing { sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
         onEvent?(.playLight(on))
     }
 
@@ -450,7 +456,7 @@ public final class JogDisplayDriver {
     /// in front goes up as images.
     private func handshakeAgain() {
         if case .drawn(let version) = mode {
-            sendWD(DrawnDisplay.Message.end(version: version).bytes)
+            endDrawing(version)
             if wanted == nil { wanted = current }
             current = nil
         }
@@ -482,7 +488,14 @@ public final class JogDisplayDriver {
         // The full state, every message once, in a fixed order: the deck, then the state.
         next()
         sendState()
+        sendLive()
         lastFullState = clock.now
+    }
+
+    /// The live part of the full state (#459): the master beat (0 with no master clock), then the needle, if known.
+    private func sendLive() {
+        sendWD(DrawnDisplay.Message.beat(lastMasterBeat ?? 0).bytes)
+        if let lastMarker { sendWD(DrawnDisplay.Message.needle(lastMarker).bytes) }
     }
 
     /// The heartbeat: begin, the deck and the state again, unchanged or not.
@@ -493,7 +506,25 @@ public final class JogDisplayDriver {
         let state = DrawnDisplay.Message.state(drawnState).bytes
         lastState = state
         sendWD(state)
+        sendLive()
         lastFullState = clock.now
+    }
+
+    private var drawing: Bool { if case .drawn = mode { true } else { false } }
+
+    /// The hand-back (#459): stock's needle is stale after drawing, and it redraws only on a change, so the current
+    /// one goes as pitch bend just before end; the play light is sent again on the next tick.
+    private func endDrawing(_ version: Int) {
+        if let lastMarker { sendWD([0xE0, UInt8(lastMarker & 0x7F), UInt8(lastMarker >> 7 & 0x7F)]) }
+        sendWD(DrawnDisplay.Message.end(version: version).bytes)
+        lastPlayLight = nil
+    }
+
+    /// The deck in front's play state for drawn mode (#459): loaded, playing, a quantized start waiting.
+    public func deckState(loaded: Bool, playing: Bool, pending: Bool) {
+        let flags: [(DrawnDisplay.State, Bool)] = [(.loaded, loaded), (.playing, playing), (.playPending, pending)]
+        for (flag, on) in flags { if on { drawnState.insert(flag) } else { drawnState.remove(flag) } }
+        sendState()
     }
 
     /// Syndicate's feedback stopped or came back (#464): drawn mode shows the waiting look while stale.

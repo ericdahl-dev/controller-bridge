@@ -3,12 +3,12 @@
 #include "harness.h"
 #include <string.h>
 
-enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE };
+enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE, KIND_BEAT, KIND_NEEDLE };
 typedef struct {
     const char *name;
     int kind, from_unit, version, number;
     int color[3];
-    int player, flags;
+    int player, flags, beat, angle;
     size_t length;
     uint8_t bytes[64];
 } vector;
@@ -77,6 +77,18 @@ void every_vector_decodes(void) {
             dfw_tick(&unit, 0);
             check(unit.flags == v->flags, v->name);
             break;
+        case KIND_BEAT:
+            feed(&unit, BEGIN_V1);
+            dfw_message(&unit, v->bytes, v->length);
+            dfw_tick(&unit, 0);
+            check(unit.beat == v->beat, v->name);
+            break;
+        case KIND_NEEDLE:
+            feed(&unit, BEGIN_V1);
+            dfw_message(&unit, v->bytes, v->length);
+            dfw_tick(&unit, 0);
+            check(unit.needle == v->angle, v->name);
+            break;
         default:
             check(0, v->name);
         }
@@ -93,11 +105,12 @@ void every_invalid_vector_is_ignored(void) {
         feed(&unit, STATE_LOADED_PLAYING);
         dfw_tick(&unit, 0);
         dfw_deck_state before = unit.deck;
-        uint8_t flags = unit.flags;
+        uint8_t flags = unit.flags, beat = unit.beat;
+        uint16_t needle = unit.needle;
         dfw_message(&unit, v->bytes, v->length);
         dfw_tick(&unit, 0);
         check(unit.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&unit.deck, &before, sizeof before) == 0 &&
-              unit.flags == flags,
+              unit.flags == flags && unit.beat == beat && unit.needle == needle,
               v->name);
     }
 }
