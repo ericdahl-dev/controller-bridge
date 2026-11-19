@@ -6,10 +6,24 @@ BUILD := build
 SRC := $(wildcard src/*.c)
 TESTS := $(wildcard test/test_*.c)
 
-.PHONY: test clean
-test: $(BUILD)/tests
+.PHONY: test clean tables
+test: $(BUILD)/tests $(BUILD)/band_table_gen
 	$(BUILD)/tests
 	sh test/check_symbols.sh $(BUILD)/freestanding
+	@# The generated tables (#558) must be what their generators write now, byte for byte.
+	$(BUILD)/band_table_gen > $(BUILD)/band_table.c
+	cmp src/band_table.c $(BUILD)/band_table.c || { echo "src/band_table.c is stale: make tables" >&2; exit 1; }
+
+# The tables B walks instead of working out geometry that never changes (#558), from the same code it ran before.
+# Built for the host with the chip's float rules (no contraction into fused multiply-adds, as arm-none-eabi-gcc's
+# -std=c99), so each entry is what the chip computed.
+GEN_CFLAGS := -std=c99 -Wall -Wextra -Werror -pedantic -O1 -ffp-contract=off
+$(BUILD)/band_table_gen: gen/band_table_gen.c src/band_geometry.h src/dfw.h
+	@mkdir -p $(BUILD)
+	$(CC) $(GEN_CFLAGS) -Isrc -o $@ gen/band_table_gen.c
+
+tables: $(BUILD)/band_table_gen
+	$(BUILD)/band_table_gen > src/band_table.c
 
 # The shared message vectors (#456), as a C header for the vectors walk.
 $(BUILD)/vectors.h: vectors/messages.json test/vectors_to_c.py
