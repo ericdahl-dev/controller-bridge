@@ -491,6 +491,21 @@ void before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block(
     CHECK(chip.witness == 0);
 }
 
+void without_a_drawing_the_ask_takes_no_malloc(void) {
+    // A without B behaves exactly like stock (#501): no answer, and none of stock's heap.
+    for (int with_upper = 0; with_upper < 2; with_upper++) {
+        cold_boot();
+        memset(upper, 0xFF, sizeof upper);
+        stock.upper = with_upper ? upper : NULL;
+        stock.drawing = NULL;
+        deliver(0, CAPABILITY_V1);
+        deliver(0, BEGIN_V1);
+        tick();
+        CHECK(chip.mallocs == 0);
+        CHECK(rec.sends == 0);
+    }
+}
+
 const test_case all_tests[] = {
     { "with no drawing from stock the capability ask gets no answer",
       with_no_drawing_from_stock_the_capability_ask_gets_no_answer },
@@ -527,6 +542,7 @@ const test_case all_tests[] = {
     { "an upper block with a bad CRC or another version gets no answer", an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer },
     { "a long upper block is checked whole at the first ask", a_long_upper_block_is_checked_whole_at_the_first_ask },
     { "before our first message the tick touches nothing even with an upper block", before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block },
+    { "without a drawing the ask takes no malloc", without_a_drawing_the_ask_takes_no_malloc },
     { 0, 0 },
 };
 

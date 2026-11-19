@@ -72,9 +72,10 @@ static void check_upper(hook_state *state, const hook_stock *stock) {
     state->unit.drawing = &state->upper_drawing;
 }
 
-/// The one stock malloc, ever, per boot: a frame for the capability ask or begin. Never freed.
+/// The one stock malloc, ever, per boot: a frame for the capability ask or begin, and only with a drawing to use it
+/// (#501): without one, block A leaves stock's heap alone. Never freed.
 static void ensure_frame(hook_state *state, const hook_stock *stock) {
-    if (state->unit.frame || state->malloc_tried) return;
+    if (!state->unit.drawing || state->unit.frame || state->malloc_tried) return;
     state->malloc_tried = 1;
     dfw_pixel *frame = stock->malloc(sizeof(dfw_pixel) * DFW_SIZE * DFW_SIZE);
     if (frame) dfw_set_frame(&state->unit, frame);
