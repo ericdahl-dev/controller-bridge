@@ -36,9 +36,26 @@ struct DrawnDisplayStateTests {
                 #expect(state.texts[field] == Self.codes(fields["codes"] as? String ?? ""), "\(name)")
             case "tempo": #expect(state.tempo == fields["tenths"] as! Int, "\(name)")
             case "phase": #expect(state.phase == fields["offset"] as! Int, "\(name)")
+            case "time":
+                #expect(state.time?.elapsed == fields["elapsed"] as? Int && state.time?.length == fields["length"] as? Int,
+                        "\(name)")
             default: Issue.record("\(name): a kind the state doesn't decode")
             }
         }
+    }
+
+    @Test("A deck change or end forgets the time (#460), as the chip does")
+    func timeCleared() {
+        var state = DrawnDisplayState()
+        state.apply(Self.begin)
+        state.apply(Self.deck3)
+        state.apply(DrawnDisplay.Message.time(elapsedSeconds: 65, lengthSeconds: 293).bytes)
+        #expect(state.time?.elapsed == 65)
+        state.apply(DrawnDisplay.Message.deck(number: 1, color: [255, 0, 0], player: .track).bytes)
+        #expect(state.time == nil)
+        state.apply(DrawnDisplay.Message.time(elapsedSeconds: 65, lengthSeconds: 293).bytes)
+        state.apply(DrawnDisplay.Message.end(version: 1).bytes)
+        #expect(state.time == nil)
     }
 
     @Test("Every invalid host message in the shared vectors changes nothing, as on the chip")

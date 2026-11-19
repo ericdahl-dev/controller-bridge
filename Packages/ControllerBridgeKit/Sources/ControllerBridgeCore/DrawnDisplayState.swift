@@ -31,6 +31,12 @@ public struct DrawnDisplayState: Equatable, Sendable {
     public private(set) var tempo = 0
     /// 1/16384 beats from the master, negative behind; DrawnPhase.unknown until the deck's own comes.
     public private(set) var phase = DrawnPhase.unknown
+    /// The track time in whole seconds (#460), a length of 0 unknown; nil until a time message since the deck.
+    public private(set) var time: (elapsed: Int, length: Int)? {
+        get { timeValue.map { ($0[0], $0[1]) } }
+        set { timeValue = newValue.map { [$0.elapsed, $0.length] } }
+    }
+    private var timeValue: [Int]?
 
     public init() {}
 
@@ -50,6 +56,7 @@ public struct DrawnDisplayState: Equatable, Sendable {
         switch op {
         case 0x00, 0x01, 0x02, 0x07, 0x08: 2
         case 0x05, 0x09, 0x0A, 0x0B: 3
+        case 0x06: 5
         case 0x03: 9
         default: nil
         }
@@ -85,6 +92,7 @@ public struct DrawnDisplayState: Equatable, Sendable {
             needle = nil
             meter = nil
             phase = DrawnPhase.unknown
+            time = nil
         case 0x03:
             guard args[0] >= 1, args[0] <= 4, args[1] <= 1, args[3] <= 1, args[5] <= 1,
                   let player = DrawnDisplay.Player(rawValue: args[7]) else { return }
@@ -100,6 +108,7 @@ public struct DrawnDisplayState: Equatable, Sendable {
             tempo = 0
             textHeard = false
             phase = DrawnPhase.unknown
+            time = nil
         case 0x05: if drawn { tempo = word() }
         case 0x07:
             guard args[0] & 0x40 == 0 else { return }
@@ -109,6 +118,7 @@ public struct DrawnDisplayState: Equatable, Sendable {
             if drawn { beat = Int(args[0]) }
         case 0x09: if drawn { needle = word() }
         case 0x0A: if drawn { meter = (Int(args[0]), Int(args[1])) }
+        case 0x06: if drawn { time = (Int(args[0]) << 7 | Int(args[1]), Int(args[2]) << 7 | Int(args[3])) }
         case 0x0B: if drawn { phase = word() >= 8192 ? word() - 16384 : word() }
         default: break
         }
@@ -137,6 +147,6 @@ public struct DrawnDisplayState: Equatable, Sendable {
     public static func == (a: DrawnDisplayState, b: DrawnDisplayState) -> Bool {
         a.drawn == b.drawn && a.deck == b.deck && a.flags == b.flags && a.beat == b.beat && a.needle == b.needle
             && a.meterValue == b.meterValue && a.texts == b.texts && a.textHeard == b.textHeard && a.tempo == b.tempo
-            && a.phase == b.phase
+            && a.phase == b.phase && a.timeValue == b.timeValue
     }
 }
