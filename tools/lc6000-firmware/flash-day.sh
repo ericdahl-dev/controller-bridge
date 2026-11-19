@@ -212,9 +212,11 @@ way_back() {
   warn "Stopping here. Nothing more is sent."
   say "The way back to stock firmware:"
   step "Power the LC6000 off and on. If it runs normally, you're done."
-  step "If the display stays dark or the unit stays in update mode: run Denon's own updater"
-  say  "  (docs/research/*.dmg). It puts the stock firmware back on both chips."
-  step "If Denon's updater can't find the display chip: stop. That's the ST-Link job (#433)."
+  step "Denon's updater refuses a unit that's running and current. It flashes a chip that's in update mode."
+  step "Display chip: if it's still in update mode (dfu-util -l lists it), open Denon's updater now."
+  say  "  If it boots a bad image instead, run this wizard again: stage 2 puts it back in update mode."
+  step "Top panel chip: hold BACK + FWD + VINYL while powering on, then open Denon's updater (proven 2026-11-19)."
+  step "If the display chip never shows up in update mode: stop. That's the ST-Link job (#433)."
   note "Backups and logs from this run are in $WORK."
   exit 1
 }
@@ -315,7 +317,7 @@ reboot_check() {
 
 run_wizard() {
 
-TOTAL_STAGES=9
+TOTAL_STAGES=8
 mkdir -p "$WORK"
 ENV_FILE="$WORK/flash-day.env"
 
@@ -381,17 +383,31 @@ fi
 note "Keep these files out of the repo and don't share them: vendor bytes plus your unit's settings."
 pause
 
-stage "Flash the STOCK image over itself"
-say "Same bytes the chip already holds. This proves the road in and the road back before any change."
-flash "$STOCK_WD" "stock"
-pause
-
-stage "Read back and compare"
-say "Done as part of the flash: the chip holds exactly the stock image."
-note "Read-back: $WORK/wd-readback-$STAMP-stock.bin"
+stage "Stock flash: Denon's own updater"
+say "Denon's updater flashes a chip that's in update mode (seen on this unit for the top panel chip)."
+say "Letting it do the display's stock flash proves the road in, and the rescue road, with none of our code."
+step "Open Denon's updater now (the .app inside docs/research/*.dmg). The display chip is waiting in update mode."
+step "Let it run. Watch for a progress bar; expect it to take longer than the top panel's 7-10 s (5x the data)."
+step "Don't unplug or power off while it runs. Quit the updater when it says it's done."
+USED_DFU_UTIL=0
+if confirm "Did the updater flash the display chip (a progress bar, then done)?"; then
+  ask UPDATER_SECONDS "About how many seconds did it take?"
+  write_env UPDATER_SECONDS "$UPDATER_SECONDS"
+else
+  warn "The updater didn't flash it (it said current, or didn't find the unit)."
+  say "The other road is dfu-util with the same stock file. It reads the chip back afterwards, which Denon's doesn't."
+  confirm "Flash the STOCK image with dfu-util now?" || way_back
+  if [[ -z "$(dfu_paths)" ]]; then
+    warn "The chip isn't in update mode any more."
+    way_back
+  fi
+  flash "$STOCK_WD" "stock"
+  USED_DFU_UTIL=1
+fi
 pause
 
 stage "Power cycle"
+if (( USED_DFU_UTIL )); then note "dfu-util doesn't restart the chip: the power cycle does."; fi
 reboot_check
 say "Check the unit: does the jog display show its usual idle screen?"
 confirm "Display looks normal?" || way_back
@@ -410,10 +426,18 @@ if confirm "Go on and flash a PATCHED image now?"; then
   write_env PATCHED_WD "$PATCHED_WD"
   enter_update_mode
   look "patched"
+  say "Checking the chip holds the stock image before changing it (read-only)…"
+  if read_app "$WORK/wd-before-patch-$STAMP.bin" && dfupatch compare "$STOCK_WD" "$WORK/wd-before-patch-$STAMP.bin"; then
+    printf '  %s✓%s the chip holds the stock image\n' "$GREEN" "$RESET"
+  else
+    warn "Couldn't confirm the chip holds the stock image (the read failed or it differs)."
+    confirm "Flash the patched image anyway?" || way_back
+  fi
   flash "$PATCHED_WD" "patched"
   reboot_check
   say "Now test the patch (for slot 16: upload to slot 16, then show 16; see #425's checklist)."
-  note "To go back to stock: run this wizard again and stop after the stock flash, or run Denon's updater."
+  note "A patched image still reports version 00.50, so Denon's updater will call the running unit current."
+  note "To go back to stock: run this wizard again (stage 2 puts the chip in update mode, then Denon's updater)."
 else
   say "Stopping after the stock flash. Good."
 fi
@@ -421,8 +445,9 @@ pause
 
 stage "Way back, for the record"
 say "If anything looks wrong later:"
-step "Run this wizard again: it flashes the stock image (stage 5) and checks it."
-step "Or run Denon's own updater: it restores both chips to stock."
+step "Denon's updater flashes stock onto a chip that's in update mode, not onto a running, current unit."
+step "Display chip: run this wizard again; stage 2 puts it in update mode, stage 5 is Denon's updater."
+step "Top panel chip: hold BACK + FWD + VINYL while powering on, then open Denon's updater."
 step "If the display chip never shows up in update mode: ST-Link (#433). Don't keep trying USB."
 note "Logs, backups and read-backs from today: $WORK"
 say "Please note on #435 what happened at each stage: it's the first proof on real hardware."

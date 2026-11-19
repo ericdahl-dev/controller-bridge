@@ -46,7 +46,7 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 
 Three pieces for the first real flash of the display chip, all run **by the unit's owner**, never by an agent:
 
-- `flash-day.sh`: a step-by-step wizard. It checks the stock file, puts the display chip into update mode, lists what `dfu-util` sees (exactly one device, or it stops), backs up the settings sector and the app (read-only), flashes the **stock** image over itself after you type `FLASH`, reads it back and compares, then has you power-cycle and checks the display's MIDI port returns. A patched image is an optional last step, off by default. Everything it saves goes to `~/lc6000` (or `$LC6000_WORK`), outside the repo.
+- `flash-day.sh`: a step-by-step wizard. It checks the stock file, puts the display chip into update mode, lists what `dfu-util` sees (exactly one device, or it stops) and backs up the settings sector and the app (read-only). Then **Denon's own updater does the stock flash**: on this unit it flashes a chip that's in update mode and refuses a running, current one (seen 2026-11-19 on the top panel chip). If the updater won't, the wizard offers the same stock file through `dfu-util`, after you type `FLASH`, and reads it back. Then you power-cycle and it checks the display's MIDI port returns. A patched image is an optional last step, off by default: it goes through `dfu-util`, only after the chip is confirmed to hold stock, and is read back and compared. Everything it saves goes to `~/lc6000` (or `$LC6000_WORK`), outside the repo.
 - `enter-update-mode.swift`: sends the stock updater's one "enter update mode" SysEx to the unit's WD port. `selftest` and `check` send nothing; `send` needs `--yes-enter-update-mode` and exactly one WD port.
 - `dfupatch.py compare <file.dfu> <readback.bin>`: checks a raw read-back of the app area against a `.dfu`'s image and says where the first difference is.
 
@@ -55,7 +55,7 @@ brew install dfu-util
 tools/lc6000-firmware/flash-day.sh
 ```
 
-**Unproven on hardware** until #435 is done: whether Denon's bootloader allows reading flash, whether a power cycle clears its update-mode flag, and whether it accepts a changed image. The wizard stops at each surprise and prints the way back (power cycle, then Denon's own updater, then SWD, #433). Have an ST-Link on the desk first. Never run Denon's updater "to look": it starts erasing as soon as it finds the unit.
+**Unproven on hardware** until #435 is done: whether Denon's bootloader allows reading flash, whether a power cycle clears its update-mode flag, and whether it accepts a changed image. The wizard stops at each surprise and prints the way back (power cycle; then update mode plus Denon's own updater; then SWD, #433). A patched image still reports version 00.50, so the updater calls a running patched unit current: put the chip in update mode first. Have an ST-Link on the desk first. Never run Denon's updater "to look": it starts erasing as soon as it finds the unit.
 
 The top panel chip needs none of this: hold BACK + FWD + VINYL at power-on and it enters ST's ROM bootloader (seen on hardware, #432); a power cycle leaves it.
 

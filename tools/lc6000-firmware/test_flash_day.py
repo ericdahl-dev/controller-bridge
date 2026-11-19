@@ -42,6 +42,26 @@ class WizardTests(unittest.TestCase):
         for upload in re.findall(r"dfu-util[^\n]*-U[^\n]*", self.stages):
             self.assertRegex(upload, r'-s "\$(APP|SETTINGS)_ADDRESS:\$(APP|SETTINGS)_SIZE"')
 
+    def test_the_stock_flash_is_denons_own_updater_before_any_patched_image(self):
+        # Seen on hardware (2026-11-19): the updater flashes a chip that's in update mode, and refuses a running,
+        # current unit. So Denon's tool does the stock flash, and dfu-util is kept for the patched image.
+        stock = self.stages.index('stage "Stock flash: Denon\'s own updater"')
+        patched = self.stages.index('stage "Patched image (optional)"')
+        self.assertLess(stock, patched)
+        between = self.stages[stock:patched]
+        self.assertIn("Open Denon's updater", between)
+        self.assertNotIn('flash "$STOCK_WD"', self.stages[:stock])
+
+    def test_the_patched_stage_checks_the_chip_holds_stock_before_writing(self):
+        patched = self.stages[self.stages.index('stage "Patched image (optional)"'):]
+        self.assertLess(patched.index('dfupatch compare "$STOCK_WD"'), patched.index('flash "$PATCHED_WD" "patched"'))
+
+    def test_the_way_back_says_update_mode_first_then_denons_updater(self):
+        way_back = self.stages[self.stages.index("way_back() {"):self.stages.index("# dfu_paths")]
+        self.assertIn("update mode", way_back)
+        self.assertIn("refuses a unit that's running and current", way_back)
+        self.assertIn("BACK + FWD + VINYL", way_back)
+
     def test_the_update_mode_message_needs_a_confirmation_first(self):
         send = self.stages.index("send --yes-enter-update-mode")
         ask = self.stages.index('confirm "Send the update-mode message to the display chip now?" || way_back')
