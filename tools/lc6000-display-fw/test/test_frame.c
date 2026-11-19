@@ -15,7 +15,7 @@ void with_no_frame_nothing_is_drawn(void) {
     fresh_without_frame(&unit, &rec);
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 0);
 }
 
@@ -23,9 +23,9 @@ void a_frame_handed_in_later_is_drawn(void) {
     fresh_without_frame(&unit, &rec);
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     dfw_set_frame(&unit, late);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 1);
 }
 
@@ -35,17 +35,17 @@ void a_frame_handed_in_after_end_draws_nothing(void) {
     fresh_without_frame(&unit, &rec);
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     feed(&unit, END_V1);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     dfw_set_frame(&unit, late);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 0);
 }
 
 void with_no_frame_the_capability_ask_gets_no_answer(void) {
     fresh_without_frame(&unit, &rec);
     feed(&unit, CAPABILITY_V1);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.sends == 0);
 }

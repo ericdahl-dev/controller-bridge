@@ -13,6 +13,8 @@ enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_
 #define STATE_RESERVED 0x40
 /// Bit 5 of the state flags: Syndicate's feedback has stopped.
 #define FLAG_STALE 0x20
+/// No drawn-display message for this long draws the waiting look (#464): three missed heartbeats.
+#define SILENCE_MS 3000u
 
 void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame) {
     memset(unit, 0, sizeof *unit);
@@ -43,7 +45,23 @@ static uint8_t op_length(uint8_t op) {
 /// A color channel sent as two 7-bit bytes, high then low; -1 if it's over 255.
 static int channel(const uint8_t *two) { return two[0] > 1 ? -1 : (two[0] << 7) | two[1]; }
 
-static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
+/// Whether an op's arguments are in range: versions are never 0, a deck is 1-4 with channels up to 255 and a known
+/// player, and a state's reserved bit is clear.
+static int in_range(uint8_t op, const uint8_t *args) {
+    switch (op) {
+    case OP_CAPABILITY: case OP_BEGIN: case OP_END:
+        return args[0] != 0;
+    case OP_DECK:
+        return args[0] >= 1 && args[0] <= 4 && channel(args + 1) >= 0 && channel(args + 3) >= 0 &&
+               channel(args + 5) >= 0 && args[7] <= 5;
+    case OP_STATE:
+        return !(args[0] & STATE_RESERVED);
+    default:
+        return 0;
+    }
+}
+
+static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t now_ms) {
     size_t header = sizeof host_header;
     // header, cmd, two length bytes, the op and its args, F7
     if (length < header + 5 || memcmp(bytes, host_header, header) != 0 || bytes[header] != DFW_CMD) return;
@@ -54,10 +72,17 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
     uint8_t op = body[0];
     if (declared == 0 || declared != op_length(op) || length != header + 4 + declared) return;
     const uint8_t *args = body + 1;
+    if (!in_range(op, args)) return;
+    // One of ours: it counts as hearing from the host, and ends any silence.
+    unit->heard = now_ms;
+    if (unit->silent) {
+        unit->silent = 0;
+        unit->dirty = 1;
+    }
     switch (op) {
     case OP_CAPABILITY:
         // No back buffer means we can't draw: no answer, so the app falls back to images.
-        if (args[0] != 0 && unit->frame) {
+        if (unit->frame) {
             // The reply header (as the unit's acks), then the version both sides speak.
             const uint8_t answer[] = { 0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, DFW_CMD, 0x00, 0x02, OP_CAPABILITY,
                                        args[0] < DFW_VERSION ? args[0] : DFW_VERSION, 0xF7 };
@@ -65,30 +90,26 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
         }
         break;
     case OP_BEGIN:
-        if (args[0] != 0) unit->drawn = 1;
+        unit->drawn = 1;
         break;
     case OP_END:
         // Back to image mode: nothing waiting is drawn, and the deck is forgotten, so a later begin waits for a
         // new one rather than redrawing this.
-        if (args[0] != 0) {
-            unit->drawn = 0;
-            unit->dirty = 0;
-            unit->deck = (dfw_deck_state){ 0, 0, 0, 0, 0 };
-            unit->flags = 0;
-        }
+        unit->drawn = 0;
+        unit->dirty = 0;
+        unit->deck = (dfw_deck_state){ 0, 0, 0, 0, 0 };
+        unit->flags = 0;
         break;
-    case OP_DECK: {
-        int r = channel(args + 1), g = channel(args + 3), b = channel(args + 5);
-        uint8_t number = args[0], player = args[7];
-        if (number < 1 || number > 4 || r < 0 || g < 0 || b < 0 || player > 5 || !unit->drawn) break;
-        unit->deck = (dfw_deck_state){ number, (uint8_t)r, (uint8_t)g, (uint8_t)b, player };
+    case OP_DECK:
+        if (!unit->drawn) break;
+        unit->deck = (dfw_deck_state){ args[0], (uint8_t)channel(args + 1), (uint8_t)channel(args + 3),
+                                       (uint8_t)channel(args + 5), args[7] };
         // A new deck's play flags wait for its own state message (#464); only feedback stale carries over.
         unit->flags &= FLAG_STALE;
         unit->dirty = 1;
         break;
-    }
     case OP_STATE:
-        if ((args[0] & STATE_RESERVED) || !unit->drawn) break;
+        if (!unit->drawn) break;
         unit->flags = args[0];
         unit->dirty = 1;
         break;
@@ -97,11 +118,18 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
     }
 }
 
-void dfw_tick(dfw_unit *unit) {
+int dfw_stale(const dfw_unit *unit) { return unit->silent || (unit->flags & FLAG_STALE); }
+
+void dfw_tick(dfw_unit *unit, uint32_t now_ms) {
     while (unit->tail != unit->head) {
         dfw_slot *slot = &unit->inbox[unit->tail];
-        act(unit, slot->bytes, slot->length);
+        act(unit, slot->bytes, slot->length, now_ms);
         unit->tail = (uint8_t)((unit->tail + 1) % DFW_INBOX);
+    }
+    // Unsigned subtraction, so the clock wrapping isn't silence.
+    if (unit->drawn && !unit->silent && now_ms - unit->heard >= SILENCE_MS) {
+        unit->silent = 1;
+        unit->dirty = 1;
     }
     // Only drawn mode draws, and only once a deck is known.
     if (!unit->dirty || !unit->frame || !unit->drawn || unit->deck.number == 0) return;

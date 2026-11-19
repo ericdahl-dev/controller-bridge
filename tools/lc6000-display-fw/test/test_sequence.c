@@ -13,9 +13,9 @@ void begin_while_drawing_changes_nothing(void) {
     feed(&unit, BEGIN_V1);
     feed(&unit, DECK_2_RED_TRACK);
     feed(&unit, STATE_ALL);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     feed(&unit, BEGIN_V1);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 1);
     CHECK(unit.deck.number == 2);
     CHECK(unit.flags == 0x3F);
@@ -27,6 +27,6 @@ void a_deck_clears_the_deck_flags_but_not_stale(void) {
     feed(&unit, DECK_2_RED_TRACK);
     feed(&unit, STATE_ALL);
     feed(&unit, DECK_2_RED_TRACK);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(unit.flags == 0x20);
 }

@@ -180,7 +180,7 @@ static void begin_then_deck_presents_the_reference(void) {
     fresh(&unit, &rec);
     feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
     feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");   // deck 2, red, track
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     CHECK(rec.presents == 1);
     const ref_case *c = &cases[0];
     CHECK(load_reference(c->file));
