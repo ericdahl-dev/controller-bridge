@@ -14,6 +14,9 @@
   python3 -I drawn_flash.py rewrite UPPER.dfu READ.bin OUT.dfu
       Only when `upper` says replace: B's element followed by erased bytes to the end of what the upper flash holds,
       so the write's erase covers an older, longer B too.
+  python3 -I drawn_flash.py options READ.bin
+      Judges a read of the option bytes (0x1FFFC000, 16 bytes) before step 1: read protection at level 0, sectors
+      8-11 not write-protected, one bank. Anything else is refused.
 
 Standard library only."""
 import argparse, struct, sys, zlib
@@ -110,6 +113,28 @@ def other_block(read):
     return length if zlib.crc32(read[16:length]) == crc else None
 
 
+def options(args):
+    """The option bytes, bank 1 (0x1FFFC000, 16 bytes; RM0090's option byte table): read protection level 0, sectors
+    8-11 not write-protected, one bank, and nWRP meaning write protection (SPRMOD 0)."""
+    read = dfupatch.read(args.read)
+    if len(read) != 16:
+        raise dfupatch.Refused(f"the option byte read is {len(read)} bytes, not 16")
+    rdp = read[1]
+    if rdp != 0xAA:
+        raise dfupatch.Refused(f"read protection is on (RDP 0x{rdp:02X}, not 0xAA, level 0). Stop: this isn't the chip "
+                               f"the earlier reads saw")
+    half = read[8] | read[9] << 8
+    if half & 0x8000:
+        raise dfupatch.Refused("SPRMOD is 1: the protection bits mean read-out protection, not what's writable. Stop")
+    if half & 0x4000:
+        raise dfupatch.Refused("the flash is set to two banks (DB1M 1), not the single bank B's addresses assume. Stop")
+    locked = [sector for sector in range(8, 12) if not half >> sector & 1]
+    if locked:
+        raise dfupatch.Refused(f"write protection is on for sector{'s' if len(locked) > 1 else ''} "
+                               f"{', '.join(map(str, locked))} (nWRP 0), where block B goes. Stop")
+    print("ok (read protection off, level 0; sectors 8-11 writable; one bank)")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Checks for the drawn flash: files and reads, never the unit.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -126,6 +151,9 @@ def main(argv=None):
     over.add_argument("read")
     over.add_argument("output")
     over.set_defaults(run=rewrite)
+    bytes_ = commands.add_parser("options", help="judge a read of the option bytes at 0x1FFFC000 (16 bytes)")
+    bytes_.add_argument("read")
+    bytes_.set_defaults(run=options)
     args = parser.parse_args(argv)
     try:
         args.run(args)

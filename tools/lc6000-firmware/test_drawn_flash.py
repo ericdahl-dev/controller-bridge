@@ -167,5 +167,46 @@ class RewriteTests(DrawnFlashTests):
                 self.assertFalse(os.path.exists(out))
 
 
+def option_bytes(rdp=0xAA, nwrp=0x0FFF, db1m=0, sprmod=0):
+    """A 16-byte read of 0x1FFFC000 (RM0090's option bytes, bank 1): USER at +0, RDP at +1, and at +8 the half-word
+    of nWRP (bits 0-11, a sector each, 1 = not write-protected), DB1M (bit 14) and SPRMOD (bit 15)."""
+    half = nwrp | db1m << 14 | sprmod << 15
+    return bytes([0xEC, rdp]) + b"\xff" * 6 + bytes([half & 0xFF, half >> 8]) + b"\xff" * 6
+
+
+class OptionsTests(DrawnFlashTests):
+    """The option bytes, read by the wizard before step 1 (#468): read protection off, sectors 8-11 writable, one
+    bank. Anything else stops with a plain message."""
+
+    def options(self, content):
+        return run("options", self.path("wd-option-bytes.bin", content))
+
+    def test_level_0_writable_upper_sectors_and_one_bank_pass(self):
+        code, out, _ = self.options(option_bytes())
+        self.assertEqual((code, out.split()[0]), (0, "ok"))
+
+    def test_read_protection_on_is_refused(self):
+        for rdp in (0xBB, 0xCC):
+            with self.subTest(rdp=rdp):
+                self.assertRefused(self.options(option_bytes(rdp=rdp)), "read protection")
+
+    def test_a_write_protected_upper_sector_is_refused_by_number(self):
+        self.assertRefused(self.options(option_bytes(nwrp=0x0FFF & ~(1 << 9))), "sector 9")
+
+    def test_a_protected_lower_sector_doesnt_matter(self):
+        code, _, err = self.options(option_bytes(nwrp=0x0FFF & ~(1 << 0)))
+        self.assertEqual(code, 0, err)
+
+    def test_dual_bank_is_refused(self):
+        self.assertRefused(self.options(option_bytes(db1m=1)), "two banks")
+
+    def test_pcrop_mode_is_refused(self):
+        # SPRMOD 1 turns nWRP into read-out protection bits, so they no longer say what's writable.
+        self.assertRefused(self.options(option_bytes(sprmod=1)), "SPRMOD")
+
+    def test_a_read_that_isnt_16_bytes_is_refused(self):
+        self.assertRefused(self.options(option_bytes()[:15]), "16")
+
+
 if __name__ == "__main__":
     unittest.main()
