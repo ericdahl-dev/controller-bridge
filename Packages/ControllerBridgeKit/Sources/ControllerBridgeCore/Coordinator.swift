@@ -575,10 +575,17 @@ public final class Coordinator {
         if let note, Int(note) == controllers[first].bridge.mapping.notes.buttons["deck_select"] {
             if velocity > 0, let at = layers.firstIndex(of: current) {
                 let target = layers[(at + 1) % layers.count]
-                activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
+                // The bridge's own step: the unit's selected deck, and so the one channel it takes note-ons on, stays
+                // (agent2's #481 reading). That's the channel deck select itself came on, so the new layer paints there
+                // at once (#554), not on its own channel, which the unit drops.
+                activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source),
+                              unitChannel: channel)
+                // Its light (#477) flashes full on the layer it stepped to, and goes back to idle on release.
+                controllers[target].bridge.pressLit("deck_select", true)
+            } else if velocity == 0 {
+                controllers[current].bridge.pressLit("deck_select", false)
             }
-            // No layer handles the note itself. Its light stays at its idle level, sent with the new layer's repaint:
-            // the unit showed no brighter level for it on a press (#480), so a press sends it nothing.
+            // Lit here; no layer handles the note itself, or a hidden one would keep it held.
             return (event, Self.noLayer)
         }
         let onPads = layers.filter {
@@ -607,14 +614,23 @@ public final class Coordinator {
     /// One handover: the layer left releases what it held and stops writing LEDs; the new one becomes the only active
     /// layer and waits for the shared fader's pickup. Its LEDs go out where the unit's controls come: ch1 in the
     /// normal state, the layer's own channel in the multi-channel state.
-    private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int], multiChannel: Bool) {
+    /// `unitChannel`: the channel the unit takes LEDs on, when the bridge stepped on its own (#420) and the unit's
+    /// selected deck didn't move; nil when the unit made the change (its channel is then the layer's, or ch1 in the
+    /// normal state).
+    private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int], multiChannel: Bool,
+                               unitChannel: UInt8? = nil) {
         if current != target { controllers[current].bridge.releaseAll() }
         for index in layers where index != target {
             status.controllers[index].activeLayer = false
             controllers[index].bridge.layerShown = false
         }
         status.controllers[target].activeLayer = true
-        controllers[target].bridge.ledChannel = multiChannel || controllers[target].bridge.mapping.midi.channel == 1 ? nil : 0
+        let bridge = controllers[target].bridge
+        if let unitChannel {
+            bridge.ledChannel = unitChannel == bridge.channel ? nil : unitChannel
+        } else {
+            bridge.ledChannel = multiChannel || bridge.mapping.midi.channel == 1 ? nil : 0
+        }
         // The one pitch fader stayed where it was, and the unit doesn't send it again: the new layer takes its
         // position, so the pitch arrows point the right way at once (#475).
         if current != target { controllers[target].bridge.takeFader(from: controllers[current].bridge) }
