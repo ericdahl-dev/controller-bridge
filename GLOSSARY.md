@@ -134,3 +134,19 @@ _Avoid_: pointer
 **Preview**:
 What a deck's jog display would show, drawn by DeckBridge for Diagnostics, for every deck, whether or not anything is sent.
 _Avoid_: simulator image, mock
+
+**Drawn display**:
+The jog display drawing its own picture from small messages DeckBridge sends (the deck, its texts, its state, the beat, the needle, the time, the meter, the phase), once our display firmware is on the unit and has answered DeckBridge's ask; otherwise DeckBridge uploads images.
+_Avoid_: custom mode, chip mode
+
+**Panel**:
+The jog display's whole screen in drawn mode, which our picture covers: the round frame in its middle, black around it but for the progress ring.
+_Avoid_: screen (not the menu-bar panel, and not the controller's top panel)
+
+**Block A**:
+Our small part of the drawn display's firmware, inside Denon's own: it takes DeckBridge's messages, answers its ask, and hands drawing to block B only once block B has checked out.
+_Avoid_: hook, patch
+
+**Block B**:
+The drawn display's drawing, kept in the display's spare flash beside Denon's firmware; block A and block B must come from the same build, or the display stays silent.
+_Avoid_: upper block

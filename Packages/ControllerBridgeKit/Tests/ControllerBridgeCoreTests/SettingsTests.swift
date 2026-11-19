@@ -346,6 +346,26 @@ struct SettingsTests {
         #expect(!BridgeSettings.rebased(draft: table, base: Self.defaults, onto: saved).colorMessages)
     }
 
+    // #532: a brightness for the color-message LEDs (pads and ring), in percent; full is today's level.
+
+    @Test("Light brightness is 100% (today's level) by default, also for old settings; a dimmer one round-trips and survives a rebase")
+    func lightBrightnessSetting() {
+        #expect(Self.defaults.lightBrightness == 100)
+        let store = MemoryStore()
+        store.values[BridgeSettings.storageKey] = Data(#"""
+            {"controllers":[{"deck":1}],"syndicateHost":"127.0.0.1","syndicatePort":9090,"feedbackPort":9096,
+             "feedbackListen":"thisMac","ledsEnabled":true}
+            """#.utf8)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).lightBrightness == 100)
+        var dim = Self.defaults
+        dim.lightBrightness = 40
+        try? dim.save(to: store)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).lightBrightness == 40)
+        var saved = Self.defaults
+        saved.controllers[0].deck = 2
+        #expect(BridgeSettings.rebased(draft: dim, base: Self.defaults, onto: saved).lightBrightness == 40)
+    }
+
     // #425: the LC6000's display firmware, Denon's or custom.
 
     @Test("Display firmware defaults to Denon's; old settings load as Denon's; Custom round-trips and survives a rebase")
