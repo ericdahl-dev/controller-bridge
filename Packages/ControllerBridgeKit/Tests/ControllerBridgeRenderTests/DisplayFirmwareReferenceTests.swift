@@ -66,10 +66,17 @@ struct DisplayFirmwareReferenceTests {
         try compare(file, with: rendered)
         // The rule's rows hold no text, so no rasterizer slack: every pixel there within `close`.
         let reference = try #require(Self.rgb(file))
-        let off = (124 * 198..<132 * 198).filter { pixel in
-            (0..<3).contains { abs(Int(rendered[pixel * 4 + $0]) - Int(reference[pixel * 3 + $0])) > Self.close }
+        var off = 0
+        for pixel in 124 * 198..<132 * 198 {
+            for channel in 0..<3 {
+                let difference = abs(Int(rendered[pixel * 4 + channel]) - Int(reference[pixel * 3 + channel]))
+                if difference > Self.close {
+                    off += 1
+                    break
+                }
+            }
         }
-        #expect(off.isEmpty, "\(file): \(off.count) pixels of the rule's rows off")
+        #expect(off == 0, "\(file): \(off) pixels of the rule's rows off")
     }
 
     private func compare(_ file: String, with rendered: [UInt8]) throws {
