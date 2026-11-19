@@ -8,6 +8,7 @@
 #define CAPABILITY_V1 "F0 00 02 0B 7F 10 20 00 02 00 01 F7"
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
 #define DECK_2_RED_TRACK "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"
+#define END_V1 "F0 00 02 0B 7F 10 20 00 02 02 01 F7"
 #define STATE_LOADED_PLAYING "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
 
 /// The simulated stock firmware: its RAM, its malloc, and our state's untouched top-of-SRAM home.
@@ -18,6 +19,7 @@ static struct {
     uint8_t rx[0x200];
     int mallocs;
     int malloc_fails;
+    int hides;
     dfw_pixel heap[DFW_SIZE * DFW_SIZE];
 } chip;
 static hook_state state;
@@ -31,6 +33,8 @@ static void *stock_malloc(size_t size) {
     if (chip.malloc_fails || size > sizeof chip.heap) return NULL;
     return chip.heap;
 }
+
+static void hide(void) { chip.hides++; }
 
 static void present(void *ctx, const dfw_pixel *frame) { (void)frame; ((recording *)ctx)->presents++; }
 static void send(void *ctx, const uint8_t *bytes, size_t length) {
@@ -47,10 +51,11 @@ static void power_on(void) {
     chip.rx_count = 0;
     chip.mallocs = 0;
     chip.malloc_fails = 0;
+    chip.hides = 0;
     memset(&rec, 0, sizeof rec);
     marker_word = HOOK_MARKER;
     stock = (hook_stock){ .marker = &marker_word, .uptime = &chip.uptime, .witness = &chip.witness, .rx_count = &chip.rx_count,
-                          .malloc = stock_malloc, .port = { .present = present, .send = send, .ctx = &rec } };
+                          .malloc = stock_malloc, .hide = hide, .port = { .present = present, .send = send, .ctx = &rec } };
 }
 
 /// A cold first boot: our state is SRAM garbage too.
@@ -255,7 +260,31 @@ void garbage_with_the_magic_but_a_bad_check_word_is_fresh_state(void) {
     CHECK(state.unit.drawn == 0);
 }
 
+void end_hands_the_screen_back_once(void) {
+    cold_boot();
+    drawing_session();
+    CHECK(rec.presents == 1 && chip.hides == 0);
+    deliver(0, END_V1);
+    tick();
+    tick();
+    CHECK(chip.hides == 1);
+    deliver(0, BEGIN_V1);
+    deliver(0, DECK_2_RED_TRACK);
+    tick();
+    CHECK(rec.presents == 2 && chip.hides == 1);
+}
+
+void nothing_is_hidden_that_was_never_shown(void) {
+    cold_boot();
+    deliver(0, CAPABILITY_V1);
+    deliver(0, END_V1);
+    tick();
+    CHECK(chip.hides == 0);
+}
+
 const test_case all_tests[] = {
+    { "end hands the screen back once", end_hands_the_screen_back_once },
+    { "nothing is hidden that was never shown", nothing_is_hidden_that_was_never_shown },
     { "the tick does nothing before our first message", the_tick_does_nothing_before_our_first_message },
     { "a capability ask allocates the frame once and is answered", a_capability_ask_allocates_the_frame_once_and_is_answered },
     { "a failed allocation means no answer and no second try", a_failed_allocation_means_no_answer_and_no_second_try },

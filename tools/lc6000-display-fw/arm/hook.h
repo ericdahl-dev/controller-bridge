@@ -27,6 +27,8 @@ typedef struct {
     volatile uint8_t *witness;
     const volatile uint16_t *rx_count;
     void *(*malloc)(size_t size);
+    /// Hands the screen back to stock (on the unit: our overlay layer off). Called once when drawn mode ends.
+    void (*hide)(void);
     dfw_port port;
 } hook_stock;
 
@@ -36,6 +38,10 @@ typedef struct {
     uint32_t check;
     uint32_t last_uptime;
     uint8_t malloc_tried;
+    /// Something was presented since drawn mode last ended, so the screen is ours until hidden.
+    uint8_t shown;
+    /// The stock side this state was started with: the port wrapper below reaches it through here.
+    const hook_stock *stock;
     dfw_unit unit;
 } hook_state;
 

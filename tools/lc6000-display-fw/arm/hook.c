@@ -14,9 +14,24 @@ static int reset_seen(const hook_state *state, const hook_stock *stock, uint32_t
     return now < state->last_uptime;
 }
 
+/// Our port to dfw: it notes that the screen is ours, then presents through stock's side.
+static void present(void *ctx, const dfw_pixel *frame) {
+    hook_state *state = ctx;
+    state->shown = 1;
+    state->stock->port.present(state->stock->port.ctx, frame);
+}
+
+static void send(void *ctx, const uint8_t *bytes, size_t length) {
+    hook_state *state = ctx;
+    state->stock->port.send(state->stock->port.ctx, bytes, length);
+}
+
 static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
-    dfw_init(&state->unit, &stock->port, NULL);
+    const dfw_port port = { .present = present, .send = send, .ctx = state };
+    state->stock = stock;
+    dfw_init(&state->unit, &port, NULL);
     state->malloc_tried = 0;
+    state->shown = 0;
     state->last_uptime = now;
     state->magic = HOOK_MAGIC;
     state->check = ~HOOK_MAGIC;
@@ -38,6 +53,7 @@ void hook_command(hook_state *state, const hook_stock *stock, uint8_t cmd, const
     uint32_t now = *stock->uptime;
     if (!valid(state) || reset_seen(state, stock, now)) start(state, stock, now);
     state->last_uptime = now;
+    state->stock = stock;
     uint8_t op = msg[9];
     if (op == OP_CAPABILITY || op == OP_BEGIN) ensure_frame(state, stock);
     if (op == OP_BEGIN && !state->unit.frame) return;  // no frame: stay in stock mode
@@ -52,5 +68,10 @@ void hook_tick(hook_state *state, const hook_stock *stock) {
         return;
     }
     state->last_uptime = now;
+    state->stock = stock;
     dfw_tick(&state->unit);
+    if (state->shown && !state->unit.drawn) {
+        state->shown = 0;
+        stock->hide();
+    }
 }
