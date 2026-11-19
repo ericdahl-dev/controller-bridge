@@ -415,6 +415,39 @@ class UpperBlockTests(unittest.TestCase):
             rows.append(bytes(chip.uc.mem_read(LAYER_AT + top * 320 * 2, (bottom - top + 1) * 320 * 2)))
         self.assertNotEqual(rows[0], rows[1], "the title changed the title rows")
 
+
+def struct_fields(source, opening, closing):
+    """The field names declared between `opening` and `closing` in a C header, comments dropped."""
+    import re
+    end = source.index(closing)
+    body = source[source.rindex(opening, 0, end) + len(opening):end]
+    body = re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)
+    names = []
+    for declaration in body.split(";"):
+        declaration = re.sub(r"\[[^\]]*\]", "", declaration).strip()
+        if declaration:
+            names += [re.findall(r"\w+$", part.strip())[0] for part in declaration.split(",")]
+    return names
+
+
+class LayoutWordTests(unittest.TestCase):
+    """DFW_LAYOUT (#516) is only a guard if it counts every field B can read: a field added into padding moves nothing
+    else, so only its own term changes the word."""
+
+    def test_every_dfw_unit_and_deck_field_is_in_the_layout_word(self):
+        with open(os.path.join(FW, "src", "dfw.h")) as f:
+            source = f.read()
+        layout = source[source.index("#define DFW_LAYOUT"):]
+        layout = layout[:layout.index("\n\n")]
+        for struct_name, opening, closing in (
+                ("dfw_unit", "typedef struct dfw_unit {", "} dfw_unit;"),
+                ("dfw_deck_state", "typedef struct {", "} dfw_deck_state;")):
+            fields = struct_fields(source, opening, closing)
+            self.assertGreater(len(fields), 4, struct_name)
+            for field in fields:
+                with self.subTest(struct=struct_name, field=field):
+                    self.assertIn(f"offsetof({struct_name}, {field})", layout)
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         BUILD = sys.argv.pop(1)

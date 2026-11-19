@@ -98,7 +98,7 @@ typedef struct dfw_unit {
     67u * offsetof(dfw_unit, needle) + 71u * offsetof(dfw_unit, level) + 73u * offsetof(dfw_unit, peak) + \
     79u * offsetof(dfw_unit, needle_heard) + 83u * offsetof(dfw_unit, meter_heard) + \
     89u * offsetof(dfw_unit, text) + 97u * offsetof(dfw_unit, text_length) + 101u * offsetof(dfw_unit, tempo) + \
-    103u * offsetof(dfw_unit, text_heard) + 107u * offsetof(dfw_unit, heard) + \
+    103u * offsetof(dfw_unit, text_heard) + 163u * offsetof(dfw_unit, phase) + 107u * offsetof(dfw_unit, heard) + \
     109u * offsetof(dfw_unit, now_ms) + 113u * offsetof(dfw_unit, silent) + 127u * offsetof(dfw_unit, dirty) + \
     131u * offsetof(dfw_unit, frame) + 137u * offsetof(dfw_deck_state, number) + \
     139u * offsetof(dfw_deck_state, r) + 149u * offsetof(dfw_deck_state, g) + \
