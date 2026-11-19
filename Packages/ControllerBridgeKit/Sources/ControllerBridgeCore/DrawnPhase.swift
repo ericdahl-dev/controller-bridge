@@ -15,8 +15,16 @@ struct DrawnPhase {
     /// The side of the last offset shown off phase: -1 behind, 1 ahead.
     private var side: Int?
 
+    /// The last value `value` gave, for the preview (#465).
+    private(set) var lastValue = DrawnPhase.unknown
+
     /// The value to send for the deck's latest offset in beats.
     mutating func value(offset: Double?, playing: Bool) -> Int {
+        lastValue = next(offset: offset, playing: playing)
+        return lastValue
+    }
+
+    private mutating func next(offset: Double?, playing: Bool) -> Int {
         guard playing, let offset, offset.isFinite else {
             inPhase = false
             side = nil
