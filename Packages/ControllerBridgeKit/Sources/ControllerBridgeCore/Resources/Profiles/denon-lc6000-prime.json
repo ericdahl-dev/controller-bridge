@@ -106,6 +106,8 @@
     },
     "leds": {
       "pitch_center": 42,
+      "pitch_arrow_back": 41,
+      "pitch_arrow_forward": 43,
       "ring": 40,
       "ring_color": [
         0,

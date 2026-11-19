@@ -102,6 +102,8 @@ final class Bridge {
     // Pitch, jog and Needle Drop state (Bridge+Continuous.swift).
     var pitchMSBValue: UInt8 = 0
     var pitchLSBValue: UInt8 = 0
+    /// Whether the fader has reported its position since launch (#475): until then the arrows can't point.
+    var faderKnown = false
     /// The last TempoSlider value sent, so a repeat isn't resent.
     var lastTempo: Double?
     /// Pitch pickup (#22): while armed, the fader is ignored until it meets Syndicate's reported TempoSlider.
@@ -391,6 +393,7 @@ final class Bridge {
         loopLEDs()
         padLEDs()
         led(mapping.leds.pitchCenter, pitchCenterVelocity)
+        pitchArrowLEDs()
         mixerLEDs()
     }
 
