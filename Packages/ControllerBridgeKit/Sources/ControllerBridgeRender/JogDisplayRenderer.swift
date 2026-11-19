@@ -19,13 +19,12 @@ public enum JogDisplayRenderer {
     /// that beat's section; `marker` draws the marker that many turns clockwise from 12 o'clock.
     public static func render(_ content: JogDisplayContent, litBeat: Int? = nil, marker: Double? = nil,
                               meter: (level: Int, peak: Int)? = nil, time: (elapsed: Int, length: Int)? = nil,
-                              warning: Bool = false) -> [UInt8] {
+                              look: JogTrackTime.Look = .normal) -> [UInt8] {
         drawing { context in
             draw(content, litBeat: litBeat, in: context)
             if let meter, !content.stale { drawMeter(level: meter.level, peak: meter.peak, in: context) }
             if let time, time.length > 0, !content.stale {
-                drawTime(elapsed: time.elapsed, length: time.length, color: warning ? timeWarning : nil,
-                         deckColor: color(content.color), in: context)
+                drawTime(elapsed: time.elapsed, length: time.length, look: look, deck: content.color, in: context)
             }
             if let marker { drawMarker(turns: marker, in: context) }
         }
@@ -65,8 +64,6 @@ public enum JogDisplayRenderer {
     static let timeSize: CGFloat = 14, timeCenterY: CGFloat = 169
     /// The progress ring, just outside the beat ring: 1 px clear of it (r 95) and of the image's edge (r 99).
     static let progressInner: CGFloat = 96, progressOuter: CGFloat = 98
-    /// The last minute's warning colour, for the remaining time and the ring's fill.
-    static let timeWarning = rgb(0xFF3B30)
     /// The peak tick's width, in degrees.
     static let meterTick: CGFloat = 2
     static let meterYellow = rgb(0xFFD400), meterClip = rgb(0xFF3B30), meterPeak = rgb(0xFFFFFF)
@@ -89,8 +86,8 @@ public enum JogDisplayRenderer {
     /// `meter` is the front deck's mixer level and held peak, 0–127 each (#461), as the drawn display shows them.
     public static func simulatorImage(_ content: JogDisplayContent, litBeat: Int?, marker: Double?,
                                       meter: (level: Int, peak: Int)? = nil,
-                                      time: (elapsed: Int, length: Int)? = nil, warning: Bool = false) -> [UInt8] {
-        render(content, litBeat: litBeat, marker: marker, meter: meter, time: time, warning: warning)
+                                      time: (elapsed: Int, length: Int)? = nil, look: JogTrackTime.Look = .normal) -> [UInt8] {
+        render(content, litBeat: litBeat, marker: marker, meter: meter, time: time, look: look)
     }
 
     /// The Geist faces the design uses, bundled with this target (#221) so the image is the same in the app and under
@@ -223,15 +220,17 @@ public enum JogDisplayRenderer {
 
     /// Track time (#460): the time left, "-m:ss" (minutes past 59 stay minutes), in the slot under key/BPM. Seconds.
     /// Around the edge, the progress ring: the deck colour clockwise from 12 o'clock, the rest a dark track.
-    /// `color`, the warning's red, replaces both the text's white and the deck colour.
-    private static func drawTime(elapsed: Int, length: Int, color warning: CGColor?, deckColor: CGColor,
+    /// The warning's red half draws text and fill red; its normal half fills `JogTrackTime.warningNormalFill`.
+    private static func drawTime(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int],
                                  in context: CGContext) {
+        let red = look == .warningRed ? color(JogTrackTime.warningRed) : nil
+        let fill = red ?? color(look == .warningNormal ? JogTrackTime.warningNormalFill(deck: deck) : deck)
         let elapsed = min(max(elapsed, 0), length), left = length - elapsed
         band(inner: progressInner, outer: progressOuter, from: 0, to: 360, color: beatOff, in: context)
         band(inner: progressInner, outer: progressOuter, from: 0, to: 360 * CGFloat(elapsed) / CGFloat(length),
-             color: warning ?? deckColor, in: context)
+             color: fill, in: context)
         let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, timeSize, nil)
-        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: warning ?? text), font: font,
+        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: red ?? text), font: font,
              centerX: center, centerY: timeCenterY, in: context)
     }
 

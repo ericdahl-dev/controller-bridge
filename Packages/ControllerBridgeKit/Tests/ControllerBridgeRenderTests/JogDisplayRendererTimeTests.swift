@@ -86,7 +86,7 @@ struct JogDisplayRendererTimeTests {
     @Test("The warning's red half: the remaining time and the ring's fill turn red (0xFF3B30); the track stays dark")
     func warningRed() {
         let image = JogDisplayRenderer.simulatorImage(Self.content, litBeat: nil, marker: nil,
-                                                      time: (elapsed: 90, length: 120), warning: true)
+                                                      time: (elapsed: 90, length: 120), look: .warningRed)
         #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0xFF3B30, by: 8))
         #expect(JogDisplayRendererTests.near(Self.at(image, 1, 98), 0x2C2C2C))
         #expect(Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xFF3B30, by: 8) })
@@ -98,5 +98,17 @@ struct JogDisplayRendererTimeTests {
         let image = Self.image((elapsed: 90, length: 120))
         #expect(Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xEDEDEA, by: 8) })
         #expect(!Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xFF3B30, by: 8) })
+    }
+
+    @Test("The warning's normal half on a red deck: the ring's fill white, so the blink shows; on blue, blue")
+    func warningNormalHalf() {
+        let red = JogDisplayRenderer.simulatorImage(Self.content, litBeat: nil, marker: nil,
+                                                    time: (elapsed: 90, length: 120), look: .warningNormal)
+        #expect(JogDisplayRendererTests.near(Self.at(red, 196, 98), 0xEDEDEA, by: 8))
+        #expect(Self.slot(red).contains { JogDisplayRendererTests.near($0, 0xEDEDEA, by: 8) })
+        let blue = JogDisplayContent(deck: 4, color: [0, 128, 255], title: "Daybreak", playerType: "track")
+        let image = JogDisplayRenderer.simulatorImage(blue, litBeat: nil, marker: nil, time: (elapsed: 90, length: 120),
+                                                      look: .warningNormal)
+        #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0x0080FF, by: 8))
     }
 }
