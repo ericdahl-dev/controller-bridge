@@ -10,9 +10,13 @@ TESTS := $(wildcard test/test_*.c)
 test: $(BUILD)/tests
 	$(BUILD)/tests
 
-$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
+# The shared message vectors (#456), as a C header for the vectors walk.
+$(BUILD)/vectors.h: vectors/messages.json test/vectors_to_c.py
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -o $@ $(SRC) $(TESTS) test/harness.c
+	python3 -I test/vectors_to_c.py $< > $@
+
+$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h $(wildcard src/*.h) $(BUILD)/vectors.h
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c
 
 clean:
 	rm -rf $(BUILD)

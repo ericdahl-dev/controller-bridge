@@ -41,6 +41,9 @@ void a_capability_ask_gets_the_answer(void);
 void a_newer_host_gets_our_version(void);
 void a_capability_ask_with_version_0_gets_no_answer(void);
 
+void every_vector_decodes(void);
+void every_invalid_vector_is_ignored(void);
+
 const test_case all_tests[] = {
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
     { "a deck before begin draws nothing", a_deck_before_begin_draws_nothing },
@@ -52,5 +55,7 @@ const test_case all_tests[] = {
     { "a capability ask gets the answer", a_capability_ask_gets_the_answer },
     { "a newer host gets our version", a_newer_host_gets_our_version },
     { "a capability ask with version 0 gets no answer", a_capability_ask_with_version_0_gets_no_answer },
+    { "every vector decodes", every_vector_decodes },
+    { "every invalid vector is ignored", every_invalid_vector_is_ignored },
     { 0, 0 },
 };

@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Turns the shared message vectors (vectors/messages.json, #456) into a C header for the vectors walk test.
+Usage: vectors_to_c.py messages.json > vectors.h. Fails on an empty file, or an entry with no bytes."""
+import json, sys
+
+KINDS = {"capability": 0, "capability_answer": 1, "begin": 2, "end": 3, "deck": 4}
+
+
+def c_bytes(hex_text):
+    values = [int(b, 16) for b in hex_text.split()]
+    if not values:
+        raise SystemExit("an entry has no bytes")
+    return "{" + ", ".join(f"0x{v:02X}" for v in values) + "}", len(values)
+
+
+def main():
+    data = json.load(open(sys.argv[1]))
+    out = ["// Generated from vectors/messages.json by test/vectors_to_c.py. Don't edit.", ""]
+    valid, invalid = data.get("messages", []), data.get("invalid", [])
+    if not valid or not invalid:
+        raise SystemExit("the vectors file has no messages or no invalid entries")
+    rows = []
+    for m in valid:
+        kind = m["kind"]
+        if kind not in KINDS:
+            raise SystemExit(f"unknown kind {kind!r} in {m['name']!r}")
+        f = m["fields"]
+        color = f.get("color", [0, 0, 0])
+        body, n = c_bytes(m["bytes"])
+        rows.append(f'    {{ {json.dumps(m["name"])}, {KINDS[kind]}, {int(m.get("direction", "host") == "unit")}, '
+                    f'{f.get("version", 0)}, {f.get("number", 0)}, {{ {color[0]}, {color[1]}, {color[2]} }}, '
+                    f'{f.get("player", 0)}, {n}, {body} }},')
+    out += ["static const vector valid_vectors[] = {", *rows, "};", ""]
+    rows = []
+    for m in invalid:
+        body, n = c_bytes(m["bytes"])
+        rows.append(f'    {{ {json.dumps(m["name"])}, {int(m.get("direction", "host") == "unit")}, {n}, {body} }},')
+    out += ["static const bad_vector invalid_vectors[] = {", *rows, "};"]
+    print("\n".join(out))
+
+
+if __name__ == "__main__":
+    main()
