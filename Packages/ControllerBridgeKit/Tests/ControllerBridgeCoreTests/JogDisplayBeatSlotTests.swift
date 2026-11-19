@@ -182,7 +182,7 @@ struct JogDisplayBeatSlotTests {
         #expect(Self.shows(port).first == 1)
     }
 
-    @Test("After a layer change, the new deck's four go up and each master beat shows its slot again")
+    @Test("After a layer change, nothing goes up (the new deck is on the unit, #424) and each master beat shows its slot")
     func beatsAfterLayerChange() throws {
         let rig = try Rig()
         let (port, drawn) = Self.attach(rig)
@@ -191,11 +191,13 @@ struct JogDisplayBeatSlotTests {
             [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
         ))
         Self.clock(rig, 1)
-        _ = Self.uploadAll(rig, port)
+        // Every layer's deck goes up after connect (#424): deck 1's four, then decks 2-4.
+        var rounds = 0
+        while !Self.uploadSlots(port).isEmpty, rounds < 40 { Self.answer(rig, port); rounds += 1 }
+        #expect(Set(drawn.contents.map(\.deck)) == [1, 2, 3, 4])
+        port.wd.removeAll()
         LayersTests.switchLayer(rig, from: 1, to: 2)
-        let slots = Self.uploadAll(rig, port)
-        #expect(slots.count == 4)
-        #expect(drawn.contents.suffix(4).allSatisfy { $0.deck == 2 })
+        #expect(Self.uploadSlots(port).isEmpty)   // deck 2 is already on the unit
         port.wd.removeAll()
         for beat in [2, 3, 4, 1] { Self.clock(rig, beat) }
         // Deck 2's own slots (#424): beat B is slot 4 + B.

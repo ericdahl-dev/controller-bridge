@@ -84,4 +84,42 @@ struct JogDisplaySlotCacheTests {
         driver.connect()
         #expect(Self.settle(driver, port) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     }
+
+    /// The LC6000 following its four layers, with its WD port and the display on; every upload answered.
+    static func layered() throws -> (ProfileMatchingTests.ProfileRig, Port, [UInt8]) {
+        let (rig, port) = try JogDisplayRingHoldTests.owned()
+        let unit = JogDisplayRingHoldTests.lc6000
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: unit, output: MIDIEndpoint(id: unit.id + 1000, name: unit.name))],
+            layers: LayersTests.lc6000Layers))
+        for deck in 1...4 { rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/Loaded", [.int(1)])) }
+        rig.coordinator.setJogDisplay(enabled: true)
+        var slots: [UInt8] = []
+        var rounds = 0
+        while !uploadSlots(port).isEmpty, rounds < 40 {
+            slots += uploadSlots(port)
+            JogDisplayRingHoldTests.answer(rig, port)
+            rounds += 1
+        }
+        return (rig, port, slots)
+    }
+
+    @Test("Following layers, every deck's images go up after connect: deck 1's four first, then decks 2-4 (15 slots)")
+    func everyLayerCached() throws {
+        let (_, _, slots) = try Self.layered()
+        #expect(slots == Array(1...15))
+    }
+
+    @Test("A layer switch to deck 2, once cached: its slot is shown, nothing is uploaded, and the ring is never held dark")
+    func layerSwitchWithoutUpload() throws {
+        let (rig, port, _) = try Self.layered()
+        port.wd.removeAll()
+        let before = JogDisplayRingHoldTests.ring(rig).count
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: JogDisplayRingHoldTests.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: JogDisplayRingHoldTests.lc6000.id)
+        #expect(Self.uploadSlots(port).isEmpty)
+        #expect(port.wd.contains(JogDisplay.show(slot: 5)))
+        let since = JogDisplayRingHoldTests.ring(rig).dropFirst(before)
+        #expect(!since.isEmpty && !since.contains(0))
+    }
 }

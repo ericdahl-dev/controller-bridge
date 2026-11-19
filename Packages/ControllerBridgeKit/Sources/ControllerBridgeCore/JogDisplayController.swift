@@ -84,6 +84,11 @@ final class JogDisplayController {
         let front = Self.front(entries, previewDeck: previewDeck) ?? first
         if enabled, driver.attached { driver.connect() } else { driver.disconnect() }
         driver.show(content(front))
+        // Every other deck's images stay on the unit too (#424), so a switch to it needs no upload.
+        guard driver.connected else { return }
+        for index in entries.indices where index != front && entries[index].facts.deck != entries[front].facts.deck {
+            driver.keep(content(index))
+        }
     }
 
     /// The driver's timers, then the needles (every playing deck's for the simulator, the deck in front's to the unit,

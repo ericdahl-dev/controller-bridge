@@ -115,7 +115,7 @@ struct JogDisplayRingHoldTests {
         #expect(Self.ring(rig).last == lit)
     }
 
-    @Test("A layer switch to deck 2: no ring lit from the switch until deck 2's four uploads are done; then deck 2's color")
+    @Test("A layer switch to deck 2 while images still go up: no ring lit from the switch until the last upload is done; then deck 2's color")
     func layerSwitchHoldsRing() throws {
         let (rig, port) = try Self.owned()
         let out = MIDIEndpoint(id: Self.lc6000.id + 1000, name: Self.lc6000.name)
@@ -130,11 +130,15 @@ struct JogDisplayRingHoldTests {
         // The unit's layer handover to layer 2: note 51 at 0 on ch1, then 127 on ch2.
         rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: Self.lc6000.id)
         rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: Self.lc6000.id)
-        for _ in 0..<4 {
+        // The other decks' images are still going up (#424): the ring stays dark until the last one is stored.
+        var rounds = 0
+        while port.wd.contains(where: { $0.count > 6 && $0[6] == 0x0C }), rounds < 40 {
             let since = Array(Self.ring(rig).dropFirst(before))
             #expect(!since.contains { $0 > 0 })
             Self.answer(rig, port)
+            rounds += 1
         }
+        #expect(rounds > 0)
         #expect((Self.ring(rig).last ?? 0) > 0)
     }
 }
