@@ -502,6 +502,10 @@ public struct Mapping: Equatable, Sendable, Codable {
 
     public struct LEDs: Equatable, Sendable, Codable {
         public var pitchCenter: Int
+        /// The pitch arrows (#475): lit during pickup to show which way to move the fader. Back is toward a lower raw
+        /// fader value, forward toward a higher one. Optional: a controller without them leaves them out.
+        public var pitchArrowBack: Int?
+        public var pitchArrowForward: Int?
         public var ring: Int
         /// The ring color when `ringFollowsDeck` is off.
         public var ringColor: [Int]
@@ -533,6 +537,8 @@ public struct Mapping: Equatable, Sendable, Codable {
 
         enum CodingKeys: String, CodingKey {
             case pitchCenter = "pitch_center"
+            case pitchArrowBack = "pitch_arrow_back"
+            case pitchArrowForward = "pitch_arrow_forward"
             case ring
             case ringColor = "ring_color"
             case ringFollowsDeck = "ring_follows_deck"
@@ -551,8 +557,10 @@ public struct Mapping: Equatable, Sendable, Codable {
             pitchCenter: Int, ring: Int, ringColor: [Int], rollPadColor: [Int], loopPadColor: [Int], dimUnlitButtons: Bool,
             beatPulse: BeatPulse, pulseMs: Int, staleIdle: StaleIdle, ringFollowsDeck: Bool = true, levels: LEDLevels = .lc6000,
             colorTable: ColorTable = .rgb222,
-            mirrorShifted: Bool = false
+            mirrorShifted: Bool = false, pitchArrowBack: Int? = nil, pitchArrowForward: Int? = nil
         ) {
+            self.pitchArrowBack = pitchArrowBack
+            self.pitchArrowForward = pitchArrowForward
             self.levels = levels
             self.colorTable = colorTable
             self.mirrorShifted = mirrorShifted
@@ -582,7 +590,9 @@ public struct Mapping: Equatable, Sendable, Codable {
                 ringFollowsDeck: try c.decodeIfPresent(Bool.self, forKey: .ringFollowsDeck) ?? ProfileKeys.fallback("leds.ring_follows_deck"),
                 levels: try c.decodeIfPresent(LEDLevels.self, forKey: .levels) ?? .lc6000,
                 colorTable: try c.decodeIfPresent(ColorTable.self, forKey: .colorTable) ?? ProfileKeys.fallback("leds.color_table"),
-                mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? ProfileKeys.fallback("leds.mirror_shifted")
+                mirrorShifted: try c.decodeIfPresent(Bool.self, forKey: .mirrorShifted) ?? ProfileKeys.fallback("leds.mirror_shifted"),
+                pitchArrowBack: try c.decodeIfPresent(Int.self, forKey: .pitchArrowBack),
+                pitchArrowForward: try c.decodeIfPresent(Int.self, forKey: .pitchArrowForward)
             )
         }
     }

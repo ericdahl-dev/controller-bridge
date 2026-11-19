@@ -184,6 +184,69 @@ class PatchTests(unittest.TestCase):
             dfupatch.patch(self.data, "# fine\nnot a patch line")
 
 
+# The wd 00.50 layout: the image fills 0x08008000-0x0807FFFF; its own padding, 0xFF inside the CRC, runs from
+# 0x0807DC00 to the trailer (#466).
+WD_SIZE = 0x78000
+PAD_START, PAD_END = 0x0807DC00, 0x0807FFE0
+
+
+def full_wd_element():
+    """A synthetic full-size wd image: invented code bytes, 0xFF padding where the real image has it, the trailer."""
+    body = bytearray(wd_element(WD_SIZE))
+    body[PAD_START - BASE:PAD_END - BASE] = b"\xff" * (PAD_END - PAD_START)
+    covered = WD_SIZE - 20
+    struct.pack_into("<I", body, covered, dfupatch.stm32_crc(bytes(body[:covered])))
+    return bytes(body)
+
+
+class PlaceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.element = full_wd_element()
+        cls.data = dfuse_file(cls.element)
+        cls.element_start = len(cls.data) - 16 - len(cls.element)
+
+    def test_a_block_lands_at_the_start_of_the_padding_and_the_crcs_are_redone(self):
+        block = bytes(range(1, 101))
+        out = dfupatch.place(self.data, block)
+        image = dfupatch.parse(out)
+        at = PAD_START - BASE
+        self.assertEqual(image.element[at:at + len(block)], block)
+        crc_at = self.element_start + WD_SIZE - 20
+        allowed = {*range(self.element_start + at, self.element_start + at + len(block)),
+                   *range(crc_at, crc_at + 4), *range(len(out) - 4, len(out))}
+        self.assertTrue(set(changed_offsets(self.data, out)) <= allowed)
+        self.assertEqual(dfupatch.patch(out, ""), out)  # trailer CRC and suffix CRC both check out
+
+    def test_a_block_that_fills_the_padding_exactly_fits(self):
+        out = dfupatch.place(self.data, b"\x11" * (PAD_END - PAD_START))
+        self.assertEqual(dfupatch.parse(out).element[PAD_END - BASE - 1], 0x11)
+
+    def test_a_block_one_byte_too_big_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "too big"):
+            dfupatch.place(self.data, b"\x11" * (PAD_END - PAD_START + 1))
+
+    def test_an_empty_block_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "empty"):
+            dfupatch.place(self.data, b"")
+
+    def test_padding_that_isnt_all_ff_is_refused(self):
+        element = bytearray(self.element)
+        element[PAD_START - BASE + 50] = 0x00
+        covered = WD_SIZE - 20
+        struct.pack_into("<I", element, covered, dfupatch.stm32_crc(bytes(element[:covered])))
+        with self.assertRaisesRegex(dfupatch.Refused, "0xFF"):
+            dfupatch.place(dfuse_file(bytes(element)), b"\x11" * 100)
+
+    def test_an_image_without_the_padding_range_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "0x0807DC00"):
+            dfupatch.place(dfuse_file(wd_element()), b"\x11" * 4)
+
+    def test_a_tp_image_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "wd"):
+            dfupatch.place(dfuse_file(tp_element(WD_SIZE)), b"\x11" * 4)
+
+
 def run(*argv):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -258,6 +321,37 @@ class CommandLineTests(unittest.TestCase):
         self.assertIn("old bytes", err)
         self.assertFalse(os.path.exists(output))
 
+    def test_apply_refuses_a_call_into_empty_padding_and_writes_nothing(self):
+        # A BL into the 0xFF padding with no block there faults on the chip with a valid CRC: no USB way back (#467).
+        element = bytearray(full_wd_element())
+        covered = len(element) - 20
+        struct.pack_into("<I", element, covered, dfupatch.stm32_crc(bytes(element[:covered])))
+        stock = self.path("padded.dfu", dfuse_file(bytes(element)))
+        at = BASE + 0x40
+        old = bytes(element[0x40:0x44]).hex()
+        patch = self.path("p.txt", f"0x{at:08X} {old} {dfupatch.thumb_bl(at, PAD_START).hex()}\n")
+        output = self.path("out.dfu")
+        code, _, err = run("apply", stock, patch, output)
+        self.assertEqual(code, 1)
+        self.assertIn("empty padding", err)
+        self.assertFalse(os.path.exists(output))
+
+    def test_place_writes_the_file_and_refuses_inside_the_repository(self):
+        data = dfuse_file(full_wd_element())
+        source = self.path("full.dfu", data)
+        block = self.path("block.bin", b"\x42" * 64)
+        output = self.path("placed.dfu")
+        code, out, _ = run("place", source, block, output)
+        self.assertEqual(code, 0, out)
+        self.assertIn("0x0807DC00", out)
+        with open(output, "rb") as f:
+            self.assertEqual(dfupatch.parse(f.read()).element[PAD_START - BASE], 0x42)
+        inside = os.path.join(dfupatch.repository_root(), "placed-test.dfu")
+        code, _, err = run("place", source, block, inside)
+        self.assertEqual(code, 1)
+        self.assertIn("outside the repository", err)
+        self.assertFalse(os.path.exists(inside))
+
     def test_apply_wont_overwrite_a_file(self):
         patch = self.path("p.txt", "")
         output = self.path("out.dfu", b"keep")
@@ -273,6 +367,28 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("outside the repository", err)
         self.assertFalse(os.path.exists(output))
+
+
+class ThumbBlTests(unittest.TestCase):
+    """The Thumb-2 BL encoder, against encodings read from the stock image and checked by disassembly (#466)."""
+
+    def test_forward_calls_from_the_hook_sites_to_the_padding(self):
+        self.assertEqual(dfupatch.thumb_bl(0x0800F464, 0x0807DC00), bytes.fromhex("6ef0ccfb"))
+        self.assertEqual(dfupatch.thumb_bl(0x08012456, 0x0807DC40), bytes.fromhex("6bf0f3fb"))
+        self.assertEqual(dfupatch.thumb_bl(0x08017720, 0x0807DC80), bytes.fromhex("66f0aefa"))
+
+    def test_backward_calls_as_the_stock_image_encodes_them(self):
+        self.assertEqual(dfupatch.thumb_bl(0x08012456, 0x0800BEA0), bytes.fromhex("f9f723fd"))
+        self.assertEqual(dfupatch.thumb_bl(0x0801244C, 0x0800F200), bytes.fromhex("fcf7d8fe"))
+        self.assertEqual(dfupatch.thumb_bl(0x0800F45A, 0x08014644), bytes.fromhex("05f0f3f8"))
+
+    def test_odd_addresses_and_targets_out_of_reach_are_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "even"):
+            dfupatch.thumb_bl(0x0800F465, 0x0807DC00)
+        with self.assertRaisesRegex(dfupatch.Refused, "even"):
+            dfupatch.thumb_bl(0x0800F464, 0x0807DC01)
+        with self.assertRaisesRegex(dfupatch.Refused, "reach"):
+            dfupatch.thumb_bl(0x08000000, 0x09000004)
 
 
 class CommittedPatchTests(unittest.TestCase):
@@ -300,6 +416,36 @@ class CommittedPatchTests(unittest.TestCase):
         changed = set(changed_offsets(data, out))
         self.assertEqual(changed - crcs, {start + 0x3DA4})
         self.assertEqual(out[start + 0x3DA4], 0x10)
+
+    def test_drawn_hook_calls_our_two_entries_from_the_two_hook_sites(self):
+        # 0x0800F464 `mov.w r8, #1` (the unknown-command fallthrough) and 0x08012456 `bl 0x0800BEA0` (the render
+        # step) each become a BL into our block's fixed entries at the start of the padding. See #466.
+        edits = dfupatch.parse_patch(self.patch_text("wd-00.50-drawn-hook.patch"))
+        self.assertEqual(edits, [
+            (0x0800F464, bytes.fromhex("4ff00108"), dfupatch.thumb_bl(0x0800F464, dfupatch.HOOK_COMMAND_ENTRY)),
+            (0x08012456, bytes.fromhex("f9f723fd"), dfupatch.thumb_bl(0x08012456, dfupatch.HOOK_RENDER_ENTRY)),
+        ])
+        self.assertTrue(PAD_START <= dfupatch.HOOK_COMMAND_ENTRY < dfupatch.HOOK_RENDER_ENTRY < PAD_END)
+
+    def test_drawn_hook_changes_only_its_8_bytes_and_the_two_crcs(self):
+        element = bytearray(full_wd_element())
+        element[0x0800F464 - BASE:0x0800F468 - BASE] = bytes.fromhex("4ff00108")
+        element[0x08012456 - BASE:0x0801245A - BASE] = bytes.fromhex("f9f723fd")
+        covered = len(element) - 20
+        struct.pack_into("<I", element, covered, dfupatch.stm32_crc(bytes(element[:covered])))
+        data = dfuse_file(bytes(element))
+        start = len(data) - 16 - len(element)
+        out = dfupatch.patch(data, self.patch_text("wd-00.50-drawn-hook.patch"))
+        crcs = {*range(start + covered, start + covered + 4), *range(len(out) - 4, len(out))}
+        hook = {*range(start + 0xF464 - 0x8000, start + 0xF468 - 0x8000),
+                *range(start + 0x12456 - 0x8000, start + 0x1245A - 0x8000)}
+        self.assertTrue(set(changed_offsets(data, out)) - crcs <= hook)  # f0 stays f0 at 0x0800F465
+        self.assertEqual(out[start + 0xF464 - 0x8000:start + 0xF468 - 0x8000], bytes.fromhex("6ef0ccfb"))
+        self.assertEqual(out[start + 0x12456 - 0x8000:start + 0x1245A - 0x8000], bytes.fromhex("6bf0f3fb"))
+
+    def test_drawn_hook_is_refused_on_an_image_without_the_old_bytes(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):
+            dfupatch.patch(dfuse_file(full_wd_element()), self.patch_text("wd-00.50-drawn-hook.patch"))
 
     def test_show_slot_16_is_refused_on_an_image_without_the_old_bytes(self):
         with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):
