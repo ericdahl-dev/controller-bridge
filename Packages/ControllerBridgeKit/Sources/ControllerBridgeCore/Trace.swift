@@ -132,9 +132,15 @@ struct TracingOutput: MIDIOutput {
     let inner: any MIDIOutput
     let name: String
     let trace: TraceSink
+    /// A color-message LED's name in the profile ("ring", "pad3"), for its trace line (#530).
+    var ledName: @Sendable (UInt8) -> String = { "note \($0)" }
     func send(_ event: MIDIEvent) throws {
         try inner.send(event)
         trace(.midiOut, "\(name) ch\(Int(event.channel) + 1) \(event.midoText)")
+    }
+    func send(color: LEDColorMessage) throws {
+        try inner.send(color: color)
+        trace(.midiOut, "\(name) color \(ledName(color.note)) r=\(color.red) g=\(color.green) b=\(color.blue)")
     }
     func close() { inner.close() }
 }
