@@ -15,8 +15,9 @@ struct DrawnDisplayReconnectTests {
     func fullStateAfterBegin() throws {
         let (rig, port, _) = try Handshake.rig(.custom)
         rig.coordinator.jogDisplayReply(Handshake.answer)
-        #expect(Self.ops(port) == [0x00, 0x01, 0x03, 0x07])
-        #expect(Handshake.drawn(port).last == DrawnDisplay.Message.state([]).bytes)
+        // ... and (#459) the master beat, 0 with no clock yet; no needle until one is known.
+        #expect(Self.ops(port) == [0x00, 0x01, 0x03, 0x07, 0x08])
+        #expect(Handshake.drawn(port).last == DrawnDisplay.Message.beat(0).bytes)
         #expect(!port.wd.contains(where: Handshake.isUpload))
     }
 
@@ -35,7 +36,7 @@ struct DrawnDisplayReconnectTests {
         #expect(Self.ops(port).last == 0x00)
         port.wd.removeAll()
         rig.coordinator.jogDisplayReply(Handshake.answer)
-        #expect(Self.ops(port) == [0x01, 0x03, 0x07])
+        #expect(Self.ops(port) == [0x01, 0x03, 0x07, 0x08])
         #expect(!port.wd.contains(where: Handshake.isUpload))
     }
 
@@ -99,7 +100,7 @@ struct DrawnDisplayReconnectTests {
         #expect(Self.ops(port).isEmpty)
         clock.now = 2.0
         rig.coordinator.tick()
-        #expect(Self.ops(port) == [0x01, 0x03, 0x07])
+        #expect(Self.ops(port) == [0x01, 0x03, 0x07, 0x08])
     }
 
     @Test("No heartbeat in image mode")

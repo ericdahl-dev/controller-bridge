@@ -339,6 +339,8 @@ public final class JogDisplayDriver {
         guard beat != lastMasterBeat else { return }
         lastMasterBeat = beat
         onEvent?(.masterBeat(beat))
+        // Drawing, the chip lights the section itself (#459); no image is shown.
+        if case .drawn = mode { return connected ? sendWD(DrawnDisplay.Message.beat(beat).bytes) : () }
         // Beat mode (#215): show the beat's slot, if it holds what's current; otherwise the screen holds. Never in the
         // middle of an upload: a show between its chunks can spoil it (ack 06). The upload's end shows the beat now.
         guard renderBeat != nil, upload == nil else { return }
@@ -485,7 +487,14 @@ public final class JogDisplayDriver {
         // The full state, every message once, in a fixed order: the deck, then the state.
         next()
         sendState()
+        sendLive()
         lastFullState = clock.now
+    }
+
+    /// The live part of the full state (#459): the master beat (0 with no master clock), then the needle, if known.
+    private func sendLive() {
+        sendWD(DrawnDisplay.Message.beat(lastMasterBeat ?? 0).bytes)
+        if let lastMarker { sendWD(DrawnDisplay.Message.needle(lastMarker).bytes) }
     }
 
     /// The heartbeat: begin, the deck and the state again, unchanged or not.
@@ -496,6 +505,7 @@ public final class JogDisplayDriver {
         let state = DrawnDisplay.Message.state(drawnState).bytes
         lastState = state
         sendWD(state)
+        sendLive()
         lastFullState = clock.now
     }
 

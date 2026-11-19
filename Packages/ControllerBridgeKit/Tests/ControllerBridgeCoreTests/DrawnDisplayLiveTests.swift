@@ -50,4 +50,29 @@ struct DrawnDisplayLiveTests {
         }
         #expect(Self.ops(port, 0x09).isEmpty)
     }
+
+    static func clock(_ rig: ProfileMatchingTests.ProfileRig, _ beat: Int) {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(Int32(beat))]))
+    }
+
+    @Test("Each master beat sends one beat message, a repeat sends none, and no image is shown while drawing")
+    func beatPerBeat() throws {
+        let (rig, port) = try Self.playing()
+        for beat in [1, 2, 2, 3, 4, 1] { Self.clock(rig, beat) }
+        #expect(Self.ops(port, 0x08).map { $0[10] } == [1, 2, 3, 4, 1])
+        #expect(!port.wd.contains { $0.count > 6 && $0[0] == 0xF0 && $0[6] == 0x0A })
+    }
+
+    @Test("With no master clock: the full state's beat is 0 (no section lit), and the needle still moves")
+    func noClock() throws {
+        let (rig, port, _) = try Handshake.rig(.custom)
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        #expect(Self.ops(port, 0x08).map { $0[10] } == [0])
+        for (path, value) in [("Playing", OSCArgument.int(1)), ("BPM", .float(120)), ("BarRamp", .float(0))] {
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/" + path, [value]))
+        }
+        rig.clock.now = 0.25
+        rig.coordinator.tick()
+        #expect(!Self.ops(port, 0x09).isEmpty)
+    }
 }
