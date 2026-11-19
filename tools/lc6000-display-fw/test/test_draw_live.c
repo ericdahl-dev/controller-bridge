@@ -325,7 +325,7 @@ static void the_play_flags_change_no_pixels(void) {
 #define PROGRESS_CAP 16
 #define PROGRESS_BUDGET_START 0
 #define PROGRESS_BUDGET_FILL 35
-/// The time left (#460), GeistMono-SemiBold 14 from CoreText's own glyphs at their own baseline and x phases, as the
+/// The time left (#460, #524), GeistMono-SemiBold 21 from CoreText's own glyphs at their own baseline and x phases, as the
 /// header's badge. Measured: within 1 everywhere, so 2 and no budget; a 1 px shift or a wrong glyph is hundreds off.
 #define TIME_CLOSE 2
 #define TIME_BUDGET 0
@@ -529,11 +529,12 @@ static const time_case times[] = {
 };
 #define TIMES (sizeof times / sizeof times[0])
 
-/// The time left, centered at (99, 169): compared over a box around its line that holds nothing else for these decks.
+/// The time left, centered at (99, 160) at 21 px (#524; ink y 152-168): compared over a box around its line that holds
+/// nothing else for these decks.
 #define TIME_LEFT 60
-#define TIME_RIGHT 140
-#define TIME_TOP 156
-#define TIME_BOTTOM 182
+#define TIME_RIGHT 139
+#define TIME_TOP 148
+#define TIME_BOTTOM 174
 
 static int time_text_matches(const char *name, int close, int budget, int cap) {
     int worst = 0, loose = 0, over = 0;
@@ -558,12 +559,12 @@ static void the_time_left_is_drawn(void) {
 }
 
 /// The wire's longest, 16383 s, is "-273:03": minutes never wrap to hours, and its seventh character is drawn, wider
-/// than "-99:59" (from x 73.8) on the left.
+/// than "-99:59" (from x 61.2 at 21 px) on the left.
 static void the_longest_time_has_three_digit_minutes(void) {
     begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, 0, 16383, 0);
     int ink = 0;
     for (int y = TIME_TOP; y < TIME_BOTTOM; y++)
-        for (int x = 69; x < 73; x++) ink += rec.last[y * DFW_SIZE + x] != 0x0B0B0Bu;
+        for (int x = 55; x < 60; x++) ink += rec.last[y * DFW_SIZE + x] != 0x0B0B0Bu;
     CHECK(ink > 10);
 }
 

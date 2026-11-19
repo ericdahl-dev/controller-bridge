@@ -49,7 +49,7 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   dark track filled green to three quarters and yellow above, all red at clip, with the held peak as a 2° tick. No
   meter until a meter message has come since begin. Over the meter and under the marker, the track time (#460,
   Swift's `drawTime`): the progress ring (r 96-98, a dark track and the deck color's fill clockwise from 12 o'clock)
-  and the time left, "-m:ss" in GeistMono-SemiBold 14 at (99, 169). None until a time message has come since begin or
+  and the time left, "-m:ss" in GeistMono-SemiBold 21 at (99, 160), drawn mode's layout (#524). None until a time message has come since begin or
   the deck changed, and none for an unknown length. In the last minute while playing and not looping (a loop holds it) it is steady red, and from 30 s
   left it blinks at 1 Hz: red for the first 500 ms from when the time last changed, then white, text and fill, for
   every deck (#524). The tick
@@ -124,7 +124,7 @@ fails, and each of those was checked. The test prints each case's worst differen
 log.
 
 The text (#458) is drawn from Geist bitmaps made by `gen/text_font_gen.swift` with CoreText: 4-bit coverage at each
-x phase CoreText snaps glyphs to (halves at 26, 20 and 22 px, thirds at 16 px). Its layout (the title's size, the
+x phase CoreText snaps glyphs to (halves at 26, 20 and 18 px, thirds at 16 px). Its layout (the title's size, the
 wrap, every ellipsis cut) is checked exactly, not by pixels, against `test/ref/text_layout.h`, which the Kit writes
 from the renderer (`DisplayFirmwareTextLayoutTests`), and its widths against CoreText's in `test/ref/text_widths.h`.
 The text references are `test/ref/text-*.ppm`; a letter the font lacks (0x81) draws Geist's own box, which the
