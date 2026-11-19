@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "The drawn jog display's messages (#455): each state and the exact bytes on the WD port. The Swift encoder (Kit tests) and the C decoder (firmware tests) both walk this file. Host to unit: F0 00 02 0B 7F 10 <cmd> <len hi> <len lo> <op> <args> F7, len counting op and args (14 bits). Unit to host: the reply header F0 00 02 0B 01 10 instead. cmd 0x20: Denon's display firmware (wd 00.50) drops it silently, with no reply (#466). Ops: 00 capability, 01 begin, 02 end, 03 deck, 07 state; 04-06 and 08-0B are reserved for text, tempo, time, beat, needle, meter, phase. State is one flags byte: bit 0 loaded, 1 playing, 2 play pending, 3 cue held, 4 loop on, 5 feedback stale; bit 6 is reserved and makes the message malformed. Colors go as two 7-bit bytes per channel, high then low. Player: 0 empty, 1 track, 2 OSC clip, 3 MIDI clip, 4 sequencer, 5 other. Each op has one exact length (capability 2, begin 2, end 2, deck 9, state 2, counting the op); any other is ignored, as is version 0. Entries with \"direction\": \"unit\" go from the unit to the host; the rest from the host.",
+  "about": "The drawn jog display's messages (#455): each state and the exact bytes on the WD port. The Swift encoder (Kit tests) and the C decoder (firmware tests) both walk this file. Host to unit: F0 00 02 0B 7F 10 <cmd> <len hi> <len lo> <op> <args> F7, len counting op and args (14 bits). Unit to host: the reply header F0 00 02 0B 01 10 instead. cmd 0x20: Denon's display firmware (wd 00.50) drops it silently, with no reply (#466). Ops: 00 capability, 01 begin, 02 end, 03 deck; 04-0B are reserved for text, tempo, time, state, beat, needle, meter, phase. Colors go as two 7-bit bytes per channel, high then low. Player: 0 empty, 1 track, 2 OSC clip, 3 MIDI clip, 4 sequencer, 5 other. Each op has one exact length (capability 2, begin 2, end 2, deck 9, counting the op); any other is ignored, as is version 0. Entries with \"direction\": \"unit\" go from the unit to the host; the rest from the host.",
   "messages": [
     {
       "name": "capability ask, host speaks v1",
@@ -90,46 +90,6 @@
         "player": 5
       },
       "bytes": "F0 00 02 0B 7F 10 20 00 09 03 03 00 07 00 40 00 7F 05 F7"
-    },
-    {
-      "name": "state, all clear",
-      "kind": "state",
-      "fields": {
-        "flags": 0
-      },
-      "bytes": "F0 00 02 0B 7F 10 20 00 02 07 00 F7"
-    },
-    {
-      "name": "state, loaded",
-      "kind": "state",
-      "fields": {
-        "flags": 1
-      },
-      "bytes": "F0 00 02 0B 7F 10 20 00 02 07 01 F7"
-    },
-    {
-      "name": "state, loaded and playing",
-      "kind": "state",
-      "fields": {
-        "flags": 3
-      },
-      "bytes": "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
-    },
-    {
-      "name": "state, loaded and stale",
-      "kind": "state",
-      "fields": {
-        "flags": 33
-      },
-      "bytes": "F0 00 02 0B 7F 10 20 00 02 07 21 F7"
-    },
-    {
-      "name": "state, every flag",
-      "kind": "state",
-      "fields": {
-        "flags": 63
-      },
-      "bytes": "F0 00 02 0B 7F 10 20 00 02 07 3F F7"
     }
   ],
   "invalid": [
@@ -218,22 +178,6 @@
       "name": "capability answer version 0",
       "direction": "unit",
       "bytes": "F0 00 02 0B 01 10 20 00 02 00 00 F7"
-    },
-    {
-      "name": "state with reserved bit 6 set (40)",
-      "bytes": "F0 00 02 0B 7F 10 20 00 02 07 40 F7"
-    },
-    {
-      "name": "state with every bit set, 6 too (7F)",
-      "bytes": "F0 00 02 0B 7F 10 20 00 02 07 7F F7"
-    },
-    {
-      "name": "state with a byte too many (len 3)",
-      "bytes": "F0 00 02 0B 7F 10 20 00 03 07 01 00 F7"
-    },
-    {
-      "name": "state with no flags (len 1)",
-      "bytes": "F0 00 02 0B 7F 10 20 00 01 07 F7"
     }
   ]
 }
