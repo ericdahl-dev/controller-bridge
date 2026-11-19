@@ -71,4 +71,13 @@ struct DrawnDisplayReconnectTests {
         #expect(rig.coordinator.status.feedback == .live)
         #expect(Handshake.drawn(port) == [DrawnDisplay.Message.state([]).bytes])
     }
+
+    @Test("A deck switch while drawing: the deck message, then the state, so the chip has the new deck's flags")
+    func deckSwitchCarriesState() throws {
+        let (rig, port) = try DrawnDisplayHandshakeTests.drawnLayers()
+        port.wd.removeAll()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: JogDisplayRingHoldTests.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: JogDisplayRingHoldTests.lc6000.id)
+        #expect(DrawnDisplayHandshakeTests.drawn(port).map { $0[9] } == [0x03, 0x07])
+    }
 }

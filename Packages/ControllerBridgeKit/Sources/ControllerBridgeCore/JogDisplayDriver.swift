@@ -502,6 +502,9 @@ public final class JogDisplayDriver {
         guard deck != lastDeck else { return }
         lastDeck = deck
         sendWD(deck)
+        // Every deck message is followed by its state: the flags are the deck's (#464).
+        lastState = nil
+        sendState()
     }
 
     private func next() {

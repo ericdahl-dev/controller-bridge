@@ -122,7 +122,7 @@ struct DrawnDisplayHandshakeTests {
         let before = JogDisplayRingHoldTests.ring(rig).count
         rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: JogDisplayRingHoldTests.lc6000.id)
         rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: JogDisplayRingHoldTests.lc6000.id)
-        let drawn = Self.drawn(port)
+        let drawn = Self.drawn(port).filter { $0[9] == 0x03 }   // and its state after it (#464)
         #expect(drawn.count == 1)
         #expect(drawn.first?[9] == 0x03 && drawn.first?[10] == 2)
         #expect(!port.wd.contains(where: Self.isUpload))
