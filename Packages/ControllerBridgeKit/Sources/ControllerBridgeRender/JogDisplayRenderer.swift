@@ -17,10 +17,11 @@ public enum JogDisplayRenderer {
 
     /// RGBA bytes, row by row, top first, upright: what `JogImage.forUnit` turns and encodes. `litBeat` (1–4) lights
     /// that beat's section; `marker` draws the marker that many turns clockwise from 12 o'clock.
+    /// `phase` is the deck's offset from the master's beat in 1/16384 beats (#462), as op 0B carries it; nil is unknown.
     public static func render(_ content: JogDisplayContent, litBeat: Int? = nil, marker: Double? = nil,
-                              meter: (level: Int, peak: Int)? = nil) -> [UInt8] {
+                              meter: (level: Int, peak: Int)? = nil, phase: Int? = nil) -> [UInt8] {
         drawing { context in
-            draw(content, litBeat: litBeat, in: context)
+            draw(content, litBeat: litBeat, phase: phase, in: context)
             if let meter, !content.stale { drawMeter(level: meter.level, peak: meter.peak, in: context) }
             if let marker { drawMarker(turns: marker, in: context) }
         }
@@ -75,9 +76,10 @@ public enum JogDisplayRenderer {
     /// The image the Diagnostics simulator shows (#221): the upload's, with the lit beat and the marker the unit would
     /// draw over it. With neither, it is the upload's exactly (a test pins it).
     /// `meter` is the front deck's mixer level and held peak, 0–127 each (#461), as the drawn display shows them.
+    /// `phase` is the deck's offset from the master's beat (#462), in 1/16384 beats as op 0B carries it; nil is unknown.
     public static func simulatorImage(_ content: JogDisplayContent, litBeat: Int?, marker: Double?,
-                                      meter: (level: Int, peak: Int)? = nil) -> [UInt8] {
-        render(content, litBeat: litBeat, marker: marker, meter: meter)
+                                      meter: (level: Int, peak: Int)? = nil, phase: Int? = nil) -> [UInt8] {
+        render(content, litBeat: litBeat, marker: marker, meter: meter, phase: phase)
     }
 
     /// The Geist faces the design uses, bundled with this target (#221) so the image is the same in the app and under
@@ -89,7 +91,7 @@ public enum JogDisplayRenderer {
         CTFontManagerRegisterFontURLs(urls as CFArray, .process, true, nil)
     }()
 
-    private static func draw(_ content: JogDisplayContent, litBeat: Int?, in context: CGContext) {
+    private static func draw(_ content: JogDisplayContent, litBeat: Int?, phase: Int?, in context: CGContext) {
         context.setFillColor(background)
         context.fill(CGRect(x: 0, y: 0, width: 198, height: 198))
         if content.stale {
@@ -104,10 +106,16 @@ public enum JogDisplayRenderer {
 
         let block = textBlock(content)
         for text in block.lines { line(text, in: context) }
-        // The rule in the deck color.
-        context.setFillColor(deckColor)
-        context.fill(CGRect(x: 50, y: 127, width: 98, height: 2))
+        rule(phase: phase, color: deckColor, in: context)
         if block.foot { keyAndBPM(key: content.key, bpm: content.bpm, in: context) }
+    }
+
+    /// The rule in the deck color (#462). Unknown phase: the plain rule. In phase: the rule with a 2×6 tick at its
+    /// center.
+    private static func rule(phase: Int?, color: CGColor, in context: CGContext) {
+        context.setFillColor(color)
+        context.fill(CGRect(x: 50, y: 127, width: 98, height: 2))
+        if phase == 0 { context.fill(CGRect(x: 98, y: 125, width: 2, height: 6)) }
     }
 
     /// One line of the text block: its words, face, CSS line box and tracking. The drawn display firmware lays out the

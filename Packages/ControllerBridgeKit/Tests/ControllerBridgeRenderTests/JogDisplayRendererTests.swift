@@ -117,4 +117,22 @@ struct JogDisplayRendererTests {
         #expect(Self.near(Self.pixel(Self.meterImage(level: 64, peak: 90, stale: true), x: 17, y: 98), 0x0B0B0B))
     }
 
+
+    /// The phase rule (#462), the user's pick: the rule under the artist (x 50–147, y 127–128, centered on x 99) shows
+    /// the deck's phase against the master, in 1/16384 beats as op 0B carries it.
+    static func phaseImage(_ phase: Int?) -> [UInt8] {
+        JogDisplayRenderer.simulatorImage(JogDisplayContent(deck: 4, color: [0, 128, 255]), litBeat: nil, marker: nil,
+                                          phase: phase)
+    }
+
+    @Test("In phase: the plain rule in the deck color, with a 2×6 tick at its center (x 98–99, y 125–130)")
+    func phaseInPhase() {
+        let image = Self.phaseImage(0)
+        for (x, y) in [(50, 127), (147, 128), (98, 125), (99, 130), (98, 127)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0080FF, by: 4), "(\(x), \(y))")
+        }
+        for (x, y) in [(97, 125), (100, 125), (98, 124), (99, 131)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0B0B0B, by: 4), "(\(x), \(y))")
+        }
+    }
 }
