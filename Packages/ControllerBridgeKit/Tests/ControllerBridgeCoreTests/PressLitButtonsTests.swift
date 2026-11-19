@@ -70,4 +70,26 @@ struct PressLitButtonsTests {
         let note3 = sent.compactMap { if case .noteOn(_, 3, let velocity) = $0 { return velocity }; return nil }
         #expect(note3 == [127, 1])
     }
+
+    @Test("They're the bridge's own: with stale_idle off, Syndicate's lights go off when feedback stops, these stay dim")
+    func notStale() throws {
+        let rig = try LivenessTests.StaleIdleRig(staleIdle: "off")
+        rig.tick(at: 10.5)
+        rig.tick(at: 12.5)
+        #expect(rig.leds[1] == 0)   // Play: Syndicate's
+        for note in Self.notes { #expect(rig.leds[note] == 1, "note \(note)") }
+    }
+
+    @Test("A deck layer change repaints them for the new layer")
+    func layerChange() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers))
+        rig.midi.outputs[Rig.lc6000Out.id]?.sent.removeAll()
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        let sent = rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []
+        let repainted = Set(sent.compactMap { if case .noteOn(_, let note, 1) = $0 { return note }; return nil })
+        #expect(Set(Self.notes).isSubset(of: repainted))
+    }
 }
