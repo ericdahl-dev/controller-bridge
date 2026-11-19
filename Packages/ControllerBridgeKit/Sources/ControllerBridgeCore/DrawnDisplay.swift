@@ -51,6 +51,19 @@ public enum DrawnDisplay {
         }
     }
 
+    /// The deck in front's state flags (#455): one byte, bit 6 never set.
+    public struct State: OptionSet, Equatable, Sendable {
+        public let rawValue: UInt8
+        public init(rawValue: UInt8) { self.rawValue = rawValue & 0x3F }
+        public static let loaded = State(rawValue: 1 << 0)
+        public static let playing = State(rawValue: 1 << 1)
+        public static let playPending = State(rawValue: 1 << 2)
+        public static let cueHeld = State(rawValue: 1 << 3)
+        public static let loopOn = State(rawValue: 1 << 4)
+        /// Syndicate's feedback stopped: the values shown aren't live (#464).
+        public static let stale = State(rawValue: 1 << 5)
+    }
+
     public enum Message: Equatable, Sendable {
         /// "Can you draw?", with the newest version the host speaks.
         case capability(version: Int)
@@ -58,6 +71,7 @@ public enum DrawnDisplay {
         case end(version: Int)
         /// The deck in front: its number (1-4), color [r, g, b] (0-255 each) and what it holds.
         case deck(number: Int, color: [Int], player: Player)
+        case state(State)
 
         /// The SysEx frame for the WD port.
         public var bytes: [UInt8] {
@@ -71,6 +85,7 @@ public enum DrawnDisplay {
                         let value = min(max(channel, 0), 255)
                         return [UInt8(value >> 7), UInt8(value & 0x7F)]
                     } + [player.rawValue])
+            case .state(let state): DrawnDisplay.frame(0x07, [state.rawValue])
             }
         }
     }

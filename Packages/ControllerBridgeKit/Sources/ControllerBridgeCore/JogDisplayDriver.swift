@@ -178,6 +178,13 @@ public final class JogDisplayDriver {
     static let answerTimeout = 0.5
     /// The last deck message sent in drawn mode, so only a change goes out.
     private var lastDeck: [UInt8]?
+    /// The deck in front's state flags for drawn mode (#464), and the last state message sent.
+    private var drawnState: DrawnDisplay.State = []
+    private var lastState: [UInt8]?
+    /// When drawn mode last sent begin and the full state (#464): the heartbeat sends them again every second, so a
+    /// chip that reset without its port going away is brought back, and one whose host is gone goes stale on its own.
+    private var lastFullState: Double?
+    static let heartbeat = 1.0
 
     /// Whether it has said hello to a unit (#165); the Coordinator repaints the LEDs after the hello (#426).
     public private(set) var connected = false
@@ -238,6 +245,7 @@ public final class JogDisplayDriver {
         // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
         mode = .images
         lastDeck = nil
+        lastState = nil
         if displayFirmware == .custom {
             mode = .asking(since: clock.now)
             sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
@@ -407,6 +415,7 @@ public final class JogDisplayDriver {
     /// Times out a silent upload; starts the next one.
     public func tick() {
         if case .asking(let since) = mode, clock.now - since >= Self.answerTimeout - 1e-9 { showImages() }
+        if case .drawn = mode, let last = lastFullState, clock.now - last >= Self.heartbeat - 1e-9 { beat() }
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)
         } else if let running = upload, clock.now - running.startedAt >= Self.timeout {
@@ -444,6 +453,7 @@ public final class JogDisplayDriver {
         }
         mode = .images
         lastDeck = nil
+        lastState = nil
         if displayFirmware == .custom {
             mode = .asking(since: clock.now)
             sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
@@ -454,16 +464,48 @@ public final class JogDisplayDriver {
     private func showImages() {
         mode = .images
         log.log("The jog display didn't answer as custom firmware that draws; it shows images")
+        // The debug trace (deckbridge.log) gets it too: the log above goes to the unified log only.
+        trace?(.jogDisplay, "jog display: no drawn-display answer in 0.5 s, using images")
         next()
     }
 
     /// The unit draws (#456): begin, then the deck in front.
     private func draw(version: Int) {
         mode = .drawn(version: version)
+        trace?(.jogDisplay, "jog display: drawn display, protocol \(version)")
         sendWD(DrawnDisplay.Message.begin(version: version).bytes)
         if wanted == nil { wanted = current }
         current = nil
+        // The full state, every message once, in a fixed order: the deck, then the state.
         next()
+        sendState()
+        lastFullState = clock.now
+    }
+
+    /// The heartbeat: begin, the deck and the state again, unchanged or not.
+    private func beat() {
+        guard connected, case .drawn(let version) = mode else { return }
+        sendWD(DrawnDisplay.Message.begin(version: version).bytes)
+        if let lastDeck { sendWD(lastDeck) }
+        let state = DrawnDisplay.Message.state(drawnState).bytes
+        lastState = state
+        sendWD(state)
+        lastFullState = clock.now
+    }
+
+    /// Syndicate's feedback stopped or came back (#464): drawn mode shows the waiting look while stale.
+    public func setStale(_ stale: Bool) {
+        if stale { drawnState.insert(.stale) } else { drawnState.remove(.stale) }
+        sendState()
+    }
+
+    /// Drawn mode: the state message, sent only when it changes.
+    private func sendState() {
+        guard connected, case .drawn = mode else { return }
+        let state = DrawnDisplay.Message.state(drawnState).bytes
+        guard state != lastState else { return }
+        lastState = state
+        sendWD(state)
     }
 
     /// Drawn mode: the deck in front as one deck message, sent only when it changes.
@@ -477,6 +519,9 @@ public final class JogDisplayDriver {
         guard deck != lastDeck else { return }
         lastDeck = deck
         sendWD(deck)
+        // Every deck message is followed by its state: the flags are the deck's (#464).
+        lastState = nil
+        sendState()
     }
 
     private func next() {

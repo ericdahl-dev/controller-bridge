@@ -51,6 +51,11 @@ final class JogDisplayController {
     /// Whether the driver has said hello to a unit.
     var connected: Bool { driver?.connected ?? false }
 
+    /// Syndicate's feedback stopped or came back (#464).
+    func setStale(_ stale: Bool) {
+        driver?.setStale(stale)
+    }
+
     /// The display firmware found on the unit (#456).
     var found: DisplayFound? { driver?.found }
 
