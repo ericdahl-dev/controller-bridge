@@ -221,7 +221,15 @@ tools/lc6000-firmware/flash-day.sh
 5. **Step 2: the owner's image**, after you type `FLASH` again. It's read back and compared, as every image is.
 6. **Power cycle.** With no host the display looks like stock. Then DeckBridge in drawn mode draws the deck chip, and `end` brings back stock images. Write what you see on #468.
 
-`drawn_flash.py` only reads files. The wizard is never run by an agent, since it calls the real `dfu-util`.
+**Where the decisions live (#567).**
+- `drawn_plan.py` decides every step of the drawn flash, from the facts so far: the owner's three files, each answer and typed word, each read, and each write's result. `flash-day.sh drawn` is a thin loop: it asks `drawn_plan.py next` for one step, does it with `dfu-util` or the keyboard, records the result with `drawn_plan.py record`, and asks again.
+- **Every write rests on a read made in the same run, after update mode was entered.** A plan file from an earlier run authorizes nothing.
+- `drawn_flash.py` and `dfupatch.py` hold the judges the plan uses, and they only read files.
+
+**How it's tested.**
+- `test_drawn_plan.py` runs whole flashes against a fake unit: a fresh flash, a B-only rewrite, a cut-off write of B, the device list (none, two, the top panel chip), and every refusal.
+- `test_flash_day_runs.py` runs the real `flash-day.sh drawn` with stand-ins for `dfu-util`, the update-mode tool and `swiftc`, on a `PATH` that can't reach the real ones.
+- The wizard itself is never run by an agent against the unit, since it calls the real `dfu-util`.
 
 **Unproven on hardware** until #435 is done: whether Denon's bootloader allows reading flash, whether a power cycle clears its update-mode flag, and whether it accepts a changed image. The wizard stops at each surprise and prints the way back (power cycle; then update mode plus Denon's own updater; then SWD, #433). A patched image still reports version 00.50, so the updater calls a running patched unit current: put the chip in update mode first. Have an ST-Link on the desk first. Never run Denon's updater "to look": it starts erasing as soon as it finds the unit.
 
