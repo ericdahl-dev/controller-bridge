@@ -45,3 +45,15 @@ for meter in "0 0" "64 90" "110 120" "127 127"; do
     set -- $meter
     "$live" 4 0 128 255 empty - - "$1" "$2" "$here/deck4-blue-empty-meter$1-$2.ppm"
 done
+# Track time (#460): the remaining time and the progress ring. The start, the middle, an unknown length (nothing), the
+# last minute's warning in its red half and its normal half, a red deck's normal half (the ring white), and the needle
+# crossing the ring (the needle on top).
+"$live" 4 0 128 255 empty - - "time=0/165" "$here/deck4-blue-empty-time0-165.ppm"
+"$live" 4 0 128 255 empty - - "time=83/165" "$here/deck4-blue-empty-time83-165.ppm"
+"$live" 4 0 128 255 empty - - "time=42/0" "$here/deck4-blue-empty-time42-0.ppm"
+"$live" 4 0 128 255 empty - - "time=135/165" look=red "$here/deck4-blue-empty-time135-165-red.ppm"
+"$live" 4 0 128 255 empty - - "time=135/165" look=normal "$here/deck4-blue-empty-time135-165-normal.ppm"
+"$live" 2 255 0 0 empty - - "time=135/165" look=normal "$here/deck2-red-empty-time135-165-normal.ppm"
+"$live" 4 0 128 255 empty - 4096 "time=83/165" "$here/deck4-blue-empty-time83-165-needle4096.ppm"
+# Long tracks: minutes past 59 stay minutes, "-99:59" the widest.
+"$live" 4 0 128 255 empty - - "time=0/5999" "$here/deck4-blue-empty-time0-5999.ppm"

@@ -1,7 +1,9 @@
-// live-reference <deck> <r> <g> <b> <player-type|-> <lit-beat|-> <needle|-> [<level> <peak>] <out.ppm> (#459, #461)
+// live-reference <deck> <r> <g> <b> <player-type|-> <lit-beat|-> <needle|-> [<level> <peak>] [time=<elapsed>/<length>]
+//     [look=red|normal] <out.ppm> (#459, #461, #460)
 // Writes JogDisplayRenderer's simulator image for that deck, with master beat <lit-beat> (1-4) lit and the marker at
 // <needle> (0-16383, a turn clockwise from 12 o'clock, as op 09 carries it) and, if given, the level meter at <level>
-// with <peak> held (0-127 each, as op 0A carries them), as a binary PPM (P6, RGB): the reference
+// with <peak> held (0-127 each, as op 0A carries them), and the track time in whole seconds as op 06 carries it, in
+// the warning's red or normal half if `look` is given, as a binary PPM (P6, RGB): the reference
 // the drawn display firmware's C tests compare with. "-" is none. The image is opaque, so premultiplied RGBA is RGB.
 import ControllerBridgeCore
 import ControllerBridgeRender
@@ -12,8 +14,14 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-let arguments = Array(CommandLine.arguments.dropFirst())
-let usage = "Usage: live-reference <deck> <r> <g> <b> <player-type|-> <lit-beat|-> <needle|-> [<level> <peak>] <out.ppm>"
+let all = Array(CommandLine.arguments.dropFirst())
+let flags = Dictionary(all.compactMap { argument -> (String, String)? in
+    let parts = argument.split(separator: "=", maxSplits: 1).map(String.init)
+    return parts.count == 2 && ["time", "look"].contains(parts[0]) ? (parts[0], parts[1]) : nil
+}, uniquingKeysWith: { $1 })
+let arguments = all.filter { argument in !["time=", "look="].contains { argument.hasPrefix($0) } }
+let usage = "Usage: live-reference <deck> <r> <g> <b> <player-type|-> <lit-beat|-> <needle|-> [<level> <peak>] "
+    + "[time=<elapsed>/<length>] [look=red|normal] <out.ppm>"
 guard arguments.count == 8 || arguments.count == 10, let deck = Int(arguments[0]), let r = Int(arguments[1]), let g = Int(arguments[2]),
       let b = Int(arguments[3]) else { fail(usage) }
 let litBeat = arguments[5] == "-" ? nil : Int(arguments[5])
@@ -24,10 +32,23 @@ if arguments.count == 10 {
     guard let level = Int(arguments[7]), let peak = Int(arguments[8]) else { fail(usage) }
     meter = (level, peak)
 }
+var time: (elapsed: Int, length: Int)?
+if let value = flags["time"] {
+    let parts = value.split(separator: "/").compactMap { Int($0) }
+    guard parts.count == 2 else { fail(usage) }
+    time = (parts[0], parts[1])
+}
+let look: JogTrackTime.Look
+switch flags["look"] {
+case nil: look = .normal
+case "red": look = .warningRed
+case "normal": look = .warningNormal
+default: fail(usage)
+}
 let output = arguments[arguments.count - 1]
 let content = JogDisplayContent(deck: deck, color: [r, g, b], playerType: arguments[4] == "-" ? nil : arguments[4])
 let rgba = JogDisplayRenderer.simulatorImage(content, litBeat: litBeat, marker: needle.map { Double($0) / 16384 },
-                                                meter: meter)
+                                                meter: meter, time: time, look: look)
 let size = JogDisplayRenderer.size
 var ppm = Data("P6\n\(size) \(size)\n255\n".utf8)
 for pixel in 0..<(size * size) { ppm.append(contentsOf: rgba[pixel * 4..<pixel * 4 + 3]) }
