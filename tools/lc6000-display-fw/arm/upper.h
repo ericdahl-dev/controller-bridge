@@ -13,8 +13,8 @@
 #include <stdint.h>
 
 #define UPPER_BASE 0x08080000u
-/// Sector 8: B's room until a larger B is needed.
-#define UPPER_LIMIT 0x20000u
+/// Sectors 8-11 (128 KB each), 0x08080000-0x080FFFFF: all of the upper flash, once the owner's read proves it.
+#define UPPER_LIMIT 0x80000u
 #define UPPER_MARKER 0x42574644u /* "DFWB" */
 #define UPPER_VERSION 1u
 #define UPPER_HEADER 20u

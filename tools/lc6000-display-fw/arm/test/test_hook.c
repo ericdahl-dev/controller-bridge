@@ -333,7 +333,7 @@ void nothing_is_hidden_that_was_never_shown(void) {
 
 /// Block B as the upper flash holds it (#501): erased, unless a test writes one. The good one's CRC, 0x22B5DF72, is
 /// zlib's CRC-32 of its bytes from +16 to its end (worked out with Python's zlib, not this code).
-static uint8_t upper[UPPER_LIMIT];
+static uint8_t upper[0x80000]; /* the upper flash: sectors 8-11 */
 
 static void put_word(uint8_t *at, uint32_t word) {
     for (int i = 0; i < 4; i++) at[i] = (uint8_t)(word >> (8 * i));
@@ -397,6 +397,17 @@ void an_entry_that_isnt_Thumb_code_inside_the_block_is_refused(void) {
     }
 }
 
+void a_block_past_sector_8_is_checked_whole(void) {
+    // 0x20020 bytes: past sector 8 into sector 9, zeros after the good B's bytes. CRC from Python's zlib.
+    good_upper();
+    memset(upper + 29, 0, 0x20020 - 29);
+    put_word(upper + 8, 0x20020);
+    put_word(upper + 12, 0x40575571u);
+    CHECK(upper_check(upper) == 0x08080015u);
+    upper[0x2001F] = 1;
+    CHECK(upper_check(upper) == 0);
+}
+
 const test_case all_tests[] = {
     { "end hands the screen back once", end_hands_the_screen_back_once },
     { "nothing is hidden that was never shown", nothing_is_hidden_that_was_never_shown },
@@ -425,6 +436,7 @@ const test_case all_tests[] = {
     { "a block whose CRC doesn't match is refused", a_block_whose_CRC_doesnt_match_is_refused },
     { "a length past the sector or inside the header is refused", a_length_past_the_sector_or_inside_the_header_is_refused },
     { "an entry that isn't Thumb code inside the block is refused", an_entry_that_isnt_Thumb_code_inside_the_block_is_refused },
+    { "a block past sector 8 is checked whole", a_block_past_sector_8_is_checked_whole },
     { 0, 0 },
 };
 
