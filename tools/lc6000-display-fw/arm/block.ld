@@ -23,6 +23,6 @@ SECTIONS
 
 ASSERT(SIZEOF(.entry_command) <= 0x40, "the command entry outgrew its 64 bytes")
 ASSERT(ADDR(.text) + SIZEOF(.text) + SIZEOF(.data) <= 0x0807FFDC,
-       "our code doesn't fit in the wd padding below the marker (9,184 bytes in all): build with ARM_DRAW=0")
+       "our code doesn't fit in the wd padding below the marker (9,184 bytes in all): move it to block B (#501)")
 ASSERT(SIZEOF(.data) == 0, "no initialized data: there is no startup code to copy it")
 ASSERT(SIZEOF(.bss) == 0, "no zeroed data: there is no startup code to zero it; use hook_state")

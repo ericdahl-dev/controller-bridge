@@ -1,6 +1,6 @@
-# Our block for the display chip (#467), included by the Makefile. `make arm` builds block.bin for the wd padding at
-# 0x0807DC00 with the GNU Arm toolchain (versions pinned in arm/README.md). ARM_DRAW=0 builds the hook path alone,
-# inert, for when the drawing code doesn't fit.
+# Our two blocks for the display chip (#467, #501), included by the Makefile. `make arm` builds block A (block.bin)
+# for the wd padding at 0x0807DC00 and block B (upper.bin), the drawing, for 0x08080000, with the GNU Arm toolchain
+# (versions pinned in arm/README.md). ARM_DRAW=0 builds block A's hook path alone, inert.
 ARM_BUILD ?= $(BUILD)/arm
 ARM_DRAW ?= 1
 # 1 only once the owner's read-only read shows the upper flash exists and is erased (#501, the firmware README's
@@ -12,14 +12,11 @@ ARM_CFLAGS := -std=c99 -Wall -Wextra -Werror -pedantic -Os $(ARM_CPU) -ffreestan
 	-fno-pic -fno-stack-protector -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections \
 	-fstack-usage -DHOOK_DRAWING=$(if $(filter 0,$(ARM_DRAW)),0,1) -DHOOK_UPPER_PROVEN=$(ARM_UPPER_PROVEN) \
 	-DHOOK_STUB_DRAWING=$(if $(filter stub,$(ARM_DRAW)),1,0)
-# ARM_DRAW=1: hook, protocol and drawing. 0: the hook path alone, inert. stub (test builds only): hook and protocol
-# with an empty drawing, so the block tests run while the real drawing doesn't fit the padding (#501).
+# ARM_DRAW=1: hook and protocol, the drawing coming from block B. 0: the hook path alone, inert. stub (test builds
+# only): hook and protocol with an empty drawing table from stock, so the block tests see a capability answer without B.
 ARM_SRC_DRAW := arm/hook.c arm/upper.c $(if $(filter stub,$(ARM_DRAW)),src/dfw.c arm/test/draw_stub.c,$(SRC))
 ARM_C := arm/adapter.c arm/libc_min.c $(if $(filter 0,$(ARM_DRAW)),,$(ARM_SRC_DRAW))
-# For the size tests only: one extra C file (absolute path) and extra link flags, to grow a build past its limit.
-ARM_EXTRA_C ?=
-ARM_EXTRA_LDFLAGS ?=
-ARM_OBJ := $(ARM_BUILD)/entry.o $(patsubst %.c,$(ARM_BUILD)/%.o,$(notdir $(ARM_C) $(ARM_EXTRA_C)))
+ARM_OBJ := $(ARM_BUILD)/entry.o $(patsubst %.c,$(ARM_BUILD)/%.o,$(notdir $(ARM_C)))
 
 .PHONY: arm
 arm: $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.bin
@@ -28,7 +25,7 @@ arm: $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.bin
 # and its timestamps here are whole seconds, so when the flags differ from the last build in this directory, that
 # build's outputs go and are built again: `make arm` then `make arm ARM_UPPER_PROVEN=1` never leaves the old block A.
 # It runs as the makefile is read, before make decides what is up to date.
-ARM_FLAGS := $(ARM_CFLAGS) | $(ARM_C) $(ARM_EXTRA_C) | $(ARM_EXTRA_LDFLAGS)
+ARM_FLAGS := $(ARM_CFLAGS) | $(ARM_C)
 ifneq ($(filter arm arm-test %/block.bin %/upper.bin,$(or $(MAKECMDGOALS),none)),)
 $(shell mkdir -p $(ARM_BUILD) && if [ "$$(cat $(ARM_BUILD)/flags.txt 2>/dev/null)" != "$(ARM_FLAGS)" ]; then \
 	rm -f $(ARM_BUILD)/block.elf $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.elf $(ARM_BUILD)/upper.bin; \
@@ -37,10 +34,10 @@ endif
 
 $(ARM_BUILD)/block.elf: $(ARM_C) arm/entry.S arm/block.ld arm/hook.h arm/upper.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
 	@mkdir -p $(ARM_BUILD)
-	cd $(ARM_BUILD) && $(ARM_PREFIX)gcc $(ARM_CFLAGS) -I$(CURDIR)/arm/include -I$(CURDIR)/src -I$(CURDIR)/arm -c $(addprefix $(CURDIR)/,$(ARM_C)) $(ARM_EXTRA_C)
+	cd $(ARM_BUILD) && $(ARM_PREFIX)gcc $(ARM_CFLAGS) -I$(CURDIR)/arm/include -I$(CURDIR)/src -I$(CURDIR)/arm -c $(addprefix $(CURDIR)/,$(ARM_C))
 	$(ARM_PREFIX)gcc $(ARM_CPU) -c arm/entry.S -o $(ARM_BUILD)/entry.o
 	$(ARM_PREFIX)gcc $(ARM_CPU) -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--build-id=none \
-		-Wl,-T,arm/block.ld -Wl,-Map,$(ARM_BUILD)/block.map $(ARM_EXTRA_LDFLAGS) -o $@ $(ARM_OBJ) -lgcc
+		-Wl,-T,arm/block.ld -Wl,-Map,$(ARM_BUILD)/block.map -o $@ $(ARM_OBJ) -lgcc
 	@# The hook block never links the drawing (#501): it gets the drawing's table from stock, NULL until the drawing
 	@# block checks out. Only the stub test build carries an (empty) drawing.
 	@if [ "$(ARM_DRAW)" != stub ] && $(ARM_PREFIX)nm $@ | grep -q ' dfw_draw'; then \

@@ -76,4 +76,4 @@ Our SRAM state survives a reboot, so the hook has to notice a reset.
 ## Frame buffers
 
 - **Visible layer.** Stock sets up a second LTDC layer at boot and never enables it. Its pixels (320 × 240 × 2 + 64 bytes) are already malloc'd; the pointer is at `0x20001DC0`. In drawn mode the adapter makes that layer an opaque RGB565 overlay above stock's layer and copies our frame into it, rotated 180° and centered at (61, 21). Ending drawn mode turns the layer off, and stock's picture underneath is current again.
-- **dfw's back buffer.** 198 × 198 × 4 = 156,816 bytes, from one call to stock's malloc (`0x08017860`). The call happens at the first capability ask or begin of each boot, and the buffer is never freed. If the malloc fails, the ask gets no answer, and the app falls back to images.
+- **dfw's back buffer.** 198 × 198 × 4 = 156,816 bytes, from one call to stock's malloc (`0x08017860`). The call happens at the first capability ask or begin of each boot, and only once block B has checked out: A without B leaves stock's heap alone. The buffer is never freed. If the malloc fails, the ask gets no answer, and the app falls back to images.
