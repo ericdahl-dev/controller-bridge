@@ -6,7 +6,14 @@ import Testing
 /// an answer puts it in drawn mode, silence keeps today's images. Through the Coordinator, on a fake display port.
 @Suite("Drawn display: handshake and fallback")
 struct DrawnDisplayHandshakeTests {
-    typealias Port = JogDisplayDriverTests.FakePort
+    /// A fake display port that also keeps both ports' messages in one list, in order.
+    final class Port: JogDisplayPort, @unchecked Sendable {
+        var controller: [[UInt8]] = []
+        var wd: [[UInt8]] = []
+        var both: [[UInt8]] = []
+        func sendController(_ bytes: [UInt8]) { controller.append(bytes); both.append(bytes) }
+        func sendWD(_ bytes: [UInt8]) { wd.append(bytes); both.append(bytes) }
+    }
     static let ask = DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes
 
     /// The LC6000 owning its display, deck 1 loaded, Settings' firmware set, then the display turned on.
@@ -40,12 +47,17 @@ struct DrawnDisplayHandshakeTests {
     /// The unit's answer: it draws, protocol 1.
     static let answer: [UInt8] = [0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, DrawnDisplay.command, 0x00, 0x02, 0x00, 0x01, 0xF7]
 
+    /// The slot of each upload on WD: 0E's first payload byte.
+    static func uploadSlots(_ port: Port) -> [UInt8] { port.wd.filter { $0.count > 9 && $0[6] == 0x0E }.map { $0[9] } }
+
     /// Whether `bytes` is part of an image upload (size, chunk or byte-sum).
     static func isUpload(_ bytes: [UInt8]) -> Bool { bytes.count > 6 && bytes[0] == 0xF0 && [0x0C, 0x0D, 0x0E].contains(bytes[6]) }
 
     /// The drawn-display messages in `port`'s WD traffic, by op byte.
-    static func drawn(_ port: Port) -> [[UInt8]] {
-        port.wd.filter { $0.count > 9 && $0[1...5] == [0x00, 0x02, 0x0B, 0x7F, 0x10] && $0[6] == DrawnDisplay.command }
+    static func drawn(_ port: Port) -> [[UInt8]] { drawn(port.wd) }
+    static func drawn(_ port: JogDisplayDriverTests.FakePort) -> [[UInt8]] { drawn(port.wd) }
+    static func drawn(_ wd: [[UInt8]]) -> [[UInt8]] {
+        wd.filter { $0.count > 9 && $0[1...5] == [0x00, 0x02, 0x0B, 0x7F, 0x10] && $0[6] == DrawnDisplay.command }
     }
 
     @Test("An answer with a version: drawn mode. Begin, then the deck in front (deck 1, empty), and no upload ever starts")
@@ -69,7 +81,7 @@ struct DrawnDisplayHandshakeTests {
         #expect(!port.wd.contains(where: Self.isUpload))
         clock.now = 0.5
         rig.coordinator.tick()
-        #expect(JogDisplaySlotCacheTests.uploadSlots(port) == [1])
+        #expect(Self.uploadSlots(port) == [1])
         clock.now = 9
         rig.coordinator.tick()
         #expect(rig.log.lines.filter { $0 == Self.fallbackLine }.count == 1)
@@ -83,12 +95,12 @@ struct DrawnDisplayHandshakeTests {
     func refusalFallsBackAtOnce() throws {
         let (rig, port, _) = try Self.rig(.custom)
         rig.coordinator.jogDisplayReply(JogDisplayDriverTests.refused)
-        #expect(JogDisplaySlotCacheTests.uploadSlots(port) == [1])
+        #expect(Self.uploadSlots(port) == [1])
         #expect(rig.log.lines.contains(Self.fallbackLine))
     }
 
     /// The LC6000 following its four layers, all loaded, with Custom firmware that answered: drawn mode.
-    static func drawnLayers() throws -> (ProfileMatchingTests.ProfileRig, Port) {
+    static func drawnLayers() throws -> (ProfileMatchingTests.ProfileRig, JogDisplayDriverTests.FakePort) {
         let (rig, port) = try JogDisplayRingHoldTests.owned()
         let unit = JogDisplayRingHoldTests.lc6000
         rig.coordinator.setControllers(ControllerSettings.expanded(
@@ -115,5 +127,35 @@ struct DrawnDisplayHandshakeTests {
         #expect(!port.wd.contains(where: Self.isUpload))
         let since = JogDisplayRingHoldTests.ring(rig).dropFirst(before)
         #expect(!since.isEmpty && !since.contains(0))
+    }
+
+    static let end = DrawnDisplay.Message.end(version: 1).bytes
+
+    @Test("Turning the jog display off in drawn mode: end, then the goodbye")
+    func offSendsEnd() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        port.both.removeAll()
+        rig.coordinator.setJogDisplay(enabled: false)
+        #expect(port.both == [Self.end, JogDisplay.goodbye])
+    }
+
+    @Test("Quitting in drawn mode: end, then the goodbye")
+    func quitSendsEnd() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        port.both.removeAll()
+        rig.coordinator.stop()
+        #expect(port.both.suffix(2) == [Self.end, JogDisplay.goodbye])
+        #expect(port.both.filter { $0 == Self.end }.count == 1)
+    }
+
+    @Test("In image mode the goodbye goes alone, as today")
+    func imagesNoEnd() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.refused)
+        rig.coordinator.setJogDisplay(enabled: false)
+        #expect(!port.both.contains(Self.end))
+        #expect(port.both.last == JogDisplay.goodbye)
     }
 }

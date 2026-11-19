@@ -236,6 +236,9 @@ public final class JogDisplayDriver {
     /// The unit is going away, or the app is quitting: goodbye, so it returns to standalone.
     public func disconnect() {
         guard connected else { return }
+        // Drawn mode ends first, so the unit's own screen comes back (#456).
+        if case .drawn(let version) = mode { sendWD(DrawnDisplay.Message.end(version: version).bytes) }
+        mode = .images
         connected = false
         upload = nil
         lastMarker = nil
