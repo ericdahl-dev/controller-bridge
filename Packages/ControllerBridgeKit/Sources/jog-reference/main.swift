@@ -1,6 +1,7 @@
 // jog-reference <deck> <r> <g> <b> <player-type|-> <out.ppm> [stale] [title=…] [artist=…] [key=…] [bpm=…]
 // (#457, #464, #458)
-// Writes JogDisplayRenderer's upload image for that deck as a binary PPM (P6, RGB): the reference the drawn display
+// Writes the drawn display as JogDisplayRenderer.drawnImage draws it for that deck, with nothing live (#524: drawn
+// mode's own layout), cropped to the 198×198 frame, as a binary PPM (P6, RGB): the reference the drawn display
 // firmware's C tests compare with. "-" is no player type; "stale" draws the waiting look. The image is opaque, so premultiplied RGBA is plain RGB.
 import ControllerBridgeCore
 import ControllerBridgeRender
@@ -28,8 +29,13 @@ for option in arguments.dropFirst(6) {
     default: fail(usage)
     }
 }
-let rgba = JogDisplayRenderer.render(content)
-let size = JogDisplayRenderer.size
+let rgba = JogDisplayRenderer.drawnImage(content, live: DrawnLive())
+let size = JogDisplayRenderer.size, drawn = JogDisplayRenderer.drawnSize, inset = (drawn - size) / 2
 var ppm = Data("P6\n\(size) \(size)\n255\n".utf8)
-for pixel in 0..<(size * size) { ppm.append(contentsOf: rgba[pixel * 4..<pixel * 4 + 3]) }
+for y in 0..<size {
+    for x in 0..<size {
+        let pixel = (y + inset) * drawn + x + inset
+        ppm.append(contentsOf: rgba[pixel * 4..<pixel * 4 + 3])
+    }
+}
 do { try ppm.write(to: URL(fileURLWithPath: arguments[5])) } catch { fail("Can't write \(arguments[5]): \(error)") }
