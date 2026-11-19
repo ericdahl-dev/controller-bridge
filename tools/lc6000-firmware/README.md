@@ -162,6 +162,7 @@ They answer what static analysis can't (#466): whether flash above the image exi
    - Expect 524,288 bytes, all `0xFF`: `python3 -I -c "import sys; d=open(sys.argv[1],'rb').read(); print(len(d), set(d))" ~/lc6000/wd-upper-512k.bin`.
    - A read error here means that flash isn't there. Record it.
 5. Read the option bytes, both blocks the ROM lists (alt 1):
+   - Nothing hangs on reading these by hand: `flash-day.sh drawn` reads bank 1 itself and checks it before it writes anything (#468). This read is for the record on #467.
    - `dfu-util -p 0-1.2 -a 1 -s 0x1FFFC000:16 -U ~/lc6000/wd-option-bytes-1.bin`
    - `dfu-util -p 0-1.2 -a 1 -s 0x1FFEC000:16 -U ~/lc6000/wd-option-bytes-2.bin`
    - What to read, per RM0090's option-byte table:
@@ -209,11 +210,14 @@ tools/lc6000-firmware/flash-day.sh
 
 1. **Ready check.** Nothing is sent. It verifies the current image and the owner's image. `drawn_flash.py files` checks that B's file is one element at `0x08080000` that passes block A's header checks, and that the owner's image is a `wd` image at `0x08008000`, so the two can't be swapped. Then you confirm the two things no file shows: A was built with `ARM_UPPER_PROVEN=1`, and A and B come from the same commit (#516).
 2. **Update mode and look**, as on the first flash day.
-3. **Before (read-only).** It reads the app and compares it with the image the chip runs now. Then it reads all of `0x08080000`-`0x080FFFFF`, and `drawn_flash.py upper` judges that read against B's file:
-   - erased: go on;
-   - exactly this B, then erased: step 1 is already done (a re-run);
-   - anything else: stop, and nothing is written over it.
-4. **Step 1: block B**, after you type `FLASH`. It reads all of the upper flash back and must find exactly B, then erased flash. With only B on the chip, the image there runs as before.
+3. **Before (read-only).** It reads the app and compares it with the image the chip runs now.
+   - It reads the option bytes (`0x1FFFC000`, 16 bytes, alt 1), and `drawn_flash.py options` checks them: read protection at level 0, sectors 8-11 not write-protected, one bank. Otherwise it stops with a plain message, and nothing is written.
+   - Then it reads all of `0x08080000`-`0x080FFFFF`, and `drawn_flash.py upper` judges that read against B's file:
+     - erased: go on;
+     - exactly this B, then erased: step 1 is already done (a re-run);
+     - part of this B (a cut-off write), or a B from another build whose header and CRC check out, then erased: step 1 rewrites it. Every layout change makes a new B (#516), so B is never write-once;
+     - anything else: stop, and nothing is written over it.
+4. **Step 1: block B**, after you type `FLASH`, or `REWRITE` when it replaces what's there. A rewrite writes `drawn_flash.py rewrite`'s file: this B, then erased bytes to the end of the old one, since a write erases only the sectors it covers. It reads all of the upper flash back and must find exactly B, then erased flash. With only B on the chip, the image there runs as before.
 5. **Step 2: the owner's image**, after you type `FLASH` again. It's read back and compared, as every image is.
 6. **Power cycle.** With no host the display looks like stock. Then DeckBridge in drawn mode draws the deck chip, and `end` brings back stock images. Write what you see on #468.
 
