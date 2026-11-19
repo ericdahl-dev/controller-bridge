@@ -40,7 +40,7 @@ static void advance(hook_state *state, uint32_t now) {
 static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
     const dfw_port port = { .present = present, .send = send, .ctx = state };
     state->stock = stock;
-    dfw_init(&state->unit, &port, NULL);
+    dfw_init(&state->unit, &port, NULL, stock->drawing);
     state->malloc_tried = 0;
     state->shown = 0;
     state->last_uptime = now;

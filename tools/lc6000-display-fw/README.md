@@ -27,13 +27,17 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
 
 - `src/dfw.h`, `src/dfw.c`: the unit.
   - `dfw_init` takes the port: `present` sends a finished frame to the panel, and `send` sends a reply to the host.
+  - It also takes the drawing as a table (`dfw_drawing`). `dfw.c` draws only through it, so it links without
+    `draw.c` and the hook block can leave the drawing out (#501). The Mac tests pass `&dfw_drawn`. The hook passes
+    whatever stock hands it, which is NULL until the drawing block checks out.
   - `dfw_message` only copies a whole message (F0 through F7) into a fixed inbox. It can be called from anywhere.
   - `dfw_tick(unit, now_ms)` parses what's waiting, then redraws and presents if something changed. `now_ms` is
     a millisecond clock that may wrap; on the unit it's the HAL tick.
   - With none of our messages for 3 s, or the state's feedback-stale bit set, the unit is stale (`dfw_stale`) and
     draws the waiting look. Any of our messages ends the silence (#464).
   - The back buffer belongs to the caller (`dfw_set_frame`). On the unit it is in SDRAM.
-  - With no frame, nothing is drawn and the capability ask gets no answer, so DeckBridge falls back to images.
+  - With no frame or no drawing, nothing is drawn and the capability ask gets no answer, so DeckBridge falls back
+    to images.
 - `src/draw.h`, `src/draw.c`: `dfw_draw` draws design B for the deck in front. For now that is the ground, the
   unlit ring, the deck chip and the player badge. When stale it draws the waiting look instead: our logo (the app
   icon's deck ring) with the beat ring dark. The logo is drawn from the icon SVG's own numbers, not stored as an

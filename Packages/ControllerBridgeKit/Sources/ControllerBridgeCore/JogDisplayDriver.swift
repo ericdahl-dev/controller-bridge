@@ -166,7 +166,7 @@ public final class JogDisplayDriver {
         case asking(since: Double)
         case drawn(version: Int)
     }
-    private(set) var mode = Mode.images
+    private(set) var mode = Mode.images { didSet { reportPreviewsIfStaleChanged() } }
     /// The firmware found (#456): nil before the hello and while asking.
     var found: DisplayFound? {
         guard connected else { return nil }
@@ -363,11 +363,29 @@ public final class JogDisplayDriver {
         onEvent?(.playLight(on))
     }
 
-    /// A deck's content for the simulator (#221), reported on change; nothing is sent to the unit.
+    /// A deck's content for the simulator (#221), reported on change; nothing is sent to the unit. While feedback is
+    /// stale it shows the waiting look (#502), from the same flag as the drawn state's stale bit.
     public func preview(_ content: JogDisplayContent) {
         guard previews[content.deck] != content else { return }
         previews[content.deck] = content
-        onEvent?(.preview(content))
+        reportPreview(content)
+    }
+
+    /// Whether the previews show the waiting look: only while the unit draws, as only then does its screen (#502).
+    private var previewStale: Bool { drawing && drawnState.contains(.stale) }
+    private var reportedStale = false
+
+    private func reportPreview(_ content: JogDisplayContent) {
+        var shown = content
+        shown.stale = previewStale
+        onEvent?(.preview(shown))
+    }
+
+    /// Every deck's preview again when the waiting look comes or goes.
+    private func reportPreviewsIfStaleChanged() {
+        guard previewStale != reportedStale else { return }
+        reportedStale = previewStale
+        for deck in previews.keys.sorted() { reportPreview(previews[deck]!) }
     }
 
     /// A message from the WD port.
@@ -531,6 +549,7 @@ public final class JogDisplayDriver {
     public func setStale(_ stale: Bool) {
         if stale { drawnState.insert(.stale) } else { drawnState.remove(.stale) }
         sendState()
+        reportPreviewsIfStaleChanged()
     }
 
     /// Drawn mode: the state message, sent only when it changes.

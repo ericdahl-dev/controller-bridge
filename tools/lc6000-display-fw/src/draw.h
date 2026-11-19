@@ -8,4 +8,7 @@
 /// outside 1-4 or an unknown player still draws a whole frame.
 void dfw_draw(dfw_pixel *frame, const dfw_unit *unit);
 
+/// The drawing's table, for dfw_init: the Mac tests and the drawing block name it, never the hook block (#501).
+extern const dfw_drawing dfw_drawn;
+
 #endif
