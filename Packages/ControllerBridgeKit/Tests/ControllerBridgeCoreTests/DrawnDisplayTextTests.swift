@@ -54,4 +54,23 @@ struct DrawnDisplayTextTests {
     func untitledField() {
         #expect(DrawnDisplay.Message.text(.untitled, "Automation").bytes == Self.text(3, Array("Automation".utf8)))
     }
+
+    @Test("Text is cut to the cap of escaped bytes, at a character boundary: the whole message stays at most 108 bytes")
+    func cut() {
+        let cap = DrawnDisplay.textCap
+        #expect(cap == 96)
+        let long = String(repeating: "a", count: cap + 10)
+        #expect(DrawnDisplay.Message.text(.title, long).bytes == Self.text(0, Array(repeating: 0x61, count: cap)))
+        #expect(DrawnDisplay.Message.text(.title, long).bytes.count == 108)
+        // Exactly the cap fits whole.
+        let exact = String(repeating: "a", count: cap)
+        #expect(DrawnDisplay.Message.text(.title, exact).bytes == Self.text(0, Array(exact.utf8)))
+    }
+
+    @Test("A 7F pair is never split: one byte short of room for é, the é goes, the a's before it stay")
+    func cutKeepsPairs() {
+        let cap = DrawnDisplay.textCap
+        let text = String(repeating: "a", count: cap - 1) + "é" + "b"
+        #expect(DrawnDisplay.Message.text(.title, text).bytes == Self.text(0, Array(repeating: 0x61, count: cap - 1)))
+    }
 }

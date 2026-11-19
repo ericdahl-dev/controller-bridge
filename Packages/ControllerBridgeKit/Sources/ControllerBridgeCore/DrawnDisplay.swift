@@ -74,15 +74,22 @@ public enum DrawnDisplay {
 
     /// A text as the wire carries it (#458): Windows-1252, a code 0x80-0xFF as 7F then code − 0x80. Control codes and
     /// DEL aren't text and are dropped; a character with no cp1252 code goes as 0x81, which the chip draws as a box.
+    /// Cut at a character boundary to `textCap` bytes, never splitting a 7F pair; the chip adds the ellipsis.
     static func escaped(_ text: String) -> [UInt8] {
         var out: [UInt8] = []
         for character in text.precomposedStringWithCanonicalMapping {
             let code = cp1252(character)
             if code < 0x20 || code == 0x7F { continue }
-            out += code < 0x80 ? [code] : [0x7F, code - 0x80]
+            let bytes: [UInt8] = code < 0x80 ? [code] : [0x7F, code - 0x80]
+            guard out.count + bytes.count <= textCap else { break }
+            out += bytes
         }
         return out
     }
+
+    /// The most escaped text bytes in one text message (#458): agent3's 96, so the whole message is at most 108 bytes,
+    /// inside the 128 agent2 found keeps stock's SysEx handling short. Longer messages are dropped with no error.
+    static let textCap = 96
 
     /// The character's cp1252 code; 0x81 (the box) for one with none. C1 controls have no glyph: cp1252's undefined
     /// slots must not pass as themselves.
