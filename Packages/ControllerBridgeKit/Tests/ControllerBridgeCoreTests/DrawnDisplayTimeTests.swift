@@ -35,3 +35,93 @@ struct DrawnDisplayTimeTests {
         #expect(DrawnDisplay.Message.time(elapsed: 201.2, length: 200).bytes == Self.time(201, 200))
     }
 }
+
+/// The time message at the Coordinator (#460): the front deck's position and length, sent when the shown second
+/// changes, at most 4 a second, in the full state and heartbeat; image mode sends none.
+@Suite("Drawn display: time from the deck")
+struct DrawnDisplayTimeFlowTests {
+    typealias Handshake = DrawnDisplayHandshakeTests
+
+    static func times(_ port: Handshake.Port) -> [[UInt8]] { Handshake.drawn(port).filter { $0[9] == 0x06 } }
+    static func position(_ seconds: Float) -> OSCMessage { OSCMessage("/Syndicate/Deck/1/Position", [.float(seconds)]) }
+
+    /// Drawing deck 1 with Daybreak (428.5 s) loaded; WD cleared.
+    static func drawing() throws -> (ProfileMatchingTests.ProfileRig, Handshake.Port) {
+        let (rig, port, _) = try Handshake.rig(.custom)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        return (rig, port)
+    }
+
+    @Test("A new shown second goes once; the same second again sends nothing")
+    func perSecond() throws {
+        let (rig, port) = try Self.drawing()
+        rig.clock.now = 1
+        rig.coordinator.feedback(Self.position(83.9))
+        rig.coordinator.tick()
+        #expect(Self.times(port) == [DrawnDisplay.Message.time(elapsedSeconds: 83, lengthSeconds: 428).bytes])
+        port.wd.removeAll()
+        rig.clock.now = 1.5
+        rig.coordinator.feedback(Self.position(84.2))
+        rig.coordinator.tick()
+        rig.clock.now = 1.9
+        rig.coordinator.feedback(Self.position(84.6))
+        rig.coordinator.tick()
+        #expect(Self.times(port) == [DrawnDisplay.Message.time(elapsedSeconds: 84, lengthSeconds: 428).bytes])
+    }
+
+    @Test("Scrubbing: at most 4 a second; the last place goes once the quarter second is up")
+    func rateLimited() throws {
+        let (rig, port) = try Self.drawing()
+        for step in 0..<20 {
+            rig.clock.now = 1 + Double(step) * 0.05
+            rig.coordinator.feedback(Self.position(Float(10 + step * 10)))
+            rig.coordinator.tick()
+        }
+        #expect(Self.times(port).count <= 5)
+        port.wd.removeAll()
+        rig.clock.now = 2.3
+        rig.coordinator.tick()
+        #expect(Self.times(port).last == DrawnDisplay.Message.time(elapsedSeconds: 200, lengthSeconds: 428).bytes)
+    }
+
+    @Test("A seek after steady play goes at once")
+    func seekAtOnce() throws {
+        let (rig, port) = try Self.drawing()
+        rig.clock.now = 1
+        rig.coordinator.feedback(Self.position(83.9))
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        rig.clock.now = 1.4
+        rig.coordinator.feedback(Self.position(300.2))
+        rig.coordinator.tick()
+        #expect(Self.times(port) == [DrawnDisplay.Message.time(elapsedSeconds: 300, lengthSeconds: 428).bytes])
+    }
+
+    @Test("The full state after begin carries the time, after the needle and before the meter")
+    func inFullState() throws {
+        let (rig, port, _) = try Handshake.rig(.custom)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        rig.coordinator.feedback(Self.position(12.5))
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        let ops = DrawnDisplayReconnectTests.ops(port)
+        #expect(Array(ops.suffix(3)) == [0x08, 0x06, 0x0A])
+        #expect(Self.times(port) == [DrawnDisplay.Message.time(elapsedSeconds: 12, lengthSeconds: 428).bytes])
+    }
+
+    @Test("Image mode sends no time")
+    func notInImages() throws {
+        let (rig, port, clock) = try Handshake.rig(.custom)
+        clock.now = 0.5
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        rig.coordinator.feedback(Self.position(83.9))
+        rig.coordinator.tick()
+        #expect(Self.times(port).isEmpty)
+    }
+}
