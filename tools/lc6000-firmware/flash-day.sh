@@ -202,9 +202,12 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 STOCK_CRC="0x3A7CE2CA"
 APP_ADDRESS="0x08008000"; APP_SIZE="0x78000"
 SETTINGS_ADDRESS="0x08004000"; SETTINGS_SIZE="0x4000"
+# Sectors 8-11, above the image: block B's home (#501), only on the drawn path.
+UPPER_ADDRESS="0x08080000"; UPPER_SIZE="0x80000"
 DFU_PATH=""
 
 dfupatch() { python3 -I "$HERE/dfupatch.py" "$@"; }
+drawn() { python3 -I "$HERE/drawn_flash.py" "$@"; }
 
 # way_back prints how to get the unit back to stock, then stops the wizard.
 way_back() {
@@ -212,6 +215,8 @@ way_back() {
   warn "Stopping here. Nothing more is sent."
   say "The way back to stock firmware:"
   step "Power the LC6000 off and on. If it runs normally, you're done."
+  note "Block B, if it was written, stays at 0x08080000 and is harmless: only block A calls it, and stock never does."
+  note "So B written and the owner's image not: the image already on the chip runs as before."
   step "Denon's updater refuses a unit that's running and current. It flashes a chip that's in update mode."
   step "Display chip: if it's still in update mode (dfu-util -l lists it), open Denon's updater now."
   say  "  If it boots a bad image instead, run this wizard again: stage 2 puts it back in update mode."
@@ -273,10 +278,20 @@ read_app() {
   dfu-util -p "$DFU_PATH" -a 0 -s "$APP_ADDRESS:$APP_SIZE" -U "$1"
 }
 
-# flash IMAGE LABEL writes one .dfu to the display chip, after a typed confirmation, then reads it back and compares.
+# read_upper FILE reads all of the flash above the image, sectors 8-11, back from the chip (read-only).
+read_upper() {
+  dfu-util -p "$DFU_PATH" -a 0 -s "$UPPER_ADDRESS:$UPPER_SIZE" -U "$1"
+}
+
+# flash IMAGE LABEL [AREA] writes one .dfu to the display chip, after a typed confirmation, then reads it back and
+# compares. AREA is app (the image, 0x08008000) or upper (block B, 0x08080000); the caller has checked the file is one.
 flash() {
-  local image="$1" label="$2" typed="" readback="$WORK/wd-readback-$STAMP-$2.bin"
-  warn "This ERASES and WRITES the display chip's app area (0x08008000-0x0807FFFF) with:"
+  local image="$1" label="$2" area="${3:-app}" typed="" readback="$WORK/wd-readback-$STAMP-$2.bin"
+  if [[ "$area" == upper ]]; then
+    warn "This ERASES and WRITES the display chip's upper flash, from 0x08080000 as far as block B reaches, with:"
+  else
+    warn "This ERASES and WRITES the display chip's app area (0x08008000-0x0807FFFF) with:"
+  fi
   say  "  $image"
   note "The bootloader and the settings sector are not touched. Don't unplug or power off while it runs."
   printf '  %s? Type FLASH to write it, anything else to stop:%s ' "$YELLOW" "$RESET"
@@ -287,6 +302,19 @@ flash() {
     way_back
   fi
   say "Reading it back to check (the stock updater never does this)…"
+  if [[ "$area" == upper ]]; then
+    if ! read_upper "$readback"; then
+      warn "The read-back failed, so the write can't be checked."
+      way_back
+    fi
+    if ! drawn upper "$image" "$readback" | grep -q '^holds'; then
+      warn "The upper flash isn't exactly block B. Block A checks B's CRC before calling it, so it stays unused."
+      note "Don't flash the owner's image on top of this. Stop, and post the message above on #468."
+      way_back
+    fi
+    printf '  %s✓%s the upper flash holds exactly block B, then erased flash\n' "$GREEN" "$RESET"
+    return
+  fi
   if ! read_app "$readback"; then
     warn "The read-back failed, so the write can't be checked."
     way_back
@@ -456,4 +484,137 @@ pause
 finish
 }
 
-run_wizard "$@"; exit
+# The drawn flash (#468): `flash-day.sh drawn`. Two writes, each with its own typed word, read back and compared:
+# block B at 0x08080000, then the owner's image. No stock flash: the chip must hold the image it runs now.
+run_drawn() {
+
+TOTAL_STAGES=8
+mkdir -p "$WORK"
+ENV_FILE="$WORK/flash-day.env"
+
+banner "LC6000 display chip: the drawn flash"
+
+stage "Ready check (drawn display)"
+say "Nothing is sent to the LC6000 in this stage."
+for tool in dfu-util swiftc python3; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    warn "$tool isn't installed."
+    exit 1
+  fi
+done
+say "Three files, all outside the repo (such as $WORK):"
+step "the .dfu the display chip runs now: the stock 00.50 file, or the slot 16 image you flashed (#425)"
+step "block B's .dfu, from build_upper_dfu.py with --proof (the README's read-only checks come first)"
+step "the owner's image, from build_owner_image.py"
+ask CURRENT_WD "Path to the .dfu the chip runs now:"
+CURRENT_WD="${CURRENT_WD/#\~/$HOME}"
+ask UPPER_DFU "Path to block B's .dfu:"
+UPPER_DFU="${UPPER_DFU/#\~/$HOME}"
+ask OWNER_DFU "Path to the owner's image .dfu:"
+OWNER_DFU="${OWNER_DFU/#\~/$HOME}"
+if ! dfupatch verify "$CURRENT_WD" | tee "$WORK/verify-current-$STAMP.txt"; then
+  warn "The image the chip runs now doesn't verify. Stopping before anything is sent."
+  exit 1
+fi
+if ! dfupatch verify "$OWNER_DFU" | tee "$WORK/verify-owner-$STAMP.txt"; then
+  warn "The owner's image doesn't verify. Stopping before anything is sent."
+  exit 1
+fi
+if ! drawn files "$UPPER_DFU" "$OWNER_DFU"; then
+  warn "Those aren't block B and the owner's image in their places. Stopping before anything is sent."
+  exit 1
+fi
+write_env CURRENT_WD "$CURRENT_WD"
+write_env UPPER_DFU "$UPPER_DFU"
+write_env OWNER_DFU "$OWNER_DFU"
+say "Two things no file can show, so they're yours to say:"
+step "Block A, in the owner's image, was built with ARM_UPPER_PROVEN=1. Without it, A never reads B (images only)."
+step "Block A and block B were built from the same commit (#516). A and B from different ones stay silent together."
+confirm "Both true?" || exit 1
+say "Building the update-mode tool…"
+swiftc -O -swift-version 5 "$HERE/enter-update-mode.swift" -o "$WORK/enter-update-mode"
+"$WORK/enter-update-mode" selftest
+if pgrep -f "ControllerBridge.app/Contents/MacOS" >/dev/null 2>&1; then
+  warn "DeckBridge is running. Quit it first: it talks to the display."
+  pause "Press Enter once DeckBridge is quit"
+fi
+step "Quit every other DJ or MIDI app. Do NOT open Denon's updater."
+step "LC6000 on a direct cable to the Mac, not a hub. Powered on, running normally."
+step "ST-Link probe connected, and it can read the chip (#433)."
+step "No gig today."
+confirm "All of that true?" || exit 1
+
+stage "Enter update mode (display chip)"
+enter_update_mode
+
+stage "Look (read-only)"
+say "Listing update-mode devices. Nothing is written."
+look "drawn"
+pause
+
+stage "Before (read-only)"
+say "Reading the app and the flash above it, into $WORK. Nothing is written."
+if read_app "$WORK/wd-app-before-$STAMP.bin" && dfupatch compare "$CURRENT_WD" "$WORK/wd-app-before-$STAMP.bin"; then
+  printf '  %s✓%s the chip holds the image it runs now\n' "$GREEN" "$RESET"
+else
+  warn "Couldn't confirm the chip holds $CURRENT_WD (the read failed or it differs). Stopping."
+  way_back
+fi
+if ! read_upper "$WORK/wd-upper-before-$STAMP.bin"; then
+  warn "The flash above the image couldn't be read: it isn't shown to exist. Block B has nowhere to go."
+  way_back
+fi
+if ! UPPER_STATE=$(drawn upper "$UPPER_DFU" "$WORK/wd-upper-before-$STAMP.bin"); then
+  warn "The flash above the image is neither erased nor this block B. Nothing is written over it."
+  way_back
+fi
+B_DONE=0
+if [[ "$UPPER_STATE" == holds* ]]; then
+  B_DONE=1
+  printf '  %s✓%s block B is already there, exactly: step 1 is done\n' "$GREEN" "$RESET"
+else
+  printf '  %s✓%s the flash above the image is erased: block B can go there\n' "$GREEN" "$RESET"
+fi
+note "Keep these reads out of the repo and don't share them: vendor bytes."
+pause
+
+stage "Step 1 of 2: block B"
+if (( B_DONE )); then
+  say "Block B is already there, exactly as in $UPPER_DFU. Nothing to write."
+else
+  say "Block B goes first. With only B on the chip, the image there now runs as before: only block A calls B."
+  flash "$UPPER_DFU" "upper" upper
+fi
+pause
+
+stage "Step 2 of 2: the owner's image"
+say "The hooked image, with block A in its padding. Once it's on, A calls B when DeckBridge asks for drawn mode."
+if [[ -z "$(dfu_paths)" ]]; then
+  warn "The chip isn't in update mode any more."
+  way_back
+fi
+flash "$OWNER_DFU" "owner" app
+pause
+
+stage "Power cycle"
+reboot_check
+say "With no host talking to it, the display should look exactly like stock."
+confirm "Display looks like stock?" || way_back
+say "Then open DeckBridge with drawn mode on: after its hello and begin, the deck chip is drawn by our code."
+say "Its end (quit DeckBridge) brings back stock images; a power cycle returns to the app."
+note "Whatever you see, write it on #468: it's the first drawn frame on real hardware."
+pause
+
+stage "Way back, for the record"
+say "If anything looks wrong later:"
+step "Display chip: run this wizard again (no 'drawn'); stage 2 puts it in update mode, stage 5 is Denon's updater."
+step "Restoring Denon's image removes block A with the hook. Block B stays at 0x08080000, unused: only A calls it."
+step "If the display chip never shows up in update mode: ST-Link (#433). Don't keep trying USB."
+note "Logs and read-backs from today: $WORK"
+say "Please note on #468 what happened at each stage."
+pause
+
+finish
+}
+
+if [[ "${1:-}" == "drawn" ]]; then run_drawn; else run_wizard "$@"; fi; exit
