@@ -10,6 +10,8 @@ extension Coordinator {
         case setCapture(source: MIDIEndpoint.ID?)
         case setDeckColors(followSyndicate: Bool, custom: DeckColors)
         case setRingColors(RingColors)
+        /// Pads and ring through Denon's color message, or the 64-color table (#530).
+        case setColorMessages(Bool)
         /// The OSC destination opened late (#84): ask Syndicate to resend its state, since what was sent before was dropped.
         case resync
         case setControllers([ControllerSettings])
@@ -46,7 +48,7 @@ extension Coordinator {
             case .ledSweep, .stopLEDSweep: .active
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
-            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .resync, .setControllers, .setProfiles,
+            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setColorMessages, .resync, .setControllers, .setProfiles,
                  .setProfileChoices, .setJogDisplay, .setDisplayFirmware:
                 .waitsForDemo
             }
@@ -62,6 +64,7 @@ extension Coordinator {
         case .setCapture(let source): setCapture(source: source)
         case .setDeckColors(let follow, let custom): setDeckColors(followSyndicate: follow, custom: custom)
         case .setRingColors(let mode): setRingColors(mode)
+        case .setColorMessages(let on): setColorMessages(on)
         case .resync: resync()
         case .setControllers(let entries): setControllers(entries)
         case .setProfiles(let profiles): setProfiles(profiles)

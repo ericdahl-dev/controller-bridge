@@ -18,6 +18,9 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     public var customDeckColors = DeckColors.defaults
     /// The ring's color mapping (#151). Vivid by default.
     public var ringColors = RingColors.vivid
+    /// Pads and ring in exact RGB through Denon's color message (#530), where the controller's profile lists them. On by
+    /// default, also for settings saved before it; off is the way back to the 64-color table.
+    public var colorMessages = true
     /// Light or dark (#127). Syndicate's own LIGHT MODE can't be read over OSC, so the DJ picks it to match.
     public var appearance = Appearance.matchMacOS
     /// "Show the deck on the jog display" (#165). On for new settings since the v1.1 hardware check.
@@ -31,7 +34,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
         case followSyndicateDeckColors, customDeckColors, appearance, ringColors, jogDisplay, profileChoices
-        case displayFirmware
+        case displayFirmware, colorMessages
     }
 
     /// Settings saved before #123 have no deck colors: they load with the defaults.
@@ -47,6 +50,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         customDeckColors = try c.decodeIfPresent(DeckColors.self, forKey: .customDeckColors) ?? .defaults
         appearance = try c.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .matchMacOS
         ringColors = try c.decodeIfPresent(RingColors.self, forKey: .ringColors) ?? .vivid
+        colorMessages = try c.decodeIfPresent(Bool.self, forKey: .colorMessages) ?? true
         // Settings saved before the switch existed keep it off; new settings have it on (v1.1, RELEASE step 3).
         jogDisplay = try c.decodeIfPresent(Bool.self, forKey: .jogDisplay) ?? false
         profileChoices = try c.decodeIfPresent([String: String].self, forKey: .profileChoices) ?? [:]
@@ -96,6 +100,7 @@ extension BridgeSettings {
         out.customDeckColors = pick(\.customDeckColors)
         out.appearance = pick(\.appearance)
         out.ringColors = pick(\.ringColors)
+        out.colorMessages = pick(\.colorMessages)
         out.jogDisplay = pick(\.jogDisplay)
         out.displayFirmware = pick(\.displayFirmware)
         out.profileChoices = pick(\.profileChoices)

@@ -168,6 +168,10 @@ public enum ProfileKeys {
         ProfileKey("leds.levels.off", .wholeNumber, "0", range: note, fallback: "0"),
         // "rgb222", or a list of entries (#197): the list form is its own keys below.
         ProfileKey("leds.color_table", .text, #""rgb222""#, choices: ["rgb222"], count: 1...Int.max, item: "entry", fallback: #""rgb222""#),
+        // Denon's color message (#530): the LEDs that take exact RGB. Left out, a controller has none.
+        ProfileKey("leds.color_message", .object, "{}"),
+        ProfileKey("leds.color_message.notes", .list, "[32, 33, 34, 35, 36, 37, 38, 39, 40]", count: 1...Int.max, item: "note"),
+        ProfileKey("leds.color_message.notes[]", .wholeNumber, "32", range: note),
         ProfileKey("pads", .object, "{}"),
         ProfileKey("pads.roll_sizes", .list, #"["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]"#, fallback: #"["ThirtySecond", "Sixteenth", "Eighth", "Quarter", "Half", "One", "Two", "Four"]"#),
         ProfileKey("pads.roll_sizes[]", .text, #""ThirtySecond""#, choices: Mapping.Pads.RollSize.allRawValues),

@@ -68,12 +68,16 @@ public final class Coordinator {
     /// A Bridge for a controller, with the deck colors in use.
     /// Settings' ring color mapping (#151).
     private var ringColors = RingColors.vivid
+    /// Settings (#530): pads and ring in exact RGB through Denon's color message, where the profile lists them. Off,
+    /// every color goes through the 64-color table. The app turns it on from its setting.
+    private var colorMessages = false
 
     private func makeBridge(_ mapping: Mapping) -> Bridge {
         let bridge = Bridge(mapping: mapping, osc: osc, clock: clock)
         bridge.trace = trace
         bridge.deckColors = deckColors
         bridge.ringColors = ringColors
+        bridge.colorMessages = colorMessages
         return bridge
     }
 
@@ -393,7 +397,10 @@ public final class Coordinator {
         if let destination = chosenOutput ?? sameName ?? Self.match(allowed, bridge.mapping.midi.output) {
             do {
                 let opened = try midiSystem.openOutput(destination: destination)
-                bridge.output = trace.map { TracingOutput(inner: opened, name: destination.name, trace: $0) } ?? opened
+                let leds = bridge.mapping
+                bridge.output = trace.map {
+                    TracingOutput(inner: opened, name: destination.name, trace: $0, ledName: { leds.ledName(note: Int($0)) })
+                } ?? opened
                 // Layers sharing a unit open the same port: say it once.
                 if controllers[index].destination?.id != destination.id,
                    !controllers.contains(where: { $0.destination?.id == destination.id }) {
@@ -912,6 +919,13 @@ public final class Coordinator {
         followSyndicateDeckColors = followSyndicate
         customDeckColors = custom
         applyDeckColors()
+        disconnectFailedOutputs()
+    }
+
+    /// Settings (#530): exact RGB through Denon's color message, or the 64-color table; repainted at once.
+    public func setColorMessages(_ on: Bool) {
+        colorMessages = on
+        for bridge in bridges { bridge.setColorMessages(on) }
         disconnectFailedOutputs()
     }
 
