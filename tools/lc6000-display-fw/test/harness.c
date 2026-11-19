@@ -29,6 +29,12 @@ static void start(dfw_unit *unit, recording *rec, const dfw_drawing *drawing) {
 
 void fresh_without_frame(dfw_unit *unit, recording *rec) { start(unit, rec, &dfw_drawn); }
 
+void fresh_with_drawing(dfw_unit *unit, recording *rec, const dfw_drawing *drawing) {
+    start(unit, rec, drawing);
+    memset(frame, 0, sizeof frame);
+    dfw_set_frame(unit, frame);
+}
+
 void fresh_without_drawing(dfw_unit *unit, recording *rec) {
     start(unit, rec, NULL);
     memset(frame, 0, sizeof frame);

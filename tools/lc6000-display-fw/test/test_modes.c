@@ -51,6 +51,7 @@ void with_no_frame_nothing_is_drawn(void);
 void a_frame_handed_in_after_end_draws_nothing(void);
 void a_frame_handed_in_later_is_drawn(void);
 void with_no_frame_the_capability_ask_gets_no_answer(void);
+void the_tick_draws_with_the_drawing_it_was_given(void);
 
 #define STATE_LOADED "F0 00 02 0B 7F 10 20 00 02 07 01 F7"
 
@@ -117,6 +118,7 @@ const test_case all_tests[] = {
     { "a frame handed in after end draws nothing", a_frame_handed_in_after_end_draws_nothing },
     { "a frame handed in later is drawn", a_frame_handed_in_later_is_drawn },
     { "with no frame the capability ask gets no answer", with_no_frame_the_capability_ask_gets_no_answer },
+    { "the tick draws with the drawing it was given", the_tick_draws_with_the_drawing_it_was_given },
     { "an end before the tick draws nothing", an_end_before_the_tick_draws_nothing },
     { "a state before any deck draws nothing", a_state_before_any_deck_draws_nothing },
     { "a second begin doesn't redraw the old deck", a_second_begin_doesnt_redraw_the_old_deck },

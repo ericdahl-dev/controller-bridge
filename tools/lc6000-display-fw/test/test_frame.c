@@ -49,3 +49,20 @@ void with_no_frame_the_capability_ask_gets_no_answer(void) {
     dfw_tick(&unit, 0);
     CHECK(rec.sends == 0);
 }
+
+/// A drawing that fills the frame with one color, to show which drawing the tick called.
+static void paint(dfw_pixel *frame, const dfw_unit *drawn) {
+    (void)drawn;
+    for (int i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = 0x123456;
+}
+
+/// The protocol draws only through the table it was given (#501): the drawing can live in its own block.
+void the_tick_draws_with_the_drawing_it_was_given(void) {
+    static const dfw_drawing painter = { paint };
+    fresh_with_drawing(&unit, &rec, &painter);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");
+    dfw_tick(&unit, 0);
+    CHECK(rec.presents == 1);
+    CHECK(rec.last[0] == 0x123456 && rec.last[DFW_SIZE * DFW_SIZE - 1] == 0x123456);
+}
