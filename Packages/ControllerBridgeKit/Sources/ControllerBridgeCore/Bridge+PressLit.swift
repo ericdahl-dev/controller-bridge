@@ -2,19 +2,14 @@
 // full while held, so every press shows. They're the bridge's own lights, not Syndicate's.
 
 extension Bridge {
-    /// Beat Jump, Track Skip, the browse knob's ring (its press), Vinyl, Pitch Bend and Param. A profile that doesn't
-    /// name one has no light for it.
+    /// Beat Jump, Track Skip, the browse knob's ring (its press), Vinyl, Pitch Bend and Param; and the deck select
+    /// button (#477), which flashes full on the layer it steps to. A profile that doesn't name one has no light for it.
     static let pressLitButtons = ["beat_jump_back", "beat_jump_forward", "track_prev", "track_next", "select_press",
-                                  "vinyl", "pitch_minus", "pitch_plus", "param_back", "param_forward"]
+                                  "vinyl", "pitch_minus", "pitch_plus", "param_back", "param_forward", "deck_select"]
 
-    /// Lit at their idle level only, never full: the deck select button (#477). On the unit a press showed no brighter
-    /// level (it seems to own that light while the button is down; #480's live check), so a press sends it nothing.
-    static let idleLitButtons = ["deck_select"]
-
-    /// Each one's light: full while held, else idle; the idle-only ones idle.
+    /// Each one's light: full while held, else idle.
     func pressLitLEDs() {
         for name in Self.pressLitButtons { buttonLED(name, on: pressLitHeld.contains(name)) }
-        for name in Self.idleLitButtons { buttonLED(name, on: false) }
     }
 
     /// A press or release of a button: one of these lights full while it's held.

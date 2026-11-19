@@ -20,7 +20,8 @@ struct LayerShownCacheTests {
         rig.midi.outputs[Rig.lc6000Out.id]?.sent.removeAll()
         Press.note(rig, 23, down: true)
         Press.note(rig, 23, down: false)
-        #expect(Self.noteOns(rig) == ["ch1 1=127"])
+        // Play, and deck select's own press flash (#477).
+        #expect(Self.noteOns(rig) == ["ch1 1=127", "ch1 23=127", "ch1 23=1"])
     }
 
     @Test("And back: only Play again, dim")
@@ -38,7 +39,8 @@ struct LayerShownCacheTests {
             }
         }
         #expect(rig.coordinator.status.controllers[0].activeLayer)
-        #expect(Self.noteOns(rig).isEmpty)   // layers 3, 4 and 1 all show the same lights
+        // Layers 3, 4 and 1 show the same lights: only deck select's flash goes out.
+        #expect(Self.noteOns(rig).allSatisfy { $0.contains(" 23=") })
     }
 
     @Test("Multi-channel mode: a deck select step paints the new layer on the unit's current channel (the one deck select came on), not the layer's own")

@@ -586,14 +586,18 @@ public final class Coordinator {
         if let note, Int(note) == controllers[first].bridge.mapping.notes.buttons["deck_select"] {
             if velocity > 0, let at = layers.firstIndex(of: current) {
                 let target = layers[(at + 1) % layers.count]
-                // The bridge's own step: the unit didn't touch its lights, so only those that differ go (#554).
-                // It paints where the unit takes LEDs: the unit's own selected deck's channel, which a bridge step
-                // doesn't change, and which the deck select note itself came on (agent2's #481 reading).
+                // The bridge's own step: the unit's selected deck, and so the one channel it takes note-ons on, stays
+                // (agent2's #481 reading). That's the channel deck select itself came on, so the new layer paints there
+                // at once, not on its own channel, which the unit drops; and the unit didn't touch its lights, so only
+                // those that differ go (#554).
                 activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source),
                               unitCleared: false, unitChannel: channel)
+                // Its light (#477) flashes full on the layer it stepped to, and goes back to idle on release.
+                controllers[target].bridge.pressLit("deck_select", true)
+            } else if velocity == 0 {
+                controllers[current].bridge.pressLit("deck_select", false)
             }
-            // No layer handles the note itself. Its light stays at its idle level, sent with the new layer's repaint:
-            // the unit showed no brighter level for it on a press (#480), so a press sends it nothing.
+            // Lit here; no layer handles the note itself, or a hidden one would keep it held.
             return (event, Self.noLayer)
         }
         let onPads = layers.filter {
@@ -625,8 +629,9 @@ public final class Coordinator {
     /// `unitCleared`: the unit made the change (its layer note, a control or pad on a layer's channel) and its
     /// deck-select mode cleared its lights (#426), so the new layer paints every one; the bridge's own deck select step
     /// (#420) paints only the lights that differ from what the unit shows (#554).
-    /// `unitChannel`: the channel the unit takes LEDs on now, when the bridge stepped on its own (#420) and the unit's
-    /// selected deck didn't move; nil when the unit made the change and its channel is the layer's.
+    /// `unitChannel`: the channel the unit takes LEDs on, when the bridge stepped on its own (#420) and the unit's
+    /// selected deck didn't move; nil when the unit made the change (its channel is then the layer's, or ch1 in the
+    /// normal state).
     private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int], multiChannel: Bool,
                                unitCleared: Bool = true, unitChannel: UInt8? = nil) {
         if current != target { controllers[current].bridge.releaseAll() }
