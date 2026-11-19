@@ -51,24 +51,23 @@ struct DisplayFirmwareTextLayoutTests {
     static let ligatureArtist = "Office fluff affluent officer staff stuff attitude"
 
     /// Titles within a fraction of a pixel of fitting at 26 px, on either side: the size choice is a <= against the
-    /// chord, so these pin it (picked by measuring the renderer's own 26 px line).
-    static var nearTheSizeBoundary: [String] {
+    /// chord, so these pin it. Fixed, not searched for here: ties in a search pick differently on another Mac.
+    static let nearTheSizeBoundary = ["Daybreak...", "Daybreak..,", "Daybreak.,.", "AvatarWVf", "AvatarVWf", "FictionAWf"]
+
+    @Test("The near-boundary titles are still near the boundary: the first three fit at 26 px, the rest just don't")
+    func nearTheBoundary() {
+        _ = JogDisplayRenderer.fontsRegistered
         let font = CTFontCreateWithName("Geist-Bold" as CFString, 26, nil)
-        func width(_ title: String) -> Double {
-            CTLineGetTypographicBounds(CTLineCreateWithAttributedString(NSAttributedString(string: title, attributes: [
+        // The safe circle's chord at the line box's farther edge from the center (its top, 39 px above).
+        let dy = max(abs(60.0 - 99), abs(60 + 26 * 1.15 - 99))
+        let room = 2 * (79.0 * 79.0 - dy * dy).squareRoot()
+        for (i, title) in Self.nearTheSizeBoundary.enumerated() {
+            let width = CTLineGetTypographicBounds(CTLineCreateWithAttributedString(NSAttributedString(string: title, attributes: [
                 kCTFontAttributeName as NSAttributedString.Key: font, kCTKernAttributeName as NSAttributedString.Key: -0.26,
             ])), nil, nil, nil)
+            #expect(JogDisplayRenderer.titleSize(title) == (i < 3 ? 26 : 20), "\(title)")
+            #expect(abs(width - room) < 0.5, "\(title): \(width) against \(room)")
         }
-        _ = JogDisplayRenderer.fontsRegistered
-        var candidates: [String] = []
-        for base in ["Daybreak", "Night", "Strobe", "Avatar", "Fiction", "Café"] {
-            for a in "ijl.,:'!frtTWAVo " { for b in "ijl.,:'!frtTWAVo " { for c in "ijl.,:'!fr" {
-                candidates.append(base + String([a, b, c]))
-            } } }
-        }
-        let twentySix = candidates.filter { JogDisplayRenderer.titleSize($0) == 26 }.sorted { width($0) > width($1) }
-        let twenty = candidates.filter { JogDisplayRenderer.titleSize($0) == 20 }.sorted { width($0) < width($1) }
-        return Array(twentySix.prefix(3)) + Array(twenty.prefix(3))
     }
 
     static func content(title: String?, artist: String?, player: String = "track") -> JogDisplayContent {
