@@ -20,5 +20,8 @@ uint32_t upper_check(const uint8_t *b) {
     uint32_t length = word(b + 8);
     if (length < UPPER_HEADER || length > UPPER_LIMIT) return 0;
     if (crc32(b + 16, length - 16) != word(b + 12)) return 0;
-    return word(b + 16);
+    uint32_t draw = word(b + 16);
+    // Thumb code (bit 0 set) past the header and before B's end.
+    if (!(draw & 1u) || draw < UPPER_BASE + UPPER_HEADER || draw >= UPPER_BASE + length) return 0;
+    return draw;
 }

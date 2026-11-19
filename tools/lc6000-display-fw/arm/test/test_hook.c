@@ -381,6 +381,22 @@ void a_length_past_the_sector_or_inside_the_header_is_refused(void) {
     CHECK(upper_check(upper) == 0);
 }
 
+void an_entry_that_isnt_Thumb_code_inside_the_block_is_refused(void) {
+    // Each entry with its own good CRC (Python's zlib), so only the entry check can refuse it.
+    static const struct { uint32_t entry, crc; } bad[] = {
+        { 0x08080014u, 0xFF2306F7u }, /* no Thumb bit */
+        { 0x0808001Fu, 0x18EAB954u }, /* past the end of B */
+        { 0x08080011u, 0xE20CB5E4u }, /* inside the header */
+        { 0x00000015u, 0x8BA17EC3u }, /* nowhere near B */
+    };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        good_upper();
+        put_word(upper + 16, bad[i].entry);
+        put_word(upper + 12, bad[i].crc);
+        CHECK(upper_check(upper) == 0);
+    }
+}
+
 const test_case all_tests[] = {
     { "end hands the screen back once", end_hands_the_screen_back_once },
     { "nothing is hidden that was never shown", nothing_is_hidden_that_was_never_shown },
@@ -408,6 +424,7 @@ const test_case all_tests[] = {
     { "a block for another version is refused", a_block_for_another_version_is_refused },
     { "a block whose CRC doesn't match is refused", a_block_whose_CRC_doesnt_match_is_refused },
     { "a length past the sector or inside the header is refused", a_length_past_the_sector_or_inside_the_header_is_refused },
+    { "an entry that isn't Thumb code inside the block is refused", an_entry_that_isnt_Thumb_code_inside_the_block_is_refused },
     { 0, 0 },
 };
 
