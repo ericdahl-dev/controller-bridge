@@ -6,14 +6,15 @@ import contextlib, io, os, struct, tempfile, unittest
 import build_upper_dfu
 import dfupatch
 
-UPPER = 0x08080000
+upper_header = build_upper_dfu.upper_header  # B's header (#572)
+UPPER = upper_header.BASE
 PROOF_SIZE = 512 * 1024
 
 
 def good_block():
-    """The same B as the C header tests (arm/test/test_hook.c): header version 4 with its layout word (#516) and its
-    draw and band entries (#524), CRC 0x6ACCA34B zlib's, worked out apart."""
-    return struct.pack("<IIIIIII", 0x42574644, 4, 37, 0x6ACCA34B, 0x1A2B3C4D, 0x0808001D, 0x0808001F) + b"123456789"
+    """The same B as the C header tests (arm/test/test_hook.c), sealed by upper_header: its layout word (#516) and its
+    draw and band entries (#524)."""
+    return upper_header.build(b"123456789", 0x1A2B3C4D, 0x0808001D, 0x0808001F)
 
 
 def run(*argv):
@@ -91,13 +92,14 @@ class BuildUpperDfuTests(unittest.TestCase):
         bad_crc[32] ^= 1
         cases = {
             "marker": b"\xff\xff\xff\xff" + good[4:],
-            # The 20-byte header #501 first built, without a layout word: refused, never read as version 2.
-            "version": struct.pack("<IIIII", 0x42574644, 1, 29, 0x22B5DF72, 0x08080015) + b"123456789",
+            # Another version, its CRC still good (the CRC starts past the version): refused on the version alone.
+            "version": good[:upper_header.VERSION_AT] + struct.pack("<I", upper_header.VERSION + 1)
+            + good[upper_header.VERSION_AT + 4:],
             "CRC": bytes(bad_crc),
             "length": good + b"\xff",  # the file is longer than the header's length
-            # No Thumb bit, with its own good CRC (worked out with zlib apart), so only the entry check can refuse it.
-            "draw entry": good[:12] + struct.pack("<IIII", 0xED6A6808, 0x1A2B3C4D, 0x0808001C, 0x0808001F) + good[28:],
-            "band entry": good[:12] + struct.pack("<IIII", 0xB75A7ACE, 0x1A2B3C4D, 0x0808001D, 0x0808001E) + good[28:],
+            # No Thumb bit, sealed with a good CRC, so only the entry check can refuse it.
+            "draw entry": upper_header.build(b"123456789", 0x1A2B3C4D, 0x0808001C, 0x0808001F),
+            "band entry": upper_header.build(b"123456789", 0x1A2B3C4D, 0x0808001D, 0x0808001E),
         }
         for reason, block in cases.items():
             with self.subTest(reason):

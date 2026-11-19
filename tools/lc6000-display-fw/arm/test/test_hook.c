@@ -7,6 +7,7 @@
 #include "hook.h"
 #include "draw.h"
 #include "upper.h"
+#include "upper_build.h"
 
 #define CAPABILITY_V1 "F0 00 02 0B 7F 10 20 00 02 00 01 F7"
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
@@ -340,8 +341,8 @@ void nothing_is_hidden_that_was_never_shown(void) {
     CHECK(chip.hides == 0);
 }
 
-/// Block B as the upper flash holds it (#501): erased, unless a test writes one. The good one's CRC, 0x85E2FFEC, is
-/// zlib's CRC-32 of its bytes from +16 to its end (worked out with Python's zlib, not this code), for TEST_LAYOUT.
+/// Block B as the upper flash holds it (#501): erased, unless a test writes one. Every header here is upper_build's
+/// (#572), the C one pinned to Python's upper_header.py.
 static uint8_t upper[0x80000]; /* the upper flash: sectors 8-11 */
 /// The layout word the upper_check tests hand in as A's: any value, as long as B's header carries the same (#516).
 #define TEST_LAYOUT 0x1A2B3C4Du
@@ -350,16 +351,27 @@ static void put_word(uint8_t *at, uint32_t word) {
     for (int i = 0; i < 4; i++) at[i] = (uint8_t)(word >> (8 * i));
 }
 
-static void good_upper(void) {
+#define GOOD_LENGTH (UPPER_HEADER + 9)
+#define GOOD_DRAW 0x0808001Du
+#define GOOD_BAND 0x0808001Fu
+
+/// A 37-byte B: its header, then "123456789"; erased after.
+static void good_upper_for(uint32_t layout, uint32_t draw, uint32_t band) {
     memset(upper, 0xFF, sizeof upper);
-    put_word(upper + 0, UPPER_MARKER);
-    put_word(upper + 4, UPPER_VERSION);
-    put_word(upper + 8, 37);
-    put_word(upper + 12, 0x6ACCA34Bu);
-    put_word(upper + 16, TEST_LAYOUT);
-    put_word(upper + 20, 0x0808001Du);
-    put_word(upper + 24, 0x0808001Fu);
-    memcpy(upper + 28, "123456789", 9);
+    memcpy(upper + UPPER_HEADER, "123456789", 9);
+    upper_build(upper, GOOD_LENGTH, layout, draw, band);
+}
+
+static void good_upper(void) { good_upper_for(TEST_LAYOUT, GOOD_DRAW, GOOD_BAND); }
+
+static uint32_t word_at(const uint8_t *at) {
+    return (uint32_t)at[0] | (uint32_t)at[1] << 8 | (uint32_t)at[2] << 16 | (uint32_t)at[3] << 24;
+}
+
+void upper_builds_crc_is_zlibs(void) {
+    // Worked out apart, with Python's zlib.crc32 of the good B from +16: the CRC this fixture carried by hand.
+    good_upper();
+    CHECK(word_at(upper + 12) == 0x6ACCA34Bu);
 }
 
 /// B's draw entry if the B in `upper` checks out for `layout`, else 0; its band entry likewise.
@@ -375,7 +387,7 @@ static uint32_t band_entry(uint32_t layout) {
 
 void a_good_upper_block_gives_its_draw_and_band_entries(void) {
     good_upper();
-    CHECK(draw_entry(TEST_LAYOUT) == 0x0808001Du);
+    CHECK(draw_entry(TEST_LAYOUT) == GOOD_DRAW);
     CHECK(band_entry(TEST_LAYOUT) == 0x0808001Fu);
 }
 
@@ -391,12 +403,10 @@ void a_block_for_another_version_is_refused(void) {
 }
 
 void a_block_built_for_another_layout_is_refused(void) {
-    // B's own CRC is good (Python's zlib, 0x11D221A8), so only the layout check can refuse it (#516).
-    good_upper();
-    put_word(upper + 16, TEST_LAYOUT + 1);
-    put_word(upper + 12, 0x11D221A8u);
+    // B's own CRC is good, so only the layout check can refuse it (#516).
+    good_upper_for(TEST_LAYOUT + 1, GOOD_DRAW, GOOD_BAND);
     CHECK(draw_entry(TEST_LAYOUT) == 0);
-    CHECK(draw_entry(TEST_LAYOUT + 1) == 0x0808001Du);
+    CHECK(draw_entry(TEST_LAYOUT + 1) == GOOD_DRAW);
 }
 
 void a_block_whose_CRC_doesnt_match_is_refused(void) {
@@ -416,72 +426,44 @@ void a_length_past_the_sector_or_inside_the_header_is_refused(void) {
 }
 
 void an_entry_that_isnt_Thumb_code_inside_the_block_is_refused(void) {
-    // Each entry with its own good CRC (Python's zlib), so only the entry check can refuse it: the draw entry at +20,
-    // then the band entry at +24 (#524).
-    static const struct { uint32_t at, entry, crc; } bad[] = {
-        { 20, 0x0808001Cu, 0xED6A6808u }, /* no Thumb bit */
-        { 20, 0x08080027u, 0x6112D795u }, /* past the end of B */
-        { 20, 0x08080019u, 0x19C48484u }, /* inside the header */
-        { 20, 0x0000001Du, 0x961C71FAu }, /* nowhere near B */
-        { 24, 0x0808001Eu, 0xB75A7ACEu },
-        { 24, 0x08080027u, 0x37B69D09u },
-        { 24, 0x08080019u, 0xCA297C96u },
-        { 24, 0x0000001Fu, 0xC3D802FAu },
+    // Each B sealed with its good CRC, so only the entry check can refuse it: the draw entry, then the band entry
+    // (#524).
+    static const struct { uint32_t draw, band; } bad[] = {
+        { 0x0808001Cu, GOOD_BAND }, /* no Thumb bit */
+        { 0x08080027u, GOOD_BAND }, /* past the end of B */
+        { 0x08080019u, GOOD_BAND }, /* inside the header */
+        { 0x0000001Du, GOOD_BAND }, /* nowhere near B */
+        { GOOD_DRAW, 0x0808001Eu },
+        { GOOD_DRAW, 0x08080027u },
+        { GOOD_DRAW, 0x08080019u },
+        { GOOD_DRAW, 0x0000001Fu },
     };
     for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
-        good_upper();
-        put_word(upper + bad[i].at, bad[i].entry);
-        put_word(upper + 12, bad[i].crc);
+        good_upper_for(TEST_LAYOUT, bad[i].draw, bad[i].band);
         CHECK(draw_entry(TEST_LAYOUT) == 0);
     }
 }
 
-/// A good B of 0x20028 bytes, past sector 8 into sector 9: zeros after the good B's bytes. CRC from Python's zlib.
-static void long_upper(void) {
-    good_upper();
-    memset(upper + 37, 0, 0x20028 - 37);
-    put_word(upper + 8, 0x20028);
-    put_word(upper + 12, 0x2B090256u);
+/// A good B of 0x20028 bytes, past sector 8 into sector 9: zeros after the good B's bytes.
+static void long_upper_for(uint32_t layout) {
+    good_upper_for(layout, GOOD_DRAW, GOOD_BAND);
+    memset(upper + GOOD_LENGTH, 0, 0x20028 - GOOD_LENGTH);
+    upper_build(upper, 0x20028, layout, GOOD_DRAW, GOOD_BAND);
 }
+
+static void long_upper(void) { long_upper_for(TEST_LAYOUT); }
 
 void a_block_past_sector_8_is_checked_whole(void) {
     long_upper();
-    CHECK(draw_entry(TEST_LAYOUT) == 0x0808001Du);
+    CHECK(draw_entry(TEST_LAYOUT) == GOOD_DRAW);
     upper[0x20027] = 1;
     CHECK(draw_entry(TEST_LAYOUT) == 0);
 }
 
-/// zlib's CRC-32 a bit at a time, for the hook tests' B: its layout word is A's own DFW_LAYOUT, which differs between
-/// the Mac and the chip, so its CRC can't be a literal. Checked against zlib's own check value below.
-static uint32_t reference_crc(const uint8_t *bytes, size_t length) {
-    uint32_t crc = 0xFFFFFFFFu;
-    for (size_t i = 0; i < length; i++) {
-        crc ^= bytes[i];
-        for (int bit = 0; bit < 8; bit++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
-    }
-    return ~crc;
-}
+/// A fixture B as block A sees it: carrying A's own DFW_LAYOUT, which differs between the Mac and the chip.
+static void hooked_upper(void) { good_upper_for(DFW_LAYOUT, GOOD_DRAW, GOOD_BAND); }
 
-void the_reference_crc_is_zlibs(void) {
-    CHECK(reference_crc((const uint8_t *)"123456789", 9) == 0xCBF43926u);
-}
-
-/// A fixture B as block A sees it: carrying `layout`, its CRC worked out again.
-static void seal_for(uint32_t layout) {
-    put_word(upper + 16, layout);
-    uint32_t length = (uint32_t)upper[8] | (uint32_t)upper[9] << 8 | (uint32_t)upper[10] << 16;
-    put_word(upper + 12, reference_crc(upper + 16, length - 16));
-}
-
-static void hooked_upper(void) {
-    good_upper();
-    seal_for(DFW_LAYOUT);
-}
-
-static void hooked_long_upper(void) {
-    long_upper();
-    seal_for(DFW_LAYOUT);
-}
+static void hooked_long_upper(void) { long_upper_for(DFW_LAYOUT); }
 
 /// The hook block draws only with the table stock hands it (#501): with none (the drawing block not yet checked), the
 /// capability ask gets no answer and nothing is drawn, so the app falls back to images.
@@ -534,8 +516,7 @@ void an_upper_block_built_for_another_layout_gets_no_answer(void) {
     // A B from a commit whose dfw_unit differs would draw from the wrong offsets (#516): A stays silent, and takes no
     // malloc, as with no B at all.
     cold_boot();
-    hooked_upper();
-    seal_for(DFW_LAYOUT ^ 1u);
+    good_upper_for(DFW_LAYOUT ^ 1u, GOOD_DRAW, GOOD_BAND);
     stock.upper = upper;
     stock.drawing = NULL;
     deliver(0, CAPABILITY_V1);
@@ -618,7 +599,7 @@ const test_case all_tests[] = {
     { "erased upper flash has no block", erased_upper_flash_has_no_block },
     { "a block for another version is refused", a_block_for_another_version_is_refused },
     { "a block built for another layout is refused", a_block_built_for_another_layout_is_refused },
-    { "the reference CRC is zlib's", the_reference_crc_is_zlibs },
+    { "upper_build's CRC is zlib's", upper_builds_crc_is_zlibs },
     { "a block whose CRC doesn't match is refused", a_block_whose_CRC_doesnt_match_is_refused },
     { "a length past the sector or inside the header is refused", a_length_past_the_sector_or_inside_the_header_is_refused },
     { "an entry that isn't Thumb code inside the block is refused", an_entry_that_isnt_Thumb_code_inside_the_block_is_refused },

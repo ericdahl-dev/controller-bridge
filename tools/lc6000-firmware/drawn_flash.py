@@ -22,7 +22,7 @@
       8-11 not write-protected, one bank. Anything else is refused.
 
 Standard library only."""
-import argparse, os, struct, sys, zlib
+import argparse, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))  # -I leaves this folder off sys.path (#468)
 import build_upper_dfu  # noqa: E402
@@ -111,10 +111,10 @@ def rewrite(args):
 def other_block(read):
     """The length of a block B from any build (#516: every layout change makes a new one), if the read starts with
     one: B's marker, a length inside the upper flash, and zlib's CRC-32 from +16 matching. Its version may differ."""
-    marker, _version, length, crc = struct.unpack_from("<IIII", read)
-    if marker != build_upper_dfu.UPPER_MARKER or not 20 <= length <= len(read):
+    header = build_upper_dfu.upper_header.parse(read)
+    if header.marker != build_upper_dfu.UPPER_MARKER or not 20 <= header.length <= len(read):
         return None
-    return length if zlib.crc32(read[16:length]) == crc else None
+    return header.length if build_upper_dfu.upper_header.crc(read, header.length) == header.crc else None
 
 
 def options(args):

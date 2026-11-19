@@ -7,8 +7,10 @@ SRC := $(wildcard src/*.c)
 TESTS := $(wildcard test/test_*.c)
 
 .PHONY: test clean tables
-test: $(BUILD)/tests $(BUILD)/band_table_gen $(BUILD)/ring_table_gen
+test: $(BUILD)/tests $(BUILD)/band_table_gen $(BUILD)/ring_table_gen $(BUILD)/upper-pin
 	$(BUILD)/tests
+	@# Block B's header, Python's and C's pinned together (#572).
+	python3 -I arm/test/test_upper_header.py $(BUILD)/upper-pin
 	sh test/check_symbols.sh $(BUILD)/freestanding
 	@# The protocol's tables (#569) must be what vectors/messages.json describes now.
 	python3 -I vectors/gen_protocol.py --check
@@ -57,6 +59,10 @@ $(BUILD)/sequences.h: vectors/messages.json test/vectors_to_c.py
 $(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h test/layer_record.c test/layer_record.h test/present.c test/present.h $(wildcard src/*.h) $(BUILD)/vectors.h $(BUILD)/sequences.h
 	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c test/present.c test/view.c test/messages.c -lm
 
+$(BUILD)/upper-pin: arm/test/upper_pin.c arm/upper.c arm/upper_build.c arm/upper.h arm/upper_build.h arm/upper_crc.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $(SAN) -Iarm -o $@ arm/test/upper_pin.c arm/upper.c arm/upper_build.c
+
 clean:
 	rm -rf $(BUILD)
 
@@ -75,9 +81,9 @@ arm-test: $(BUILD)/hook-tests $(BUILD)/frame-dump
 # `make arm-test PYTHON=path/to/venv/python`. Without it the tests fail at the import; nothing is skipped.
 PYTHON ?= python3
 
-$(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
+$(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h arm/upper_build.c arm/upper_build.h arm/upper_crc.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c $(ARM_TESTS) test/harness.c test/view.c
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c arm/upper_build.c $(ARM_TESTS) test/harness.c test/view.c
 
 include arm/arm.mk
 

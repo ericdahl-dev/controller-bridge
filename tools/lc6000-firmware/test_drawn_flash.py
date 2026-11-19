@@ -141,9 +141,10 @@ class RewriteTests(DrawnFlashTests):
         return image.address, image.element
 
     def test_over_a_longer_older_b_it_is_this_b_then_erased_to_the_old_ones_end(self):
-        import struct, zlib
+        import struct
+        upper_header = drawn_flash.build_upper_dfu.upper_header
         rest = bytes((i * 5 + 1) & 0xFF for i in range(0x30000 - 16))  # spans sectors 8 and 9
-        old = struct.pack("<IIII", 0x42574644, 2, 0x30000, zlib.crc32(rest)) + rest
+        old = upper_header.seal(struct.pack("<IIII", upper_header.MARKER, 2, 0, 0) + rest)  # a version-2 B
         (code, _, err), out = self.rewrite(old)
         self.assertEqual(code, 0, err)
         address, element = self.element(out)
