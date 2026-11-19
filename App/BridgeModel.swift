@@ -331,9 +331,9 @@ final class BridgeModel {
         let sendQueue = MIDISendQueue(label: "dev.ericdahl.ControllerBridge.midi-send", onStuck: { name in
             log.log("MIDI port \(name) stopped taking data: sends to it are dropped until it takes data again")
         }, onRecovered: { name in
-            // What was dropped meanwhile is lost: every light is painted again.
-            log.log("MIDI port \(name) takes data again: repainting its lights")
-            recoveryProducer.send(.portRecovered)
+            // What was dropped meanwhile is lost: every light is painted again, or the jog display starts over (#595).
+            log.log("MIDI port \(name) takes data again")
+            recoveryProducer.send(.afterRecovery(of: name))
         })
         let midi = midi!
         let queuedMIDI = QueuedMIDISystem(inner: midi, queue: sendQueue)
