@@ -43,23 +43,29 @@ There is no startup code. Both links refuse any `.data` or `.bss`.
 
 ## Block B's header
 
-Six little-endian words at `0x08080000` (`upper.h`), 24 bytes:
+Seven little-endian words at `0x08080000` (`upper.h`), 28 bytes:
 
 | Offset | Field |
 |---|---|
 | +0 | Marker `"DFWB"` |
-| +4 | Version (3), changed whenever this header or the entry table changes |
+| +4 | Version (4), changed whenever this header or the entry table changes |
 | +8 | Length of B, header included, at most 512 KB |
 | +12 | CRC-32 (zlib's) of B from +16 to its end |
 | +16 | Layout: `DFW_LAYOUT` (`src/dfw.h`) as B was built (#516) |
 | +20 | The draw entry: Thumb code inside B |
+| +24 | The band entry (#524): Thumb code inside B |
+
+- **The band.** The ring sits in layer 2's black border, outside our 198 px frame. B draws it straight into the layer: `band(layer, unit)`, 320 × 240 RGB565.
+  - The hook keeps the band entry only once B checks out, and calls it from its present wrapper, right after stock's present. So it never runs on a tick that presented nothing, or after end.
+  - The adapter hands over the layer's pixels through `hook_stock.layer`, so B never learns an address.
+  - Until the real `dfw_draw_band` is in `src/`, B links `arm/test/band_stub.c`, which writes one pixel the block tests look for.
 
 - **The layout word.** B reads A's `dfw_unit`, so both must agree on it. `DFW_LAYOUT` is worked out at compile time from every `dfw_unit` and `dfw_deck_state` field's offset and the shared sizes. A calls B only when B's word equals its own. Otherwise a B and an A from commits whose `dfw_unit` differs stay silent together, instead of B drawing from the wrong offsets. A new field in `dfw_unit` goes into `DFW_LAYOUT` too.
 
 - `upper_header.c` puts the header first, and `upper_seal.py` fills in its length and CRC after the link.
 - B never calls into A, whose addresses move from build to build. It links its own copy of what the drawing uses (`dfw_stale`, say).
 - **When A checks B:** once per boot, at the first capability ask or begin, never at boot, so a power cycle still clears any crash of ours. The CRC goes a nibble at a time with a 64-byte table, never the chip's CRC unit (stock uses it). On the chip build: about 1 ms for today's B (about 10 KB), and 45 ms for all 512 KB (6.1M instructions, measured in the emulator), well under the app's 0.5 s wait.
-- If anything fails (marker, version, length, CRC, layout or entry), A doesn't answer the capability ask, and the app falls back to images. That's the same path as a failed malloc.
+- If anything fails (marker, version, length, CRC, layout or either entry), A doesn't answer the capability ask, and the app falls back to images. That's the same path as a failed malloc.
 
 ## The entries
 

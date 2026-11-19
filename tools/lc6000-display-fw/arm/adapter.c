@@ -72,6 +72,9 @@ static void layer_present(void *ctx, const dfw_pixel *frame) {
     REG(LTDC_SRCR) = SRCR_VBR;
 }
 
+/// Layer 2's pixels, for B's band (#524).
+static uint16_t *layer_pixels(void) { return LAYER2_PIXELS; }
+
 static void layer_hide(void) {
     REG(L2_CR) &= ~1u;
     REG(LTDC_SRCR) = SRCR_VBR;
@@ -90,6 +93,7 @@ static const hook_stock stock = {
     .rx_count = (const volatile uint16_t *)0x2000189Au,
     .malloc = (void *(*)(size_t))0x08017861u,
     .hide = layer_hide,
+    .layer = layer_pixels,
     .port = { .present = layer_present, .send = stock_send, .ctx = 0 },
     // No drawing in this block (#501): NULL until the drawing block's header checks out. The stub test build alone
     // carries an empty drawing, so the block tests can see the capability answer.

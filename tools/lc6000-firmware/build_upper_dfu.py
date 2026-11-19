@@ -10,8 +10,9 @@ import dfupatch
 
 UPPER_BASE = 0x08080000
 # B's header (arm/upper.h): marker "DFWB", version, length, CRC-32 (zlib's) from +16 to length, the dfw_unit layout
-# B was built for (#516; only block A, built from the same src/dfw.h, can judge it), the draw entry.
-UPPER_MARKER, UPPER_VERSION, UPPER_HEADER = 0x42574644, 3, 24
+# B was built for (#516; only block A, built from the same src/dfw.h, can judge it), the draw entry, the band entry
+# (#524).
+UPPER_MARKER, UPPER_VERSION, UPPER_HEADER = 0x42574644, 4, 28
 UPPER_LIMIT = 0x80000  # sectors 8-11
 # The owner's read covers sectors 8-11, 0x08080000-0x080FFFFF.
 PROOF_SIZE = 512 * 1024
@@ -33,7 +34,7 @@ def check_block(block):
     """B as built (`make arm`): refused unless its header checks out the way block A will check it on the chip."""
     if len(block) < UPPER_HEADER:
         raise dfupatch.Refused(f"the block is {len(block)} bytes, shorter than B's {UPPER_HEADER}-byte header")
-    marker, version, length, crc, _layout, draw = struct.unpack_from("<IIIIII", block)
+    marker, version, length, crc, _layout, draw, band = struct.unpack_from("<IIIIIII", block)
     if marker != UPPER_MARKER:
         raise dfupatch.Refused("the block doesn't start with B's marker \"DFWB\": it isn't block B")
     if version != UPPER_VERSION:
@@ -43,8 +44,9 @@ def check_block(block):
                                f"the upper flash's {UPPER_LIMIT}")
     if zlib.crc32(block[16:]) != crc:
         raise dfupatch.Refused("the header's CRC doesn't match the block")
-    if not draw & 1 or not UPPER_BASE + UPPER_HEADER <= draw < UPPER_BASE + length:
-        raise dfupatch.Refused(f"the draw entry 0x{draw:08X} isn't Thumb code inside the block")
+    for name, entry in (("draw", draw), ("band", band)):
+        if not entry & 1 or not UPPER_BASE + UPPER_HEADER <= entry < UPPER_BASE + length:
+            raise dfupatch.Refused(f"the {name} entry 0x{entry:08X} isn't Thumb code inside the block")
 
 
 def check_proof(path):
