@@ -129,3 +129,38 @@ final class QueuedMIDIOutput: MIDIOutput, @unchecked Sendable {
         }
     }
 }
+
+extension MIDISendQueue {
+    /// The jog display's two ports (#165), their sends on this queue too: in order with the LEDs, so the ring's hold
+    /// reaches the unit before an upload starts (#422). Their SysEx is never dropped for the backlog; a stuck port's
+    /// is, until the port is opened again.
+    public func jogDisplayPort(_ inner: any JogDisplayPort) -> any JogDisplayPort {
+        QueuedJogDisplayPort(inner: inner, queue: self, controller: newPort(), wd: newPort())
+    }
+}
+
+final class QueuedJogDisplayPort: JogDisplayPort, @unchecked Sendable {
+    private let inner: any JogDisplayPort
+    private let queue: MIDISendQueue
+    private let controller: Int
+    private let wd: Int
+
+    init(inner: any JogDisplayPort, queue: MIDISendQueue, controller: Int, wd: Int) {
+        self.inner = inner
+        self.queue = queue
+        self.controller = controller
+        self.wd = wd
+    }
+
+    func sendController(_ bytes: [UInt8]) {
+        let inner = self.inner
+        queue.enqueue(port: controller, name: "jog display (Controller)", droppable: false) { inner.sendController(bytes) }
+    }
+
+    func sendWD(_ bytes: [UInt8]) {
+        let inner = self.inner
+        queue.enqueue(port: wd, name: "jog display (WD)", droppable: false) { inner.sendWD(bytes) }
+    }
+
+    var isAttached: Bool { inner.isAttached }
+}

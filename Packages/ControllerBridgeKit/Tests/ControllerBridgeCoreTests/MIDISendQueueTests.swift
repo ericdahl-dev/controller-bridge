@@ -118,4 +118,59 @@ struct MIDISendQueueTests {
         queue.drain()
         #expect(inner.sent == [0, 7, 8, 9, 10].map { "\(MIDIEvent.noteOn(channel: 0, note: UInt8($0), velocity: 1))" })
     }
+
+    /// One log of what reached the unit, across its ports, in order.
+    final class UnitLog: @unchecked Sendable {
+        let lock = NSLock()
+        var lines: [String] = []
+        func add(_ line: String) { lock.withLock { lines.append(line) } }
+    }
+
+    final class LoggingOutput: MIDIOutput, @unchecked Sendable {
+        let log: UnitLog
+        init(_ log: UnitLog) { self.log = log }
+        func send(_ event: MIDIEvent) throws {
+            if case .noteOn(_, let note, let velocity) = event { log.add("led \(note)=\(velocity)") }
+        }
+        func send(color: LEDColorMessage) throws { log.add("color \(color.note)") }
+        func close() {}
+    }
+
+    final class LoggingJogPort: JogDisplayPort, @unchecked Sendable {
+        let log: UnitLog
+        init(_ log: UnitLog) { self.log = log }
+        func sendController(_ bytes: [UInt8]) { log.add("controller \(bytes.count)") }
+        func sendWD(_ bytes: [UInt8]) { log.add("wd \(bytes.count)") }
+    }
+
+    @Test("The jog display's ports go through the same queue: the ring's hold reaches the unit before the upload starts (#422)")
+    func ringHoldBeforeUpload() throws {
+        let log = UnitLog()
+        let queue = MIDISendQueue(label: "test")
+        let leds = queue.output(LoggingOutput(log), name: "LC6000")
+        let jog = queue.jogDisplayPort(LoggingJogPort(log))
+        try leds.send(.noteOn(channel: 0, note: 40, velocity: 0))   // the ring held dark
+        jog.sendWD(Array(repeating: 0, count: 300))                  // the upload
+        try leds.send(.noteOn(channel: 0, note: 1, velocity: 127))
+        jog.sendController([0xF0, 0xF7])
+        queue.drain()
+        #expect(log.lines == ["led 40=0", "wd 300", "led 1=127", "controller 2"])
+    }
+
+    @Test("Past the backlog bound, the jog display's SysEx is never dropped: only LED writes are")
+    func sysexKept() throws {
+        let log = UnitLog()
+        let blocking = BlockingOutput()
+        let queue = MIDISendQueue(label: "test", backlog: 3)
+        let leds = queue.output(blocking, name: "LC6000")
+        let jog = queue.jogDisplayPort(LoggingJogPort(log))
+        try leds.send(.noteOn(channel: 0, note: 0, velocity: 1))   // in flight
+        Thread.sleep(forTimeInterval: 0.02)
+        jog.sendWD([1])
+        for note in 1...5 { try leds.send(.noteOn(channel: 0, note: UInt8(note), velocity: 1)) }
+        jog.sendWD([2, 2])
+        blocking.release()
+        queue.drain()
+        #expect(log.lines == ["wd 1", "wd 2"])
+    }
 }
