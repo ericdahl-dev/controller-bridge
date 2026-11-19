@@ -9,9 +9,10 @@ static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
 #define DFW_VERSION 1
 enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03 };
 
-void dfw_init(dfw_unit *unit, const dfw_port *port) {
+void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame) {
     memset(unit, 0, sizeof *unit);
     unit->port = *port;
+    unit->frame = frame;
 }
 
 void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {

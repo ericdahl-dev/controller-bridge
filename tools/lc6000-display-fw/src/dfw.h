@@ -1,5 +1,6 @@
 // The drawn jog display (#455): message bytes in, a drawn frame out. Called only from the stock image's hook: one
-// call per display message, and a periodic draw tick. No allocation; the frame is a fixed back buffer.
+// call per display message, and a periodic draw tick. No allocation; the frame is a fixed back buffer
+// the caller hands in.
 #ifndef DFW_H
 #define DFW_H
 #include <stddef.h>
@@ -38,10 +39,11 @@ typedef struct {
     uint8_t drawn;
     dfw_deck_state deck;
     uint8_t dirty;
-    dfw_pixel frame[DFW_SIZE * DFW_SIZE];
+    /// The back buffer, DFW_SIZE * DFW_SIZE pixels, owned by the caller: on the unit it lives in SDRAM (#466).
+    dfw_pixel *frame;
 } dfw_unit;
 
-void dfw_init(dfw_unit *unit, const dfw_port *port);
+void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame);
 /// One whole display message, F0 through F7. Only copies it; the tick acts on it.
 void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length);
 /// The draw tick: acts on the waiting messages, then presents a frame if something changed.

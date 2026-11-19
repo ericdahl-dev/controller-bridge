@@ -17,10 +17,14 @@ static void send(void *ctx, const uint8_t *bytes, size_t length) {
     memcpy(rec->sent, bytes, rec->sent_length);
 }
 
+/// The back buffer the tests hand in, as the hook hands in one in SDRAM.
+static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
+
 void fresh(dfw_unit *unit, recording *rec) {
     memset(rec, 0, sizeof *rec);
+    memset(frame, 0, sizeof frame);
     dfw_port port = { .present = present, .send = send, .ctx = rec };
-    dfw_init(unit, &port);
+    dfw_init(unit, &port, frame);
 }
 
 size_t parse_hex(const char *hex, uint8_t *bytes, size_t capacity) {
