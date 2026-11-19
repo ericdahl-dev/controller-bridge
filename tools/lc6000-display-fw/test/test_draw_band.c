@@ -1,5 +1,5 @@
 // The progress ring in the band outside the frame (#524): dfw_band_pixels against the whole 216 drawn image the
-// renderer draws (test/ref/band-*.ppm, live-reference canvas=216, never from this code), and dfw_draw_band's layer.
+// renderer draws (test/ref/band-*.ppm, a manifest entry with canvas 216, never from this code), and dfw_draw_band's layer.
 #include "harness.h"
 #include "draw_band.h"
 #include "band_geometry.h"
