@@ -39,6 +39,10 @@ public enum JogDisplayRenderer {
             frame(content, litBeat: live.beat, marker: live.needle.map { Double($0) / 16384 },
                   meter: live.meter.map { ($0.level, $0.peak) }, phase: live.phase,
                   time: live.time.map { ($0.elapsed, $0.length) }, look: live.look, drawn: true, in: context)
+            // The band outside the frame (#524): the progress ring, in the frame's coordinates.
+            if let time = live.time, time.length > 0, !content.stale {
+                drawRing(elapsed: time.elapsed, length: time.length, look: live.look, deck: content.color, in: context)
+            }
         }
     }
 
@@ -96,8 +100,10 @@ public enum JogDisplayRenderer {
         static let image = Layout(keySize: 22, keyCenterY: nil, timeSize: 14, timeCenterY: 169)
         static let drawn = Layout(keySize: 18, keyCenterY: 140.5, timeSize: 21, timeCenterY: 160)
     }
-    /// The progress ring, just outside the beat ring: 1 px clear of it (r 95) and of the image's edge (r 99).
-    static let progressInner: CGFloat = 96, progressOuter: CGFloat = 98
+    /// The progress ring (#524), in the panel's black band outside the frame: r 103–107 from the frame's center, a
+    /// 0x4A4A4A track. How much of the band the round window shows is checked on the unit (#469).
+    static let progressInner: CGFloat = 103, progressOuter: CGFloat = 107
+    static let progressTrack = rgb(0x4A4A4A)
     /// The peak tick's width, in degrees.
     static let meterTick: CGFloat = 2
     static let meterYellow = rgb(0xFFD400), meterClip = rgb(0xFF3B30), meterPeak = rgb(0xFFFFFF)
@@ -295,19 +301,31 @@ public enum JogDisplayRenderer {
 
     /// Track time (#460): the time left, "-m:ss" (minutes past 59 stay minutes), in the slot under key/BPM. Seconds.
     /// Around the edge, the progress ring: the deck color clockwise from 12 o'clock, the rest a dark track.
-    /// The warning's red draws text and fill red; the blink's white half draws both white.
+    /// The warning's color now: red, or white in the blink's other half; nil for none.
+    private static func warningColor(_ look: JogTrackTime.Look) -> CGColor? {
+        switch look {
+        case .normal: nil
+        case .warningRed: color(JogTrackTime.warningRed)
+        case .warningWhite: color(JogTrackTime.warningWhite)
+        }
+    }
+
+    /// The time left, "-m:ss", under key/BPM: white, or the warning's color.
     private static func drawTime(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int], layout: Layout,
                                  in context: CGContext) {
-        let warning = look == .warningRed ? color(JogTrackTime.warningRed)
-            : look == .warningWhite ? color(JogTrackTime.warningWhite) : nil
-        let fill = warning ?? color(deck)
-        let elapsed = min(max(elapsed, 0), length), left = length - elapsed
-        band(inner: progressInner, outer: progressOuter, from: 0, to: 360, color: beatOff, in: context)
-        band(inner: progressInner, outer: progressOuter, from: 0, to: 360 * CGFloat(elapsed) / CGFloat(length),
-             color: fill, in: context)
+        let left = length - min(max(elapsed, 0), length)
         let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, layout.timeSize, nil)
-        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: warning ?? text), font: font,
-             centerX: center, centerY: layout.timeCenterY, in: context)
+        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: warningColor(look) ?? text),
+             font: font, centerX: center, centerY: layout.timeCenterY, in: context)
+    }
+
+    /// The progress ring in the band outside the frame (#524): the track all round, the fill clockwise from 12 in the
+    /// deck color or the warning's.
+    private static func drawRing(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int], in context: CGContext) {
+        let elapsed = min(max(elapsed, 0), length)
+        band(inner: progressInner, outer: progressOuter, from: 0, to: 360, color: progressTrack, in: context)
+        band(inner: progressInner, outer: progressOuter, from: 0, to: 360 * CGFloat(elapsed) / CGFloat(length),
+             color: warningColor(look) ?? color(deck), in: context)
     }
 
     /// The level meter (#461): the dark track, the fill from the bottom, the held peak as a tick. Levels 0–127.
