@@ -115,7 +115,9 @@ python3 -I tools/lc6000-firmware/build_owner_image.py ~/lc6000/jc20_wd_update_00
 ```
 
 **Options:**
-- `--show-slot-16` keeps the slot 16 patch (#425). The owner's unit runs it today, so with it, the first drawn flash changes only one thing: the hook and its block.
+- **Slot 16: you must choose; there is no default.** `--show-slot-16` keeps the slot 16 patch (#425), and `--no-show-slot-16` leaves it out. A build that names neither is refused.
+  - **The owner's unit runs slot 16 now, and DeckBridge (Firmware = Custom) uploads 16 slots. Keep it on.** Without it, image mode loses slot 16 (deck 4, beat 4) after the flash.
+  - With it on, the first drawn flash changes only one thing: the hook and its block.
 - `--vos-scale-1` adds the core voltage fix (#438). **It is off by default.** Flash it on its own later, so a problem can be traced to one change.
 
 **What goes where:**
@@ -133,10 +135,18 @@ python3 -I tools/lc6000-firmware/build_owner_image.py ~/lc6000/jc20_wd_update_00
 
 ### Read-only checks before the first drawn flash (the owner runs these; nothing is written)
 
+**Where the files go:** every file these steps write goes in `~/lc6000`, never in the repository. They are reads of your unit, and they are never committed or posted; post only what the checks print. `dfu-util -U` won't overwrite an existing file, so move an old one aside first.
+
+**You need:** `dfu-util` (`brew install dfu-util`), and `enter-update-mode`, built as the flash day kit builds it:
+`swiftc -O -swift-version 5 tools/lc6000-firmware/enter-update-mode.swift -o ~/lc6000/enter-update-mode`, then `~/lc6000/enter-update-mode selftest`, which sends nothing.
+
 They answer what static analysis can't (#466): whether flash above the image exists and is erased, and how the chip's option bytes are set. Our block doesn't use that flash today, but these reads make sure nothing up there is a surprise.
 
 1. Quit DeckBridge and anything else that talks to the unit.
-2. Put the display chip in update mode: `tools/lc6000-firmware/enter-update-mode send --yes-enter-update-mode`. The jog screen goes dark.
+2. Put the display chip in update mode:
+   - Run `~/lc6000/enter-update-mode check`. It sends nothing and must find exactly one WD port.
+   - Then run `~/lc6000/enter-update-mode send --yes-enter-update-mode`. The jog screen goes dark.
+   - If `check` fails, stop here and post what it printed on #467. The BACK + FWD + VINYL buttons enter update mode on the top panel chip, not the display chip.
 3. Run `dfu-util -l`. Expect one `0483:df11` device, `STM32  BOOTLOADER`, at the WD path (`0-1.2` on the owner's unit).
    - Alt 0 should read `@Internal Flash  /0x08000000/04*016Kg,01*064Kg,07*128Kg`, which is 1 MB, single bank (#432).
    - If there is more than one device, or the layout differs, stop.
@@ -153,7 +163,7 @@ They answer what static analysis can't (#466): whether flash above the image exi
      - DB1M is bit 14 of that same half-word. 0 means single bank, matching the layout string.
 6. Try the flash-size word, `dfu-util -p 0-1.2 -a 0 -s 0x1FFF7A22:2 -U ~/lc6000/wd-flash-size.bin`. Expect `00 04` (0x0400, 1,024 KB).
    - It isn't inside any alt setting the ROM lists, so the ROM may refuse it. Then it is a read for SWD (#433). The layout string in step 3 already says 1 MB.
-7. Power-cycle with no buttons. The display chip comes back in its app.
+7. **Leave update mode:** switch the unit off, wait 5 s, and switch it on with no buttons held. Update mode only reads, and nothing was written, so the display chip comes back in its own app with the stock picture. If the screen stays dark and `dfu-util -l` still lists the bootloader, do as the flash day kit does: open Denon's updater, which restores a chip that is in update mode (#434).
 8. Post the results on #467. Never write anything in this session.
 
 ## Flash day kit (#435)

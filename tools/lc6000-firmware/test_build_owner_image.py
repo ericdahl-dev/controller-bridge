@@ -59,12 +59,23 @@ class BuildOwnerImageTests(unittest.TestCase):
         code, out, err = run(stock, blob, output, *extra)
         return code, out, err, output
 
+    def build_plain(self, *extra, block=None):
+        """A build with slot 16 explicitly off, the choice every build must now make."""
+        return self.build("--no-show-slot-16", *extra, block=block)
+
     def element(self, path):
         with open(path, "rb") as f:
             return f.read()
 
+    def test_slot_16_has_no_default_so_a_build_without_the_choice_is_refused(self):
+        # the owner's unit runs the slot 16 patch now (#425); a silent default would take slot 16 away on deck 4
+        code, _, err, output = self.build()
+        self.assertEqual(code, 1)
+        self.assertIn("slot 16", err)
+        self.assertFalse(os.path.exists(output))
+
     def test_it_changes_only_the_hook_the_block_and_the_two_crcs(self):
-        code, out, err, output = self.build()
+        code, out, err, output = self.build_plain()
         self.assertEqual(code, 0, err)
         result = self.element(output)
         allowed = set(range(self.start + PAD_START - BASE, self.start + PAD_END - BASE))
@@ -79,11 +90,11 @@ class BuildOwnerImageTests(unittest.TestCase):
         self.assertEqual(dfupatch.patch(result, ""), result)  # both CRCs check out
 
     def test_the_voltage_fix_is_off_by_default_and_on_when_asked(self):
-        _, _, _, plain = self.build()
+        _, _, _, plain = self.build_plain()
         vos = VOS_SITE - BASE
         self.assertEqual(dfupatch.parse(self.element(plain)).element[vos:vos + 4], bytes.fromhex(VOS_OLD))
         os.remove(plain)
-        code, out, err, fixed = self.build("--vos-scale-1")
+        code, out, err, fixed = self.build_plain("--vos-scale-1")
         self.assertEqual(code, 0, err)
         self.assertEqual(dfupatch.parse(self.element(fixed)).element[vos:vos + 4], bytes.fromhex("40f44040"))
         self.assertIn("VOS", out)
@@ -103,13 +114,13 @@ class BuildOwnerImageTests(unittest.TestCase):
 
     def test_a_block_without_our_marker_last_is_refused(self):
         # the hook calls into the block, so the hook never goes out without a whole block behind it
-        code, _, err, output = self.build(block=synthetic_block(marker=False))
+        code, _, err, output = self.build_plain(block=synthetic_block(marker=False))
         self.assertEqual(code, 1)
         self.assertIn("marker", err)
         self.assertFalse(os.path.exists(output))
 
     def test_a_block_that_isnt_the_whole_padding_is_refused(self):
-        code, _, err, output = self.build(block=synthetic_block()[:-8] + MARKER)
+        code, _, err, output = self.build_plain(block=synthetic_block()[:-8] + MARKER)
         self.assertEqual(code, 1)
         self.assertIn("9184", err)
 
@@ -117,7 +128,7 @@ class BuildOwnerImageTests(unittest.TestCase):
         stock = self.path("stock.dfu", self.data)
         blob = self.path("block.bin", synthetic_block())
         inside = os.path.join(dfupatch.repository_root(), "owner-test.dfu")
-        code, _, err = run(stock, blob, inside)
+        code, _, err = run(stock, blob, inside, "--no-show-slot-16")
         self.assertEqual(code, 1)
         self.assertIn("outside the repository", err)
         self.assertFalse(os.path.exists(inside))

@@ -39,9 +39,16 @@ def main(argv=None):
     parser.add_argument("block")
     parser.add_argument("output")
     parser.add_argument("--vos-scale-1", action="store_true", help="also apply the core voltage fix (#438)")
-    parser.add_argument("--show-slot-16", action="store_true", help="also keep the slot 16 patch (#425)")
+    slot = parser.add_mutually_exclusive_group()
+    slot.add_argument("--show-slot-16", dest="show_slot_16", action="store_true", default=None,
+                      help="keep the slot 16 patch (#425); the owner's unit runs it now")
+    slot.add_argument("--no-show-slot-16", dest="show_slot_16", action="store_false",
+                      help="build without the slot 16 patch")
     args = parser.parse_args(argv)
     try:
+        if args.show_slot_16 is None:
+            raise dfupatch.Refused("choose slot 16: --show-slot-16 (your unit runs it now; image mode uploads 16 "
+                                   "slots) or --no-show-slot-16. There is no default (#425, #467)")
         if dfupatch.inside(args.output, dfupatch.repository_root()):
             raise dfupatch.Refused("write the image outside the repository: built images are never committed")
         if os.path.exists(args.output):
