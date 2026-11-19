@@ -42,7 +42,7 @@ struct MIDISendQueueTests {
     }
 
     /// The rig's MIDI system, its outputs through a send queue over an output that blocks.
-    final class QueuedMIDISystem: MIDISystem, @unchecked Sendable {
+    final class BlockedMIDISystem: MIDISystem, @unchecked Sendable {
         let inner = Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out])
         let queue = MIDISendQueue(label: "test")
         let blocking = BlockingOutput()
@@ -55,7 +55,7 @@ struct MIDISendQueueTests {
 
     @Test("While the controller's port blocks, Syndicate's feedback is still handled at once; the LEDs follow once it unblocks")
     func feedbackWhileBlocked() throws {
-        let midi = QueuedMIDISystem()
+        let midi = BlockedMIDISystem()
         let osc = Rig.FakeOSC()
         let coordinator = Coordinator(mapping: try Mapping.bundledDefault(), midi: midi, osc: osc, clock: Rig.FakeClock(),
                                       log: Rig.FakeLog())
@@ -172,5 +172,35 @@ struct MIDISendQueueTests {
         blocking.release()
         queue.drain()
         #expect(log.lines == ["wd 1", "wd 2"])
+    }
+
+    @Test("The queued MIDI system opens outputs through the queue, and passes everything else straight through")
+    func queuedSystem() throws {
+        let inner = Rig.FakeMIDISystem(sources: [Rig.lc6000], destinations: [Rig.lc6000Out])
+        let queue = MIDISendQueue(label: "test")
+        let system = QueuedMIDISystem(inner: inner, queue: queue)
+        #expect(system.sources == [Rig.lc6000] && system.destinations == [Rig.lc6000Out])
+        try system.connect(source: Rig.lc6000)
+        #expect(inner.connected == [Rig.lc6000.id])
+        let output = try system.openOutput(destination: Rig.lc6000Out)
+        #expect(!(output is Rig.FakeOutput))
+        try output.send(.noteOn(channel: 0, note: 1, velocity: 127))
+        queue.drain()
+        #expect(inner.outputs[Rig.lc6000Out.id]?.sent == [.noteOn(channel: 0, note: 1, velocity: 127)])
+    }
+
+    @Test("A stuck port whose send finally returns takes data again: the jog display's ports are never reopened")
+    func unsticks() throws {
+        let inner = BlockingOutput()
+        let queue = MIDISendQueue(label: "test", stuckAfter: 0.05)
+        let output = queue.output(inner, name: "LC6000")
+        try output.send(.noteOn(channel: 0, note: 1, velocity: 1))
+        Thread.sleep(forTimeInterval: 0.1)
+        try output.send(.noteOn(channel: 0, note: 2, velocity: 1))   // dropped: stuck
+        inner.release()
+        queue.drain()
+        try output.send(.noteOn(channel: 0, note: 3, velocity: 1))   // the port answered: goes out
+        queue.drain()
+        #expect(inner.sent.count == 2 && inner.sent.last == "\(MIDIEvent.noteOn(channel: 0, note: 3, velocity: 1))")
     }
 }

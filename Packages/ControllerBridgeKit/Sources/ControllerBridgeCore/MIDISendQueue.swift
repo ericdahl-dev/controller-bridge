@@ -4,7 +4,7 @@
 // display upload starts (#422), on another port.
 //
 // A port whose send hasn't returned within `stuckAfter` is stuck: later sends to it are dropped, and `onStuck` says so
-// once, until the port is opened again (a reconnect, #429, which repaints). The backlog is bounded: past it the oldest
+// once, until that send returns or the port is opened again (a reconnect, #429, which repaints). The backlog is bounded: past it the oldest
 // LED write is dropped (a light's state; the latest is what matters), never anything else.
 import Foundation
 
@@ -81,6 +81,8 @@ public final class MIDISendQueue: @unchecked Sendable {
             }
             guard let next else { return }
             next.work()
+            // The send returned: the port takes data again (the jog display's ports are never reopened).
+            lock.withLock { _ = stuck.remove(next.port) }
         }
     }
 
@@ -163,4 +165,24 @@ final class QueuedJogDisplayPort: JogDisplayPort, @unchecked Sendable {
     }
 
     var isAttached: Bool { inner.isAttached }
+}
+
+/// A MIDI system whose outputs send through a `MIDISendQueue` (#552); everything else is the inner system's.
+public final class QueuedMIDISystem: MIDISystem, @unchecked Sendable {
+    private let inner: any MIDISystem
+    private let queue: MIDISendQueue
+
+    public init(inner: any MIDISystem, queue: MIDISendQueue) {
+        self.inner = inner
+        self.queue = queue
+    }
+
+    public var sources: [MIDIEndpoint] { inner.sources }
+    public var destinations: [MIDIEndpoint] { inner.destinations }
+    public func connect(source: MIDIEndpoint) throws { try inner.connect(source: source) }
+    public func disconnect(source: MIDIEndpoint) { inner.disconnect(source: source) }
+
+    public func openOutput(destination: MIDIEndpoint) throws -> any MIDIOutput {
+        queue.output(try inner.openOutput(destination: destination), name: destination.name)
+    }
 }
