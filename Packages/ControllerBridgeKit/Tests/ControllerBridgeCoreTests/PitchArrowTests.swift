@@ -32,4 +32,40 @@ struct PitchArrowTests {
         #expect(Self.problems(#"{"pitch_arrow_back": 128}"#).count == 1)   // range-checked
         #expect(Self.problems(#"{"pitch_arrow_back": 44, "pitch_arrow_forward": 45}"#) == [])
     }
+
+    static let back: UInt8 = 41, forward: UInt8 = 43
+
+    /// The fader at a raw 14-bit position: the MSB, then the LSB, as the LC6000 sends them.
+    static func fader(_ rig: Rig, _ raw: Int) {
+        ContinuousTests.cc(rig, 8, UInt8(raw >> 7))
+        ContinuousTests.cc(rig, 40, UInt8(raw & 0x7F))
+    }
+
+    /// A loaded deck whose tempo Syndicate reports as `tempo` (not the bridge's echo): pickup is pending.
+    static func pending(tempo: Float = 0.5) throws -> Rig {
+        let rig = try ContinuousTests.started()
+        ContinuousTests.feedback(rig, "Loaded", [.int(1)])
+        ContinuousTests.feedback(rig, "TempoSlider", [.float(tempo)])
+        return rig
+    }
+
+    @Test("Pickup pending, the fader below Syndicate's value: forward full, back off; above it: back full, forward off")
+    func arrowPointsTheWay() throws {
+        let rig = try Self.pending()
+        Self.fader(rig, 0x2000)   // well below +0.5
+        #expect(rig.leds[Self.forward] == 127 && rig.leds[Self.back] == 0)
+        #expect(rig.osc.sent.filter { $0.address.hasSuffix("TempoSlider") }.isEmpty)   // still waiting
+        let other = try Self.pending(tempo: -0.5)
+        Self.fader(other, 0x3000)   // above -0.5
+        #expect(other.leds[Self.back] == 127 && other.leds[Self.forward] == 0)
+    }
+
+    @Test("pitch.invert: the arrows follow the raw fader, not the tempo. Low raw is a high tempo here, so it must go up: forward")
+    func invertFlips() throws {
+        let rig = try ContinuousTests.started(#"{"pitch": {"invert": true}}"#)
+        ContinuousTests.feedback(rig, "Loaded", [.int(1)])
+        ContinuousTests.feedback(rig, "TempoSlider", [.float(0.5)])
+        Self.fader(rig, 0x0800)   // raw near the bottom: tempo near +1 inverted, above +0.5
+        #expect(rig.leds[Self.forward] == 127 && rig.leds[Self.back] == 0)
+    }
 }

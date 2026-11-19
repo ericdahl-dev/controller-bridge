@@ -11,13 +11,21 @@ extension Bridge {
         sendPitch()
     }
 
-    private func sendPitch() {
-        guard let pitch = mapping.pitch else { return }
+    /// The tempo the fader's position stands for, rounded as it's sent.
+    func faderTempo(_ pitch: Mapping.Pitch) -> Double {
         // A 7-bit fader is one CC (#195); the LC6000's is an MSB/LSB pair.
         let t = pitch.bits == 7
             ? tempoSlider(from7Bit: pitchMSBValue, invert: pitch.invert, deadZone: pitch.deadZone)
             : tempoSlider(from: join14Bit(msb: pitchMSBValue, lsb: pitchLSBValue), invert: pitch.invert, deadZone: pitch.deadZone)
-        let rounded = (t * 100_000).rounded() / 100_000
+        return (t * 100_000).rounded() / 100_000
+    }
+
+    private func sendPitch() {
+        guard let pitch = mapping.pitch else { return }
+        faderKnown = true
+        // The arrows follow every move, whether or not it drives the tempo (#475).
+        defer { pitchArrowLEDs() }
+        let rounded = faderTempo(pitch)
         // Moving the fader while Syndicate has the slider disabled would queue up a jump.
         guard sliderEnabled, pickedUp(at: rounded) else { return }
         guard rounded != lastTempo else { return }
@@ -63,6 +71,22 @@ extension Bridge {
     var pitchCenterVelocity: UInt8 {
         if mapping.pitch?.pickup == true, pickupArmed, reportedTempo != nil { return dimLevel }
         return lastTempo == 0 ? fullLevel : offLevel
+    }
+
+    /// The pitch arrows (#475): during pickup, the one pointing the way to move the fader is full, the other off.
+    /// Back is toward a lower raw value, forward toward a higher one, whatever `invert` says. Both are off when the
+    /// fader's within the catch tolerance, its position isn't known yet, or there's nothing to catch.
+    func pitchArrowLEDs() {
+        var back = offLevel, forward = offLevel
+        if let pitch = mapping.pitch, pitch.pickup, pickupArmed, sliderEnabled, loaded, faderKnown, let reported = reportedTempo {
+            let gap = faderTempo(pitch) - reported
+            if abs(gap) > pitch.pickupTolerance {
+                // Below the value in tempo is below it in raw terms, unless the fader's inverted.
+                if (gap < 0) != pitch.invert { forward = fullLevel } else { back = fullLevel }
+            }
+        }
+        if let note = mapping.leds.pitchArrowBack { led(note, back) }
+        if let note = mapping.leds.pitchArrowForward { led(note, forward) }
     }
 
     func rearmPickup() {
