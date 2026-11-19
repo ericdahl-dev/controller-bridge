@@ -12,65 +12,66 @@ struct LayerSettleTests {
         (rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).filter { if case .noteOn = $0 { true } else { false } }.count
     }
 
-    /// Note-on writes to the LC6000's LED output since `from`.
-    static func writes(_ rig: Rig, from: Int) -> Int { ledWrites(rig) - from }
+    /// Decks 2 and 4 playing: every step changes Play (note 1), full on layers 2 and 4, dim on 1 and 3, so each
+    /// repaint sends exactly one write to it (#554: a step sends only the lights that differ).
+    static func alternating() throws -> Rig {
+        let rig = try CensorDeckSelectLightsTests.layered()
+        for deck in [2, 4] { rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/Playing", [.int(1)])) }
+        return rig
+    }
+
+    /// Writes to Play (note 1) so far.
+    static func playWrites(_ rig: Rig) -> [UInt8] {
+        (rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).compactMap { if case .noteOn(_, 1, let v) = $0 { v } else { nil } }
+    }
 
     @Test("A lone step repaints at once, as before")
     func lone() throws {
-        let rig = try CensorDeckSelectLightsTests.layered()
+        let rig = try Self.alternating()
         rig.clock.now = 10
-        let before = Self.ledWrites(rig)
+        let before = Self.playWrites(rig).count
         Press.note(rig, 23, down: true)
-        #expect(Self.writes(rig, from: before) > 30)
+        #expect(Self.playWrites(rig).dropFirst(before) == [127])
     }
 
     @Test("Four steps 0.25 s apart: the first repaints at once, the rest wait and the last layer is repainted once")
     func coalesced() throws {
-        let rig = try CensorDeckSelectLightsTests.layered()
+        let rig = try Self.alternating()
         rig.clock.now = 10
         rig.coordinator.tick()
-        let start = Self.ledWrites(rig)
-        var afterFirst = 0
+        let start = Self.playWrites(rig).count
         for step in 0..<4 {
             rig.clock.now = 10 + Double(step) * 0.25
             Press.note(rig, 23, down: true)
             Press.note(rig, 23, down: false)
             rig.coordinator.tick()
-            if step == 0 { afterFirst = Self.writes(rig, from: start) }
         }
-        #expect(afterFirst > 30)
-        #expect(Self.writes(rig, from: start) == afterFirst)   // steps 2-4 sent nothing yet
+        #expect(Self.playWrites(rig).dropFirst(start) == [127])   // layer 2 at once; steps 2-4 wait
         rig.clock.now = 10.75 + LayerSettle.interval
         rig.coordinator.tick()
-        let settled = Self.writes(rig, from: start)
-        #expect(settled > afterFirst + 30)                     // the last layer, once
+        #expect(Self.playWrites(rig).dropFirst(start) == [127, 1])   // then layer 1, once
         rig.clock.now = 12
         rig.coordinator.tick()
-        #expect(Self.writes(rig, from: start) == settled)
-        // Four steps from layer 1: back on layer 1, and it's the one in front.
+        #expect(Self.playWrites(rig).dropFirst(start) == [127, 1])
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
     }
 
     @Test("The steps seen on the unit (16:35:26.47, 27.26, 27.84, 28.22): two repaints, the first layer at once and the last after the settle")
     func observed() throws {
-        let rig = try CensorDeckSelectLightsTests.layered()
+        let rig = try Self.alternating()
         rig.clock.now = 26
         rig.coordinator.tick()
-        let start = Self.ledWrites(rig)
-        var repaints = 0, last = start
+        let start = Self.playWrites(rig).count
         for time in [26.47, 27.26, 27.84, 28.22] {
             rig.clock.now = time
             Press.note(rig, 23, down: true)
             Press.note(rig, 23, down: false)
             rig.coordinator.tick()
-            if Self.ledWrites(rig) - last > 30 { repaints += 1 }
-            last = Self.ledWrites(rig)
         }
-        #expect(repaints == 1)   // the first step only
+        #expect(Self.playWrites(rig).dropFirst(start) == [127])
         rig.clock.now = 28.22 + LayerSettle.interval
         rig.coordinator.tick()
-        if Self.ledWrites(rig) - last > 30 { repaints += 1 }
-        #expect(repaints == 2)
+        #expect(Self.playWrites(rig).dropFirst(start) == [127, 1])
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
     }
 
