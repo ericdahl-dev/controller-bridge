@@ -19,8 +19,12 @@ typedef struct {
     void *ctx;
 } dfw_port;
 
-/// The longest message kept: the longest valid one (deck, 19 bytes) with room to spare. Longer ones are dropped.
-#define DFW_MESSAGE_MAX 32
+/// The most a text message carries (#458): 96 bytes of characters after escapes, so at most 96 characters.
+#define DFW_TEXT_MAX 96
+/// Text fields: title, artist, key, and the untitled words (player 5's own name).
+#define DFW_TEXT_FIELDS 4
+/// The longest message kept: the longest valid one (text, 108 bytes) with room to spare. Longer ones are dropped.
+#define DFW_MESSAGE_MAX 112
 /// Messages waiting for the next tick. The hook copies them in as the stock parser dispatches them (main loop, #466),
 /// never keeping a pointer into the stock SysEx buffer; the tick acts on them.
 #define DFW_INBOX 16
@@ -60,6 +64,12 @@ typedef struct dfw_unit {
     uint8_t needle_heard;
     /// Whether a meter message has come since begin: until one does, no meter is drawn.
     uint8_t meter_heard;
+    /// The texts as Windows-1252 codes (0x81 the box), and the tempo in tenths of a BPM, 0 for none (#458).
+    uint8_t text[DFW_TEXT_FIELDS][DFW_TEXT_MAX];
+    uint8_t text_length[DFW_TEXT_FIELDS];
+    uint16_t tempo;
+    /// Whether a text message has come since the deck last changed: until one has, no words are drawn (#458).
+    uint8_t text_heard;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
     /// The clock at the tick that is drawing, for anything drawn over time.

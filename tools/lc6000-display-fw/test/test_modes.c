@@ -94,6 +94,9 @@ void the_first_meter_at_silence_presents(void);
 void a_changed_meter_presents(void);
 void the_same_meter_does_not_present_again(void);
 void end_forgets_the_meter(void);
+void an_unchanged_text_or_tempo_presents_nothing(void);
+void a_deck_change_clears_the_text_and_tempo(void);
+void a_new_decks_words_wait_for_its_text(void);
 
 void three_seconds_of_silence_is_stale(void);
 void any_message_clears_the_silence(void);
@@ -136,6 +139,9 @@ const test_case all_tests[] = {
     { "a changed meter presents", a_changed_meter_presents },
     { "the same meter does not present again", the_same_meter_does_not_present_again },
     { "end forgets the meter", end_forgets_the_meter },
+    { "an unchanged text or tempo presents nothing", an_unchanged_text_or_tempo_presents_nothing },
+    { "a deck change clears the text and tempo", a_deck_change_clears_the_text_and_tempo },
+    { "a new deck's words wait for its text", a_new_decks_words_wait_for_its_text },
     { "three seconds of silence is stale", three_seconds_of_silence_is_stale },
     { "any message clears the silence", any_message_clears_the_silence },
     { "garbage doesn't count as a message", garbage_doesnt_count_as_a_message },

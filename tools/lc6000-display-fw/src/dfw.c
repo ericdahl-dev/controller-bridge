@@ -7,8 +7,10 @@ static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
 #define DFW_CMD 0x20
 /// The protocol version this code speaks.
 #define DFW_VERSION 1
-enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_STATE = 0x07, OP_BEAT = 0x08,
-       OP_NEEDLE = 0x09, OP_METER = 0x0A };
+enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_TEXT = 0x04, OP_TEMPO = 0x05,
+       OP_STATE = 0x07, OP_BEAT = 0x08, OP_NEEDLE = 0x09, OP_METER = 0x0A };
+/// A text escape: the next byte plus 0x80 is the Windows-1252 code.
+#define TEXT_ESCAPE 0x7F
 /// Bit 6 of the state flags is reserved: a message with it set is malformed.
 #define STATE_RESERVED 0x40
 /// Bit 5 of the state flags: Syndicate's feedback has stopped.
@@ -38,7 +40,7 @@ void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {
 static uint8_t op_length(uint8_t op) {
     switch (op) {
     case OP_CAPABILITY: case OP_BEGIN: case OP_END: case OP_STATE: case OP_BEAT: return 2;
-    case OP_NEEDLE: case OP_METER: return 3;
+    case OP_NEEDLE: case OP_TEMPO: case OP_METER: return 3;
     case OP_DECK: return 9;
     default: return 0;
     }
@@ -60,11 +62,29 @@ static int in_range(uint8_t op, const uint8_t *args) {
         return !(args[0] & STATE_RESERVED);
     case OP_BEAT:
         return args[0] <= 4;
-    case OP_NEEDLE: case OP_METER:
-        return 1;   // any two 7-bit bytes are an angle, or a level and a peak
+    case OP_NEEDLE: case OP_TEMPO: case OP_METER:
+        return 1;   // any two 7-bit bytes are an angle, a tempo, or a level and a peak
     default:
         return 0;
     }
+}
+
+/// Decodes a text message's characters into Windows-1252 codes; -1 if any is malformed: a code below 0x20, an escape
+/// with nothing after it, or one of Windows-1252's undefined codes other than 0x81 (the box).
+static int decode_text(const uint8_t *chars, size_t count, uint8_t *codes) {
+    int n = 0;
+    for (size_t i = 0; i < count; i++) {
+        uint8_t code = chars[i];
+        if (code == TEXT_ESCAPE) {
+            if (++i == count) return -1;
+            code = (uint8_t)(0x80 | chars[i]);
+            if (code == 0x8D || code == 0x8F || code == 0x90 || code == 0x9D) return -1;
+        } else if (code < 0x20) {
+            return -1;
+        }
+        codes[n++] = code;
+    }
+    return n;
 }
 
 static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t now_ms) {
@@ -76,9 +96,18 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
     size_t declared = ((size_t)bytes[header + 1] << 7) | bytes[header + 2];
     const uint8_t *body = bytes + header + 3;
     uint8_t op = body[0];
-    if (declared == 0 || declared != op_length(op) || length != header + 4 + declared) return;
+    if (length != header + 4 + declared) return;
     const uint8_t *args = body + 1;
-    if (!in_range(op, args)) return;
+    // Text alone has no one length: its field and up to DFW_TEXT_MAX bytes of characters.
+    uint8_t codes[DFW_TEXT_MAX];
+    int code_count = 0;
+    if (op == OP_TEXT) {
+        if (declared < 2 || declared > 2 + DFW_TEXT_MAX || args[0] >= DFW_TEXT_FIELDS) return;
+        code_count = decode_text(args + 1, declared - 2, codes);
+        if (code_count < 0) return;
+    } else if (declared == 0 || declared != op_length(op) || !in_range(op, args)) {
+        return;
+    }
     // One of ours: it counts as hearing from the host, and ends any silence.
     unit->heard = now_ms;
     if (unit->silent) {
@@ -119,8 +148,33 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         // The heartbeat's deck, unchanged, changes nothing: its flags stay and nothing is redrawn (#459).
         if (memcmp(&deck, &unit->deck, sizeof deck) == 0) break;
         unit->deck = deck;
-        // A new deck's play flags wait for its own state message (#464); only feedback stale carries over.
+        // A new deck's play flags wait for its own state message (#464); only feedback stale carries over. Its text
+        // and tempo wait for their own messages too (#458).
         unit->flags &= FLAG_STALE;
+        memset(unit->text_length, 0, sizeof unit->text_length);
+        unit->tempo = 0;
+        unit->text_heard = 0;
+        unit->dirty = 1;
+        break;
+    }
+    case OP_TEXT:
+        if (!unit->drawn) break;
+        // The first since the deck changed lets the words show, even an empty one (an empty deck's title).
+        if (!unit->text_heard) {
+            unit->text_heard = 1;
+            unit->dirty = 1;
+        }
+        // Unchanged (the heartbeat's), it changes nothing.
+        if (unit->text_length[args[0]] == code_count &&
+            memcmp(unit->text[args[0]], codes, (size_t)code_count) == 0) break;
+        memcpy(unit->text[args[0]], codes, (size_t)code_count);
+        unit->text_length[args[0]] = (uint8_t)code_count;
+        unit->dirty = 1;
+        break;
+    case OP_TEMPO: {
+        uint16_t tempo = (uint16_t)((args[0] << 7) | args[1]);
+        if (!unit->drawn || unit->tempo == tempo) break;
+        unit->tempo = tempo;
         unit->dirty = 1;
         break;
     }

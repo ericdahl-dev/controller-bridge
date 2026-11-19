@@ -78,7 +78,10 @@ A change to the vectors file runs the Mac jobs too, so the Swift walk always run
 Anything that isn't exactly one of our messages is ignored:
 
 - wrong header or command;
-- a length that isn't the op's one exact length, or isn't the bytes actually received;
+- a length that isn't the op's one exact length, or isn't the bytes actually received (text, #458, has no one
+  length: its field and at most 96 bytes of characters);
+- text with a control code, a lone escape at its end, an undefined Windows-1252 code other than the box (0x81), or a
+  field over 3;
 - F7 anywhere but its place;
 - a data byte with its top bit set;
 - a version of 0, or a value out of range.

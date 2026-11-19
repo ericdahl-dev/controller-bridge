@@ -59,21 +59,8 @@ public enum JogDisplayRenderer {
     static let meterTick: CGFloat = 2
     static let meterYellow = rgb(0xFFD400), meterClip = rgb(0xFF3B30), meterPeak = rgb(0xFFFFFF)
 
-    /// The badge for Syndicate's player type: TRK for a track, OSC, MIDI or SEQ for a clip of that kind (#209).
-    static func badge(_ playerType: String?) -> String? {
-        guard let type = playerType?.lowercased(), !type.isEmpty, type != "empty" else { return nil }
-        if type == "track" { return "TRK" }
-        for (needle, label) in [("osc", "OSC"), ("midi", "MIDI"), ("seq", "SEQ")] where type.contains(needle) { return label }
-        return String(type.uppercased().prefix(4))
-    }
-
-    /// What a deck with no title shows: "OSC clip" for an OSC clip, the player type's own name for another kind (an
-    /// Automation deck says "Automation"), "No track" when it's empty.
-    static func untitled(_ playerType: String?) -> (title: String, caption: String) {
-        guard let label = badge(playerType), label != "TRK" else { return ("No track", "Load a track") }
-        if label == "OSC" { return ("OSC clip", "no title") }
-        return (playerType!.prefix(1).uppercased() + playerType!.dropFirst().lowercased(), "no title")
-    }
+    static func badge(_ playerType: String?) -> String? { JogDisplayWords.badge(playerType) }
+    static func untitled(_ playerType: String?) -> (title: String, caption: String) { JogDisplayWords.untitled(playerType) }
 
     // MARK: Drawing
 
