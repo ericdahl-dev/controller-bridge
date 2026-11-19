@@ -1,5 +1,5 @@
 {
-  "about": "The drawn jog display's picture, the numbers its two languages share (#571): the Swift renderer (JogDisplayRenderer, JogTrackTime, DeckNumberInk) and the chip's C. layout/gen_layout.py writes src/layout_generated.h and Packages/ControllerBridgeKit/Sources/ControllerBridgeCore/JogLayout.generated.swift from it; `make layout` regenerates them and `make test` fails if either differs. Kinds: color is 0xRRGGBB (C: 0x...u, Swift: Int); float is a length or position in frame pixels (C: float with an f, Swift: Double); int is a whole number (C: int, Swift: Int); ratio is a fraction (C: float, Swift: Double). The warning's 60 and 30 s are the protocol's (vectors/messages.json, #569), not here. Values are written as their literals are, so each language reads exactly the value it read before.",
+  "about": "The drawn jog display's picture, the numbers its two languages share (#571): the Swift renderer (JogDisplayRenderer, JogTrackTime, DeckNumberInk) and the chip's C. layout/gen_layout.py writes src/layout_generated.h and Packages/ControllerBridgeKit/Sources/ControllerBridgeCore/JogLayout.generated.swift from it; `make layout` regenerates them and `make test` fails if either differs. Kinds: color is 0xRRGGBB (C: 0x...u, Swift: Int); float is a length or position in frame pixels (C: float with an f, Swift: Double); int is a whole number (C: int, Swift: Int); ratio is a fraction (C: float, Swift: Double); double is a number C works in double (C: double, Swift: Double). The warning's 60 and 30 s are the protocol's (vectors/messages.json, #569), not here. Values are written as their literals are, so each language reads exactly the value it read before.",
   "constants": [
     {
       "name": "ground",
@@ -162,6 +162,96 @@
       "kind": "ratio",
       "value": "0.1791",
       "about": "The deck number is white under this WCAG relative luminance."
+    },
+    {
+      "name": "ruleX",
+      "kind": "int",
+      "value": "50",
+      "about": "The rule under the artist (#458, #462): its left edge."
+    },
+    {
+      "name": "ruleY",
+      "kind": "int",
+      "value": "127",
+      "about": "The rule's top."
+    },
+    {
+      "name": "ruleWidth",
+      "kind": "int",
+      "value": "98",
+      "about": "The rule's width."
+    },
+    {
+      "name": "ruleHeight",
+      "kind": "int",
+      "value": "2",
+      "about": "The rule's height."
+    },
+    {
+      "name": "tickX",
+      "kind": "int",
+      "value": "98",
+      "about": "In phase: the tick at the rule's center, its left edge."
+    },
+    {
+      "name": "tickY",
+      "kind": "int",
+      "value": "125",
+      "about": "The tick's top."
+    },
+    {
+      "name": "tickWidth",
+      "kind": "int",
+      "value": "2",
+      "about": "The tick's width."
+    },
+    {
+      "name": "tickHeight",
+      "kind": "int",
+      "value": "6",
+      "about": "The tick's height."
+    },
+    {
+      "name": "barY",
+      "kind": "int",
+      "value": "126",
+      "about": "Off phase: the bar from the center, its top."
+    },
+    {
+      "name": "barHeight",
+      "kind": "int",
+      "value": "4",
+      "about": "The bar's height."
+    },
+    {
+      "name": "barMax",
+      "kind": "int",
+      "value": "49",
+      "about": "The bar's longest, the rule's half, in px."
+    },
+    {
+      "name": "phaseDim",
+      "kind": "double",
+      "value": "0.35",
+      "about": "Off phase: how much of the deck color the rule keeps over the ground."
+    },
+    {
+      "name": "phaseCurve",
+      "kind": "double",
+      "value": "0.02",
+      "about": "The bar's curve, g(p) = p/(|p| + this), p in beats."
+    },
+    {
+      "name": "phaseFull",
+      "kind": "double",
+      "value": "0.5",
+      "about": "The offset in beats at which the bar is its whole half."
+    },
+    {
+      "name": "phaseUnitsPerBeat",
+      "kind": "int",
+      "value": "16384",
+      "about": "The phase's units in a beat, as op 0B carries it."
     }
   ]
 }

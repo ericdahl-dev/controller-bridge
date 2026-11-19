@@ -178,24 +178,33 @@ public enum JogDisplayRenderer {
     private static func rule(phase: Int?, color: CGColor, in context: CGContext) {
         guard let phase, phase != 0 else {
             context.setFillColor(color)
-            context.fill(CGRect(x: 50, y: 127, width: 98, height: 2))
-            if phase == 0 { context.fill(CGRect(x: 98, y: 125, width: 2, height: 6)) }
+            context.fill(ruleRect)
+            if phase == 0 { context.fill(tickRect) }
             return
         }
         context.setFillColor(dimmed(color))
-        context.fill(CGRect(x: 50, y: 127, width: 98, height: 2))
+        context.fill(ruleRect)
         let length = CGFloat(phaseBar(phase))
         context.setFillColor(color)
-        context.fill(CGRect(x: phase < 0 ? center - length : center, y: 126, width: length, height: 4))
+        context.fill(CGRect(x: phase < 0 ? center - length : center, y: CGFloat(JogLayout.barY), width: length,
+                            height: CGFloat(JogLayout.barHeight)))
     }
 
+    /// The rule, and the in-phase tick at its center (JogLayout, shared with the chip).
+    static let ruleRect = CGRect(x: CGFloat(JogLayout.ruleX), y: CGFloat(JogLayout.ruleY), width: CGFloat(JogLayout.ruleWidth),
+                                 height: CGFloat(JogLayout.ruleHeight))
+    static let tickRect = CGRect(x: CGFloat(JogLayout.tickX), y: CGFloat(JogLayout.tickY), width: CGFloat(JogLayout.tickWidth),
+                                 height: CGFloat(JogLayout.tickHeight))
+
     /// How much of the deck color the rule keeps while off phase.
-    static let phaseDim: CGFloat = 0.35
+    static let phaseDim = CGFloat(JogLayout.phaseDim)
+    /// The ground's level in each channel (it is a gray).
+    static let groundLevel = CGFloat(JogLayout.ground & 0xFF)
 
     /// The deck color at `phaseDim` over the ground, each channel rounded to a whole 0–255 level.
     private static func dimmed(_ color: CGColor) -> CGColor {
         let deck = color.components ?? [1, 1, 1, 1]
-        let level = { (channel: CGFloat) -> CGFloat in ((channel * 255 * phaseDim + 11 * (1 - phaseDim)).rounded()) / 255 }
+        let level = { (channel: CGFloat) -> CGFloat in ((channel * 255 * phaseDim + groundLevel * (1 - phaseDim)).rounded()) / 255 }
         return CGColor(srgbRed: level(deck[0]), green: level(deck[1]), blue: level(deck[2]), alpha: 1)
     }
 
@@ -203,9 +212,10 @@ public enum JogDisplayRenderer {
     /// offset in beats (`phase`/16384); so a hundredth of a beat is a third of the way and half a beat the whole half.
     /// At least 1 px off phase.
     static func phaseBar(_ phase: Int) -> Int {
-        func g(_ beats: Double) -> Double { beats / (abs(beats) + 0.02) }
-        let length = (49 * g(abs(Double(phase)) / 16384) / g(0.5)).rounded()
-        return max(1, min(49, Int(length)))
+        func g(_ beats: Double) -> Double { beats / (abs(beats) + JogLayout.phaseCurve) }
+        let most = JogLayout.barMax
+        let length = (Double(most) * g(abs(Double(phase)) / Double(JogLayout.phaseUnitsPerBeat)) / g(JogLayout.phaseFull)).rounded()
+        return max(1, min(most, Int(length)))
     }
 
     /// One line of the text block: its words, face, CSS line box and tracking. The drawn display firmware lays out the

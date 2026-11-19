@@ -19,13 +19,16 @@ def c_literal(kind, value):
     if kind == "int":
         int(value)
         return value
+    if kind == "double":
+        float(value)
+        return value
     raise SystemExit(f"unknown kind {kind!r}")
 
 
 def swift_line(name, kind, value):
     if kind == "color":
         return f"public static let {name} = 0x{value}"
-    if kind in ("float", "ratio"):
+    if kind in ("float", "ratio", "double"):
         return f"public static let {name}: Double = {value}"
     if kind == "int":
         return f"public static let {name} = {value}"

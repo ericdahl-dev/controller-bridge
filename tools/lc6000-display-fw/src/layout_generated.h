@@ -56,5 +56,35 @@
 #define DFW_UNTITLED_CAPTION_TOP 100
 /// The deck number is white under this WCAG relative luminance.
 #define DFW_NUMBER_WHITE_BELOW 0.1791f
+/// The rule under the artist (#458, #462): its left edge.
+#define DFW_RULE_X 50
+/// The rule's top.
+#define DFW_RULE_Y 127
+/// The rule's width.
+#define DFW_RULE_WIDTH 98
+/// The rule's height.
+#define DFW_RULE_HEIGHT 2
+/// In phase: the tick at the rule's center, its left edge.
+#define DFW_TICK_X 98
+/// The tick's top.
+#define DFW_TICK_Y 125
+/// The tick's width.
+#define DFW_TICK_WIDTH 2
+/// The tick's height.
+#define DFW_TICK_HEIGHT 6
+/// Off phase: the bar from the center, its top.
+#define DFW_BAR_Y 126
+/// The bar's height.
+#define DFW_BAR_HEIGHT 4
+/// The bar's longest, the rule's half, in px.
+#define DFW_BAR_MAX 49
+/// Off phase: how much of the deck color the rule keeps over the ground.
+#define DFW_PHASE_DIM 0.35
+/// The bar's curve, g(p) = p/(|p| + this), p in beats.
+#define DFW_PHASE_CURVE 0.02
+/// The offset in beats at which the bar is its whole half.
+#define DFW_PHASE_FULL 0.5
+/// The phase's units in a beat, as op 0B carries it.
+#define DFW_PHASE_UNITS_PER_BEAT 16384
 
 #endif

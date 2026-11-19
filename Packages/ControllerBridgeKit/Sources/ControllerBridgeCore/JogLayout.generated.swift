@@ -56,4 +56,34 @@ public enum JogLayout {
     public static let untitledCaptionTop = 100
     /// The deck number is white under this WCAG relative luminance.
     public static let numberWhiteBelow: Double = 0.1791
+    /// The rule under the artist (#458, #462): its left edge.
+    public static let ruleX = 50
+    /// The rule's top.
+    public static let ruleY = 127
+    /// The rule's width.
+    public static let ruleWidth = 98
+    /// The rule's height.
+    public static let ruleHeight = 2
+    /// In phase: the tick at the rule's center, its left edge.
+    public static let tickX = 98
+    /// The tick's top.
+    public static let tickY = 125
+    /// The tick's width.
+    public static let tickWidth = 2
+    /// The tick's height.
+    public static let tickHeight = 6
+    /// Off phase: the bar from the center, its top.
+    public static let barY = 126
+    /// The bar's height.
+    public static let barHeight = 4
+    /// The bar's longest, the rule's half, in px.
+    public static let barMax = 49
+    /// Off phase: how much of the deck color the rule keeps over the ground.
+    public static let phaseDim: Double = 0.35
+    /// The bar's curve, g(p) = p/(|p| + this), p in beats.
+    public static let phaseCurve: Double = 0.02
+    /// The offset in beats at which the bar is its whole half.
+    public static let phaseFull: Double = 0.5
+    /// The phase's units in a beat, as op 0B carries it.
+    public static let phaseUnitsPerBeat = 16384
 }

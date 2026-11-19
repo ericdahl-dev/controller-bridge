@@ -297,22 +297,24 @@ static void fill(dfw_pixel *frame, int x, int y, int width, int height, dfw_pixe
 }
 
 /// How much of the deck color the rule keeps while off phase, over the ground (#462).
-#define PHASE_DIM 0.35
+#define PHASE_DIM DFW_PHASE_DIM
+/// The ground's level in each channel (it is a gray).
+#define GROUND_LEVEL ((int)(DFW_GROUND & 0xFFu))
 
 /// One channel of the deck color dimmed over the ground, as the renderer works it: in double, rounded half away.
 static uint8_t dimmed(uint8_t channel) {
-    double level = (double)channel / 255 * 255 * PHASE_DIM + 11 * (1 - PHASE_DIM);
+    double level = (double)channel / 255 * 255 * PHASE_DIM + GROUND_LEVEL * (1 - PHASE_DIM);
     return (uint8_t)(level + 0.5);
 }
 
 /// The renderer's phase curve, g(p) = p/(|p| + 0.02), for p ≥ 0 in beats.
-static double phase_curve(double beats) { return beats / (beats + 0.02); }
+static double phase_curve(double beats) { return beats / (beats + DFW_PHASE_CURVE); }
 
 /// The phase bar's length in whole px, as JogDisplayRenderer.phaseBar: 49 × g(p)/g(½), rounded, 1 to 49.
 static int phase_bar(int phase) {
-    double beats = (double)(phase < 0 ? -phase : phase) / 16384;
-    int length = (int)(49 * phase_curve(beats) / phase_curve(0.5) + 0.5);
-    return length < 1 ? 1 : length > 49 ? 49 : length;
+    double beats = (double)(phase < 0 ? -phase : phase) / DFW_PHASE_UNITS_PER_BEAT;
+    int length = (int)(DFW_BAR_MAX * phase_curve(beats) / phase_curve(DFW_PHASE_FULL) + 0.5);
+    return length < 1 ? 1 : length > DFW_BAR_MAX ? DFW_BAR_MAX : length;
 }
 
 /// The rule under the artist (#458) in the deck color, showing the deck's phase against the master (#462). Unknown:
@@ -323,13 +325,14 @@ static void rule(dfw_pixel *frame, const dfw_unit *unit) {
     dfw_pixel deck = (dfw_pixel)d->r << 16 | (dfw_pixel)d->g << 8 | d->b;
     int phase = unit->phase;
     if (phase == DFW_PHASE_UNKNOWN || phase == 0) {
-        fill(frame, 50, 127, 98, 2, deck);
-        if (phase == 0) fill(frame, 98, 125, 2, 6, deck);
+        fill(frame, DFW_RULE_X, DFW_RULE_Y, DFW_RULE_WIDTH, DFW_RULE_HEIGHT, deck);
+        if (phase == 0) fill(frame, DFW_TICK_X, DFW_TICK_Y, DFW_TICK_WIDTH, DFW_TICK_HEIGHT, deck);
         return;
     }
-    fill(frame, 50, 127, 98, 2, (dfw_pixel)dimmed(d->r) << 16 | (dfw_pixel)dimmed(d->g) << 8 | dimmed(d->b));
-    int length = phase_bar(phase);
-    fill(frame, phase < 0 ? 99 - length : 99, 126, length, 4, deck);
+    fill(frame, DFW_RULE_X, DFW_RULE_Y, DFW_RULE_WIDTH, DFW_RULE_HEIGHT,
+         (dfw_pixel)dimmed(d->r) << 16 | (dfw_pixel)dimmed(d->g) << 8 | dimmed(d->b));
+    int length = phase_bar(phase), middle = (int)DFW_CENTER;
+    fill(frame, phase < 0 ? middle - length : middle, DFW_BAR_Y, length, DFW_BAR_HEIGHT, deck);
 }
 
 void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
