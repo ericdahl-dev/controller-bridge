@@ -29,6 +29,10 @@ struct DrawnDisplayVectorsTests {
         case "state": return .state(DrawnDisplay.State(rawValue: UInt8(fields["flags"] as! Int)))
         case "beat": return .beat(fields["beat"] as! Int)
         case "needle": return .needle(fields["angle"] as! Int)
+        case "text":
+            return DrawnDisplay.TextField(rawValue: UInt8(fields["field"] as! Int))
+                .map { .text($0, fields["text"] as! String) }
+        case "tempo": return .tempo(tenths: fields["tenths"] as! Int)
         default: return nil
         }
     }
@@ -36,7 +40,8 @@ struct DrawnDisplayVectorsTests {
     @Test("Every host message in the file encodes to its bytes, and the file has begin, end, capability and deck")
     func hostMessagesEncode() {
         let entries = (Self.file["messages"] as! [[String: Any]]).filter { $0["direction"] as? String != "unit" }
-        #expect(Set(entries.map { $0["kind"] as! String }).isSuperset(of: ["begin", "end", "capability", "deck", "state", "beat", "needle"]))
+        #expect(Set(entries.map { $0["kind"] as! String }).isSuperset(of: ["begin", "end", "capability", "deck", "state", "beat", "needle",
+                                                                          "text", "tempo"]))
         for entry in entries {
             let message = Self.message(entry)
             #expect(message != nil, "\(entry["name"]!): unknown kind")
