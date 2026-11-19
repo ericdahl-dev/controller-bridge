@@ -10,6 +10,13 @@ TARGET_PREFIX_SIZE = 274
 ELEMENT_HEADER_SIZE = 8
 SUFFIX_SIZE = 16
 
+TRAILER_SIZE = 32
+TRAILER_MAGIC = 0xDEADBEEF
+END_TOKEN = b"EndOfFlashToken\x00"
+TP_REFUSAL = ("this image has no CRC trailer this tool understands (no 0xDEADBEEF magic, length and CRC). "
+              "That is the tp (top panel) layout: its trailer field is undecoded, so a patched tp image "
+              "can't be given a trailer the bootloader would accept. Only wd images can be patched")
+
 
 class Refused(Exception):
     """The input or the patch isn't one this tool can handle safely."""
@@ -25,6 +32,46 @@ class DfuSeImage:
 
 def suffix_crc(data):
     return zlib.crc32(data) ^ 0xFFFFFFFF
+
+
+def stm32_crc(data, crc=0xFFFFFFFF):
+    """The STM32 hardware CRC unit: CRC-32 poly 0x04C11DB7, from 0xFFFFFFFF, little-endian 32-bit words,
+    no reflection, no final XOR."""
+    if len(data) % 4:
+        raise ValueError("the STM32 CRC unit takes whole 32-bit words")
+    for (word,) in struct.iter_unpack("<I", data):
+        crc ^= word
+        for _ in range(32):
+            crc = ((crc << 1) ^ 0x04C11DB7) & 0xFFFFFFFF if crc & 0x80000000 else (crc << 1) & 0xFFFFFFFF
+    return crc
+
+
+def covered_length(element):
+    """The number of bytes the wd trailer CRC covers, once the trailer is known good. Refuses anything else."""
+    size = len(element)
+    if size < TRAILER_SIZE or size % 4 or element[-16:] != END_TOKEN:
+        raise Refused("the image doesn't end with the 32-byte EndOfFlashToken trailer")
+    magic, covered, stored = struct.unpack_from("<III", element, size - 28)
+    if magic != TRAILER_MAGIC or covered != size - 20:
+        raise Refused(TP_REFUSAL)
+    if stm32_crc(element[:covered]) != stored:
+        raise Refused("the input's trailer CRC doesn't match its image: refusing to build on it")
+    return covered
+
+
+def build(image, element):
+    """Serialises the DfuSe file around a new element of the same size, with a fresh suffix CRC."""
+    data = image.head + element + image.suffix_head
+    return data + struct.pack("<I", suffix_crc(data))
+
+
+def patch(data, patch_text):
+    """Applies a patch description to a wd DfuSe file and returns the new file, both CRCs recomputed."""
+    image = parse(data)
+    covered = covered_length(image.element)
+    element = bytearray(image.element)
+    struct.pack_into("<I", element, covered, stm32_crc(bytes(element[:covered])))
+    return build(image, bytes(element))
 
 
 def parse(data):

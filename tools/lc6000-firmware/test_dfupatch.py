@@ -56,5 +56,54 @@ class ParseTests(unittest.TestCase):
             dfupatch.parse(cut)
 
 
+def wd_element(size=0x400, fill=b"\x5a\xa5\x0f\xf0"):
+    """A wd-style image: code, then the 32-byte trailer (version, 0xDEADBEEF, length, CRC, EndOfFlashToken)."""
+    body = bytearray((fill * (size // len(fill)))[:size])
+    covered = size - 20
+    struct.pack_into("<4sII", body, size - 32, b"\x00\x00\x05\x00", 0xDEADBEEF, covered)
+    struct.pack_into("<I", body, covered, dfupatch.stm32_crc(bytes(body[:covered])))
+    body[size - 16:] = b"EndOfFlashToken\x00"
+    return bytes(body)
+
+
+def tp_element(size=0x400):
+    """A tp-style image: its trailer has no magic and no length, just an undecoded field (an invented value here)."""
+    body = bytearray(b"\xff" * size)
+    struct.pack_into("<4sIII", body, size - 32, b"\x00\x00\x03\x01", 0x00C0FFEE, 0, 0)
+    body[size - 16:] = b"EndOfFlashToken\x00"
+    return bytes(body)
+
+
+class Stm32CrcTests(unittest.TestCase):
+    def test_it_matches_the_stm32_crc_unit_on_a_known_word(self):
+        # ST's CRC unit fed the one word 0x12345678 from reset reads back 0xDF8A8A2B
+        self.assertEqual(dfupatch.stm32_crc(struct.pack("<I", 0x12345678)), 0xDF8A8A2B)
+
+    def test_no_words_leave_the_reset_value(self):
+        self.assertEqual(dfupatch.stm32_crc(b""), 0xFFFFFFFF)
+
+
+class TrailerTests(unittest.TestCase):
+    def test_a_no_op_patch_gives_back_the_input_bit_for_bit(self):
+        data = dfuse_file(wd_element())
+        self.assertEqual(dfupatch.patch(data, ""), data)
+
+    def test_a_tp_image_is_refused_because_its_trailer_is_undecoded(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "tp.*undecoded"):
+            dfupatch.patch(dfuse_file(tp_element()), "")
+
+    def test_a_stale_trailer_crc_on_the_input_is_refused(self):
+        element = bytearray(wd_element())
+        element[0x10] ^= 0x01
+        with self.assertRaisesRegex(dfupatch.Refused, "CRC"):
+            dfupatch.patch(dfuse_file(bytes(element)), "")
+
+    def test_a_length_field_that_isnt_the_element_size_less_20_is_refused(self):
+        element = bytearray(wd_element())
+        struct.pack_into("<I", element, len(element) - 24, len(element) - 24)
+        with self.assertRaises(dfupatch.Refused):
+            dfupatch.patch(dfuse_file(bytes(element)), "")
+
+
 if __name__ == "__main__":
     unittest.main()
