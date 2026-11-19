@@ -308,6 +308,48 @@ static void logo(dfw_pixel *frame) {
     disc(frame, CENTER, CENTER, 26.0f * LOGO_SCALE, 0x141415u);
 }
 
+/// A whole-pixel rectangle in one color.
+static void fill(dfw_pixel *frame, int x, int y, int width, int height, dfw_pixel color) {
+    for (int row = y; row < y + height; row++)
+        for (int column = x; column < x + width; column++) frame[row * DFW_SIZE + column] = color;
+}
+
+/// How much of the deck color the rule keeps while off phase, over the ground (#462).
+#define PHASE_DIM 0.35
+
+/// One channel of the deck color dimmed over the ground, as the renderer works it: in double, rounded half away.
+static uint8_t dimmed(uint8_t channel) {
+    double level = (double)channel / 255 * 255 * PHASE_DIM + 11 * (1 - PHASE_DIM);
+    return (uint8_t)(level + 0.5);
+}
+
+/// The renderer's phase curve, g(p) = p/(|p| + 0.02), for p ≥ 0 in beats.
+static double phase_curve(double beats) { return beats / (beats + 0.02); }
+
+/// The phase bar's length in whole px, as JogDisplayRenderer.phaseBar: 49 × g(p)/g(½), rounded, 1 to 49.
+static int phase_bar(int phase) {
+    double beats = (double)(phase < 0 ? -phase : phase) / 16384;
+    int length = (int)(49 * phase_curve(beats) / phase_curve(0.5) + 0.5);
+    return length < 1 ? 1 : length > 49 ? 49 : length;
+}
+
+/// The rule under the artist (#458) in the deck color, showing the deck's phase against the master (#462). Unknown:
+/// the plain rule. In phase: the rule with a 2×6 tick at its center. Off phase: the rule dimmed and a 4 px bar in the
+/// deck color from the center, left for behind and right for ahead.
+static void rule(dfw_pixel *frame, const dfw_unit *unit) {
+    const dfw_deck_state *d = &unit->deck;
+    dfw_pixel deck = (dfw_pixel)d->r << 16 | (dfw_pixel)d->g << 8 | d->b;
+    int phase = unit->phase;
+    if (phase == DFW_PHASE_UNKNOWN || phase == 0) {
+        fill(frame, 50, 127, 98, 2, deck);
+        if (phase == 0) fill(frame, 98, 125, 2, 6, deck);
+        return;
+    }
+    fill(frame, 50, 127, 98, 2, (dfw_pixel)dimmed(d->r) << 16 | (dfw_pixel)dimmed(d->g) << 8 | dimmed(d->b));
+    int length = phase_bar(phase);
+    fill(frame, phase < 0 ? 99 - length : 99, 126, length, 4, deck);
+}
+
 void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
     for (int i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = GROUND;
     if (dfw_stale(unit)) {
@@ -318,10 +360,7 @@ void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
     }
     ring(frame, 0);
     header(frame, &unit->deck);
-    // The rule in the deck color, under the artist (#458): always, as the renderer draws it.
-    dfw_pixel deck = (dfw_pixel)unit->deck.r << 16 | (dfw_pixel)unit->deck.g << 8 | unit->deck.b;
-    for (int y = 127; y < 129; y++)
-        for (int x = 50; x < 148; x++) frame[y * DFW_SIZE + x] = deck;
+    rule(frame, unit);
     // The words wait for the deck's own text (#458), so a deck change never flashes another deck's.
     if (unit->text_heard) {
         dfw_text_block block;

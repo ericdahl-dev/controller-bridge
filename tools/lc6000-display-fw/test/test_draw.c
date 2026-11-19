@@ -124,6 +124,7 @@ static int band_matches(const ref_case *c, band which) {
 static void draw_case(const ref_case *c) {
     static dfw_unit unit;
     unit.deck = (dfw_deck_state){ c->number, c->r, c->g, c->b, c->player };
+    unit.phase = DFW_PHASE_UNKNOWN;   // the references draw the plain rule (#462)
     dfw_draw(frame, &unit);
 }
 
@@ -187,6 +188,7 @@ static void draw_text_case(const text_case *c) {
     set_text(&unit, 3, c->words);
     unit.tempo = c->tenths;
     unit.text_heard = 1;
+    unit.phase = DFW_PHASE_UNKNOWN;
     dfw_draw(frame, &unit);
 }
 
