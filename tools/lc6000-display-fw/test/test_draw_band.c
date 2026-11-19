@@ -283,29 +283,10 @@ static void record_band(void) {
 
 static int most_writes(void) { return recorder_most_writes(&record); }
 
-/// (1), (2), (5): a present's band writes each pixel at most once, never black and then a color, and never in the square.
-/// From a black layer and from a layer holding another ring (83 then 120 of 165).
-static void the_band_writes_each_pixel_once_with_its_final_value(void) {
-    memset(record.pixels, 0, sizeof record.pixels);
-    with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
-    record_band();
-    CHECK(record.total > 1000);
-    CHECK(most_writes() == 1 && record.dark_then_lit == 0 && record.in_square == 0);
-    with_time(DECK_4_BLUE_EMPTY, PLAYING, 120, 165, 0);
-    record_band();
-    CHECK(record.total > 0);
-    CHECK(most_writes() == 1 && record.dark_then_lit == 0 && record.in_square == 0);
-}
-
-/// (3): the same ring again writes nothing: the layer already holds it.
-static void an_unchanged_ring_writes_nothing(void) {
-    memset(record.pixels, 0, sizeof record.pixels);
-    with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
-    record_band();
-    CHECK(record.total > 1000);
-    record_band();
-    CHECK(record.total == 0);
-}
+// Each pixel once with its final value, and an unchanged ring writing nothing, are checked at the whole panel, through
+// the same dfw_band_layer seam (#573: one behavior test per seam): test_panel_record.c's "every present writes each
+// pixel once and never black then lit" (no pixel twice, none black then lit, the band writing no unchanged pixel, none
+// in the square, which A's copy writes) and "an unchanged scene writes nothing".
 
 /// (4), (5): a ring that goes (an unknown length, stale, a deck change) leaves the band black outside the square, the
 /// square untouched; and writes only what was lit.
@@ -406,8 +387,6 @@ static void the_band_table_walk_is_the_geometry(void) {
 
 const test_case draw_band_tests[] = {
     { "the band table walk is the geometry", the_band_table_walk_is_the_geometry },
-    { "the band writes each pixel once with its final value", the_band_writes_each_pixel_once_with_its_final_value },
-    { "an unchanged ring writes nothing", an_unchanged_ring_writes_nothing },
     { "a ring that goes leaves black", a_ring_that_goes_leaves_black },
     { "the band ring is the renderer's", the_band_ring_is_the_renderers },
     { "each band reference has the ring", each_band_reference_has_the_ring },
