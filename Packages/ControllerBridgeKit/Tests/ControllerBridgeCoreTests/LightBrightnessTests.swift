@@ -28,4 +28,19 @@ struct LightBrightnessTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
         #expect(try Ring.colors(rig) == [[63, 35, 0]])
     }
+
+    @Test("Changing it repaints the ring once in the new level; the single-color buttons get nothing; the same level again sends nothing")
+    func changeRepaintsOnce() throws {
+        let rig = try Ring.exact(deck: 2)
+        Ring.palette(rig, slot: 3, 255, 140, 0)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        let output = try Ring.output(rig)
+        output.colors.removeAll()
+        output.sent.removeAll()
+        rig.coordinator.setLightBrightness(50)
+        #expect(try Ring.colors(rig) == [[63, 35, 0]])
+        #expect(!output.sent.contains { if case .noteOn = $0 { true } else { false } })
+        rig.coordinator.setLightBrightness(50)
+        #expect(try Ring.colors(rig).count == 1)
+    }
 }
