@@ -17,10 +17,6 @@ static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
 static dfw_unit unit;
 static uint16_t panel[DFW_LAYER_W * DFW_LAYER_H];
 
-static uint16_t rgb565(dfw_pixel p) {
-    return (uint16_t)(((p >> 8) & 0xF800u) | ((p >> 5) & 0x07E0u) | ((p >> 3) & 0x001Fu));
-}
-
 int main(int argc, char **argv) {
     dfw_port port = { present, send, 0 };
     dfw_init(&unit, &port, frame, &dfw_drawn);
@@ -37,9 +33,7 @@ int main(int argc, char **argv) {
     dfw_tick(&unit, 0);
     if (as_panel) {
         for (int y = 0; y < DFW_SIZE; y++)
-            for (int x = 0; x < DFW_SIZE; x++)
-                panel[(DFW_FRAME_Y + y) * DFW_LAYER_W + DFW_FRAME_X + x] =
-                    rgb565(frame[(DFW_SIZE - 1 - y) * DFW_SIZE + (DFW_SIZE - 1 - x)]);
+            for (int x = 0; x < DFW_SIZE; x++) panel[dfw_panel_index(x, y)] = dfw_rgb565(frame[y * DFW_SIZE + x]);
         dfw_draw_band(panel, &unit);
         for (size_t i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) {
             uint8_t le[2] = { (uint8_t)panel[i], (uint8_t)(panel[i] >> 8) };

@@ -3,6 +3,7 @@
 #ifndef DFW_DRAW_BAND_H
 #define DFW_DRAW_BAND_H
 #include "dfw.h"
+#include "panel_geometry.h"
 
 /// Receives one pixel of the ring: x, y in the 198 frame's own coordinates (they may be below 0 or past 197), and its
 /// final color over what lies under it there (the frame's ground inside the 198 square, the panel's black outside).
@@ -31,10 +32,5 @@ typedef struct {
 /// dfw_draw_band through `io`.
 void dfw_band_layer(const dfw_unit *unit, const dfw_layer_io *io);
 
-/// The band's 320 x 240 layer, and where the frame's corner lands in it.
-#define DFW_LAYER_W 320
-#define DFW_LAYER_H 240
-#define DFW_FRAME_X ((DFW_LAYER_W - DFW_SIZE) / 2)
-#define DFW_FRAME_Y ((DFW_LAYER_H - DFW_SIZE) / 2)
 
 #endif

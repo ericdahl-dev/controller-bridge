@@ -73,16 +73,6 @@ void dfw_band_pixels(const dfw_unit *unit, dfw_put put, void *ctx) {
     }
 }
 
-static uint16_t rgb565(dfw_pixel p) {
-    return (uint16_t)(((p >> 8) & 0xF800u) | ((p >> 5) & 0x07E0u) | ((p >> 3) & 0x001Fu));
-}
-
-/// Frame (x, y) to its place in the layer, turned 180° as the frame is presented; -1 off the layer.
-static int layer_index(int x, int y) {
-    int px = DFW_FRAME_X + DFW_SIZE - 1 - x, py = DFW_FRAME_Y + DFW_SIZE - 1 - y;
-    if (px < 0 || px >= DFW_LAYER_W || py < 0 || py >= DFW_LAYER_H) return -1;
-    return py * DFW_LAYER_W + px;
-}
 
 /// The band in the layer: every pixel of its clear annulus outside the square, once, with its final value (the ring, or
 /// black where it doesn't reach), written only if the layer doesn't hold it already. So the visible layer never shows a
@@ -93,9 +83,9 @@ void dfw_band_layer(const dfw_unit *unit, const dfw_layer_io *io) {
     for (int i = 0; i < dfw_band_entries; i++) {
         const dfw_band_entry *e = &dfw_band_table[i];
         if (!e->layer) continue;
-        int index = layer_index(e->x, e->y);
+        int index = dfw_panel_index(e->x, e->y);
         if (index < 0) continue;
-        uint16_t value = ring.on && e->ring ? rgb565(ring_color(&ring, e)) : 0;
+        uint16_t value = ring.on && e->ring ? dfw_rgb565(ring_color(&ring, e)) : 0;
         if (io->read(io->ctx, index) != value) io->write(io->ctx, index, value);
     }
 }

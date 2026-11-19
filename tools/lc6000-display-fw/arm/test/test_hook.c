@@ -633,3 +633,4 @@ const test_case text_tests[] = { { 0, 0 } };
 const test_case layout_tests[] = { { 0, 0 } };
 const test_case draw_band_tests[] = { { 0, 0 } };
 const test_case ring_table_tests[] = { { 0, 0 } };
+const test_case panel_tests[] = { { 0, 0 } };

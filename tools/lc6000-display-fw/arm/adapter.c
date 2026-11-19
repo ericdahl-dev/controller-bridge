@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "hook.h"
+#include "panel_geometry.h"
 #if HOOK_STUB_DRAWING
 #include "draw.h"
 #endif
@@ -35,17 +36,15 @@ const uint32_t hook_marker __attribute__((section(".marker"), used)) = HOOK_MARK
 /// Stock's layer-2 surface (struct at 0x20001DB8) holds its malloc'd pixels at +8: 320 x 240 x 2 + 64 bytes,
 /// allocated at boot and never drawn into (#466).
 #define LAYER2_PIXELS (*(uint16_t *const volatile *)0x20001DC0u)
-#define LAYER_W 320
-#define LAYER_H 240
+/// The panel's size, the frame's place and the pack, from src/panel_geometry.h (#568): defined once for A and B.
+#define LAYER_W DFW_LAYER_W
+#define LAYER_H DFW_LAYER_H
 /// Our frame sits where stock draws an uploaded slot: x 40 + 21, y 21.
-#define FRAME_X ((LAYER_W - DFW_SIZE) / 2)
-#define FRAME_Y ((LAYER_H - DFW_SIZE) / 2)
+#define FRAME_X DFW_FRAME_X
+#define FRAME_Y DFW_FRAME_Y
 
 /// Uploads show rotated 180 degrees unless the host pre-rotates them (#121), so the panel shows the frame buffer
 /// upside down; dfw draws upright, so the copy turns it. To check on the unit.
-static uint16_t rgb565(dfw_pixel p) {
-    return (uint16_t)(((p >> 8) & 0xF800u) | ((p >> 5) & 0x07E0u) | ((p >> 3) & 0x001Fu));
-}
 
 static void layer_present(void *ctx, const dfw_pixel *frame) {
     (void)ctx;
@@ -66,7 +65,7 @@ static void layer_present(void *ctx, const dfw_pixel *frame) {
     for (uint32_t y = 0; y < DFW_SIZE; y++) {
         const dfw_pixel *from = frame + (DFW_SIZE - 1 - y) * DFW_SIZE + (DFW_SIZE - 1);
         uint16_t *to = pixels + (FRAME_Y + y) * LAYER_W + FRAME_X;
-        for (uint32_t x = 0; x < DFW_SIZE; x++) to[x] = rgb565(*from--);
+        for (uint32_t x = 0; x < DFW_SIZE; x++) to[x] = dfw_rgb565(*from--);
     }
     REG(L2_CR) |= 1u;
     REG(LTDC_SRCR) = SRCR_VBR;
