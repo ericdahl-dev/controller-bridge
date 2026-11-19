@@ -378,7 +378,8 @@ struct SettingsView: View {
         let picker = ProfilePicker(
             chosenInput: entry.input?.name,
             connectedDevice: single ? model.status.bridges.compactMap(\.device).first : nil,
-            unsupported: model.status.otherDevices.offer?.device,
+            // Only the device the panel highlights, with no controller connected, as before #329: this entry is unchanged.
+            unsupported: model.status.otherDevices.highlighted?.label,
             profiles: model.profiles.map { (id: $0.id, name: $0.name) },
             choices: settings.wrappedValue.profileChoices
         )
