@@ -4,6 +4,7 @@
 
 #include "harness.h"
 #include "hook.h"
+#include "upper.h"
 
 #define CAPABILITY_V1 "F0 00 02 0B 7F 10 20 00 02 00 01 F7"
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
@@ -330,6 +331,29 @@ void nothing_is_hidden_that_was_never_shown(void) {
     CHECK(chip.hides == 0);
 }
 
+/// Block B as the upper flash holds it (#501): erased, unless a test writes one. The good one's CRC, 0x22B5DF72, is
+/// zlib's CRC-32 of its bytes from +16 to its end (worked out with Python's zlib, not this code).
+static uint8_t upper[UPPER_LIMIT];
+
+static void put_word(uint8_t *at, uint32_t word) {
+    for (int i = 0; i < 4; i++) at[i] = (uint8_t)(word >> (8 * i));
+}
+
+static void good_upper(void) {
+    memset(upper, 0xFF, sizeof upper);
+    put_word(upper + 0, UPPER_MARKER);
+    put_word(upper + 4, UPPER_VERSION);
+    put_word(upper + 8, 29);
+    put_word(upper + 12, 0x22B5DF72u);
+    put_word(upper + 16, 0x08080015u);
+    memcpy(upper + 20, "123456789", 9);
+}
+
+void a_good_upper_block_gives_its_draw_entry(void) {
+    good_upper();
+    CHECK(upper_check(upper) == 0x08080015u);
+}
+
 const test_case all_tests[] = {
     { "end hands the screen back once", end_hands_the_screen_back_once },
     { "nothing is hidden that was never shown", nothing_is_hidden_that_was_never_shown },
@@ -352,6 +376,7 @@ const test_case all_tests[] = {
     { "garbage with the magic but a bad check word is fresh state", garbage_with_the_magic_but_a_bad_check_word_is_fresh_state },
     { "three seconds of silence turn the screen stale", three_seconds_of_silence_turn_the_screen_stale },
     { "the millisecond clock runs on across a counter wrap", the_millisecond_clock_runs_on_across_a_counter_wrap },
+    { "a good upper block gives its draw entry", a_good_upper_block_gives_its_draw_entry },
     { 0, 0 },
 };
 
