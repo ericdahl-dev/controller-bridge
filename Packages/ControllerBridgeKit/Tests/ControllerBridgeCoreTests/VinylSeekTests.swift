@@ -74,4 +74,34 @@ struct VinylSeekTests {
         Self.vinyl(rig)
         #expect(rig.osc.sent == [OSCMessage("/Syndicate/Deck/1/PhaseBend", [.int(0)])])
     }
+
+    @Test("VINYL's light: full (127) while seek mode is on, even after release; idle (1) once it's off")
+    func light() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        Self.vinyl(rig)
+        #expect(rig.leds[19] == 127)
+        Self.vinyl(rig)
+        #expect(rig.leds[19] == 1)
+    }
+
+    @Test("Each layer keeps its own mode, and a layer change repaints VINYL's light for it")
+    func perLayer() throws {
+        let rig = try Rig()
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers))
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        LayersTests.note(rig, channel: 1, 19, 127)
+        LayersTests.note(rig, channel: 1, 19, 0)
+        output.sent.removeAll()
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        // Layer 2's own mode is off: idle on ch2 (channel 1 counted from 0).
+        #expect(output.sent.contains(.noteOn(channel: 1, note: 19, velocity: 1)))
+        #expect(!output.sent.contains(.noteOn(channel: 1, note: 19, velocity: 127)))
+        output.sent.removeAll()
+        LayersTests.switchLayer(rig, from: 2, to: 1)
+        // Back on layer 1: still on.
+        #expect(output.sent.contains(.noteOn(channel: 0, note: 19, velocity: 127)))
+    }
 }

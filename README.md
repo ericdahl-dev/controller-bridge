@@ -14,7 +14,8 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 | LC6000 | Syndicate (`/Syndicate/Deck/{n}/…`) |
 |---|---|
 | Pitch fader (14-bit CC 8 + 40) | `TempoSlider` −1…+1 at full resolution, with pickup so the tempo never jumps |
-| Jog while playing | `PhaseBend` ±1, released 80 ms after the wheel stops |
+| Jog while playing | `PhaseBend` ±1, released 80 ms after the wheel stops. With VINYL on, it seeks instead, as the paused jog does |
+| VINYL | Toggles the playing jog between bending (off, the default) and seeking (on), per deck layer. Its light is full while seeking is on |
 | Jog while paused | `WaveformSeek`, using the track length from feedback, with the deck's `Quantize` at None (1) while seeking so Syndicate doesn't snap it to the grid, then Use Global (0) 300 ms after the last move. Falls back to `BeatSkip` |
 | Needle Drop strip, while touched | `WaveformSeek`. On a paused deck, the deck's `Quantize` is None while touched, then Use Global |
 | Play / Cue / Sync / Master | `PlayPause` / `Cue` (hold) / `TempoSync` / `TempoMaster` |

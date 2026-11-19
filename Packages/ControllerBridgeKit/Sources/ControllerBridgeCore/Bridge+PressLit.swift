@@ -7,15 +7,19 @@ extension Bridge {
     static let pressLitButtons = ["beat_jump_back", "beat_jump_forward", "track_prev", "track_next", "select_press",
                                   "vinyl", "pitch_minus", "pitch_plus", "param_back", "param_forward"]
 
-    /// Each one's light: full while held, else idle.
+    /// Each one's light: full while held, else idle. Vinyl's is also full while its seek mode is on (#540).
     func pressLitLEDs() {
-        for name in Self.pressLitButtons { buttonLED(name, on: pressLitHeld.contains(name)) }
+        for name in Self.pressLitButtons { buttonLED(name, on: pressLitOn(name)) }
+    }
+
+    private func pressLitOn(_ name: String) -> Bool {
+        pressLitHeld.contains(name) || (name == "vinyl" && vinylSeek)
     }
 
     /// A press or release of a button: one of these lights full while it's held.
     func pressLit(_ name: String, _ pressed: Bool) {
         guard Self.pressLitButtons.contains(name) else { return }
         if pressed { pressLitHeld.insert(name) } else { pressLitHeld.remove(name) }
-        buttonLED(name, on: pressed)
+        buttonLED(name, on: pressLitOn(name))
     }
 }
