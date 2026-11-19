@@ -17,11 +17,16 @@ typedef struct { const char *name; test_fn fn; } test_case;
 /// What the stub saw: how many frames were presented, and the last one.
 typedef struct {
     int presents;
+    int sends;
+    size_t sent_length;
+    uint8_t sent[64];
     dfw_pixel last[DFW_SIZE * DFW_SIZE];
 } recording;
 
 /// A unit freshly started with the recording stub as its port.
 void fresh(dfw_unit *unit, recording *rec);
+/// Hex ("F0 00 ... F7") to bytes; returns how many.
+size_t parse_hex(const char *hex, uint8_t *bytes, size_t capacity);
 /// Feeds one message, given as hex ("F0 00 ... F7").
 void feed(dfw_unit *unit, const char *hex);
 

@@ -37,6 +37,10 @@ void a_malformed_begin_is_ignored(void);
 void an_oversized_message_is_ignored(void);
 void random_bytes_change_nothing(void);
 
+void a_capability_ask_gets_the_answer(void);
+void a_newer_host_gets_our_version(void);
+void a_capability_ask_with_version_0_gets_no_answer(void);
+
 const test_case all_tests[] = {
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
     { "a deck before begin draws nothing", a_deck_before_begin_draws_nothing },
@@ -45,5 +49,8 @@ const test_case all_tests[] = {
     { "a malformed begin is ignored", a_malformed_begin_is_ignored },
     { "an oversized message is ignored", an_oversized_message_is_ignored },
     { "random bytes change nothing", random_bytes_change_nothing },
+    { "a capability ask gets the answer", a_capability_ask_gets_the_answer },
+    { "a newer host gets our version", a_newer_host_gets_our_version },
+    { "a capability ask with version 0 gets no answer", a_capability_ask_with_version_0_gets_no_answer },
     { 0, 0 },
 };

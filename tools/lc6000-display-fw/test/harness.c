@@ -10,22 +10,33 @@ static void present(void *ctx, const dfw_pixel *frame) {
     memcpy(rec->last, frame, sizeof rec->last);
 }
 
+static void send(void *ctx, const uint8_t *bytes, size_t length) {
+    recording *rec = ctx;
+    rec->sends++;
+    rec->sent_length = length < sizeof rec->sent ? length : sizeof rec->sent;
+    memcpy(rec->sent, bytes, rec->sent_length);
+}
+
 void fresh(dfw_unit *unit, recording *rec) {
     memset(rec, 0, sizeof *rec);
-    dfw_port port = { .present = present, .ctx = rec };
+    dfw_port port = { .present = present, .send = send, .ctx = rec };
     dfw_init(unit, &port);
 }
 
-void feed(dfw_unit *unit, const char *hex) {
-    uint8_t bytes[1024];
+size_t parse_hex(const char *hex, uint8_t *bytes, size_t capacity) {
     size_t n = 0;
     const char *p = hex;
-    while (*p && n < sizeof bytes) {
+    while (*p && n < capacity) {
         while (*p == ' ') p++;
         if (!*p) break;
         bytes[n++] = (uint8_t)strtoul(p, (char **)&p, 16);
     }
-    dfw_message(unit, bytes, n);
+    return n;
+}
+
+void feed(dfw_unit *unit, const char *hex) {
+    uint8_t bytes[1024];
+    dfw_message(unit, bytes, parse_hex(hex, bytes, sizeof bytes));
 }
 
 extern const test_case all_tests[];

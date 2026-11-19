@@ -13,6 +13,8 @@ typedef uint32_t dfw_pixel;
 /// Where frames and replies go: the panel on the unit, a recording stub in the tests.
 typedef struct {
     void (*present)(void *ctx, const dfw_pixel *frame);
+    /// A reply to the host, F0 through F7 (on the unit: the stock ack sender, on WD's cable).
+    void (*send)(void *ctx, const uint8_t *bytes, size_t length);
     void *ctx;
 } dfw_port;
 

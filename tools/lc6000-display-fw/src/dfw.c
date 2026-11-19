@@ -5,6 +5,8 @@
 /// inMusic's SysEx header from the host to the unit, then our command (#456). 0x20 is a placeholder until #466.
 static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
 #define DFW_CMD 0x20
+/// The protocol version this code speaks.
+#define DFW_VERSION 1
 enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03 };
 
 void dfw_init(dfw_unit *unit, const dfw_port *port) {
@@ -45,6 +47,14 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
     if (declared == 0 || declared != op_length(op) || length != header + 4 + declared) return;
     const uint8_t *args = body + 1;
     switch (op) {
+    case OP_CAPABILITY:
+        if (args[0] != 0) {
+            // The reply header (as the unit's acks), then the version both sides speak.
+            const uint8_t answer[] = { 0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, DFW_CMD, 0x00, 0x02, OP_CAPABILITY,
+                                       args[0] < DFW_VERSION ? args[0] : DFW_VERSION, 0xF7 };
+            unit->port.send(unit->port.ctx, answer, sizeof answer);
+        }
+        break;
     case OP_BEGIN:
         if (args[0] != 0) unit->drawn = 1;
         break;
