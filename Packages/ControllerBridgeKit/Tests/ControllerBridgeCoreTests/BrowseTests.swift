@@ -114,6 +114,24 @@ struct BrowseTests {
         ])
     }
 
+    @Test("Shift + the auto loop knob moves the loop (#470): a beat forward per click clockwise, a beat back the other way, and no resize")
+    func loopMove() throws {
+        let rig = try Self.startedRig()
+        Self.holdingShift(rig) {
+            Self.turn(rig, cc: 3, 0x01)   // one click clockwise
+            Self.turn(rig, cc: 3, 0x02)   // two clicks in one message
+            Self.turn(rig, cc: 3, 0x7F)   // one click counter-clockwise
+            Self.turn(rig, cc: 3, 0x00)
+        }
+        let moves = rig.osc.sent.filter { $0.address.contains("Loop") }
+        #expect(moves == [
+            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(1)]),
+            OSCMessage("/Syndicate/Deck/1/LoopMoveBeat", [.int(-1)]),
+        ])
+    }
+
     @Test("Beat jump ◀ and ▶ skip a beat back and forward, on press only")
     func beatJump() throws {
         let rig = try Self.startedRig()

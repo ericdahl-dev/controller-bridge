@@ -44,9 +44,15 @@ extension Bridge {
     }
 
     /// While looping, Syndicate's LoopOut doubles the loop and LoopIn halves it. One step per turn, however fast.
+    /// With Shift held it's the knob's printed Loop Move (#470): the loop moves a beat per click, forward clockwise.
     func autoLoopSize(_ value: UInt8) {
         let ticks = mapping.midi.encoderFormat.ticks(value)
-        if ticks != 0 { sendDeck(ticks > 0 ? "LoopOut" : "LoopIn", .int(1)) }
+        guard ticks != 0 else { return }
+        if shift {
+            for _ in 0..<abs(ticks) { sendDeck("LoopMoveBeat", .int(ticks > 0 ? 1 : -1)) }
+        } else {
+            sendDeck(ticks > 0 ? "LoopOut" : "LoopIn", .int(1))
+        }
     }
 
     // MARK: Jumps
