@@ -211,6 +211,8 @@ equal to the table.
 - `notes.param_forward`: a whole number; 0–127; LC6000 `69`
 - `leds`: an object
 - `leds.pitch_center`: a whole number; 0–127; LC6000 `42`
+- `leds.pitch_arrow_back`: a whole number; 0–127; LC6000 `41`. Lit during pitch pickup when the fader must move toward a lower value (#475); optional
+- `leds.pitch_arrow_forward`: a whole number; 0–127; LC6000 `43`. Lit during pitch pickup when the fader must move toward a higher value; optional
 - `leds.ring`: a whole number; 0–127; LC6000 `40`
 - `leds.ring_color`: a list; exactly 3; LC6000 `[0, 128, 255]`
 - `leds.ring_color[]`: a whole number; 0–255; LC6000 `0`
