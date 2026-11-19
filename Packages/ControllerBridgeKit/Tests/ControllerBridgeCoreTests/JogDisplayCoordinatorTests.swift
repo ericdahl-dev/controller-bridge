@@ -170,14 +170,57 @@ struct JogMarkerCoordinatorTests {
         #expect(Self.bends(port) == [[0xE0, 0x00, 0x00]])
     }
 
-    @Test("At most 30 a second: ticks every 10 ms send at 0, 0.04 and 0.08 s (0, 327, 655)")
+    /// The needle keeps a send schedule, 1/30 s apart (#558): a send that lands late on a 10 ms tick doesn't push the
+    /// next one back, so the rate reaches the cap. Sends at 0, 0.04 (due 0.033) and 0.07 (due 0.067): 0, 327, 573.
+    @Test("At most 30 a second, on a schedule: ticks every 10 ms send at 0, 0.04 and 0.07 s (0, 327, 573)")
     func rateLimit() throws {
+        let (rig, port) = try Self.playingAt120()
+        for step in 0...9 { Self.tick(rig, at: Double(step) * 0.01) }
+        #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x47, 0x02], [0xE0, 0x3D, 0x04]])
+    }
+
+    /// A tick at `time` with Syndicate's BarRamp at the deck's true phase then (a bar is 2 s at 120 BPM), so the needle
+    /// keeps moving: it runs on at most a beat past the last ramp.
+    static func tickRamped(_ rig: Rig, at time: Double) {
+        rig.clock.now = time
+        Self.feed(rig, "Deck/1/BarRamp", .float(Float((time / 2).truncatingRemainder(dividingBy: 1))))
+        rig.coordinator.tick()
+    }
+
+    static func playingAt120() throws -> (Rig, JogDisplayDriverTests.FakePort) {
         let (rig, port) = try Self.started()
         Self.feed(rig, "Deck/1/Playing", .int(1))
         Self.feed(rig, "Deck/1/BPM", .float(120))
         Self.feed(rig, "Deck/1/BarRamp", .float(0))
-        for step in 0...9 { Self.tick(rig, at: Double(step) * 0.01) }
-        #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x47, 0x02], [0xE0, 0x0F, 0x05]])
+        return (rig, port)
+    }
+
+    @Test("A second of 10 ms ticks sends the needle 30 times, the cap (it was 25: each send waited for the 40 ms tick)")
+    func fullRate() throws {
+        let (rig, port) = try Self.playingAt120()
+        for step in 0..<100 { Self.tickRamped(rig, at: Double(step) * 0.01) }
+        #expect(Self.bends(port).count == 30)
+    }
+
+    @Test("Late ticks (the timer's leeway): ticks 5 ms late every other time still send about 30 a second, not 20")
+    func lateTicks() throws {
+        let (rig, port) = try Self.playingAt120()
+        for step in 0..<100 { Self.tickRamped(rig, at: Double(step) * 0.01 + (step % 2 == 1 ? 0.005 : 0)) }
+        #expect((29...30).contains(Self.bends(port).count))
+    }
+
+    @Test("After a stall the schedule restarts: no burst to catch up, the next send is 1/30 s on")
+    func noBurstAfterStall() throws {
+        let (rig, port) = try Self.playingAt120()
+        Self.tickRamped(rig, at: 0)
+        Self.tickRamped(rig, at: 1)
+        let before = Self.bends(port).count
+        Self.tickRamped(rig, at: 1.01)
+        Self.tickRamped(rig, at: 1.02)
+        Self.tickRamped(rig, at: 1.03)
+        #expect(Self.bends(port).count == before)
+        Self.tickRamped(rig, at: 1.04)
+        #expect(Self.bends(port).count == before + 1)
     }
 
     @Test("The platter never moves the needle (the user's pick for v1.1): touched and turned, a playing deck's needle stays on its BarRamp")

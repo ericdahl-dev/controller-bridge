@@ -378,6 +378,15 @@ public final class Coordinator {
         return true
     }
 
+    /// What each output's lights show (#554), one for all the layers that share it.
+    private var shownByOutput: [MIDIEndpoint.ID: LEDShown] = [:]
+    private func shown(for output: MIDIEndpoint.ID) -> LEDShown {
+        if let shown = shownByOutput[output] { return shown }
+        let shown = LEDShown()
+        shownByOutput[output] = shown
+        return shown
+    }
+
     /// Opens the LED output for a connected controller: the chosen one, else the port named like its input, else
     /// the mapping's hint, never a port the profile excludes. Logs where the LEDs go, or that they have nowhere to go.
     private func openOutput(_ index: Int, for source: MIDIEndpoint, profile: ControllerProfile) {
@@ -407,6 +416,8 @@ public final class Coordinator {
                     log.log("LEDs go to \(destination.name)")
                 }
                 controllers[index].destination = destination
+                // Layers on one port share what its lights show (#554).
+                bridge.shown = shown(for: destination.id)
             } catch {
                 log.log("Couldn't open MIDI output \(destination.name): \(error)")
             }
@@ -495,6 +506,7 @@ public final class Coordinator {
 
     /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
     public func tick() {
+        settleLayer()
         runSweep()
         for bridge in bridges { bridge.tick() }
         jogController.tick(jogEntries)
@@ -546,6 +558,9 @@ public final class Coordinator {
     ///   (pads.channel only), it plays the layer in front. Neither is the multi-channel state.
     /// Returns the event as the layers should see it: a ch1 control re-addressed to the active layer's channel; and,
     /// for a pad, the one layer that handles it.
+    /// `layerHandover`'s `only` for an event no layer handles: only controllers that don't follow layers get it.
+    private static let noLayer = -1
+
     private func layerHandover(_ event: MIDIEvent, source: MIDIEndpoint.ID) -> (MIDIEvent, only: Int?) {
         let layers = controllers.indices.filter { controllers[$0].source?.id == source && controllers[$0].followsLayers }
         guard let first = layers.first else { return (event, nil) }
@@ -571,9 +586,19 @@ public final class Coordinator {
         if let note, Int(note) == controllers[first].bridge.mapping.notes.buttons["deck_select"] {
             if velocity > 0, let at = layers.firstIndex(of: current) {
                 let target = layers[(at + 1) % layers.count]
-                activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source))
+                // The bridge's own step: the unit's selected deck, and so the one channel it takes note-ons on, stays
+                // (agent2's #481 reading). That's the channel deck select itself came on, so the new layer paints there
+                // at once, not on its own channel, which the unit drops; and the unit didn't touch its lights, so only
+                // those that differ go (#554).
+                activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source),
+                              unitCleared: false, unitChannel: channel)
+                // Its light (#477) flashes full on the layer it stepped to, and goes back to idle on release.
+                controllers[target].bridge.pressLit("deck_select", true)
+            } else if velocity == 0 {
+                controllers[current].bridge.pressLit("deck_select", false)
             }
-            return (event, nil)
+            // Lit here; no layer handles the note itself, or a hidden one would keep it held.
+            return (event, Self.noLayer)
         }
         let onPads = layers.filter {
             let bridge = controllers[$0].bridge
@@ -601,20 +626,63 @@ public final class Coordinator {
     /// One handover: the layer left releases what it held and stops writing LEDs; the new one becomes the only active
     /// layer and waits for the shared fader's pickup. Its LEDs go out where the unit's controls come: ch1 in the
     /// normal state, the layer's own channel in the multi-channel state.
-    private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int], multiChannel: Bool) {
+    /// `unitCleared`: the unit made the change (its layer note, a control or pad on a layer's channel) and its
+    /// deck-select mode cleared its lights (#426), so the new layer paints every one; the bridge's own deck select step
+    /// (#420) paints only the lights that differ from what the unit shows (#554).
+    /// `unitChannel`: the channel the unit takes LEDs on, when the bridge stepped on its own (#420) and the unit's
+    /// selected deck didn't move; nil when the unit made the change (its channel is then the layer's, or ch1 in the
+    /// normal state).
+    private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int], multiChannel: Bool,
+                               unitCleared: Bool = true, unitChannel: UInt8? = nil) {
         if current != target { controllers[current].bridge.releaseAll() }
         for index in layers where index != target {
             status.controllers[index].activeLayer = false
             controllers[index].bridge.layerShown = false
         }
         status.controllers[target].activeLayer = true
-        controllers[target].bridge.ledChannel = multiChannel || controllers[target].bridge.mapping.midi.channel == 1 ? nil : 0
+        let bridge = controllers[target].bridge
+        if let unitChannel {
+            bridge.ledChannel = unitChannel == bridge.channel ? nil : unitChannel
+        } else {
+            bridge.ledChannel = multiChannel || bridge.mapping.midi.channel == 1 ? nil : 0
+        }
         // The one pitch fader stayed where it was, and the unit doesn't send it again: the new layer takes its
         // position, so the pitch arrows point the right way at once (#475).
         if current != target { controllers[target].bridge.takeFader(from: controllers[current].bridge) }
+        controllers[target].bridge.rearmPickup()
+        // A lone step shows at once. Steps that follow within LayerSettle.interval wait until the steps settle
+        // (#428), then show the last layer once: a burst of steps is two repaints, not one per step.
+        let rapid = pendingLayer != nil || lastLayerStep.map { clock.now - $0 < LayerSettle.interval } ?? false
+        lastLayerStep = clock.now
+        if rapid {
+            pendingLayer = target
+            pendingLayerFull = pendingLayerFull || unitCleared
+            pendingLayerAt = clock.now + LayerSettle.interval
+            return
+        }
         // The display first, so its uploads hold the ring before the repaint could light it (#422).
         updateJogDisplay()
-        controllers[target].bridge.becameActiveLayer()
+        controllers[target].bridge.showLayer(full: unitCleared)
+    }
+
+    /// The layer whose LEDs and display wait for the steps to settle, and when they're due; and whether any of the
+    /// steps it settles had the unit clear its lights.
+    private var pendingLayer: Int?
+    private var pendingLayerAt = 0.0
+    private var pendingLayerFull = false
+    /// When the last layer step came.
+    private var lastLayerStep: Double?
+
+    /// Shows the settled layer: the display first, so its uploads hold the ring before the repaint could light it
+    /// (#422); then every LED once.
+    private func settleLayer() {
+        guard let target = pendingLayer, clock.now >= pendingLayerAt - 1e-9 else { return }
+        pendingLayer = nil
+        let full = pendingLayerFull
+        pendingLayerFull = false
+        guard controllers.indices.contains(target), status.controllers[target].activeLayer else { return }
+        updateJogDisplay()
+        controllers[target].bridge.showLayer(full: full)
     }
 
     /// Where a layer's LEDs go; repaints there if it moved.
@@ -824,6 +892,7 @@ public final class Coordinator {
         old.releaseAll()
         let bridge = makeBridge(controllers[index].profile, for: index)
         bridge.output = old.output
+        bridge.shown = old.shown
         controllers[index].bridge = bridge
         guard controllers[index].source != nil else { return }
         bridge.start()
@@ -897,6 +966,7 @@ public final class Coordinator {
         deriveFollowing(index)
         let bridge = makeBridge(updated, for: index)
         bridge.output = old.output
+        bridge.shown = old.shown
         bridge.carrySyndicateState(from: old)
         bridge.carryOwnState(from: old)
         // The active layer's LEDs keep going where the unit's controls come from (#79).
@@ -1010,4 +1080,10 @@ public final class Coordinator {
         let arguments = message.arguments.map(\.pythonText).joined(separator: " ")
         trace(category, message.address + (arguments.isEmpty ? "" : " " + arguments) + note)
     }
+}
+
+/// Rapid deck layer steps (#428): the LED repaint and display switch wait this long after the last step. Since a
+/// step sends only the lights that differ (#554), it only has to catch true bursts.
+enum LayerSettle {
+    static let interval = 0.3
 }
