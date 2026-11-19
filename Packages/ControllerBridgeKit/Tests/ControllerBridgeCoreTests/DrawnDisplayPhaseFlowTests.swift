@@ -60,4 +60,47 @@ struct DrawnDisplayPhaseFlowTests {
         rig.coordinator.tick()
         #expect(Self.phases(port) == [DrawnDisplay.Message.phase(-8192).bytes])
     }
+
+    @Test("A nudge (Syndicate sends about 45 a second): at most 30 a second, and the last value goes once due")
+    func rateLimited() throws {
+        let (rig, port, clock) = try Self.drawing()
+        for step in 0..<45 {
+            clock.now = 2 + Double(step) / 45
+            rig.coordinator.feedback(Self.offset(-0.01 - Float(step) * 0.001))
+            rig.coordinator.tick()
+        }
+        #expect(Self.phases(port).count <= 31)
+        // The last offset, -0.054 beat, is -885 on the wire: sent by the end of the nudge or on the next due tick.
+        clock.now = 3.1
+        rig.coordinator.tick()
+        #expect(Self.phases(port).last == DrawnDisplay.Message.phase(-885).bytes)
+    }
+
+    @Test("The heartbeat carries a known phase, after the meter")
+    func heartbeat() throws {
+        let (rig, port, clock) = try Self.drawing()
+        clock.now = 0.5
+        rig.coordinator.feedback(Self.offset(-0.04))
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        clock.now = 1.0
+        rig.coordinator.tick()
+        let ops = DrawnDisplayReconnectTests.ops(port)
+        #expect(Array(ops.suffix(2)) == [0x0A, 0x0B])
+        #expect(Self.phases(port) == [DrawnDisplay.Message.phase(-655).bytes])
+    }
+
+    @Test("Image mode sends no phase")
+    func notInImages() throws {
+        let (rig, port, clock) = try Handshake.rig(.custom)
+        clock.now = 0.5
+        rig.clock.now = 0.5
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        rig.coordinator.feedback(Self.playing(true))
+        rig.coordinator.feedback(Self.offset(-0.04))
+        rig.clock.now = 1
+        rig.coordinator.tick()
+        #expect(Self.phases(port).isEmpty)
+    }
 }
