@@ -361,6 +361,27 @@ static void the_fill_turns_yellow_past_three_quarters(void) {
     CHECK(frame[61 * DFW_SIZE + 26] == 0x2C2C2Cu);
 }
 
+/// No reference has the tick over the fill: level 110 with the peak at 64, a mid-band pixel whole inside the tick
+/// (fractions 0.500-0.512 of the tick's 0.487-0.521) is the tick's white, not the fill's green.
+static void the_tick_is_drawn_over_the_fill(void) {
+    memset(&unit, 0, sizeof unit);
+    unit.meter_heard = 1;
+    unit.level = 110;
+    unit.peak = 64;
+    draw_beat(0);
+    CHECK(frame[98 * DFW_SIZE + 17] == 0xFFFFFFu);
+}
+
+/// No reference has the marker over the meter: at 9 o'clock (needle 12288) over a clipping meter, a pixel whole inside
+/// the marker's wedge (half width 1.125 at 82 out) is the marker's white, not the clip red.
+static void the_marker_is_drawn_over_the_meter(void) {
+    begin_with_needle(12288);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 03 0A 7F 7F F7");
+    dfw_tick(&live, 10);
+    CHECK(rec.presents == 2);
+    CHECK(rec.last[99 * DFW_SIZE + 16] == 0xFFFFFFu);
+}
+
 /// Not vacuous: each meter reference differs from the unlit one, from MARKER_IN out.
 static void each_meter_reference_differs_from_the_unlit_one(void) {
     static dfw_pixel unlit[DFW_SIZE * DFW_SIZE];
@@ -398,6 +419,8 @@ const test_case draw_live_tests[] = {
     { "each meter reference differs from the unlit one", each_meter_reference_differs_from_the_unlit_one },
     { "stale draws no meter", stale_draws_no_meter },
     { "the fill turns yellow past three quarters", the_fill_turns_yellow_past_three_quarters },
+    { "the tick is drawn over the fill", the_tick_is_drawn_over_the_fill },
+    { "the marker is drawn over the meter", the_marker_is_drawn_over_the_meter },
     { "the play flags change no pixels", the_play_flags_change_no_pixels },
     { "the needle is drawn as the marker", the_needle_is_drawn_as_the_marker },
     { "the marker is drawn over the lit section", the_marker_is_drawn_over_the_lit_section },
