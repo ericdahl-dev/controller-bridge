@@ -354,6 +354,11 @@ void a_good_upper_block_gives_its_draw_entry(void) {
     CHECK(upper_check(upper) == 0x08080015u);
 }
 
+void erased_upper_flash_has_no_block(void) {
+    memset(upper, 0xFF, sizeof upper);
+    CHECK(upper_check(upper) == 0);
+}
+
 const test_case all_tests[] = {
     { "end hands the screen back once", end_hands_the_screen_back_once },
     { "nothing is hidden that was never shown", nothing_is_hidden_that_was_never_shown },
@@ -377,6 +382,7 @@ const test_case all_tests[] = {
     { "three seconds of silence turn the screen stale", three_seconds_of_silence_turn_the_screen_stale },
     { "the millisecond clock runs on across a counter wrap", the_millisecond_clock_runs_on_across_a_counter_wrap },
     { "a good upper block gives its draw entry", a_good_upper_block_gives_its_draw_entry },
+    { "erased upper flash has no block", erased_upper_flash_has_no_block },
     { 0, 0 },
 };
 
