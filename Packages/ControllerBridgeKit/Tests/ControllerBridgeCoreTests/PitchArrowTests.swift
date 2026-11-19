@@ -94,4 +94,54 @@ struct PitchArrowTests {
         #expect(rig.leds[Self.forward] == 0 && rig.leds[Self.back] == 0)
         #expect(rig.osc.sent.contains { $0.address.hasSuffix("TempoSlider") })
     }
+
+    /// The LC6000 following its four layers, decks 1 and 2 loaded, Syndicate reporting deck 2's tempo at +0.5.
+    static func layered() throws -> ProfileMatchingTests.ProfileRig {
+        let unit = JogDisplayRingHoldTests.lc6000
+        let rig = ProfileMatchingTests.ProfileRig(profiles: try ControllerProfile.bundled(), sources: [unit])
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: unit, output: MIDIEndpoint(id: unit.id + 1000, name: unit.name))],
+            layers: LayersTests.lc6000Layers))
+        for deck in 1...2 { rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/Loaded", [.int(1)])) }
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/TempoSlider", [.float(0.5)]))
+        return rig
+    }
+
+    /// The last velocity sent to `note` on the LC6000's output, on any channel.
+    static func lastLED(_ rig: ProfileMatchingTests.ProfileRig, _ note: UInt8) -> UInt8? {
+        let out = rig.midi.outputs[JogDisplayRingHoldTests.lc6000.id + 1000]?.sent ?? []
+        return out.compactMap { if case .noteOn(_, note, let velocity) = $0 { velocity } else { nil } }.last
+    }
+
+    @Test("A layer change to a deck whose tempo is above the fader: forward lights at once, from where the fader was (the unit doesn't resend it)")
+    func layerChangeLightsTheWay() throws {
+        let rig = try Self.layered()
+        let unit = JogDisplayRingHoldTests.lc6000.id
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 8, value: 0x20), source: unit)   // deck 1's fader, low
+        rig.coordinator.midi(.controlChange(channel: 0, controller: 40, value: 0), source: unit)
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: unit)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: unit)   // to deck 2
+        #expect(Self.lastLED(rig, Self.forward) == 127)
+        #expect(Self.lastLED(rig, Self.back) == 0)
+    }
+
+    @Test("A tempo change from Syndicate (a sync) starts pickup: the arrow toward the new value lights")
+    func syndicateTempoChange() throws {
+        let rig = try Self.pending(tempo: 0)
+        Self.fader(rig, 0x1000)   // -0.5, below 0: forward
+        #expect(rig.leds[Self.forward] == 127)
+        ContinuousTests.feedback(rig, "TempoSlider", [.float(-0.9)])   // synced down, below the fader
+        #expect(rig.leds[Self.back] == 127 && rig.leds[Self.forward] == 0)
+    }
+
+    @Test("A pitch reset (Shift + Key Lock, #114) starts pickup at 0: the arrow toward the center lights")
+    func pitchResetLights() throws {
+        let rig = try ContinuousTests.started()
+        ContinuousTests.feedback(rig, "Loaded", [.int(1)])
+        Self.fader(rig, 0x3000)   // no report yet: the fader drives, +0.5
+        rig.coordinator.midi(.noteOn(channel: 0, note: 26, velocity: 127), source: Rig.lc6000.id)   // Shift
+        rig.coordinator.midi(.noteOn(channel: 0, note: 22, velocity: 127), source: Rig.lc6000.id)   // Key Lock
+        #expect(rig.leds[Self.back] == 127 && rig.leds[Self.forward] == 0)
+    }
 }

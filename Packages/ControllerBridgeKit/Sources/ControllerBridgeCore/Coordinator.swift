@@ -599,6 +599,9 @@ public final class Coordinator {
         }
         status.controllers[target].activeLayer = true
         controllers[target].bridge.ledChannel = multiChannel || controllers[target].bridge.mapping.midi.channel == 1 ? nil : 0
+        // The one pitch fader stayed where it was, and the unit doesn't send it again: the new layer takes its
+        // position, so the pitch arrows point the right way at once (#475).
+        if current != target { controllers[target].bridge.takeFader(from: controllers[current].bridge) }
         // The display first, so its uploads hold the ring before the repaint could light it (#422).
         updateJogDisplay()
         controllers[target].bridge.becameActiveLayer()

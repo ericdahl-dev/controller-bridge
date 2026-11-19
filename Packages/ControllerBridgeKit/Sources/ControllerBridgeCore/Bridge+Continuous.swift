@@ -73,6 +73,14 @@ extension Bridge {
         return lastTempo == 0 ? fullLevel : offLevel
     }
 
+    /// The shared fader's raw position from the layer that had it (#475), if that one knew it.
+    func takeFader(from other: Bridge) {
+        guard other.faderKnown else { return }
+        pitchMSBValue = other.pitchMSBValue
+        pitchLSBValue = other.pitchLSBValue
+        faderKnown = true
+    }
+
     /// The pitch arrows (#475): during pickup, the one pointing the way to move the fader is full, the other off.
     /// Back is toward a lower raw value, forward toward a higher one, whatever `invert` says. Both are off when the
     /// fader's within the catch tolerance, its position isn't known yet, or there's nothing to catch.
