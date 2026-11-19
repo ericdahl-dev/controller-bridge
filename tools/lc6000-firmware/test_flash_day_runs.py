@@ -129,22 +129,30 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertNotEqual(self.env["HOME"], os.path.expanduser("~"))
         self.assertFalse(self.env["LC6000_WORK"].startswith(os.path.expanduser("~/lc6000")))
 
-    def run_wizard(self, answers):
+    def run_wizard(self, answers, entered=True):
         self.assert_isolated()
         result = subprocess.run(["/bin/bash", WIZARD, "drawn"], input="\n".join(answers) + "\n", env=self.env,
                                 cwd=self.dir.name, capture_output=True, text=True, timeout=300)
-        # The update-mode tool that ran was the stand-in, never the real one.
+        # The update-mode tool that ran was the stand-in, never the real one; a run stopped in the ready check never
+        # sends the update-mode message at all.
         with open(os.path.join(self.unit, "update-mode.log")) as f:
-            self.assertIn("send --yes-enter-update-mode", f.read())
+            (self.assertIn if entered else self.assertNotIn)("send --yes-enter-update-mode", f.read())
         return result
 
     def memory(self, name):
         with open(os.path.join(self.unit, name), "rb") as f:
             return f.read()
 
+    def calls(self):
+        """Every dfu-util call the run made; none when it never ran."""
+        log = os.path.join(self.unit, "calls.log")
+        if not os.path.exists(log):
+            return []
+        with open(log) as f:
+            return f.read().splitlines()
+
     def downloads(self):
-        with open(os.path.join(self.unit, "calls.log")) as f:
-            return [line for line in f.read().splitlines() if " -D " in f" {line} "]
+        return [line for line in self.calls() if " -D " in f" {line} "]
 
     def test_a_fresh_flash_writes_b_and_the_owners_image(self):
         self.unit_holds(self.current_element)
@@ -243,6 +251,39 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertIn("Build record: " + os.path.join(kit, "wd-upper-drawing.build.json"), result.stdout)
         self.assertEqual(len(self.downloads()), 2)
         self.assertEqual(self.memory("upper.bin")[:len(good_block())], good_block())
+
+
+    def refused_by_the_record(self, record, *reasons):
+        self.unit_holds(self.current_element)
+        result = self.run_wizard(["", self.current, self.upper, self.owner, record, "y", "y", "y", "FLASH", "FLASH"],
+                                 entered=False)
+        self.assertNotEqual(result.returncode, 0)
+        for reason in ("Nothing was sent", *reasons):
+            self.assertIn(reason, result.stdout)
+        self.assertEqual(self.calls(), [], "dfu-util never runs: the record stops the ready check")
+        self.assertEqual(self.memory("app.bin"), self.current_element)
+        self.assertEqual(set(self.memory("upper.bin")), {0xFF})
+
+    def other_record(self, name, a=None, b=None, proven="1"):
+        """A record as make arm writes it, for these blocks (by default the ones in the owner's files)."""
+        start = dfupatch.PAD_START - APP
+        a = a if a is not None else self.owner_element[start:start + dfupatch.PAD_END - dfupatch.PAD_START]
+        with open(os.path.join(self.dir.name, name), "w") as f:
+            json.dump(build_record.record_of(a, b if b is not None else good_block(), "1", proven), f)
+        return os.path.join(self.dir.name, name)
+
+    def test_no_record_stops_in_the_ready_check(self):
+        self.refused_by_the_record(os.path.join(self.dir.name, "nowhere.json"), "no build record")
+
+    def test_files_from_another_build_stop_and_say_which_to_rebuild(self):
+        other_a = synthetic_block()
+        self.refused_by_the_record(self.other_record("other-a.json", a=other_a),
+                                   "block A in the owner's image", "Rebuild the owner's image")
+        other_b = build_upper_dfu.upper_header.build(b"another build", 0x1A2B3C4D, 0x0808001D, 0x0808001F)
+        self.refused_by_the_record(self.other_record("other-b.json", b=other_b), "block B in " + self.upper)
+
+    def test_a_block_built_without_the_proof_switch_stops(self):
+        self.refused_by_the_record(self.other_record("unproven.json", proven="0"), "ARM_UPPER_PROVEN=0")
 
 
 if __name__ == "__main__":
