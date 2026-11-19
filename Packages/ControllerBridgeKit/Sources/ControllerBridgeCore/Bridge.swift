@@ -145,6 +145,10 @@ final class Bridge {
     var phaseOffset: Double?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
+    /// Syndicate's master BPM, for the smooth pulse (#533).
+    var masterBPM: Double?
+    /// When the smooth pulse may send the ring again (#533).
+    var nextPulseSend: Double?
     /// When any master clock beat last arrived, pulsed or not.
     var lastClockTime: Double?
     var loaded = false
@@ -329,6 +333,7 @@ final class Bridge {
         if address == (root + "ColorPalette").lowercased() { return colorPalette(message.arguments) }
         // The master clock is one for all decks too.
         if address == (root + "Header/Clock").lowercased() { return headerClock(message.arguments) }
+        if address == (root + "Header/BPM").lowercased() { return headerBPM(message.arguments) }
         // The mixer channel of this deck (#207).
         if mapping.mixer != nil, let mixer = MixerOSC.parse(message.address, root: root) {
             if mixer.channel == mapping.deck.number { mixerFeedback(mixer.value, message.arguments) }
