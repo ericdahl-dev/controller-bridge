@@ -35,7 +35,17 @@ struct OtherDevicesTests {
     func offer() {
         let devices = OtherDevices(unmatched: ["DDJ-FLX4"], controllerConnected: false)
         #expect(devices.offer == CaptureOffer(device: "DDJ-FLX4", text: "DDJ-FLX4 isn't supported yet.", action: "Help add it…"))
-        #expect(OtherDevices(unmatched: ["DDJ-FLX4"], controllerConnected: true).offer == nil)
+    }
+
+    // MARK: Help add it, with a controller connected (#329)
+
+    @Test("With an LC6000 connected, an unmatched device still gets the offer, and its capture preselects that device")
+    func offerWhileConnected() {
+        let devices = OtherDevices(unmatched: ["DDJ-FLX4"], controllerConnected: true)
+        #expect(devices.offer == CaptureOffer(device: "DDJ-FLX4", text: "DDJ-FLX4 isn't supported yet.", action: "Help add it…"))
+        // Still quiet: no orange row, and the device stays in the gray list.
+        #expect(devices.highlighted == nil)
+        #expect(devices.rows == ["DDJ-FLX4 · no profile"])
     }
 
     @Test("A known controller's other port (the LC6000's WD) is never highlighted or offered: it's listed as part of it")
