@@ -94,13 +94,6 @@ TOOLS = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)
 # The header's two descriptions, C's one CRC, and this pin (which names what a copy looks like).
 OWNERS = {"lc6000-display-fw/arm/upper.h", "lc6000-display-fw/arm/upper_header.py", "lc6000-display-fw/arm/upper_crc.h",
           "lc6000-display-fw/arm/test/test_upper_header.py"}
-# Files that still carry their own copy, each removed as it moves onto the modules (#572).
-NOT_YET = {
-    "lc6000-firmware/build_upper_dfu.py",
-    "lc6000-firmware/drawn_flash.py",
-    "lc6000-firmware/test_build_upper_dfu.py",
-    "lc6000-firmware/test_drawn_flash.py",
-}
 # What a copy looks like: B's marker as a number, a CRC table, a CRC-32 in a file about block B, or a CRC written
 # into B by hand.
 COPY = [re.compile(r"0x42574644"), re.compile(r"nibbles\["), re.compile(r"put_word\(upper \+ 12\b")]
@@ -126,7 +119,7 @@ def copies():
 
 class OneDescriptionTests(unittest.TestCase):
     def test_no_tool_or_test_carries_its_own_header_or_crc(self):
-        self.assertEqual(copies(), NOT_YET)
+        self.assertEqual(copies(), set())
 
 
 if __name__ == "__main__":
