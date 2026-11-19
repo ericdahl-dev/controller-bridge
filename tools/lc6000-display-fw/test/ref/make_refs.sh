@@ -31,8 +31,8 @@ for needle in 0 4096 8192 12288 1500; do
 done
 # The marker over a lit section, at an angle that folds back from the last quarter turn.
 "$live" 4 0 128 255 empty 3 11000 "$here/deck4-blue-empty-beat3-needle11000.ppm"
-# The level meter (#461): silence, mid with a held peak above, clip.
-for meter in "0 0" "64 90" "127 127"; do
+# The level meter (#461): silence, mid with a held peak above, high (yellow, the tick over it), clip.
+for meter in "0 0" "64 90" "110 120" "127 127"; do
     set -- $meter
     "$live" 4 0 128 255 empty - - "$1" "$2" "$here/deck4-blue-empty-meter$1-$2.ppm"
 done

@@ -323,6 +323,8 @@ typedef struct { const char *file; uint8_t level, peak; int budget; } meter_case
 static const meter_case meters[] = {
     { "test/ref/deck4-blue-empty-meter0-0.ppm", 0, 0, 0 },
     { "test/ref/deck4-blue-empty-meter64-90.ppm", 64, 90, 50 },
+    // High: green, then yellow above 0.75, the white tick over the yellow.
+    { "test/ref/deck4-blue-empty-meter110-120.ppm", 110, 120, 30 },
     // Clip: the whole arc red, and the tick red at the top.
     { "test/ref/deck4-blue-empty-meter127-127.ppm", 127, 127, 95 },
 };
@@ -387,6 +389,7 @@ static void each_meter_reference_differs_from_the_unlit_one(void) {
     static dfw_pixel unlit[DFW_SIZE * DFW_SIZE];
     static const char *const files[] = { "test/ref/deck4-blue-empty-meter0-0.ppm",
                                          "test/ref/deck4-blue-empty-meter64-90.ppm",
+                                         "test/ref/deck4-blue-empty-meter110-120.ppm",
                                          "test/ref/deck4-blue-empty-meter127-127.ppm" };
     CHECK(load_reference(UNLIT));
     memcpy(unlit, reference, sizeof unlit);
