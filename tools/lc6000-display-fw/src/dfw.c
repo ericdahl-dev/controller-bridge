@@ -7,13 +7,17 @@ static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
 #define DFW_CMD 0x20
 /// The protocol version this code speaks.
 #define DFW_VERSION 1
-enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03 };
+enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_STATE = 0x07 };
+/// Bit 6 of the state flags is reserved: a message with it set is malformed.
+#define STATE_RESERVED 0x40
 
 void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame) {
     memset(unit, 0, sizeof *unit);
     unit->port = *port;
     unit->frame = frame;
 }
+
+void dfw_set_frame(dfw_unit *unit, dfw_pixel *frame) { unit->frame = frame; }
 
 void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {
     uint8_t next = (uint8_t)((unit->head + 1) % DFW_INBOX);
@@ -27,7 +31,7 @@ void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {
 /// Each op's one exact length, counting the op itself; 0 for an op this version doesn't take.
 static uint8_t op_length(uint8_t op) {
     switch (op) {
-    case OP_CAPABILITY: case OP_BEGIN: case OP_END: return 2;
+    case OP_CAPABILITY: case OP_BEGIN: case OP_END: case OP_STATE: return 2;
     case OP_DECK: return 9;
     default: return 0;
     }
@@ -49,7 +53,8 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
     const uint8_t *args = body + 1;
     switch (op) {
     case OP_CAPABILITY:
-        if (args[0] != 0) {
+        // No back buffer means we can't draw: no answer, so the app falls back to images.
+        if (args[0] != 0 && unit->frame) {
             // The reply header (as the unit's acks), then the version both sides speak.
             const uint8_t answer[] = { 0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, DFW_CMD, 0x00, 0x02, OP_CAPABILITY,
                                        args[0] < DFW_VERSION ? args[0] : DFW_VERSION, 0xF7 };
@@ -70,6 +75,11 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
         unit->dirty = 1;
         break;
     }
+    case OP_STATE:
+        if ((args[0] & STATE_RESERVED) || !unit->drawn) break;
+        unit->flags = args[0];
+        unit->dirty = 1;
+        break;
     default:
         break;
     }
@@ -81,7 +91,7 @@ void dfw_tick(dfw_unit *unit) {
         act(unit, slot->bytes, slot->length);
         unit->tail = (uint8_t)((unit->tail + 1) % DFW_INBOX);
     }
-    if (!unit->dirty) return;
+    if (!unit->dirty || !unit->frame) return;
     unit->dirty = 0;
     unit->port.present(unit->port.ctx, unit->frame);
 }

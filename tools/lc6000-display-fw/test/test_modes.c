@@ -46,6 +46,10 @@ void a_capability_ask_with_version_0_gets_no_answer(void);
 void every_vector_decodes(void);
 void every_invalid_vector_is_ignored(void);
 
+void with_no_frame_nothing_is_drawn(void);
+void a_frame_handed_in_later_is_drawn(void);
+void with_no_frame_the_capability_ask_gets_no_answer(void);
+
 const test_case all_tests[] = {
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
     { "a deck before begin draws nothing", a_deck_before_begin_draws_nothing },
@@ -62,5 +66,8 @@ const test_case all_tests[] = {
     { "a capability ask with version 0 gets no answer", a_capability_ask_with_version_0_gets_no_answer },
     { "every vector decodes", every_vector_decodes },
     { "every invalid vector is ignored", every_invalid_vector_is_ignored },
+    { "with no frame nothing is drawn", with_no_frame_nothing_is_drawn },
+    { "a frame handed in later is drawn", a_frame_handed_in_later_is_drawn },
+    { "with no frame the capability ask gets no answer", with_no_frame_the_capability_ask_gets_no_answer },
     { 0, 0 },
 };
