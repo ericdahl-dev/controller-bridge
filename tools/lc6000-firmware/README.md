@@ -37,7 +37,7 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 `apply` refuses, and writes nothing, if:
 
 - the file isn't a one-target, one-element DfuSe file with a good suffix CRC (the stock updater reads the element at a fixed offset, so nothing else would flash correctly);
-- the image's trailer isn't the `wd` CRC trailer, or its stored CRC doesn't match (see the `tp` limitation below);
+- the image doesn't end with `EndOfFlashToken`, or it's a `wd` image whose stored trailer CRC doesn't match (see "The `tp` image" below);
 - any old bytes don't match what's in the file (wrong image or wrong patch);
 - an edit falls outside the image, reaches into the 32-byte trailer, overlaps another edit, or has old and new bytes of different lengths;
 - the output already exists, or is inside the repository.
@@ -97,9 +97,21 @@ Nothing else changes: every byte outside the patched ranges, the trailer CRC and
 - `python3 -I -m unittest discover tools/lc6000-firmware` runs the tests. They build their own synthetic DfuSe files, so they need no vendor data; CI runs them in the Site check job. They pin the CRC to a known answer (one word `0x12345678` gives `0xDF8A8A2B`), check that a no-op patch reproduces the input bit for bit, and that a one-byte patch changes only that byte and the two CRCs.
 - `verify` on your own stock `wd` file must print `0x3A7CE2CA` and report a bit-for-bit round trip. If it doesn't, stop: your file isn't the one this tool was written against.
 
-## The `tp` limitation
+## The `tp` image
 
-The **top panel (`tp`)** image is refused, and there is no option to override that. Its trailer has no magic or length field, and its one value (`0x0001D868`, also in its file name) is **undecoded**. A patched `tp` image would keep a stale value there, and whether the `tp` bootloader checks it is unknown. Until a bootloader dump (#432, #433, #434) shows what that field is, `tp` patches can't be made safe, so this tool won't make them.
+The **top panel (`tp`)** image can be patched too. Its trailer has no magic, length or CRC: a version, one word (`0x0001D868`, also in the file name) and `EndOfFlashToken\0`.
+
+The unit's own startup stage was read out through ST's ROM bootloader and analyzed (#432, #434). Before it starts the app it checks **one thing**: the last 16 bytes of the image are `EndOfFlashToken\0`. There is no checksum, length, version or vector check, and the `0x0001D868` word is never read (its meaning is still unknown).
+
+So for a `tp` image the tool:
+
+- tells the chip from the trailer (`wd` has the `0xDEADBEEF` magic; `tp` doesn't);
+- applies the edits, refusing any that reach into the last 32 bytes;
+- leaves the trailer exactly as it was, and recomputes only the DfuSe suffix CRC.
+
+`verify` on the stock `tp` file prints `ok: tp image, EndOfFlashToken present; it has no checksum …`.
+
+`tp` is also the safe chip to experiment on: BACK + FWD + VINYL at power-on enters ST's ROM bootloader, which nothing in flash can remove; flash isn't read-protected; and Denon's updater restores stock from that mode (all seen on hardware, 2026-11-19). A patched `tp` image booting is still **unproven on hardware**.
 
 ## What isn't known yet
 

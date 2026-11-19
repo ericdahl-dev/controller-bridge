@@ -88,9 +88,34 @@ class TrailerTests(unittest.TestCase):
         data = dfuse_file(wd_element())
         self.assertEqual(dfupatch.patch(data, ""), data)
 
-    def test_a_tp_image_is_refused_because_its_trailer_is_undecoded(self):
-        with self.assertRaisesRegex(dfupatch.Refused, "tp.*undecoded"):
-            dfupatch.patch(dfuse_file(tp_element()), "")
+    def test_a_tp_no_op_patch_gives_back_the_input_bit_for_bit(self):
+        # The tp startup stage only checks that the image ends with EndOfFlashToken (read from the unit's sector 0,
+        # #434): there's no checksum to fix, so a tp image is patchable as long as its trailer stays as it is.
+        data = dfuse_file(tp_element())
+        self.assertEqual(dfupatch.patch(data, ""), data)
+
+    def test_a_tp_patch_changes_only_its_byte_and_the_suffix_crc(self):
+        element = tp_element()
+        data = dfuse_file(element)
+        start = len(data) - 16 - len(element)
+        out = dfupatch.patch(data, f"0x{BASE + 0x40:08X} ff 00\n")
+        self.assertEqual(set(changed_offsets(data, out)) - set(range(len(out) - 4, len(out))), {start + 0x40})
+        self.assertEqual(out[start + len(element) - 32:start + len(element)], element[-32:])
+
+    def test_a_tp_patch_that_touches_the_trailer_is_refused(self):
+        element = tp_element()
+        with self.assertRaisesRegex(dfupatch.Refused, "trailer"):
+            dfupatch.patch(dfuse_file(element), f"0x{BASE + len(element) - 28:08X} ee 00\n")
+
+    def test_an_image_without_the_end_token_is_refused(self):
+        element = bytearray(tp_element())
+        element[-1] = 0x01
+        with self.assertRaisesRegex(dfupatch.Refused, "EndOfFlashToken"):
+            dfupatch.patch(dfuse_file(bytes(element)), "")
+
+    def test_the_chip_is_told_from_the_trailer(self):
+        self.assertEqual(dfupatch.chip(wd_element()), "wd")
+        self.assertEqual(dfupatch.chip(tp_element()), "tp")
 
     def test_a_stale_trailer_crc_on_the_input_is_refused(self):
         element = bytearray(wd_element())
@@ -185,10 +210,18 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("bit for bit", out)
 
-    def test_verify_refuses_a_tp_file(self):
-        code, _, err = run("verify", self.path("tp.dfu", dfuse_file(tp_element())))
-        self.assertEqual(code, 1)
-        self.assertIn("undecoded", err)
+    def test_verify_passes_a_tp_file_and_says_it_has_no_checksum(self):
+        code, out, _ = run("verify", self.path("tp.dfu", dfuse_file(tp_element())))
+        self.assertEqual(code, 0)
+        self.assertIn("tp image", out)
+        self.assertIn("no checksum", out)
+
+    def test_apply_on_a_tp_file_says_no_trailer_crc_was_needed(self):
+        patch = self.path("p.txt", f"0x{BASE + 0x40:08X} ff 00\n")
+        output = self.path("tp-out.dfu")
+        code, out, _ = run("apply", self.path("tp.dfu", dfuse_file(tp_element())), patch, output)
+        self.assertEqual(code, 0)
+        self.assertIn("tp image", out)
 
     def test_compare_passes_a_readback_equal_to_the_files_image(self):
         code, out, _ = run("compare", self.input, self.path("readback.bin", self.element))
