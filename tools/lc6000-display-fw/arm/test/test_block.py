@@ -213,6 +213,7 @@ BEGIN = "F000020B7F102000020101F7"
 DECK_2_RED_TRACK = "F000020B7F10200009030201 7F0000000001F7".replace(" ", "")
 TITLE_STROBE = "F000020B7F102000080400 5374726F6265F7".replace(" ", "")  # title "Strobe", as test/test_sequence.c
 TEMPO_128 = "F000020B7F10200003050A00F7"
+END = "F000020B7F102000020201F7"
 
 
 class CommandEntryTests(unittest.TestCase):
@@ -417,6 +418,31 @@ class UpperBlockTests(unittest.TestCase):
             top, bottom = 21 + 197 - 90, 21 + 197 - 60
             rows.append(bytes(chip.uc.mem_read(LAYER_AT + top * 320 * 2, (bottom - top + 1) * 320 * 2)))
         self.assertNotEqual(rows[0], rows[1], "the title changed the title rows")
+
+    def test_block_a_calls_bs_band_right_after_a_real_present_and_never_otherwise(self):
+        # The band (#524) goes straight into layer 2, so it must only follow a present: never on a tick that showed
+        # nothing, and never after end. B's stub band (arm/test/band_stub.c) writes 0xF81F at panel (0, 0), which no
+        # frame copy touches; the layer is zeroed when it is turned on, so a band called before the present is lost.
+        chip = Chip(data=proven_block(), upper=upper_block())
+
+        def deliver(*messages):
+            for hexbytes in messages:
+                message = chip.receive(hexbytes)
+                chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX,
+                          r5=(message[7] << 7) | message[8], r8=0)
+            chip.call(dfupatch.HOOK_RENDER_ENTRY, count=50_000_000)
+
+        def corner():
+            return struct.unpack("<H", chip.uc.mem_read(LAYER_AT, 2))[0]
+
+        deliver(CAPABILITY)
+        self.assertEqual(corner(), 0, "the ask presents nothing, so no band")
+        deliver(BEGIN, DECK_2_RED_TRACK)
+        self.assertEqual(corner(), 0xF81F, "the band follows the present")
+        chip.uc.mem_write(LAYER_AT, b"\x00\x00")
+        deliver(END)
+        deliver()
+        self.assertEqual(corner(), 0, "end presents nothing, so no band")
 
 
 def struct_fields(source, opening, closing):
