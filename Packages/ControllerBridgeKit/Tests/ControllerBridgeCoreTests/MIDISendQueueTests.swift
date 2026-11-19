@@ -231,6 +231,48 @@ struct MIDISendQueueRecoveryTests {
         #expect(names.lock.withLock { names.names } == ["LC6000"])
     }
 
+    /// The jog display's port whose send doesn't return: the WD port of a unit that stopped reading (#595).
+    final class BlockingJogPort: JogDisplayPort, @unchecked Sendable {
+        let gate = DispatchSemaphore(value: 0)
+        private let lock = NSLock()
+        private var blocking = true
+        private var _sent: [String] = []
+        var sent: [String] { lock.withLock { _sent } }
+        func sendController(_ bytes: [UInt8]) { lock.withLock { _sent.append("controller \(bytes.count)") } }
+        func sendWD(_ bytes: [UInt8]) {
+            if lock.withLock({ blocking }) { gate.wait() }
+            lock.withLock { _sent.append("wd \(bytes.count)") }
+        }
+        var isAttached: Bool { true }
+        func release() {
+            lock.withLock { blocking = false }
+            for _ in 0..<64 { gate.signal() }
+        }
+    }
+
+    @Test("A wedged WD port goes stuck: its backlog of SysEx is dropped, not flooded into the unit, and it's named both ways")
+    func wedgedWD() throws {
+        final class Names: @unchecked Sendable {
+            let lock = NSLock()
+            var said: [String] = []
+        }
+        let names = Names()
+        let inner = BlockingJogPort()
+        let queue = MIDISendQueue(label: "test", stuckAfter: 0.05,
+                                  onStuck: { name in names.lock.withLock { names.said.append("stuck \(name)") } },
+                                  onRecovered: { name in names.lock.withLock { names.said.append("back \(name)") } })
+        let jog = queue.jogDisplayPort(inner)
+        jog.sendWD([1])                                   // in flight, wedged
+        Thread.sleep(forTimeInterval: 0.1)
+        for _ in 0..<50 { jog.sendWD([2, 2]) }            // a second of 50/s needle steps: dropped
+        inner.release()
+        queue.drain()
+        jog.sendController([0xF0, 0xF7])
+        queue.drain()
+        #expect(inner.sent == ["wd 1", "controller 2"])
+        #expect(names.lock.withLock { names.said } == ["stuck jog display (WD)", "back jog display (WD)"])
+    }
+
     @Test("The Coordinator's port-recovered command repaints every light of the layer in front")
     func repaints() throws {
         let rig = try Rig()
