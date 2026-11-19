@@ -128,6 +128,16 @@ struct RingColorMessageTests {
         #expect(try Self.colors(rig) == [[127, 0, 0]])
     }
 
+    @Test("The setting sent again unchanged (as at every launch) repaints nothing")
+    func unchangedSettingSendsNothing() throws {
+        let rig = try Self.exact(deck: 2)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        let output = try Self.output(rig)
+        let before = output.writes.count
+        rig.coordinator.apply(.setColorMessages(true))
+        #expect(output.writes.count == before)
+    }
+
     /// What the ring shows on the unit: the last write to note 40, a color message or a note-on.
     static func ringShows(_ output: Rig.FakeOutput) -> String? {
         for write in output.writes.reversed() {

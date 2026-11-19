@@ -478,15 +478,16 @@ struct SettingsView: View {
                           ? "The ring shows each deck's exact color"
                           : "The ring uses the LC6000's 64 colors",
                       isOn: settings.colorMessages)
-            // Vivid keeps a color's hue on the LC6000's 64 colors; Exact rounds each channel (#151). Only with the table.
-            if !settings.wrappedValue.colorMessages {
-                row("Ring colors", hint: settings.wrappedValue.ringColors == .vivid
+            // Vivid keeps a color's hue on the LC6000's 64 colors; Exact rounds each channel (#151). With exact colors on,
+            // only a held pad still takes the table, until the pads move to the color message too (#531).
+            row("Ring colors", hint: settings.wrappedValue.colorMessages
+                ? "For a held pad; the ring shows exact colors"
+                : settings.wrappedValue.ringColors == .vivid
                     ? "Strong colors on the ring and a held pad, keeping each hue"
                     : "Each channel rounded, as the pads' cue colors are; softer colors look paler") {
-                    SegmentedPills(options: [RingColors.vivid, .exact], title: { $0 == .vivid ? "Vivid" : "Exact" },
-                                   selection: settings.ringColors)
-                        .accessibilityElement(children: .contain).accessibilityLabel("Ring colors")
-                }
+                SegmentedPills(options: [RingColors.vivid, .exact], title: { $0 == .vivid ? "Vivid" : "Exact" },
+                               selection: settings.ringColors)
+                    .accessibilityElement(children: .contain).accessibilityLabel("Ring colors")
             }
             ForEach(1...4, id: \.self) { deck in deckColorRow(settings, deck) }
             if !settings.wrappedValue.followSyndicateDeckColors {

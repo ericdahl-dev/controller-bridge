@@ -167,8 +167,6 @@ final class Bridge {
     private var ledCache = LEDCache()
     /// What each color-message LED shows (#530), as last sent: only a change goes out, as with the velocity cache.
     private var colorCache: [UInt8: [UInt8]] = [:]
-    /// The LEDs that take Denon's color message (#530), from the profile; nil without it.
-    private(set) lazy var colorEncoder = LEDColorEncoder(mapping)
     /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
     var colorMessages = false
 
@@ -466,8 +464,8 @@ final class Bridge {
                 padLED(lit.note, Self.off)
             }
             // The color-message LEDs (#530): each lit one off with its own message.
-            for (note, rgb) in colorCache.sorted(by: { $0.key < $1.key }) where rgb != [0, 0, 0] {
-                if let message = colorMessageEncoder?.message(note: Int(note), rgb: [0, 0, 0]) { colorLED(message) }
+            for entry in colorCache.sorted(by: { $0.key < $1.key }) where entry.value != [0, 0, 0] {
+                if let message = colorMessageEncoder?.message(note: Int(entry.key), rgb: [0, 0, 0]) { colorLED(message) }
             }
             // The VU meter too (#320).
             if let meter = mapping.mixer?.meter, let shown = mixerModule.meterShownValue, shown != 0, ledCC(UInt8(meter.cc), 0) {
@@ -498,7 +496,7 @@ final class Bridge {
     }
 
     /// The color-message encoder in use (#530): nil when the setting is off or the profile has none.
-    var colorMessageEncoder: LEDColorEncoder? { colorMessages ? colorEncoder : nil }
+    var colorMessageEncoder: LEDColorEncoder? { colorMessages ? LEDColorEncoder(mapping) : nil }
 
     /// A pad or the ring in exact RGB (#530), through Denon's color message.
     func colorLED(_ message: LEDColorMessage) {
