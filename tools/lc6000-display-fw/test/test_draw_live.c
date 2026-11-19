@@ -273,7 +273,25 @@ static void stale_draws_no_marker(void) {
     CHECK(memcmp(frame, without, sizeof frame) == 0);
 }
 
+/// Play state shows only through the needle, as the unit's own does: it moves while playing and holds while paused.
+/// Nothing is drawn for it: every combination of loaded, playing and play pending is the same frame.
+static void the_play_flags_change_no_pixels(void) {
+    static dfw_pixel first[DFW_SIZE * DFW_SIZE];
+    begin_with_needle(1500);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 08 02 F7");   // beat 2
+    for (uint8_t flags = 0; flags <= 7; flags++) {
+        char state[64];
+        snprintf(state, sizeof state, "F0 00 02 0B 7F 10 20 00 02 07 %02X F7", flags);
+        feed(&live, state);
+        dfw_tick(&live, 10u + flags);
+        CHECK(rec.presents == 2 + flags);
+        if (flags == 0) memcpy(first, rec.last, sizeof first);
+        else CHECK(memcmp(rec.last, first, sizeof first) == 0);
+    }
+}
+
 const test_case draw_live_tests[] = {
+    { "the play flags change no pixels", the_play_flags_change_no_pixels },
     { "the needle is drawn as the marker", the_needle_is_drawn_as_the_marker },
     { "each marker reference differs from the unlit one", each_marker_reference_differs_from_the_unlit_one },
     { "no needle message draws no marker", no_needle_message_draws_no_marker },
