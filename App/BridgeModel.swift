@@ -237,6 +237,7 @@ final class BridgeModel {
         if new.ringColors != old.ringColors { producer.send(.setRingColors(new.ringColors)) }
         if new.profileChoices != old.profileChoices { producer.send(.setProfileChoices(new.profileChoices)) }
         if new.jogDisplay != old.jogDisplay { producer.send(.setJogDisplay(enabled: new.jogDisplay)) }
+        if new.displayFirmware != old.displayFirmware { producer.send(.setDisplayFirmware(new.displayFirmware)) }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
 
@@ -332,6 +333,8 @@ final class BridgeModel {
         pipe.producer.send(.setRingColors(settings.ringColors))
         // Profiles chosen by hand (#200): a device only they name connects now.
         pipe.producer.send(.setProfileChoices(settings.profileChoices))
+        // Before the switch, so the first uploads already know how many slots the unit shows (#425).
+        pipe.producer.send(.setDisplayFirmware(settings.displayFirmware))
         pipe.producer.send(.setJogDisplay(enabled: settings.jogDisplay))
 
     }
