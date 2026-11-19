@@ -190,6 +190,23 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("undecoded", err)
 
+    def test_compare_passes_a_readback_equal_to_the_files_image(self):
+        code, out, _ = run("compare", self.input, self.path("readback.bin", self.element))
+        self.assertEqual(code, 0)
+        self.assertIn(f"match: {len(self.element):#x} bytes at 0x{BASE:08X}", out)
+
+    def test_compare_refuses_a_readback_with_one_byte_changed_and_says_where(self):
+        changed = bytearray(self.element)
+        changed[0x123] ^= 0x01
+        code, _, err = run("compare", self.input, self.path("readback.bin", bytes(changed)))
+        self.assertEqual(code, 1)
+        self.assertIn(f"1 byte differs, the first at 0x{BASE + 0x123:08X}", err)
+
+    def test_compare_refuses_a_readback_of_another_length(self):
+        code, _, err = run("compare", self.input, self.path("readback.bin", self.element[:-4]))
+        self.assertEqual(code, 1)
+        self.assertIn("bytes, the image is", err)
+
     def test_apply_writes_the_patched_file(self):
         old = self.element[0x40]
         patch = self.path("p.txt", f"0x{BASE + 0x40:08X} {old:02x} {old ^ 0xFF:02x}\n")
