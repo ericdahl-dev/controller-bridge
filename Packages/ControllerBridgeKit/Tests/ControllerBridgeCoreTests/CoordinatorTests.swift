@@ -14,13 +14,19 @@ final class Rig {
         func send(_ event: MIDIEvent) throws {
             if failing { throw SendFailed() }
             sent.append(event)
+            writes.append(.event(event))
         }
         /// Denon's color messages (#530), in order, apart from the channel messages.
         var colors: [LEDColorMessage] = []
         func send(color: LEDColorMessage) throws {
             if failing { throw SendFailed() }
             colors.append(color)
+            writes.append(.color(color))
         }
+        /// Everything sent, both kinds in one order (#530): on the unit, a note-on and a color message for the same LED
+        /// each replace the other, so the last one is what shows.
+        enum Write: Equatable { case event(MIDIEvent), color(LEDColorMessage) }
+        var writes: [Write] = []
         func close() { closed = true }
     }
 

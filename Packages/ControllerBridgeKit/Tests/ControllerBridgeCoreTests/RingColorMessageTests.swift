@@ -128,6 +128,62 @@ struct RingColorMessageTests {
         #expect(try Self.colors(rig) == [[127, 0, 0]])
     }
 
+    /// What the ring shows on the unit: the last write to note 40, a color message or a note-on.
+    static func ringShows(_ output: Rig.FakeOutput) -> String? {
+        for write in output.writes.reversed() {
+            switch write {
+            case .color(let m) where m.note == 40: return "color \(m.red) \(m.green) \(m.blue)"
+            case .event(.noteOn(_, 40, let velocity)): return "note-on \(velocity)"
+            default: continue
+            }
+        }
+        return nil
+    }
+
+    @Test("The ring's last write stays its color message after a resync, LEDs off and on, an LED sweep and a reboot")
+    func lastWriteWins() throws {
+        let rig = try Self.exact(deck: 2)
+        Self.palette(rig, slot: 3, 255, 0, 0)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        let red = "color 127 0 0"
+        #expect(Self.ringShows(try Self.output(rig)) == red)
+        // The sweep first: a resync left unanswered by this fake Syndicate goes stale over the sweep's minute.
+        rig.clock.now = 100
+        rig.coordinator.startLEDSweep()
+        DiagnosticsTests.tick(rig, at: 1000)
+        #expect(Self.ringShows(try Self.output(rig)) == red, "after a sweep")
+        rig.coordinator.apply(.resync)
+        #expect(Self.ringShows(try Self.output(rig)) == red, "resync")
+        rig.coordinator.setLEDs(enabled: false)
+        rig.coordinator.setLEDs(enabled: true)
+        #expect(Self.ringShows(try Self.output(rig)) == red, "LEDs off and on")
+        rig.coordinator.devicesChanged(removed: [Rig.lc6000.id])
+        #expect(Self.ringShows(try Self.output(rig)) == red, "after a reboot")
+    }
+
+    @Test("Layers, both modes: a layer switch leaves the ring's last write the front deck's color message")
+    func layerSwitchLastWrite() throws {
+        for multiChannel in [false, true] {
+            let rig = try LayersTests.layered()
+            rig.coordinator.setColorMessages(true)
+            Self.palette(rig, slot: 3, 255, 0, 0)
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+            if multiChannel {
+                LayersTests.note(rig, channel: 1, 51, 0); LayersTests.note(rig, channel: 2, 51, 127)
+                LayersTests.note(rig, channel: 2, 1, 127)   // Play on ch2: controls on ch2
+            } else {
+                LayersTests.note(rig, channel: 2, 51, 127)
+            }
+            let output = try Self.output(rig)
+            #expect(Self.ringShows(output) == "color 127 0 0", "multi-channel: \(multiChannel)")
+            // The hidden deck 1's color change paints nothing.
+            output.colors.removeAll()
+            Self.palette(rig, slot: 1, 0, 0, 255)
+            #expect(output.colors.isEmpty, "multi-channel: \(multiChannel)")
+        }
+    }
+
     @Test("With no track the ring is off, as a color message of 0, 0, 0")
     func noTrack() throws {
         let rig = try Self.exact(deck: 2)
