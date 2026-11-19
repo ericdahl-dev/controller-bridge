@@ -137,5 +137,45 @@ class FreshFlashTests(DrawnPlanTests):
         self.assertTrue(all(a[2] == "2-1.2" for a in unit.log if a[0] in ("read", "write")))
 
 
+
+class FreshnessTests(DrawnPlanTests):
+    """A plan file never lets stale facts authorize a write (#567): each write rests on its own read, made in this run
+    after update mode was entered."""
+
+    def test_a_plan_file_left_from_a_completed_run_asks_for_everything_again(self):
+        path = self.plan()
+        self.assertEqual(FakeUnit(self.dir.name, self.current_element).run(path), ("done",))
+        # The same file, begun again for a new run.
+        drawn_plan.begin(path, current=self.current, upper=self.upper, owner=self.owner, work=self.dir.name)
+        self.assertEqual(drawn_plan.next_action(path)[:2], ("ask", "both_true"))
+
+    def test_facts_from_another_run_kept_in_the_file_authorize_nothing(self):
+        # A completed run's facts left in the file under a new run id: the reads come again before any write.
+        path = self.plan()
+        self.assertEqual(FakeUnit(self.dir.name, self.current_element).run(path), ("done",))
+        plan = drawn_plan.load(path)
+        plan["run"] = "another-run"
+        drawn_plan.save(path, plan)
+        unit = FakeUnit(self.dir.name, self.current_element)
+        unit.run(path)
+        kinds = self.kinds(unit)
+        self.assertLess(kinds.index("read upper"), kinds.index("write upper"))
+        self.assertLess(kinds.index("read app"), kinds.index("write app"))
+        self.assertEqual(kinds[0], "ask both_true")
+
+    def test_a_read_made_before_update_mode_is_read_again(self):
+        path = self.plan()
+        for key in ("both_true", "all_true", "probe"):
+            drawn_plan.record(path, key, "y")
+        upper = self.write("old-upper.bin", b"\xff" * UPPER_SIZE)
+        drawn_plan.record(path, "upper_read", upper)   # before update mode
+        drawn_plan.record(path, "update_mode", "ok")
+        unit = FakeUnit(self.dir.name, self.current_element)
+        unit.run(path)
+        reads = [a[4] for a in unit.log if a[0] == "read"]
+        self.assertIn("upper_read", reads)
+        self.assertLess(self.kinds(unit).index("read upper"), self.kinds(unit).index("write upper"))
+
+
 if __name__ == "__main__":
     unittest.main()
