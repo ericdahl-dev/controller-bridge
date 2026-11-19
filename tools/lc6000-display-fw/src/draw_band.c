@@ -52,7 +52,11 @@ static dfw_pixel ring_color(const ring_state *ring, const dfw_band_entry *e) {
         float cover = 1.0f;
         if (ring->turns < 1.0f) {
             float dx = (float)e->x + 0.5f - CENTER, dy = (float)e->y + 0.5f - CENTER;
-            float end = edge_cover(dx * ring->end_nx + dy * ring->end_ny, ring->end_nx, ring->end_ny);
+            // A pixel's center 0.75 px or more from the end's line is wholly on one side: edge_cover gives exactly 1
+            // or 0 there (half its corner-to-corner reach is at most √2/2), so only the pixels on the line need it.
+            float distance = dx * ring->end_nx + dy * ring->end_ny;
+            float end = distance >= 0.75f ? 1.0f : distance <= -0.75f ? 0.0f
+                : edge_cover(distance, ring->end_nx, ring->end_ny);
             cover = clamp01(ring->turns <= 0.5f ? e->start + end - 1.0f : e->start + end);
         }
         c = blend(c, ring->fill, e->band * cover);
