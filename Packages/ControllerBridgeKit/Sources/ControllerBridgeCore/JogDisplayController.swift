@@ -70,6 +70,9 @@ final class JogDisplayController {
         driver?.setStale(stale)
     }
 
+    /// Whether the unit draws the screen itself now (#461).
+    var drawing: Bool { if case .customDrawn = driver?.found { true } else { false } }
+
     /// The display firmware found on the unit (#456).
     var found: DisplayFound? { driver?.found }
 

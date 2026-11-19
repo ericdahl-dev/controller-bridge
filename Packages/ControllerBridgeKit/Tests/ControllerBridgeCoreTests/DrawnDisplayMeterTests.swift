@@ -93,4 +93,14 @@ struct DrawnDisplayMeterTests {
         layers.coordinator.tick()
         #expect(Self.meters(wd).last == DrawnDisplay.Message.meter(level: 0, peak: 0).bytes)
     }
+
+    @Test("While drawing, the mixer meter joins the required subscriptions (so a missing one is reported); not before, not after")
+    func meterSubscription() throws {
+        let (rig, _, _) = try Handshake.rig(.custom)
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.mixerMeter))   // still asking
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        #expect(rig.coordinator.status.requiredSubscriptions.contains(.mixerMeter))
+        rig.coordinator.setJogDisplay(enabled: false)
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.mixerMeter))
+    }
 }
