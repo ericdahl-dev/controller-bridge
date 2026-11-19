@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch an LC6000 PRIME wd firmware image inside its DfuSe file, and fix its checksums.
+"""Patch an LC6000 PRIME firmware image (wd or tp) inside its DfuSe file, and fix its checksums.
 
   python3 -I dfupatch.py verify IN.dfu
   python3 -I dfupatch.py apply IN.dfu PATCH.txt OUT.dfu
@@ -16,9 +16,6 @@ SUFFIX_SIZE = 16
 TRAILER_SIZE = 32
 TRAILER_MAGIC = 0xDEADBEEF
 END_TOKEN = b"EndOfFlashToken\x00"
-TP_REFUSAL = ("this image has no CRC trailer this tool understands (no 0xDEADBEEF magic, length and CRC). "
-              "That is the tp (top panel) layout: its trailer field is undecoded, so a patched tp image "
-              "can't be given a trailer the bootloader would accept. Only wd images can be patched")
 
 
 class Refused(Exception):
@@ -49,14 +46,23 @@ def stm32_crc(data, crc=0xFFFFFFFF):
     return crc
 
 
-def covered_length(element):
-    """The number of bytes the wd trailer CRC covers, once the trailer is known good. Refuses anything else."""
+def chip(element):
+    """Which chip's image this is, from its trailer: "wd" has the 0xDEADBEEF magic, a length and a CRC; "tp" has
+    only the end token, the one thing its startup stage checks (#434). Refuses an image without the token."""
     size = len(element)
     if size < TRAILER_SIZE or size % 4 or element[-16:] != END_TOKEN:
         raise Refused("the image doesn't end with the 32-byte EndOfFlashToken trailer")
-    magic, covered, stored = struct.unpack_from("<III", element, size - 28)
-    if magic != TRAILER_MAGIC or covered != size - 20:
-        raise Refused(TP_REFUSAL)
+    return "wd" if struct.unpack_from("<I", element, size - 28)[0] == TRAILER_MAGIC else "tp"
+
+
+def covered_length(element):
+    """The number of bytes the wd trailer CRC covers, once the trailer is known good. Refuses anything else."""
+    size = len(element)
+    if chip(element) != "wd":
+        raise Refused("this is a tp image: it has no CRC trailer")
+    _, covered, stored = struct.unpack_from("<III", element, size - 28)
+    if covered != size - 20:
+        raise Refused("the wd trailer's length field isn't the image size less 20")
     if stm32_crc(element[:covered]) != stored:
         raise Refused("the input's trailer CRC doesn't match its image: refusing to build on it")
     return covered
@@ -108,12 +114,14 @@ def apply_edits(element, address, edits):
 
 
 def patch(data, patch_text):
-    """Applies a patch description to a wd DfuSe file and returns the new file, both CRCs recomputed."""
+    """Applies a patch description to a DfuSe file and returns the new file. A wd image gets its trailer CRC
+    recomputed; a tp image has none, and keeps its trailer as it is. Both get a fresh DfuSe suffix CRC."""
     image = parse(data)
-    covered = covered_length(image.element)
+    covered = covered_length(image.element) if chip(image.element) == "wd" else None
     element = bytearray(image.element)
     apply_edits(element, image.address, parse_patch(patch_text))
-    struct.pack_into("<I", element, covered, stm32_crc(bytes(element[:covered])))
+    if covered is not None:
+        struct.pack_into("<I", element, covered, stm32_crc(bytes(element[:covered])))
     return build(image, bytes(element))
 
 
@@ -172,9 +180,14 @@ def read(path, mode="rb"):
 def verify(args):
     data = read(args.input)
     image = parse(data)
-    covered = covered_length(image.element)
+    kind = chip(image.element)
     if patch(data, "") != data:
         raise Refused("a no-op patch didn't reproduce the input bit for bit")
+    if kind == "tp":
+        print("ok: tp image, EndOfFlashToken present; it has no checksum (its startup stage checks only the token); "
+              "a no-op patch reproduces the file bit for bit")
+        return
+    covered = covered_length(image.element)
     crc = struct.unpack_from("<I", image.element, covered)[0]
     print(f"ok: trailer CRC 0x{crc:08X} over {covered:#x} bytes; a no-op patch reproduces the file bit for bit")
 
@@ -186,9 +199,13 @@ def apply(args):
         raise Refused(f"{args.output} already exists; not overwriting it")
     out = patch(read(args.input), read(args.patch, "r"))
     image = parse(out)
-    crc = struct.unpack_from("<I", image.element, covered_length(image.element))[0]
     with open(args.output, "xb") as f:
         f.write(out)
+    if chip(image.element) == "tp":
+        print(f"wrote {args.output}: tp image, trailer unchanged (no trailer CRC), "
+              f"DfuSe suffix CRC 0x{suffix_crc(out[:-4]):08X}")
+        return
+    crc = struct.unpack_from("<I", image.element, covered_length(image.element))[0]
     print(f"wrote {args.output}: new trailer CRC 0x{crc:08X}, DfuSe suffix CRC 0x{suffix_crc(out[:-4]):08X}")
 
 
@@ -207,7 +224,7 @@ def compare(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Patch an LC6000 PRIME wd image in its DfuSe file.")
+    parser = argparse.ArgumentParser(description="Patch an LC6000 PRIME wd or tp image in its DfuSe file.")
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("verify", help="check a file's CRCs and that a no-op patch round-trips")
     check.add_argument("input")
