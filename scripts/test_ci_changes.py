@@ -58,6 +58,63 @@ class NeedsMacTests(unittest.TestCase):
             self.assertTrue(ci_changes.needs_mac([path]), path)
 
 
+class DiffBaseTests(unittest.TestCase):
+    """What the change is measured against (#546): each event says it differently, and a merge queue run has its own."""
+
+    def test_a_pull_request_against_its_base(self):
+        self.assertEqual(ci_changes.diff_base("pull_request", {"pull_request": {"base": {"sha": "aaa"}}}), "aaa")
+
+    def test_a_merge_queue_entry_against_the_queue_base(self):
+        self.assertEqual(ci_changes.diff_base("merge_group", {"merge_group": {"base_sha": "bbb", "head_sha": "ccc"}}),
+                         "bbb")
+
+    def test_a_push_against_the_commit_before(self):
+        self.assertEqual(ci_changes.diff_base("push", {"before": "ddd"}), "ddd")
+
+    def test_anything_else_or_missing_is_unknown(self):
+        # an unknown base lists nothing, and nothing runs everything
+        self.assertEqual(ci_changes.diff_base("workflow_dispatch", {}), "")
+        self.assertEqual(ci_changes.diff_base("merge_group", {}), "")
+
+
+class WorkflowTests(unittest.TestCase):
+    """The CI workflow runs for a merge queue entry, and every required check reports for it (#546): a required check
+    that never reports would hold the queue."""
+
+    @classmethod
+    def setUpClass(cls):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, ".github", "workflows", "ci.yml")) as f:
+            cls.ci = f.read()
+
+    def job(self, name):
+        start = self.ci.index(f"    name: {name}\n")
+        start = self.ci.rindex("\n  ", 0, start)
+        end = self.ci.find("\n  ", start + 3)
+        while end != -1 and self.ci[end + 3] == " ":
+            end = self.ci.find("\n  ", end + 3)
+        return self.ci[start:end if end != -1 else len(self.ci)]
+
+    def test_it_runs_on_merge_group(self):
+        on = self.ci[self.ci.index("\non:\n"):self.ci.index("\npermissions:")]
+        self.assertIn("\n  merge_group:", on)
+
+    def test_only_pull_requests_cancel_runs_in_progress(self):
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", self.ci)
+
+    def test_the_changes_job_asks_ci_changes_for_its_base(self):
+        changes = self.job("Changes")
+        self.assertIn('python3 -I scripts/ci_changes.py --base "$GITHUB_EVENT_NAME" "$GITHUB_EVENT_PATH"', changes)
+        self.assertNotIn("github.event.before", changes)
+
+    def test_every_required_job_runs_or_reports_for_any_event(self):
+        for name in ("Kit tests", "App build (Release, ad-hoc)", "Display firmware"):
+            with self.subTest(name):
+                conditions = [line.strip() for line in self.job(name).splitlines() if line.strip().startswith("if:")]
+                # Only the changes gate: a job it skips reports skipped, which the ruleset counts as passed.
+                self.assertTrue(all(c == "if: needs.changes.outputs.mac == 'true'" for c in conditions), conditions)
+
+
 class OutputTests(unittest.TestCase):
     def run_script(self, stdin):
         script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ci_changes.py")

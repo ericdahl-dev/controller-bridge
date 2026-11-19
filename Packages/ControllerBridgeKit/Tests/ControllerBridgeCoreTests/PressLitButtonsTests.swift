@@ -39,10 +39,11 @@ struct PressLitButtonsTests {
                              source: Rig.lc6000.id)
     }
 
-    @Test("Each goes full (127) while held and back to dim (1) on release, Vinyl too, though it does nothing")
+    /// Vinyl's light also shows its seek mode (#540, VinylSeekTests): a press-and-release turns it on, so it's left out.
+    @Test("Each goes full (127) while held and back to dim (1) on release")
     func held() throws {
         let rig = try Self.started()
-        for note in Self.notes {
+        for note in Self.notes where note != 19 {
             Self.note(rig, note, down: true)
             #expect(rig.leds[note] == 127, "note \(note) held")
             Self.note(rig, note, down: false)

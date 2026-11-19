@@ -23,10 +23,18 @@ extension Bridge {
         if pressed { send(shift ? "Browser/Enter" : "Browser/L\(mapping.deck.number)", .int(1)) }
     }
 
-    /// One browser step per tick.
+    /// Syndicate's per-deck waveform zoom triggers (#479), read from its app's input names; the argument is the one
+    /// its other triggers take. A live check with Syndicate confirms both.
+    static let zoomIn = "WaveformZoomIn", zoomOut = "WaveformZoomOut", zoomArgument: OSCArgument = .int(1)
+
+    /// One browser step per tick. With Shift (printed ZOOM, #479), one zoom of the deck in front per tick instead:
+    /// in clockwise, out counter-clockwise.
     func selectTurn(_ value: UInt8) {
         let ticks = mapping.midi.encoderFormat.ticks(value)
-        for _ in 0..<abs(ticks) { send(ticks > 0 ? "Browser/Down" : "Browser/Up", .int(1)) }
+        for _ in 0..<abs(ticks) {
+            if shift { sendDeck(ticks > 0 ? Self.zoomIn : Self.zoomOut, Self.zoomArgument) }
+            else { send(ticks > 0 ? "Browser/Down" : "Browser/Up", .int(1)) }
+        }
     }
 
     // MARK: Loops

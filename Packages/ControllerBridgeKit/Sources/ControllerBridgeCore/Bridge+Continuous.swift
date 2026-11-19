@@ -137,7 +137,7 @@ extension Bridge {
 
     func jogLSB(_ value: UInt8) {
         guard let wheel = mapping.jog else { return }
-        applyJog(jogModule.jogLSB(value, wheel: wheel, playing: playing, duration: duration, now: clock.now))
+        applyJog(jogModule.jogLSB(value, wheel: wheel, playing: jogBends, duration: duration, now: clock.now))
     }
 
     /// A relative jog's tick on the platter's top (#204), in the profile's encoder format.
@@ -148,7 +148,18 @@ extension Bridge {
 
     private func jogTicks(_ counts: Int, needsTouch: Bool) {
         guard let wheel = mapping.jog else { return }
-        applyJog(jogModule.jog(counts: counts, needsTouch: needsTouch, wheel: wheel, playing: playing, duration: duration, now: clock.now))
+        applyJog(jogModule.jog(counts: counts, needsTouch: needsTouch, wheel: wheel, playing: jogBends, duration: duration,
+                               now: clock.now))
+    }
+
+    /// Whether the jog bends: a playing deck, unless VINYL's seek mode is on (#540); otherwise it seeks.
+    private var jogBends: Bool { playing && !vinylSeek }
+
+    /// VINYL (#540) toggles the playing jog between bending and seeking. A bend under way ends.
+    func vinyl(_ pressed: Bool) {
+        guard pressed else { return }
+        vinylSeek.toggle()
+        if vinylSeek { applyJog(jogModule.playingChanged(false)) }
     }
 
     func platterTouch(_ pressed: Bool) { applyJog(jogModule.platterTouch(pressed)) }

@@ -2,6 +2,8 @@
 // renderer draws (test/ref/band-*.ppm, live-reference canvas=216, never from this code), and dfw_draw_band's layer.
 #include "harness.h"
 #include "draw_band.h"
+#include "band_geometry.h"
+#include "band_table.h"
 #include <string.h>
 
 #define CANVAS 216
@@ -76,6 +78,20 @@ static int band_matches(const char *name, int close, int budget, int cap) {
     }
     fprintf(stderr, "    %s band: worst %d, %d over %d (budget %d)\n", name, worst, loose, close, budget);
     return over == 0 && loose <= budget;
+}
+
+/// draw_band.c's sin and cos of a turn, as it was.
+static void reference_sin_cos(float turns, float *sin_out, float *cos_out) {
+    int quarter = (int)(turns * 4.0f + 0.5f);
+    float a = (turns - (float)quarter / 4.0f) * 6.2831853f, a2 = a * a;
+    float s = a * (1.0f - a2 / 6.0f * (1.0f - a2 / 20.0f * (1.0f - a2 / 42.0f * (1.0f - a2 / 72.0f))));
+    float c = 1.0f - a2 / 2.0f * (1.0f - a2 / 12.0f * (1.0f - a2 / 30.0f * (1.0f - a2 / 56.0f)));
+    switch (quarter & 3) {
+    case 0: *sin_out = s; *cos_out = c; break;
+    case 1: *sin_out = c; *cos_out = -s; break;
+    case 2: *sin_out = -s; *cos_out = -c; break;
+    default: *sin_out = -c; *cos_out = s; break;
+    }
 }
 
 static dfw_unit unit;
@@ -350,7 +366,64 @@ static void a_ring_that_goes_leaves_black(void) {
     }
 }
 
+/// The ring as draw_band.c worked it out per pixel before its table (#558), from the same geometry: the reference the
+/// table walk must equal bit for bit, for any progress and fill.
+static int reference_pixel(float turns, dfw_pixel fill, int x, int y, dfw_pixel *color) {
+    float band, start;
+    dfw_pixel track;
+    if (!band_shape(x, y, &band, &start, &track)) return 0;
+    float dx = (float)x + 0.5f - CENTER, dy = (float)y + 0.5f - CENTER;
+    dfw_pixel c = track;
+    if (turns > 0.0f) {
+        float cover = 1.0f;
+        if (turns < 1.0f) {
+            float sn, cs;
+            reference_sin_cos(turns, &sn, &cs);
+            float end = edge_cover(dx * -cs + dy * -sn, -cs, -sn);
+            cover = clamp01(turns <= 0.5f ? start + end - 1.0f : start + end);
+        }
+        c = blend(c, fill, band * cover);
+    }
+    *color = c;
+    return 1;
+}
+
+typedef struct { int count, off; float turns; dfw_pixel fill; } compare_log;
+
+static void compare_put(void *ctx, int x, int y, dfw_pixel color) {
+    compare_log *log = ctx;
+    dfw_pixel want;
+    log->count++;
+    if (!reference_pixel(log->turns, log->fill, x, y, &want) || want != color) log->off++;
+}
+
+/// The table walk is the geometry, pixel for pixel: every elapsed second of a 165 s track and of a 3600 s one's first
+/// and last minutes, in the deck color, red and white; and the number of pixels is the geometry's.
+static void the_band_table_walk_is_the_geometry(void) {
+    int ring_pixels = 0;
+    for (int y = -10; y <= 208; y++)
+        for (int x = -10; x <= 208; x++) {
+            dfw_pixel c;
+            ring_pixels += reference_pixel(0.0f, 0, x, y, &c);
+        }
+    static const struct { uint16_t length, from, to; } spans[] = { { 165, 0, 165 }, { 3600, 0, 60 }, { 3600, 3540, 3600 } };
+    int off = 0, checked = 0;
+    for (size_t s = 0; s < 3; s++)
+        for (uint16_t e = spans[s].from; e <= spans[s].to; e++)
+            for (int look = 0; look < 3; look++) {
+                with_time(DECK_2_RED_EMPTY, PAUSED, e, spans[s].length, 0);
+                unit.time_look = (uint8_t)look;
+                compare_log log = { 0, 0, (float)e / (float)spans[s].length,
+                                    look == DFW_TIME_RED ? 0xFF3B30u : look == DFW_TIME_WHITE ? 0xEDEDEAu : 0xFF0000u };
+                dfw_band_pixels(&unit, compare_put, &log);
+                off += log.off + (log.count != ring_pixels);
+                checked++;
+            }
+    CHECK(ring_pixels > 2000 && checked == 864 && off == 0);
+}
+
 const test_case draw_band_tests[] = {
+    { "the band table walk is the geometry", the_band_table_walk_is_the_geometry },
     { "the band writes each pixel once with its final value", the_band_writes_each_pixel_once_with_its_final_value },
     { "an unchanged ring writes nothing", an_unchanged_ring_writes_nothing },
     { "a ring that goes leaves black", a_ring_that_goes_leaves_black },

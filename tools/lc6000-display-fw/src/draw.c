@@ -5,19 +5,14 @@
 #include "text.h"
 #include "draw_live.h"
 #include "font_header.h"
+#include "ring_table.h"
 
 #define GROUND 0x0B0B0Bu
-#define DOWNBEAT_OFF 0x5A5A5Au
-#define BEAT_OFF 0x2C2C2Cu
 /// The time left (#460, #524): centered on x 99, its line box's middle at y 160 (drawn mode's layout).
 #define TIME_CENTER_X 99.0f
 #define TIME_MIDDLE 160.0f
 
 #define CENTER 99.0f
-#define RING_OUTER 95.0f
-#define RING_INNER 85.0f
-/// The gap between beat sections, measured at mid-band.
-#define RING_GAP 7.0f
 
 /// A square root by Newton's method from a bit-level first guess: three steps take it to float precision for the
 /// values drawn here (0 to 2·198²). No libm on the chip.
@@ -61,44 +56,14 @@ static dfw_pixel blend(dfw_pixel under, dfw_pixel over, float cover) {
     return out;
 }
 
-/// sin and cos of a small angle by their series; ample for the ring's half gap (0.04 rad).
-static void small_sin_cos(float a, float *s, float *c) {
-    float a2 = a * a;
-    *s = a * (1.0f - a2 / 6.0f * (1.0f - a2 / 20.0f));
-    *c = 1.0f - a2 / 2.0f * (1.0f - a2 / 12.0f);
-}
-
-/// The four beat sections, clockwise from 12 o'clock, beat 1 a step brighter. Angles run from 12 o'clock clockwise,
-/// which on screen (y down) is the direction (sin a, −cos a), and clockwise from it is (cos a, sin a). Each section is
-/// under half a turn, so it is the band between the two radii cut by two half-planes through the center.
+/// The four beat sections, clockwise from 12 o'clock, beat 1 a step brighter; or all dark, the waiting look. From the
+/// ring's table (#558): each pixel's gray, worked out once by the same geometry (src/ring_geometry.h) over the ground,
+/// which is all there is under the ring when it is drawn.
 static void ring(dfw_pixel *frame, int all_dark) {
-    float s, c;
-    small_sin_cos(RING_GAP / ((RING_OUTER + RING_INNER) / 2.0f) / 2.0f, &s, &c);
-    // Beat 1's edges, at half and π/2 − half, as normals pointing into the section.
-    const float start_nx = c, start_ny = s, end_nx = -s, end_ny = -c;
-    for (int y = 0; y < DFW_SIZE; y++) {
-        float dy = (float)y + 0.5f - CENTER;
-        for (int x = 0; x < DFW_SIZE; x++) {
-            float dx = (float)x + 0.5f - CENTER;
-            float d2 = dx * dx + dy * dy;
-            if (d2 > (RING_OUTER + 1.0f) * (RING_OUTER + 1.0f) || d2 < (RING_INNER - 1.0f) * (RING_INNER - 1.0f)) continue;
-            float r = root(d2);
-            float nx = r > 0.0f ? dx / r : 1.0f, ny = r > 0.0f ? dy / r : 0.0f;
-            float band = edge_cover(RING_OUTER - r, nx, ny) + edge_cover(r - RING_INNER, nx, ny) - 1.0f;
-            if (band <= 0.0f) continue;
-            // Each step turns the point a quarter turn back, so beat b's section lands where beat 1's is.
-            float px = dx, py = dy;
-            for (int beat = 0; beat < 4; beat++) {
-                // The edge normals turn with the point, so they are taken in its turned frame.
-                float cover = band * edge_cover(px * start_nx + py * start_ny, start_nx, start_ny)
-                    * edge_cover(px * end_nx + py * end_ny, end_nx, end_ny);
-                dfw_pixel *p = &frame[y * DFW_SIZE + x];
-                *p = blend(*p, beat == 0 && !all_dark ? DOWNBEAT_OFF : BEAT_OFF, cover);
-                float t = px;
-                px = py;
-                py = -t;
-            }
-        }
+    for (int i = 0; i < dfw_ring_entries; i++) {
+        const dfw_ring_entry *e = &dfw_ring_table[i];
+        dfw_pixel level = all_dark ? e->dark : e->normal;
+        frame[e->index] = level << 16 | level << 8 | level;
     }
 }
 
