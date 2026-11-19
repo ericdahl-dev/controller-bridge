@@ -140,6 +140,8 @@ final class Bridge {
     var shiftCueDown = false
     /// The deck's latest BarRamp, for DeckFacts (#383).
     var barRamp: DeckFacts.BarRamp?
+    /// The last PhaseOffset (#462), for DeckFacts.
+    var phaseOffset: Double?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
     /// When any master clock beat last arrived, pulsed or not.
@@ -340,12 +342,17 @@ final class Bridge {
                 jogModule.progressReported(nil)
                 duration = nil
                 track = nil
+                phaseOffset = nil
             }
         case "sync": synced = value
         case "bpm": bpm = message.arguments.first?.number.flatMap { $0 > 0 ? $0 : nil }
         case "barramp":
             // Kept for DeckFacts (#383); nothing the Bridge shows changes with it.
             if let phase = message.arguments.first?.number { barRamp = DeckFacts.BarRamp(phase: phase, at: clock.now) }
+            return
+        case "phaseoffset":
+            // Kept for DeckFacts (#462): the drawn display's phase rule.
+            phaseOffset = message.arguments.first?.number
             return
         case "temposliderenabled":
             if value != sliderEnabled { rearmPickup() }
