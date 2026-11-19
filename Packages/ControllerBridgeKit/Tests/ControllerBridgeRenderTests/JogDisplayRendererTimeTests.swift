@@ -78,4 +78,25 @@ struct JogDisplayRendererTimeTests {
         #expect(!ring.isEmpty)
         #expect(ring.allSatisfy { Self.radius($0) > 95 && Self.radius($0) < 99 })
     }
+
+    static func slot(_ image: [UInt8]) -> [[UInt8]] {
+        (163...175).flatMap { y in (60...138).map { x in Self.at(image, x, y) } }
+    }
+
+    @Test("The warning's red half: the remaining time and the ring's fill turn red (0xFF3B30); the track stays dark")
+    func warningRed() {
+        let image = JogDisplayRenderer.simulatorImage(Self.content, litBeat: nil, marker: nil,
+                                                      time: (elapsed: 90, length: 120), warning: true)
+        #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0xFF3B30, by: 8))
+        #expect(JogDisplayRendererTests.near(Self.at(image, 1, 98), 0x2C2C2C))
+        #expect(Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xFF3B30, by: 8) })
+        #expect(!Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xEDEDEA, by: 8) })
+    }
+
+    @Test("Without the warning the remaining time is white and the fill the deck colour")
+    func warningOff() {
+        let image = Self.image((elapsed: 90, length: 120))
+        #expect(Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xEDEDEA, by: 8) })
+        #expect(!Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xFF3B30, by: 8) })
+    }
 }
