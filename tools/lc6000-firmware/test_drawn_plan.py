@@ -1,10 +1,12 @@
 """The drawn wizard's plan (#567): the facts so far in, the next step out. A fake unit plays the shell's part (dfu-util,
 the keyboard), so whole runs are tested with no hardware. Nothing here talks to a unit.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import os, tempfile, unittest
+import json, os, tempfile, unittest
 
+import build_record
 import build_upper_dfu
 import dfupatch
+import drawn_flash
 import drawn_plan
 from test_build_owner_image import stock_like_element
 from test_build_upper_dfu import good_block
@@ -15,6 +17,15 @@ DISPLAY_LAYOUT = "@Internal Flash  /0x08000000/04*016Kg,01*064Kg,07*128Kg"
 TOP_PANEL_LAYOUT = "@Internal Flash  /0x08000000/04*016Kg,01*064Kg,01*128Kg"
 # The option bytes as read (RM0090: RDP 0xAA at +1; nWRP, DB1M and SPRMOD in the half-word at +8).
 OPTIONS_OK = bytes([0xEC, 0xAA]) + b"\xff" * 6 + bytes([0xFF, 0x0F]) + b"\xff" * 6
+
+
+def write_record(path, owner, upper, draw="1", proven="1"):
+    """The build record `make arm` would have written for the block A inside OWNER and the block B inside UPPER."""
+    start = dfupatch.PAD_START - drawn_flash.APP_BASE
+    a = drawn_flash.owner_image(owner)[start:start + dfupatch.PAD_END - dfupatch.PAD_START]
+    with open(path, "w") as f:
+        json.dump(build_record.record_of(a, drawn_flash.upper_block(upper), draw, proven), f)
+    return path
 
 
 def listing(*devices):
@@ -33,7 +44,7 @@ class FakeUnit:
         self.upper = bytearray(upper if upper is not None else b"\xff" * UPPER_SIZE)
         self.options = options
         self.devices = devices
-        self.answers = {"both_true": "y", "all_true": "y", "probe": "y", "stock_look": "y", **(answers or {})}
+        self.answers = {"all_true": "y", "probe": "y", "stock_look": "y", **(answers or {})}
         self.words = words or {}
         self.cut_upper_write_at = cut_upper_write_at
         self.cut_reports_ok = cut_reports_ok
@@ -105,6 +116,7 @@ class DrawnPlanTests(unittest.TestCase):
         self.current = self.write("current.dfu", dfuse_file(self.current_element))
         self.owner = self.write("owner.dfu", dfuse_file(self.owner_element))
         self.upper = self.write("upper.dfu", build_upper_dfu.dfuse(good_block()))
+        self.record = write_record(os.path.join(self.dir.name, "build.json"), self.owner, self.upper)
 
     def write(self, name, content):
         path = os.path.join(self.dir.name, name)
@@ -114,7 +126,8 @@ class DrawnPlanTests(unittest.TestCase):
 
     def plan(self):
         path = os.path.join(self.dir.name, "plan.json")
-        drawn_plan.begin(path, current=self.current, upper=self.upper, owner=self.owner, work=self.dir.name)
+        drawn_plan.begin(path, current=self.current, upper=self.upper, owner=self.owner, record=self.record,
+                         work=self.dir.name)
         return path
 
     def kinds(self, unit):
@@ -127,7 +140,7 @@ class FreshFlashTests(DrawnPlanTests):
         end = unit.run(self.plan())
         self.assertEqual(end, ("done",))
         self.assertEqual(self.kinds(unit), [
-            "ask both_true", "ask all_true", "ask probe", "update-mode", "list",
+            "ask all_true", "ask probe", "update-mode", "list",
             "read app", "read options", "read upper",
             "type word_upper", "write upper", "read upper",
             "list", "type word_app", "write app", "read app",
@@ -295,10 +308,8 @@ class RefusalTests(DrawnPlanTests):
         self.refused("Nothing is written over it", upper=bytes(upper))
 
     def test_not_ready_stops_before_anything_is_sent(self):
-        for key in ("both_true", "all_true"):
-            with self.subTest(key):
-                fake = self.refused("Not ready", answers={key: "n"})
-                self.assertNotIn("update-mode", self.kinds(fake))
+        fake = self.refused("Not ready", answers={"all_true": "n"})
+        self.assertNotIn("update-mode", self.kinds(fake))
 
     def test_a_display_not_like_stock_after_the_power_cycle_stops(self):
         self.refused("doesn't look like stock", writes=["upper", "app"], answers={"stock_look": "n"})
@@ -312,6 +323,72 @@ class RefusalTests(DrawnPlanTests):
     def test_a_failed_read_back_stops_after_the_write(self):
         self.refused("couldn't be read", writes=["upper"], failing_reads=("upper_back",))
 
+
+
+class BuildRecordTests(DrawnPlanTests):
+    """How A and B were built is read from `make arm`'s record, judged against the very bytes (#593): never asked."""
+
+    def test_a_good_record_is_read_and_the_owner_is_never_asked(self):
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertEqual(self.kinds(unit)[0], "ask all_true")
+        self.assertNotIn("both_true", [a[1] for a in unit.log if a[0] == "ask"])
+
+    def test_no_record_stops_before_anything_is_sent(self):
+        self.record = os.path.join(self.dir.name, "nowhere", "build.json")
+        unit = FakeUnit(self.dir.name, self.current_element)
+        end = unit.run(self.plan())
+        self.assertEqual(end[0], "stop")
+        self.assertIn("no build record", end[1])
+        self.assertIn("Nothing was sent", end[1])
+        self.assertEqual(len(unit.log), 1)
+
+
+class FindRecordTests(unittest.TestCase):
+    """`drawn_plan.py find-record UPPER.dfu OWNER.dfu` (#593): the record each kit tool left beside its .dfu, so the owner
+    types no fourth path. Exactly one record, or ask."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.upper = os.path.join(self.dir.name, "wd-upper-drawing.dfu")
+        self.owner = os.path.join(self.dir.name, "owner", "wd-owner.dfu")
+        os.makedirs(os.path.dirname(self.owner))
+
+    def leave(self, dfu, content):
+        path = os.path.splitext(dfu)[0] + ".build.json"
+        with open(path, "w") as f:
+            f.write(content)
+        return path
+
+    def find(self):
+        import contextlib, io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = drawn_plan.main(["find-record", self.upper, self.owner])
+        self.assertEqual(code, 0)
+        return out.getvalue().rstrip("\n").split("\t")
+
+    def test_one_record_beside_either_file_is_the_one(self):
+        self.assertEqual(self.find_with(upper='{"x": 1}'), ["one", os.path.splitext(self.upper)[0] + ".build.json"])
+        self.setUp()
+        self.assertEqual(self.find_with(owner='{"x": 1}'), ["one", os.path.splitext(self.owner)[0] + ".build.json"])
+
+    def find_with(self, upper=None, owner=None):
+        if upper is not None:
+            self.leave(self.upper, upper)
+        if owner is not None:
+            self.leave(self.owner, owner)
+        return self.find()
+
+    def test_the_same_record_beside_both_is_one(self):
+        self.assertEqual(self.find_with(upper='{"x": 1}', owner='{"x": 1}')[0], "one")
+
+    def test_none_or_two_different_asks(self):
+        self.assertEqual(self.find()[0], "ask")
+        kind, why = self.find_with(upper='{"x": 1}', owner='{"x": 2}')
+        self.assertEqual(kind, "ask")
+        self.assertIn("differ", why)
 
 
 class DevicesCommandTests(unittest.TestCase):
@@ -354,8 +431,9 @@ class FreshnessTests(DrawnPlanTests):
         path = self.plan()
         self.assertEqual(FakeUnit(self.dir.name, self.current_element).run(path), ("done",))
         # The same file, begun again for a new run.
-        drawn_plan.begin(path, current=self.current, upper=self.upper, owner=self.owner, work=self.dir.name)
-        self.assertEqual(drawn_plan.next_action(path)[:2], ("ask", "both_true"))
+        drawn_plan.begin(path, current=self.current, upper=self.upper, owner=self.owner, record=self.record,
+                         work=self.dir.name)
+        self.assertEqual(drawn_plan.next_action(path)[:2], ("ask", "all_true"))
 
     def test_facts_from_another_run_kept_in_the_file_authorize_nothing(self):
         # A completed run's facts left in the file under a new run id: the reads come again before any write.
@@ -369,11 +447,11 @@ class FreshnessTests(DrawnPlanTests):
         kinds = self.kinds(unit)
         self.assertLess(kinds.index("read upper"), kinds.index("write upper"))
         self.assertLess(kinds.index("read app"), kinds.index("write app"))
-        self.assertEqual(kinds[0], "ask both_true")
+        self.assertEqual(kinds[0], "ask all_true")
 
     def test_a_read_made_before_update_mode_is_read_again(self):
         path = self.plan()
-        for key in ("both_true", "all_true", "probe"):
+        for key in ("all_true", "probe"):
             drawn_plan.record(path, key, "y")
         upper = self.write("old-upper.bin", b"\xff" * UPPER_SIZE)
         drawn_plan.record(path, "upper_read", upper)   # before update mode

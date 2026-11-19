@@ -132,7 +132,7 @@ class DrawnPathTests(unittest.TestCase):
         self.assertNotIn('flash "$STOCK_WD"', self.drawn)
 
     def test_it_begins_a_plan_and_asks_it_for_each_step(self):
-        self.assertIn('plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$WORK"', self.drawn)
+        self.assertIn('plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK"', self.drawn)
         self.assertIn('plan next "$PLAN"', self.loop)
 
     def test_it_handles_exactly_the_steps_the_plan_can_ask_for(self):

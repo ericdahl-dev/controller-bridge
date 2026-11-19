@@ -1,8 +1,9 @@
 """Tests for build_upper_dfu.py (#501): block B's own DfuSe file at 0x08080000, built only with the owner's read-only
 read of the upper flash as proof that sector 8 exists and is empty. Synthetic data only, no vendor bytes.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import contextlib, io, os, struct, tempfile, unittest
+import contextlib, io, json, os, struct, tempfile, unittest
 
+import build_record
 import build_upper_dfu
 import dfupatch
 
@@ -119,6 +120,32 @@ class BuildUpperDfuTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("already exists", err)
         self.assertEqual(dfupatch.read(existing), b"keep me")
+
+
+    def test_the_build_record_beside_the_block_travels_with_the_dfu(self):
+        # make arm writes build.json beside upper.bin; the wizard finds it beside the .dfu (#593).
+        record = build_record.record_of(bytes(dfupatch.PAD_END - dfupatch.PAD_START), good_block(), "1", "1")
+        with open(self.path("build.json"), "w") as f:
+            json.dump(record, f)
+        code, out, err, output = self.build()
+        self.assertEqual(code, 0, err)
+        with open(self.path("upper.build.json")) as f:
+            self.assertEqual(json.load(f), record)
+        self.assertIn("upper.build.json", out)
+
+    def test_a_record_for_another_b_or_none_doesnt_travel(self):
+        other = build_record.record_of(b"", upper_header.build(b"other", 0x1A2B3C4D, 0x0808001D, 0x0808001F), "1", "1")
+        for record in (other, None):
+            with self.subTest(record=record is not None):
+                self.setUp()
+                if record:
+                    with open(self.path("build.json"), "w") as f:
+                        json.dump(record, f)
+                code, out, err, output = self.build()
+                self.assertEqual(code, 0, err)
+                self.assertTrue(os.path.exists(output))
+                self.assertFalse(os.path.exists(self.path("upper.build.json")))
+                self.assertIn("no build record", out)
 
 
 if __name__ == "__main__":
