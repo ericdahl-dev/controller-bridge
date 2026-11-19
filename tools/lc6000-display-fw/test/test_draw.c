@@ -72,8 +72,13 @@ static void every_reference_has_the_ring_and_header_to_compare(void) {
     }
 }
 
-/// A pixel is a mismatch when any channel is off by more than this; a band fails past MAX_MISMATCHED such pixels.
-#define TOLERANCE 8
+/// A pixel is a mismatch when any channel is off by more than TOLERANCE; a band fails past MAX_MISMATCHED such pixels.
+///
+/// Why 16 and none: CoreGraphics' anti-aliasing is not exact pixel area. On the chip's 45° edges it covers up to about
+/// 5% less than the true area, which is 12 levels on a 244-level step (blue on the ground); everywhere else the C
+/// frame is within 3-5. 16 (6% of full scale) leaves room for that and nothing more. Real mistakes are far bigger: the
+/// chip a pixel off, its radius 12, a ring gap of 6, or another digit each put dozens of pixels 30 to 240 levels off.
+#define TOLERANCE 16
 #define MAX_MISMATCHED 0
 
 static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
@@ -131,6 +136,18 @@ static void the_ring_matches_the_reference(void) {
     }
 }
 
+static void the_header_matches_the_reference(uint8_t player) {
+    for (size_t c = 0; c < CASES; c++) {
+        if (cases[c].player != player) continue;
+        CHECK(load_reference(cases[c].file));
+        draw_case(&cases[c]);
+        CHECK(band_mismatches(&cases[c], HEADER) <= MAX_MISMATCHED);
+    }
+}
+
+static void an_empty_deck_draws_its_chip_alone(void) { the_header_matches_the_reference(0); }
+static void another_player_draws_its_chip_alone(void) { the_header_matches_the_reference(5); }
+
 static void every_pixel_is_written_whatever_the_deck(void) {
     static const dfw_deck_state decks[] = { { 0, 1, 2, 3, 0 }, { 255, 9, 9, 9, 255 }, { 5, 0, 0, 0, 6 }, { 2, 255, 0, 0, 1 } };
     for (size_t d = 0; d < sizeof decks / sizeof decks[0]; d++) {
@@ -145,6 +162,8 @@ static void every_pixel_is_written_whatever_the_deck(void) {
 const test_case draw_tests[] = {
     { "outside the bands is plain ground", outside_the_bands_is_plain_ground },
     { "the ring matches the reference", the_ring_matches_the_reference },
+    { "an empty deck draws its chip alone", an_empty_deck_draws_its_chip_alone },
+    { "another player draws its chip alone", another_player_draws_its_chip_alone },
     { "every pixel is written whatever the deck", every_pixel_is_written_whatever_the_deck },
     { "every reference has the ring and header to compare", every_reference_has_the_ring_and_header_to_compare },
     { 0, 0 },
