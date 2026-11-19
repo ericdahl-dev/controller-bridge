@@ -386,6 +386,26 @@ struct SettingsTests {
         #expect(BridgeSettings.rebased(draft: custom, base: Self.defaults, onto: saved).displayFirmware == .custom)
     }
 
+    // #590: how the jog display writes the key.
+
+    @Test("Key display defaults to Traditional; old settings load as Traditional; Camelot round-trips and survives a rebase")
+    func keyDisplaySetting() {
+        #expect(Self.defaults.keyDisplay == .traditional)
+        let store = MemoryStore()
+        store.values[BridgeSettings.storageKey] = Data(#"""
+            {"controllers":[{"deck":1}],"syndicateHost":"127.0.0.1","syndicatePort":9090,"feedbackPort":9096,
+             "feedbackListen":"thisMac","ledsEnabled":true}
+            """#.utf8)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).keyDisplay == .traditional)
+        var camelot = Self.defaults
+        camelot.keyDisplay = .camelot
+        try? camelot.save(to: store)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).keyDisplay == .camelot)
+        var saved = Self.defaults
+        saved.controllers[0].deck = 2
+        #expect(BridgeSettings.rebased(draft: camelot, base: Self.defaults, onto: saved).keyDisplay == .camelot)
+    }
+
     @Test("A field the DJ also edited in Settings keeps the DJ's value")
     func editedFieldWins() {
         let base = Self.defaults
