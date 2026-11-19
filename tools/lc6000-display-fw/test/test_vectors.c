@@ -4,12 +4,12 @@
 #include <string.h>
 
 enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE, KIND_BEAT, KIND_NEEDLE,
-       KIND_TEXT, KIND_TEMPO };
+       KIND_TEXT, KIND_TEMPO, KIND_METER };
 typedef struct {
     const char *name;
     int kind, from_unit, version, number;
     int color[3];
-    int player, flags, beat, angle;
+    int player, flags, beat, angle, level, peak;
     /// Text: the field, and the Windows-1252 codes the chip decodes. Tempo: tenths of a BPM.
     int field;
     size_t code_count;
@@ -95,6 +95,12 @@ void every_vector_decodes(void) {
             dfw_tick(&unit, 0);
             check(unit.needle == v->angle, v->name);
             break;
+        case KIND_METER:
+            feed(&unit, BEGIN_V1);
+            dfw_message(&unit, v->bytes, v->length);
+            dfw_tick(&unit, 0);
+            check(unit.level == v->level && unit.peak == v->peak, v->name);
+            break;
         case KIND_TEXT:
             feed(&unit, BEGIN_V1);
             feed(&unit, DECK_3_GREEN_SEQ);
@@ -129,11 +135,12 @@ void every_invalid_vector_is_ignored(void) {
         uint8_t flags = unit.flags, beat = unit.beat;
         uint16_t needle = unit.needle, tempo = unit.tempo;
         uint8_t text_length = unit.text_length[0];
+        uint8_t level = unit.level, peak = unit.peak;
         dfw_message(&unit, v->bytes, v->length);
         dfw_tick(&unit, 0);
         check(unit.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&unit.deck, &before, sizeof before) == 0 &&
               unit.flags == flags && unit.beat == beat && unit.needle == needle && unit.tempo == tempo &&
-                  unit.text_length[0] == text_length,
+                  unit.text_length[0] == text_length && unit.level == level && unit.peak == peak,
               v->name);
     }
 }

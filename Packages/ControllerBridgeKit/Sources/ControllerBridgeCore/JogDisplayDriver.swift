@@ -516,6 +516,8 @@ public final class JogDisplayDriver {
     private func sendLive() {
         sendWD(DrawnDisplay.Message.beat(lastMasterBeat ?? 0).bytes)
         if let lastMarker { sendWD(DrawnDisplay.Message.needle(lastMarker).bytes) }
+        // The level meter (#461): empty until the deck's channel reports.
+        sendWD(DrawnDisplay.Message.meter(level: lastMeter.level, peak: lastMeter.peak).bytes)
     }
 
     /// The heartbeat: begin, the deck and the state again, unchanged or not.
@@ -541,9 +543,23 @@ public final class JogDisplayDriver {
         lastPlayLight = nil
     }
 
-    /// The deck in front's play state for drawn mode (#459): loaded, playing, a quantized start waiting.
-    public func deckState(loaded: Bool, playing: Bool, pending: Bool) {
-        let flags: [(DrawnDisplay.State, Bool)] = [(.loaded, loaded), (.playing, playing), (.playPending, pending)]
+    /// The deck in front's level meter for drawn mode (#461), 0-127 each; 0 and 0 until its channel reports. Sent
+    /// only while drawing, and only on a change; whether it went out.
+    private var lastMeter = (level: 0, peak: 0)
+    @discardableResult
+    public func meter(level: Int, peak: Int) -> Bool {
+        guard (level, peak) != lastMeter else { return false }
+        lastMeter = (level, peak)
+        guard connected, drawing else { return false }
+        sendWD(DrawnDisplay.Message.meter(level: level, peak: peak).bytes)
+        return true
+    }
+
+    /// The deck in front's play state for drawn mode (#459): loaded, playing, a quantized start waiting; and (#463)
+    /// a loop on and the CUE button held.
+    public func deckState(loaded: Bool, playing: Bool, pending: Bool, loop: Bool = false, cue: Bool = false) {
+        let flags: [(DrawnDisplay.State, Bool)] = [(.loaded, loaded), (.playing, playing), (.playPending, pending),
+                                                   (.loopOn, loop), (.cueHeld, cue)]
         for (flag, on) in flags { if on { drawnState.insert(flag) } else { drawnState.remove(flag) } }
         sendState()
     }

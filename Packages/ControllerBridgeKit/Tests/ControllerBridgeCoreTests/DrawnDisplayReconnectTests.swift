@@ -16,8 +16,9 @@ struct DrawnDisplayReconnectTests {
         let (rig, port, _) = try Handshake.rig(.custom)
         rig.coordinator.jogDisplayReply(Handshake.answer)
         // ... and (#459) the master beat, 0 with no clock yet; no needle until one is known.
-        #expect(Self.ops(port) == [0x00, 0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08])
-        #expect(Handshake.drawn(port).last == DrawnDisplay.Message.beat(0).bytes)
+        // ... and (#461) the meter, empty until the deck's channel reports.
+        #expect(Self.ops(port) == [0x00, 0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x0A])
+        #expect(Handshake.drawn(port).last == DrawnDisplay.Message.meter(level: 0, peak: 0).bytes)
         #expect(!port.wd.contains(where: Handshake.isUpload))
     }
 
@@ -36,7 +37,7 @@ struct DrawnDisplayReconnectTests {
         #expect(Self.ops(port).last == 0x00)
         port.wd.removeAll()
         rig.coordinator.jogDisplayReply(Handshake.answer)
-        #expect(Self.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08])
+        #expect(Self.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x0A])
         #expect(!port.wd.contains(where: Handshake.isUpload))
     }
 
@@ -92,7 +93,7 @@ struct DrawnDisplayReconnectTests {
         rig.coordinator.tick()   // the deck's loaded flag (#459)
         let full = [DrawnDisplay.Message.begin(version: 1).bytes] + Handshake.drawn(port).filter { $0[9] == 0x03 }
             + [DrawnDisplay.Message.state(.loaded).bytes] + Handshake.drawn(port).filter { $0[9] == 0x04 || $0[9] == 0x05 }
-            + [DrawnDisplay.Message.beat(0).bytes]
+            + [DrawnDisplay.Message.beat(0).bytes, DrawnDisplay.Message.meter(level: 0, peak: 0).bytes]
         port.wd.removeAll()
         clock.now = 0.99
         rig.coordinator.tick()
@@ -106,7 +107,7 @@ struct DrawnDisplayReconnectTests {
         #expect(Self.ops(port).isEmpty)
         clock.now = 2.0
         rig.coordinator.tick()
-        #expect(Self.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08])
+        #expect(Self.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x0A])
     }
 
     @Test("No heartbeat in image mode")

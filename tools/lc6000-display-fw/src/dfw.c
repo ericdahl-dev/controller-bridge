@@ -8,7 +8,7 @@ static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
 /// The protocol version this code speaks.
 #define DFW_VERSION 1
 enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_TEXT = 0x04, OP_TEMPO = 0x05,
-       OP_STATE = 0x07, OP_BEAT = 0x08, OP_NEEDLE = 0x09 };
+       OP_STATE = 0x07, OP_BEAT = 0x08, OP_NEEDLE = 0x09, OP_METER = 0x0A };
 /// A text escape: the next byte plus 0x80 is the Windows-1252 code.
 #define TEXT_ESCAPE 0x7F
 /// Bit 6 of the state flags is reserved: a message with it set is malformed.
@@ -40,7 +40,7 @@ void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {
 static uint8_t op_length(uint8_t op) {
     switch (op) {
     case OP_CAPABILITY: case OP_BEGIN: case OP_END: case OP_STATE: case OP_BEAT: return 2;
-    case OP_NEEDLE: case OP_TEMPO: return 3;
+    case OP_NEEDLE: case OP_TEMPO: case OP_METER: return 3;
     case OP_DECK: return 9;
     default: return 0;
     }
@@ -62,8 +62,8 @@ static int in_range(uint8_t op, const uint8_t *args) {
         return !(args[0] & STATE_RESERVED);
     case OP_BEAT:
         return args[0] <= 4;
-    case OP_NEEDLE: case OP_TEMPO:
-        return 1;   // any two 7-bit bytes are an angle, or a tempo
+    case OP_NEEDLE: case OP_TEMPO: case OP_METER:
+        return 1;   // any two 7-bit bytes are an angle, a tempo, or a level and a peak
     default:
         return 0;
     }
@@ -137,6 +137,9 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->beat = 0;
         unit->needle = 0;
         unit->needle_heard = 0;
+        unit->level = 0;
+        unit->peak = 0;
+        unit->meter_heard = 0;
         break;
     case OP_DECK: {
         if (!unit->drawn) break;
@@ -183,6 +186,14 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
     case OP_BEAT:
         if (!unit->drawn || unit->beat == args[0]) break;
         unit->beat = args[0];
+        unit->dirty = 1;
+        break;
+    case OP_METER:
+        // The first one draws the meter, whatever its values; after that, only a change.
+        if (!unit->drawn || (unit->meter_heard && unit->level == args[0] && unit->peak == args[1])) break;
+        unit->level = args[0];
+        unit->peak = args[1];
+        unit->meter_heard = 1;
         unit->dirty = 1;
         break;
     case OP_NEEDLE: {

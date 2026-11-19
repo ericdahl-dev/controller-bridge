@@ -310,7 +310,120 @@ static void the_play_flags_change_no_pixels(void) {
     }
 }
 
+/// The level meter (#461): an arc 80-83 inside the ring on the left, Swift's drawMeter. Compared, as the marker is,
+/// from MARKER_IN out: the meter, the ring and nothing else of this deck's. Its edges against the dark track are within
+/// 3. Against the bright fill, the band's two circles land about 0.03 px further in in CoreGraphics than their exact
+/// areas put them, as the lit section's do, and the band is all edge: measured, worst 13 with 46 pixels over 6, all on
+/// the circles, none on the radial edges or the tick; at clip, the whole arc bright, 89. So 6 with a budget a little
+/// over each case's count, and nothing past 16 in any: a quarter pixel off is 60 levels on every edge pixel of the fill.
+#define METER_CLOSE 6
+#define METER_CAP 16
+
+typedef struct { const char *file; uint8_t level, peak; int budget; } meter_case;
+static const meter_case meters[] = {
+    { "test/ref/deck4-blue-empty-meter0-0.ppm", 0, 0, 0 },
+    { "test/ref/deck4-blue-empty-meter64-90.ppm", 64, 90, 50 },
+    // High: green, then yellow above 0.75, the white tick over the yellow.
+    { "test/ref/deck4-blue-empty-meter110-120.ppm", 110, 120, 30 },
+    // Clip: the whole arc red, and the tick red at the top.
+    { "test/ref/deck4-blue-empty-meter127-127.ppm", 127, 127, 95 },
+};
+#define METERS (sizeof meters / sizeof meters[0])
+
+/// Begin, deck 4 blue empty, then a meter message, then a tick.
+static void begin_with_meter(uint8_t level, uint8_t peak) {
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7");
+    char meter[64];
+    snprintf(meter, sizeof meter, "F0 00 02 0B 7F 10 20 00 03 0A %02X %02X F7", level, peak);
+    feed(&live, meter);
+    dfw_tick(&live, 0);
+}
+
+static void the_meter_is_drawn(void) {
+    for (size_t n = 0; n < METERS; n++) {
+        CHECK(load_reference(meters[n].file));
+        begin_with_meter(meters[n].level, meters[n].peak);
+        CHECK(rec.presents == 1);
+        memcpy(frame, rec.last, sizeof frame);
+        CHECK(band_from_matches(meters[n].file + 9, METER_CLOSE, meters[n].budget, METER_CAP));
+    }
+}
+
+/// No reference has a fill past the yellow; the spec's colors are exact where the band covers a pixel whole. Level 110
+/// (0.87 of the arc), no peak: mid-band pixels at fractions 0.40 (green), 0.80 (yellow) and 0.96 (the track).
+static void the_fill_turns_yellow_past_three_quarters(void) {
+    memset(&unit, 0, sizeof unit);
+    unit.meter_heard = 1;
+    unit.level = 110;
+    draw_beat(0);
+    CHECK(frame[107 * DFW_SIZE + 17] == 0x00FF48u);
+    CHECK(frame[73 * DFW_SIZE + 21] == 0xFFD400u);
+    CHECK(frame[61 * DFW_SIZE + 26] == 0x2C2C2Cu);
+}
+
+/// No reference has the tick over the fill: level 110 with the peak at 64, a mid-band pixel whole inside the tick
+/// (fractions 0.500-0.512 of the tick's 0.487-0.521) is the tick's white, not the fill's green.
+static void the_tick_is_drawn_over_the_fill(void) {
+    memset(&unit, 0, sizeof unit);
+    unit.meter_heard = 1;
+    unit.level = 110;
+    unit.peak = 64;
+    draw_beat(0);
+    CHECK(frame[98 * DFW_SIZE + 17] == 0xFFFFFFu);
+}
+
+/// No reference has the marker over the meter: at 9 o'clock (needle 12288) over a clipping meter, a pixel whole inside
+/// the marker's wedge (half width 1.125 at 82 out) is the marker's white, not the clip red.
+static void the_marker_is_drawn_over_the_meter(void) {
+    begin_with_needle(12288);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 03 0A 7F 7F F7");
+    dfw_tick(&live, 10);
+    CHECK(rec.presents == 2);
+    CHECK(rec.last[99 * DFW_SIZE + 16] == 0xFFFFFFu);
+}
+
+/// Not vacuous: each meter reference differs from the unlit one, from MARKER_IN out.
+static void each_meter_reference_differs_from_the_unlit_one(void) {
+    static dfw_pixel unlit[DFW_SIZE * DFW_SIZE];
+    static const char *const files[] = { "test/ref/deck4-blue-empty-meter0-0.ppm",
+                                         "test/ref/deck4-blue-empty-meter64-90.ppm",
+                                         "test/ref/deck4-blue-empty-meter110-120.ppm",
+                                         "test/ref/deck4-blue-empty-meter127-127.ppm" };
+    CHECK(load_reference(UNLIT));
+    memcpy(unlit, reference, sizeof unlit);
+    for (int f = 0; f < 3; f++) {
+        CHECK(load_reference(files[f]));
+        int changed = 0;
+        for (int y = 0; y < DFW_SIZE; y++)
+            for (int x = 0; x < DFW_SIZE; x++)
+                changed += radius2(x, y) >= MARKER_IN * MARKER_IN && reference[y * DFW_SIZE + x] != unlit[y * DFW_SIZE + x];
+        CHECK(changed > 300);
+    }
+}
+
+/// The waiting look is agent3's; whatever it is, the meter changes none of it.
+static void stale_draws_no_meter(void) {
+    static dfw_pixel without[DFW_SIZE * DFW_SIZE];
+    memset(&unit, 0, sizeof unit);
+    unit.flags = 0x20;
+    draw_beat(0);
+    memcpy(without, frame, sizeof without);
+    unit.meter_heard = 1;
+    unit.level = 64;
+    unit.peak = 90;
+    draw_beat(0);
+    CHECK(memcmp(frame, without, sizeof frame) == 0);
+}
+
 const test_case draw_live_tests[] = {
+    { "the meter is drawn", the_meter_is_drawn },
+    { "each meter reference differs from the unlit one", each_meter_reference_differs_from_the_unlit_one },
+    { "stale draws no meter", stale_draws_no_meter },
+    { "the fill turns yellow past three quarters", the_fill_turns_yellow_past_three_quarters },
+    { "the tick is drawn over the fill", the_tick_is_drawn_over_the_fill },
+    { "the marker is drawn over the meter", the_marker_is_drawn_over_the_meter },
     { "the play flags change no pixels", the_play_flags_change_no_pixels },
     { "the needle is drawn as the marker", the_needle_is_drawn_as_the_marker },
     { "the marker is drawn over the lit section", the_marker_is_drawn_over_the_lit_section },
