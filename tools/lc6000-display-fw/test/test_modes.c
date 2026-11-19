@@ -90,6 +90,8 @@ void a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored(void);
 void begin_while_drawing_changes_nothing(void);
 void a_deck_clears_the_deck_flags_but_not_stale(void);
 void an_unchanged_heartbeat_presents_nothing(void);
+void an_unchanged_text_or_tempo_presents_nothing(void);
+void a_deck_change_clears_the_text_and_tempo(void);
 
 void three_seconds_of_silence_is_stale(void);
 void any_message_clears_the_silence(void);
@@ -128,6 +130,8 @@ const test_case all_tests[] = {
     { "begin while drawing changes nothing", begin_while_drawing_changes_nothing },
     { "a deck clears the deck flags but not stale", a_deck_clears_the_deck_flags_but_not_stale },
     { "an unchanged heartbeat presents nothing", an_unchanged_heartbeat_presents_nothing },
+    { "an unchanged text or tempo presents nothing", an_unchanged_text_or_tempo_presents_nothing },
+    { "a deck change clears the text and tempo", a_deck_change_clears_the_text_and_tempo },
     { "three seconds of silence is stale", three_seconds_of_silence_is_stale },
     { "any message clears the silence", any_message_clears_the_silence },
     { "garbage doesn't count as a message", garbage_doesnt_count_as_a_message },
