@@ -53,11 +53,12 @@ clean:
 # The hook into the stock wd image (#467): its portable logic, tested natively (`make arm-test`).
 ARM_TESTS := $(wildcard arm/test/test_*.c)
 .PHONY: arm-test
-# The block tests build with an empty drawing (ARM_DRAW=stub) until drawing has its own block (#501).
+# The block tests' test double (#573): block A with an empty drawing table (ARM_DRAW=stub) that never reads block B
+# (ARM_UPPER_PROVEN=0), so it answers the capability ask with no B. The default `make arm` is the flashed build.
 arm-test: $(BUILD)/hook-tests $(BUILD)/frame-dump
 	$(BUILD)/hook-tests
 	sh arm/check_symbols.sh $(BUILD)/freestanding-arm
-	$(MAKE) ARM_BUILD=$(BUILD)/arm-stub ARM_DRAW=stub $(BUILD)/arm-stub/block.bin $(BUILD)/arm-stub/upper.bin
+	$(MAKE) ARM_BUILD=$(BUILD)/arm-stub ARM_DRAW=stub ARM_UPPER_PROVEN=0 $(BUILD)/arm-stub/block.bin $(BUILD)/arm-stub/upper.bin
 	ARM_BUILD=$(BUILD)/arm-stub $(PYTHON) -I arm/test/test_block.py
 
 # The block tests need the `unicorn` package, as CI pins it (pip install unicorn==2.1.4):
