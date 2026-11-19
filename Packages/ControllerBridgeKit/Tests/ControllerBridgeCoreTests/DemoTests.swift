@@ -124,12 +124,13 @@ struct DemoTests {
 struct DemoJogDisplayTests {
     final class Events: @unchecked Sendable { var list: [JogDisplayEvent] = [] }
 
-    static func run(to time: Double) throws -> [JogDisplayEvent] {
+    static func run(to time: Double, firmware: DisplayFirmware = .denon) throws -> [JogDisplayEvent] {
         let rig = try DemoTests.DemoRig()
         let events = Events()
         let preview = JogDisplayDriver(port: nil, clock: rig.clock, log: Rig.FakeLog(), size: 1) { _ in [0, 0, 0, 255] }
         preview.onEvent = { events.list.append($0) }
         rig.session.coordinator.attachJogDisplay(preview)
+        rig.session.coordinator.setDisplayFirmware(firmware)
         rig.run(to: time)
         return events.list
     }
@@ -148,5 +149,13 @@ struct DemoJogDisplayTests {
         let needles = Set(events.compactMap { if case .deckMarker(1, let pitchBend) = $0 { pitchBend } else { nil } })
         #expect(needles.count >= 8)
         #expect(events.contains { if case .masterBeat = $0 { true } else { false } })
+    }
+
+    @Test("Firmware set to Custom: the demo deck's drawn preview, with its title, its needle moving while it plays (#465)")
+    func drawn() throws {
+        let states = try Self.run(to: 3, firmware: .custom).compactMap { if case .drawnPreview(let state) = $0 { state } else { nil } }
+        let deck1 = states.filter { $0.deck?.number == 1 }
+        #expect(deck1.last?.texts[.title] == Array("Demo Track".utf8))
+        #expect(Set(deck1.compactMap(\.needle)).count >= 8)
     }
 }

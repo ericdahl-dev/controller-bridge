@@ -66,6 +66,11 @@ public enum JogDisplayEvent: Equatable, Sendable {
     /// What a deck's display would show (#221): every deck, live, for the simulator; only the deck in front is
     /// uploaded. Nothing is sent for it.
     case preview(JogDisplayContent)
+    /// What a deck's drawn display would show (#465), as the chip would decode it from the host's messages: every deck,
+    /// live, while the jog display would draw (previewsDrawn). Nothing is sent for it.
+    case drawnPreview(DrawnDisplayState)
+    /// The previews show images again (#465): the view goes back to `preview`'s images.
+    case drawnPreviewsEnded
 }
 
 public final class JogDisplayDriver {
@@ -371,6 +376,39 @@ public final class JogDisplayDriver {
         guard previews[content.deck] != content else { return }
         previews[content.deck] = content
         reportPreview(content)
+    }
+
+    /// Whether the jog display would draw, so the previews show the drawn layout (#465): a unit that answered draws, one
+    /// that didn't shows images; with no unit, Custom shows the drawn look so it can be tried, Denon the images.
+    public var previewsDrawn: Bool { connected ? drawing : displayFirmware == .custom }
+    private var drawnPreviews: [Int: DrawnDisplayState] = [:]
+    /// Each deck's drawn preview as last reported; forgotten while previews show images, so the switch back reports all.
+    private var reportedDrawn: [Int: DrawnDisplayState] = [:]
+
+    /// A deck's live drawn values for the preview (#465): its flags, needle, meter and phase, with its content as
+    /// `preview` last gave it and the master beat. They go through the deck's own copy of the chip's state as the
+    /// messages the host would send, and a change is reported while previews are drawn (all of them again once they are).
+    public func drawnPreview(deck: Int, flags: DrawnDisplay.State, needle: Int?, meter: (level: Int, peak: Int)?,
+                             phase: Int) {
+        guard let content = previews[deck] else { return }
+        typealias Message = DrawnDisplay.Message
+        let color = content.color.count == 3 ? content.color : [255, 255, 255]
+        var messages: [Message] = [.begin(version: DrawnDisplay.version),
+                                   .deck(number: deck, color: color, player: DrawnDisplay.Player(playerType: content.playerType)),
+                                   .state(drawnState.contains(.stale) ? flags.union(.stale) : flags),
+                                   .beat(lastMasterBeat ?? 0), .phase(phase)]
+        if let needle { messages.append(.needle(needle)) }
+        if let meter { messages.append(.meter(level: meter.level, peak: meter.peak)) }
+        var state = drawnPreviews[deck] ?? DrawnDisplayState()
+        for bytes in messages.map(\.bytes) + Self.texts(content) { state.apply(bytes) }
+        drawnPreviews[deck] = state
+        guard previewsDrawn else {
+            if !reportedDrawn.isEmpty { onEvent?(.drawnPreviewsEnded) }
+            return reportedDrawn.removeAll()
+        }
+        guard reportedDrawn[deck] != state else { return }
+        reportedDrawn[deck] = state
+        onEvent?(.drawnPreview(state))
     }
 
     /// Whether the previews show the waiting look: only while the unit draws, as only then does its screen (#502).

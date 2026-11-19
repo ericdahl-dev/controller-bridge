@@ -37,6 +37,9 @@ typedef struct {
     /// Block B, the drawing block (upper.h): 0x08080000 on a unit built with HOOK_UPPER_PROVEN=1, else NULL. When
     /// set, the drawing comes from B alone, once its header checks out.
     const uint8_t *upper;
+    /// Layer 2's pixels, 320 x 240 RGB565 (#524): B's band draws straight into them after each present. NULL on the
+    /// Mac, where B's entries are chip addresses and never called.
+    uint16_t *(*layer)(void);
 } hook_stock;
 
 /// Our state, in SRAM stock never uses (0x2002AE94 on the unit), which no boot zeroes.
@@ -56,6 +59,8 @@ typedef struct {
     /// B was checked this boot (#501), and B's table once it checks out; the unit then points there.
     uint8_t upper_checked;
     dfw_drawing upper_drawing;
+    /// B's band entry (#524), once B checks out: the ring outside the frame, drawn after each present.
+    void (*upper_band)(uint16_t *layer, const dfw_unit *unit);
     dfw_unit unit;
 } hook_state;
 

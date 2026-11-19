@@ -14,6 +14,8 @@ struct JogSimulatorState: Sendable {
     var sim = JogSimulator()
     /// Each deck's last uploaded content: what its preview draws.
     var contents: [Int: JogDisplayContent] = [:]
+    /// Each deck's drawn display state while the jog display would draw (#465); empty while it shows images.
+    var drawnStates: [Int: DrawnDisplayState] = [:]
     /// Each deck's needle redraws at most 30 times a second (#221), whatever rate it arrives at.
     var needleLimiters: [Int: RedrawLimiter<Int>] = [:]
 
@@ -39,6 +41,9 @@ struct JogSimulatorState: Sendable {
             case .deckPlaying(let deck, let playing): sim.apply(.playing(deck: deck, playing))
             // Every deck's content, live (#221): the simulator draws all of them, not only the one uploaded.
             case .preview(let content): contents[content.deck] = content
+            // The drawn layout's state (#465): kept for the preview; drawing it comes with the renderer's drawn image.
+            case .drawnPreview(let state): if let deck = state.deck?.number { drawnStates[deck] = state }
+            case .drawnPreviewsEnded: drawnStates.removeAll()
             }
         }
 
