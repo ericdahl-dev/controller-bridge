@@ -141,6 +141,7 @@ final class JogDisplayController {
         }
         // Every deck's play state for the simulator, from Syndicate's Playing (#317), not the blinking light below.
         for entry in entries { driver.deckPlaying(deck: entry.facts.deck, entry.facts.playing) }
+        drawnPreviewTick(entries, driver: driver)
         guard let front else { return }
         let facts = entries[front].facts
         meterTick(deck: facts.deck, driver: driver)
@@ -181,6 +182,22 @@ final class JogDisplayController {
         if deck == lastPhaseDeck, let sent = lastPhaseSent, clock.now - sent < 1 / Self.markerRate - 1e-9 { return }
         lastPhaseDeck = deck
         if driver.phase(value) { lastPhaseSent = clock.now }
+    }
+
+    /// Every deck's drawn preview (#465): its flags, needle while playing, meter and phase, as the unit would get them.
+    private func drawnPreviewTick(_ entries: [Entry], driver: JogDisplayDriver) {
+        for (index, entry) in entries.enumerated() {
+            let facts = entry.facts
+            var flags: DrawnDisplay.State = []
+            for (flag, on) in [(DrawnDisplay.State.loaded, facts.loaded), (.playing, facts.playing),
+                               (.playPending, facts.playPending), (.loopOn, facts.looping), (.cueHeld, facts.cueHeld)] where on {
+                flags.insert(flag)
+            }
+            func scaled(_ value: Double) -> Int { Int((min(max(value, 0), 1) * 127).rounded()) }
+            let meter = meters[facts.deck].map { (level: scaled($0.level), peak: scaled($0.peak)) }
+            driver.drawnPreview(deck: facts.deck, flags: flags, needle: needle(index, at: clock.now), meter: meter,
+                                phase: phases[facts.deck]?.lastValue ?? DrawnPhase.unknown)
+        }
     }
 
     private func meterTick(deck: Int, driver: JogDisplayDriver) {
