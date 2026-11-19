@@ -11,7 +11,8 @@
 //   ("ffi" is ff then i). Its arrow ligatures (->, <--, <->) also swap glyphs by context, and aren't copied.
 // - A soft hyphen (0xAD) draws nothing and takes no room.
 // - The baseline's y is snapped (a glyph drawn 0.18 and 0.53 px past a pixel rasterizes the same), so one bitmap per
-//   glyph serves every line of a face; x snaps to halves at these sizes, and only phase 0 is kept.
+//   glyph and x phase serves every line of a face. x snaps down to a fraction of a pixel, measured per face, and each
+//   glyph is kept at every phase.
 // - Tracking is added after every glyph, a ligature counting as one.
 // Characters are Windows-1252 codes, as the text message carries them. A code Geist has no glyph for, and 0x81 (the
 // host's "no glyph"), draw Geist's own .notdef: the box.
@@ -111,9 +112,13 @@ var header = """
 
 #include "text.h"
 
-/// One glyph: its bitmap's place from the glyph origin (left, and top above the baseline, both down from the pen),
-/// its size, where its coverage starts (4 bits a pixel, high nibble first, each row starting on a byte), its advance.
-typedef struct { int8_t left, top; uint8_t width, height; uint32_t offset; int16_t advance; } dfw_text_glyph;
+/// One rasterization of a glyph: its bitmap's place from the glyph origin (left, and top above the baseline), its size,
+/// and where its coverage starts (4 bits a pixel, high nibble first, each row starting on a byte).
+typedef struct { int8_t left, top; uint8_t width, height; uint32_t offset; } dfw_text_bitmap;
+/// The most x phases a face has: CoreText snaps a glyph's x down to 1/phases of a pixel.
+#define DFW_TEXT_PHASES_MAX 4
+/// One glyph: its advance in font units, and its bitmap at each x phase.
+typedef struct { int16_t advance; dfw_text_bitmap phase[DFW_TEXT_PHASES_MAX]; } dfw_text_glyph;
 /// A kerning pair: (left glyph << 8) | right glyph, and its kern in font units. Sorted by pair.
 typedef struct { uint16_t pair; int16_t units; } dfw_kern;
 /// The code a glyph index of 255 marks: nothing drawn, no room (the soft hyphen).
@@ -130,6 +135,8 @@ struct dfw_text_face {
     /// The ligature glyphs for ff, fi, fl and tt.
     uint8_t ligature[4];
     uint8_t box;
+    /// How many x phases: a glyph's x is snapped down to 1/phases of a pixel, and drawn with that phase's bitmap.
+    uint8_t phases;
     const dfw_text_glyph *glyphs;
     const uint8_t *coverage;
     uint16_t kern_count;
@@ -161,7 +168,9 @@ for face in faces {
     let upm = Int(CTFontGetUnitsPerEm(font))
     let unitFont = loadFont(face.file, postScriptName: face.postScriptName, size: CGFloat(upm))
     let ascent = CTFontGetAscent(font), descent = CTFontGetDescent(font)
-    let middle = face.middle >= 0 ? face.middle : 136 + (ascent + descent + CTFontGetLeading(font)) / 2
+    // Key and BPM sit in a "normal" line box, ascent + descent + leading; the C takes it as ascent + descent.
+    guard face.middle >= 0 || CTFontGetLeading(font) == 0 else { fail("\(face.name): leading isn't 0") }
+    let middle = face.middle >= 0 ? face.middle : 136 + (ascent + descent) / 2
     let baseline = middle + (ascent - descent) / 2
     let fraction = baseline - floor(baseline)
     let trackingUnits = face.tracking * CGFloat(upm)
@@ -221,8 +230,8 @@ for face in faces {
         } }
     }
 
-    // Rasterizing: each glyph by id, in the face's own colors, at its baseline's fraction, x phase 0.
-    func rasterize(_ id: CGGlyph) -> [UInt8] {
+    // Rasterizing: each glyph by id, in the face's own colors, at its baseline's fraction, at an x phase.
+    func rasterize(_ id: CGGlyph, _ phase: CGFloat = 0) -> [UInt8] {
         var pixels = [UInt8](repeating: 0, count: box * box * 4)
         guard let context = CGContext(data: &pixels, width: box, height: box, bitsPerComponent: 8, bytesPerRow: box * 4,
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!,
@@ -231,7 +240,7 @@ for face in faces {
         context.scaleBy(x: 1, y: -1)
         context.setFillColor(color(face.ground))
         context.fill(CGRect(x: 0, y: 0, width: box, height: box))
-        context.translateBy(x: CGFloat(pad), y: CGFloat(box - pad) + fraction)
+        context.translateBy(x: CGFloat(pad) + phase, y: CGFloat(box - pad) + fraction)
         context.scaleBy(x: 1, y: -1)
         context.setFillColor(color(face.ink))
         var glyph = id
@@ -242,8 +251,24 @@ for face in faces {
     var coverageBytes: [UInt8] = []
     var glyphRows: [String] = []
     let groundG = Double(face.ground >> 8 & 0xFF), inkG = Double(face.ink >> 8 & 0xFF)
+    // The x snap, measured: where a glyph's image changes as its origin moves across a pixel in 1/96 steps.
+    var steps: [Int] = []
+    var probe: CGGlyph = 0
+    var h: [UniChar] = [0x48]
+    CTFontGetGlyphsForCharacters(font, &h, &probe, 1)
+    var previous = rasterize(probe, 0)
+    for i in 1..<96 {
+        let next = rasterize(probe, CGFloat(i) / 96)
+        if next != previous { steps.append(i) }
+        previous = next
+    }
+    let phases = steps.count + 1
+    guard phases <= 4, steps.enumerated().allSatisfy({ abs(Double($0.element) - Double(($0.offset + 1) * 96) / Double(phases)) < 1 })
+    else { fail("\(face.name): x snaps at \(steps) / 96, not evenly") }
     for (i, id) in ids.enumerated() {
-        let pixels = rasterize(id)
+      var bitmaps: [String] = []
+      for p in 0..<phases {
+        let pixels = rasterize(id, CGFloat(p) / CGFloat(phases))
         var level = [UInt8](repeating: 0, count: box * box)
         for p in 0..<(box * box) {
             let c = (Double(pixels[p * 4 + 1]) - groundG) / (inkG - groundG)
@@ -255,7 +280,7 @@ for face in faces {
         } }
         let offset = coverageBytes.count
         if maxX < 0 {
-            glyphRows.append("    { 0, 0, 0, 0, \(offset)u, \(advanceUnits[i]) },")
+            bitmaps.append("{ 0, 0, 0, 0, \(offset)u }")
             continue
         }
         guard minX > 0, minY > 0, maxX < box - 1, maxY < box - 1 else { fail("\(face.name): glyph \(id) doesn't fit the box") }
@@ -267,7 +292,9 @@ for face in faces {
                 x += 2
             }
         }
-        glyphRows.append("    { \(minX - pad), \(box - pad - minY), \(maxX - minX + 1), \(maxY - minY + 1), \(offset)u, \(advanceUnits[i]) },")
+        bitmaps.append("{ \(minX - pad), \(box - pad - minY), \(maxX - minX + 1), \(maxY - minY + 1), \(offset)u }")
+      }
+      glyphRows.append("    { \(advanceUnits[i]), { " + bitmaps.joined(separator: ", ") + " } },")
     }
 
     header += "/// \(face.postScriptName) \(Int(face.size)): \(face.about).\n"
@@ -286,7 +313,7 @@ for face in faces {
     header += "static const dfw_text_face \(face.name)_face = {\n"
     header += "    \(face.size)f, \(ascent)f, \(descent)f, \(fraction)f, \(upm), \(Int(trackingUnits)), 0x\(String(format: "%06X", face.ink))u,\n"
     header += "    { " + glyphOf.map { String($0) }.joined(separator: ", ") + " },\n"
-    header += "    { " + ligatureIndex.map { String($0) }.joined(separator: ", ") + " }, 0, \(face.name)_glyphs, \(face.name)_coverage, \(kerns.count), "
+    header += "    { " + ligatureIndex.map { String($0) }.joined(separator: ", ") + " }, 0, \(phases), \(face.name)_glyphs, \(face.name)_coverage, \(kerns.count), "
     header += kerns.isEmpty ? "0,\n};\n\n" : "\(face.name)_kerns,\n};\n\n"
 
     // The width oracle: the samples as the renderer lays them out in this face.
