@@ -81,18 +81,27 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
 
 ## The messages
 
-`vectors/messages.json` is the one definition, shared with the Swift side (#456).
+`vectors/messages.json` is the protocol's one description (#456, #569), shared with the Swift side.
 
-- It names each message and gives its exact bytes.
-- The Kit tests walk it with the Swift encoder, and `test/test_vectors.c` walks it with this decoder.
-- Its `invalid` entries must all be ignored.
-- The `about` field describes the framing.
+- **`protocol`**: the ops (number, and one exact length or `framed`), the caps, the state flags, the reserved values
+  and the timing. `vectors/gen_protocol.py` generates `src/protocol.h` and the Kit's `DrawnDisplayProtocol.swift`
+  from it; `make test` and a Kit test fail if either is out of date.
+- **`messages`** and **`invalid`**: each message's exact bytes, and bytes that must all be ignored. The Kit tests walk
+  them with the Swift encoder and decoder, and `test/test_vectors.c` with this decoder.
+- **`sequences`**: the sequence rules as cases, messages at times in, the expected state out (a deck change, end,
+  the 3 s silence, the time's look…). `test/test_sequences.c` walks them with `dfw.c`, and the Kit's
+  `DrawnDisplaySequenceTests` with `DrawnDisplayState`.
+- **`about`**: the framing, in words.
 
-To add a message:
+To add a message, red first:
 
-1. Add its entries to the file, valid and invalid.
-2. Teach `test/vectors_to_c.py` its kind. An unknown kind fails the build.
-3. Add the case to the walk, then to the decoder, red first.
+1. **Describe it:** its op in `protocol`, its entries in `messages` and `invalid`, and any rule it brings as a
+   `sequences` case. Run `python3 vectors/gen_protocol.py`.
+2. **The host:** its case in `DrawnDisplay.Message` and its encoding (the Kit), and where the driver sends it.
+3. **The decoders:** its case in `DrawnDisplayState` and in `dfw.c`'s `act`, plus any field it fills in `dfw_unit`
+   (which moves its layout: see `DFW_LAYOUT`).
+4. **The walks:** its kind in `test/vectors_to_c.py`, `test/test_vectors.c` and the Kit's vectors walks. An unknown
+   kind fails the build.
 
 A change to the vectors file runs the Mac jobs too, so the Swift walk always runs on it.
 

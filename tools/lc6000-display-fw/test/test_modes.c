@@ -110,7 +110,10 @@ void garbage_doesnt_count_as_a_message(void);
 void the_clock_wrapping_isnt_silence(void);
 void the_stale_flag_is_stale_too(void);
 
+void every_sequence_case_holds(void);
+
 const test_case all_tests[] = {
+    { "every sequence case holds", every_sequence_case_holds },
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
     { "a deck before begin draws nothing", a_deck_before_begin_draws_nothing },
     { "a deck after end draws nothing", a_deck_after_end_draws_nothing },

@@ -10,6 +10,8 @@ TESTS := $(wildcard test/test_*.c)
 test: $(BUILD)/tests $(BUILD)/band_table_gen $(BUILD)/ring_table_gen
 	$(BUILD)/tests
 	sh test/check_symbols.sh $(BUILD)/freestanding
+	@# The protocol's tables (#569) must be what vectors/messages.json describes now.
+	python3 -I vectors/gen_protocol.py --check
 	@# The generated tables (#558) must be what their generators write now, byte for byte.
 	$(BUILD)/band_table_gen > $(BUILD)/band_table.c
 	cmp src/band_table.c $(BUILD)/band_table.c || { echo "src/band_table.c is stale: make tables" >&2; exit 1; }
@@ -37,7 +39,12 @@ $(BUILD)/vectors.h: vectors/messages.json test/vectors_to_c.py
 	@mkdir -p $(BUILD)
 	python3 -I test/vectors_to_c.py $< > $@
 
-$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h $(wildcard src/*.h) $(BUILD)/vectors.h
+# The sequence cases (#569), as C for the sequence walk.
+$(BUILD)/sequences.h: vectors/messages.json test/vectors_to_c.py
+	@mkdir -p $(BUILD)
+	python3 -I test/vectors_to_c.py $< --sequences > $@
+
+$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h $(wildcard src/*.h) $(BUILD)/vectors.h $(BUILD)/sequences.h
 	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c -lm
 
 clean:

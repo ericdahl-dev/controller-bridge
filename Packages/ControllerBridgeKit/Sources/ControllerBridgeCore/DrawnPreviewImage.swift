@@ -21,7 +21,8 @@ extension DrawnDisplayState {
         var content = JogDisplayContent(deck: deck.number, color: deck.color, title: text(.title),
                                         artist: text(.artist), key: text(.key), bpm: tempo > 0 ? Double(tempo) / 10 : nil,
                                         playerType: Self.playerType(deck.player, words: text(.untitled) ?? ""))
-        content.stale = flags.contains(.stale)
+        // The waiting look: the host said feedback stopped, or nothing came for 3 s (#569), as on the chip.
+        content.stale = stale
         var look = JogTrackTime.Look.normal
         if let time, let timeAt {
             let since = max(0, now - timeAt)

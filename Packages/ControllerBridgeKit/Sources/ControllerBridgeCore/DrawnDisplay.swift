@@ -34,9 +34,9 @@ extension DisplayFirmware {
 public enum DrawnDisplay {
     /// The command byte of every drawn-display message. Denon's display firmware (wd 00.50) drops it silently, with no
     /// reply (#466); the vectors file and the C side carry the same number. Never 78 or 79: they write its settings flash.
-    public static let command: UInt8 = 0x20
+    public static let command = UInt8(DrawnDisplayProtocol.command)
     /// The protocol version this app speaks.
-    public static let version = 1
+    public static let version = DrawnDisplayProtocol.version
 
     /// What a deck holds, as the badge shows it (#209).
     public enum Player: UInt8, Sendable {
@@ -89,7 +89,7 @@ public enum DrawnDisplay {
 
     /// The most escaped text bytes in one text message (#458): agent3's 96, so the whole message is at most 108 bytes,
     /// inside the 128 agent2 found keeps stock's SysEx handling short. Longer messages are dropped with no error.
-    static let textCap = 96
+    static let textCap = DrawnDisplayProtocol.textMax
 
     /// The character's cp1252 code; 0x81 (the box) for one with none. C1 controls have no glyph: cp1252's undefined
     /// slots must not pass as themselves.
@@ -148,40 +148,40 @@ public enum DrawnDisplay {
         /// The SysEx frame for the WD port.
         public var bytes: [UInt8] {
             switch self {
-            case .capability(let version): DrawnDisplay.frame(0x00, [UInt8(version & 0x7F)])
-            case .begin(let version): DrawnDisplay.frame(0x01, [UInt8(version & 0x7F)])
-            case .end(let version): DrawnDisplay.frame(0x02, [UInt8(version & 0x7F)])
+            case .capability(let version): DrawnDisplay.frame(.capability, [UInt8(version & 0x7F)])
+            case .begin(let version): DrawnDisplay.frame(.begin, [UInt8(version & 0x7F)])
+            case .end(let version): DrawnDisplay.frame(.end, [UInt8(version & 0x7F)])
             case .deck(let number, let color, let player):
-                DrawnDisplay.frame(0x03, [UInt8(number & 0x7F)]
+                DrawnDisplay.frame(.deck, [UInt8(number & 0x7F)]
                     + color.prefix(3).flatMap { channel -> [UInt8] in
                         let value = min(max(channel, 0), 255)
                         return [UInt8(value >> 7), UInt8(value & 0x7F)]
                     } + [player.rawValue])
-            case .state(let state): DrawnDisplay.frame(0x07, [state.rawValue])
-            case .beat(let beat): DrawnDisplay.frame(0x08, [UInt8(min(max(beat, 0), 4))])
+            case .state(let state): DrawnDisplay.frame(.state, [state.rawValue])
+            case .beat(let beat): DrawnDisplay.frame(.beat, [UInt8(min(max(beat, 0), 4))])
             case .needle(let angle):
-                DrawnDisplay.frame(0x09, [UInt8(angle >> 7 & 0x7F), UInt8(angle & 0x7F)])
+                DrawnDisplay.frame(.needle, [UInt8(angle >> 7 & 0x7F), UInt8(angle & 0x7F)])
             case .meter(let level, let peak):
-                DrawnDisplay.frame(0x0A, [UInt8(min(max(level, 0), 127)), UInt8(min(max(peak, 0), 127))])
-            case .text(let field, let text): DrawnDisplay.frame(0x04, [field.rawValue] + DrawnDisplay.escaped(text))
+                DrawnDisplay.frame(.meter, [UInt8(min(max(level, 0), 127)), UInt8(min(max(peak, 0), 127))])
+            case .text(let field, let text): DrawnDisplay.frame(.text, [field.rawValue] + DrawnDisplay.escaped(text))
             case .time(let elapsed, let length):
-                DrawnDisplay.frame(0x06, [UInt8(elapsed >> 7 & 0x7F), UInt8(elapsed & 0x7F),
+                DrawnDisplay.frame(.time, [UInt8(elapsed >> 7 & 0x7F), UInt8(elapsed & 0x7F),
                                           UInt8(length >> 7 & 0x7F), UInt8(length & 0x7F)])
             case .tempo(let tenths):
-                DrawnDisplay.frame(0x05, [UInt8(tenths >> 7 & 0x7F), UInt8(tenths & 0x7F)])
+                DrawnDisplay.frame(.tempo, [UInt8(tenths >> 7 & 0x7F), UInt8(tenths & 0x7F)])
             case .phase(let offset):
-                DrawnDisplay.frame(0x0B, [UInt8(offset >> 7 & 0x7F), UInt8(offset & 0x7F)])
+                DrawnDisplay.frame(.phase, [UInt8(offset >> 7 & 0x7F), UInt8(offset & 0x7F)])
             }
         }
     }
 
-    static func frame(_ op: UInt8, _ arguments: [UInt8]) -> [UInt8] {
-        JogDisplay.frame(command, [op] + arguments)
+    static func frame(_ op: DrawnDisplayProtocol.Op, _ arguments: [UInt8]) -> [UInt8] {
+        JogDisplay.frame(command, [op.rawValue] + arguments)
     }
 
     /// The unit's answer to the capability question: its protocol version, or nil for anything else.
     public static func answer(_ message: [UInt8]) -> Int? {
-        let head: [UInt8] = [0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, command, 0x00, 0x02, 0x00]
+        let head: [UInt8] = DrawnDisplayProtocol.replyHeader + [command, 0x00, 0x02, DrawnDisplayProtocol.Op.capability.rawValue]
         guard message.count == 12, Array(message.prefix(10)) == head, message[11] == 0xF7,
               (1...0x7F).contains(message[10]) else { return nil }
         return Int(message[10])

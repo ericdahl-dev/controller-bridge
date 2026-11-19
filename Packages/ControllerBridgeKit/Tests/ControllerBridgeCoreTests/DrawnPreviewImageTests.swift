@@ -35,6 +35,18 @@ struct DrawnPreviewImageTests {
         #expect(try #require(empty.preview(now: 0, timeAt: nil)).content.playerType == "empty")
     }
 
+    @Test("3 s with no message is the waiting look too (#569), as on the chip")
+    func silence() throws {
+        var state = DrawnDisplayState()
+        for message: Message in [.begin(version: 1), .deck(number: 1, color: [0, 0, 255], player: .track), .state(.loaded)] {
+            state.apply(message.bytes, atMs: 0)
+        }
+        state.tick(atMs: 2999)
+        #expect(try #require(state.preview(now: 3, timeAt: nil)).content.stale == false)
+        state.tick(atMs: 3000)
+        #expect(try #require(state.preview(now: 3, timeAt: nil)).content.stale)
+    }
+
     @Test("Stale feedback is the content's waiting look")
     func stale() throws {
         let state = Self.state([.deck(number: 1, color: [0, 0, 255], player: .track), .state([.loaded, .stale])])
