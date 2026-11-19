@@ -375,3 +375,4 @@ const test_case all_tests[] = {
 const test_case draw_tests[] = { { 0, 0 } };
 const test_case draw_live_tests[] = { { 0, 0 } };
 const test_case text_tests[] = { { 0, 0 } };
+const test_case layout_tests[] = { { 0, 0 } };

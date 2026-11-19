@@ -1,8 +1,9 @@
 // The drawing (#457), checked against design B as the Swift renderer draws it: test/ref/*.ppm, made by
 // test/ref/make_refs.sh from JogDisplayRenderer, never from this code.
 //
-// The Swift image also has the title, caption, rule and key/BPM, which this ticket doesn't draw. So only two bands are
-// compared with the reference: the ring band and the header band. Everywhere else must be plain ground.
+// Three bands are compared: the ring, the header, and the text below it (#458: the title or an untitled deck's words,
+// the artist or caption, the rule in the deck color, key and BPM). Before a deck's text arrives, the text band is the
+// rule alone.
 #include "harness.h"
 #include "draw.h"
 #include <string.h>
@@ -126,14 +127,129 @@ static void draw_case(const ref_case *c) {
     dfw_draw(frame, &unit);
 }
 
-static void outside_the_bands_is_plain_ground(void) {
+/// The rule in the deck color, under the artist: x 50-147, y 127-128, as the renderer fills it.
+static int in_rule(int x, int y) { return x >= 50 && x < 148 && y >= 127 && y < 129; }
+
+static void before_the_text_arrives_the_text_band_is_the_rule_alone(void) {
     for (size_t c = 0; c < CASES; c++) {
         draw_case(&cases[c]);
-        int stray = 0;
+        int stray = 0, rule = 0;
+        dfw_pixel deck = (dfw_pixel)cases[c].r << 16 | (dfw_pixel)cases[c].g << 8 | cases[c].b;
         for (int y = 0; y < DFW_SIZE; y++)
-            for (int x = 0; x < DFW_SIZE; x++)
-                if (!in_ring(x, y) && !in_header(y) && frame[y * DFW_SIZE + x] != GROUND) stray++;
+            for (int x = 0; x < DFW_SIZE; x++) {
+                if (in_ring(x, y) || in_header(y)) continue;
+                dfw_pixel p = frame[y * DFW_SIZE + x];
+                if (in_rule(x, y)) rule += p == deck;
+                else stray += p != GROUND;
+            }
         CHECK(stray == 0);
+        CHECK(rule == 98 * 2);
+    }
+}
+
+/// The text references (#458), with the messages the host sends for them: Windows-1252 texts, the untitled words in
+/// field 3, the tempo in tenths.
+typedef struct {
+    const char *file;
+    uint8_t number, r, g, b, player;
+    const char *title, *artist, *key, *words;
+    uint16_t tenths;
+} text_case;
+
+static const text_case text_cases[] = {
+    { "test/ref/text-strobe.ppm", 2, 255, 0, 0, 1, "Strobe", "Deadmau5", "F#m", "", 1280 },
+    { "test/ref/text-night-drive.ppm", 2, 255, 0, 0, 1, "Night Drive", "Caf\xE9 del Mar", "11B", "", 900 },
+    { "test/ref/text-ten.ppm", 1, 255, 255, 255, 1, "Ten (Original Club Mix)", "Mark Knight", "8A", "", 1245 },
+    { "test/ref/text-cut.ppm", 3, 0, 200, 80, 1, "Mark Knight Underworld Sander Van Doorn Remix Edition",
+      "Wolfgang Amadeus Mozart and the Vienna Philharmonic", "", "", 0 },
+    { "test/ref/text-accents.ppm", 4, 0, 128, 255, 1, "T\xE4nzer aus T\xFC" "bingen", "L\xE9" "a Seydoux & \x93" "Don\x92t\x94",
+      "Ebm", "", 1740 },
+    { "test/ref/text-automation.ppm", 3, 0, 200, 80, 5, "", "", "", "Automation", 0 },
+    { "test/ref/deck2-red-track.ppm", 2, 255, 0, 0, 1, "", "", "", "No track", 0 },
+    { "test/ref/deck4-blue-empty.ppm", 4, 0, 128, 255, 0, "", "", "", "No track", 0 },
+    { "test/ref/deck1-white-midi.ppm", 1, 255, 255, 255, 3, "", "", "", "Midiclip", 0 },
+    { "test/ref/deck1-orange-osc.ppm", 1, 255, 128, 0, 2, "", "", "", "OSC clip", 0 },
+    { "test/ref/deck3-purple-seq.ppm", 3, 180, 0, 255, 4, "", "", "", "Sequencer", 0 },
+};
+
+static void set_text(dfw_unit *unit, int field, const char *codes) {
+    unit->text_length[field] = (uint8_t)strlen(codes);
+    memcpy(unit->text[field], codes, unit->text_length[field]);
+}
+
+static void draw_text_case(const text_case *c) {
+    static dfw_unit unit;
+    memset(&unit, 0, sizeof unit);
+    unit.deck = (dfw_deck_state){ c->number, c->r, c->g, c->b, c->player };
+    set_text(&unit, 0, c->title);
+    set_text(&unit, 1, c->artist);
+    set_text(&unit, 2, c->key);
+    set_text(&unit, 3, c->words);
+    unit.tempo = c->tenths;
+    unit.text_heard = 1;
+    dfw_draw(frame, &unit);
+}
+
+/// The text band: below the header, inside the ring. The renderer's text is CoreText's, anti-aliased at half-pixel x
+/// positions; ours is 4-bit coverage at whole ones. So most pixels are close, glyph edges a little further.
+#define TEXT_CLOSE 8
+#define TEXT_BUDGET 200
+#define TEXT_CAP 56
+
+static int text_band_matches(const char *file) {
+    int loose = 0, over_cap = 0, worst = 0, pixels = 0;
+    for (int y = HEADER_BOTTOM + 1; y < DFW_SIZE; y++)
+        for (int x = 0; x < DFW_SIZE; x++) {
+            if (in_ring(x, y)) continue;
+            float dx = (float)x + 0.5f - 99.0f, dy = (float)y + 0.5f - 99.0f;
+            if (dx * dx + dy * dy > RING_IN * RING_IN) continue;
+            int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
+            pixels++;
+            if (d > worst) worst = d;
+            if (d > TEXT_CLOSE) loose++;
+            if (d > TEXT_CAP) over_cap++;
+        }
+    fprintf(stderr, "    %s text: %d px, worst %d, %d over %d (budget %d), %d over %d\n", file + 9, pixels, worst, loose,
+            TEXT_CLOSE, TEXT_BUDGET, over_cap, TEXT_CAP);
+    return over_cap == 0 && loose <= TEXT_BUDGET;
+}
+
+/// A letter the font lacks (#458): the host sends 0x81, and the chip draws Geist's own .notdef, a box. The renderer
+/// would draw another font's glyph there, so there's no reference: this checks that the box has ink where a space has
+/// none, and that it's a box (its ink's top and bottom rows are wider than a stroke).
+static void a_letter_the_font_lacks_draws_a_box(void) {
+    static const text_case boxed = { "", 2, 255, 0, 0, 1, "\x81", "x", "", "", 0 };
+    static const text_case spaced = { "", 2, 255, 0, 0, 1, " ", "x", "", "", 0 };
+    static dfw_pixel with_box[DFW_SIZE * DFW_SIZE];
+    draw_text_case(&boxed);
+    memcpy(with_box, frame, sizeof frame);
+    draw_text_case(&spaced);
+    int left = DFW_SIZE, right = -1, top = DFW_SIZE, bottom = -1;
+    for (int y = 56; y < 94; y++)
+        for (int x = 0; x < DFW_SIZE; x++)
+            if (with_box[y * DFW_SIZE + x] != frame[y * DFW_SIZE + x] && with_box[y * DFW_SIZE + x] != GROUND) {
+                if (x < left) left = x;
+                if (x > right) right = x;
+                if (y < top) top = y;
+                if (y > bottom) bottom = y;
+            }
+    CHECK(right > left && bottom > top);
+    if (right <= left || bottom <= top) return;
+    // A box: its top and bottom rows are inked most of its width.
+    int top_ink = 0, bottom_ink = 0;
+    for (int x = left; x <= right; x++) {
+        top_ink += with_box[top * DFW_SIZE + x] != GROUND;
+        bottom_ink += with_box[bottom * DFW_SIZE + x] != GROUND;
+    }
+    CHECK(right - left >= 6 && bottom - top >= 10);
+    CHECK(top_ink * 2 > right - left && bottom_ink * 2 > right - left);
+}
+
+static void the_text_matches_the_reference(void) {
+    for (size_t c = 0; c < sizeof text_cases / sizeof text_cases[0]; c++) {
+        CHECK(load_reference(text_cases[c].file));
+        draw_text_case(&text_cases[c]);
+        CHECK(text_band_matches(text_cases[c].file));
     }
 }
 
@@ -253,7 +369,9 @@ static void the_stale_flag_draws_the_logo_and_fresh_feedback_clears_it(void) {
 }
 
 const test_case draw_tests[] = {
-    { "outside the bands is plain ground", outside_the_bands_is_plain_ground },
+    { "before the text arrives the text band is the rule alone", before_the_text_arrives_the_text_band_is_the_rule_alone },
+    { "the text matches the reference", the_text_matches_the_reference },
+    { "a letter the font lacks draws a box", a_letter_the_font_lacks_draws_a_box },
     { "the ring matches the reference", the_ring_matches_the_reference },
     { "an empty deck draws its chip alone", an_empty_deck_draws_its_chip_alone },
     { "another player draws its chip alone", another_player_draws_its_chip_alone },

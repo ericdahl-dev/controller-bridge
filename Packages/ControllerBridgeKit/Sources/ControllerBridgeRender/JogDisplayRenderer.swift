@@ -102,41 +102,54 @@ public enum JogDisplayRenderer {
         let deckColor = color(content.color)
         header(deck: content.deck, color: deckColor, badge: badge(content.playerType), in: context)
 
-        let title = content.title ?? ""
-        let foot: Bool
-        if title.isEmpty {
-            // No title: the deck says what it holds, or that it's empty. Nothing invented.
-            let words = untitled(content.playerType)
-            line(words.title, font: "Geist-Bold", size: 26, lineHeight: 1.1, top: 66, color: text, in: context)
-            line(words.caption, font: "Geist-Medium", size: 16, lineHeight: 1.1, top: 100, color: caption, in: context)
-            foot = badge(content.playerType) != nil && badge(content.playerType) != "TRK"
-        } else {
-            let artistTop: CGFloat
-            if titleSize(title) == 26 {
-                line(title, font: "Geist-Bold", size: 26, lineHeight: 1.15, top: 60, color: text, tracking: -0.01, in: context)
-                artistTop = 94
-            } else {
-                // Wrapped at words; titleLines already fits both lines, so only line 2 can end in an ellipsis.
-                let lines = titleLines(title)
-                if lines.count > 1 {
-                    line(lines[0], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1, top: 54, color: text, in: context)
-                    line(lines[1], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1, top: 78, color: text, in: context)
-                    artistTop = 103
-                } else {
-                    // One line at 20 px: centered where the 26 px line sits (box center 75), the artist where it goes then.
-                    line(lines[0], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1, top: 75 - twoLineSize * 1.1 / 2,
-                         color: text, in: context)
-                    artistTop = 94
-                }
-            }
-            line(content.artist.flatMap { $0.isEmpty ? nil : $0 } ?? "—", font: "Geist-Medium", size: 16, lineHeight: 1.15,
-                 top: artistTop, color: caption, in: context)
-            foot = true
-        }
+        let block = textBlock(content)
+        for text in block.lines { line(text, in: context) }
         // The rule in the deck color.
         context.setFillColor(deckColor)
         context.fill(CGRect(x: 50, y: 127, width: 98, height: 2))
-        if foot { keyAndBPM(key: content.key, bpm: content.bpm, in: context) }
+        if block.foot { keyAndBPM(key: content.key, bpm: content.bpm, in: context) }
+    }
+
+    /// One line of the text block: its words, face, CSS line box and tracking. The drawn display firmware lays out the
+    /// same block (#458; test/ref/text_layout.h is this, checked by DisplayFirmwareTextLayoutTests).
+    struct TextLine {
+        let string: String, font: String, size: CGFloat, lineHeight: CGFloat, top: CGFloat, color: CGColor
+        var tracking: CGFloat = 0
+    }
+
+    /// The text block between the header and the rule: the title (or an untitled deck's words) and the artist (or its
+    /// caption); and whether key and BPM show below the rule.
+    static func textBlock(_ content: JogDisplayContent) -> (lines: [TextLine], foot: Bool) {
+        let title = content.title ?? ""
+        if title.isEmpty {
+            // No title: the deck says what it holds, or that it's empty. Nothing invented.
+            let words = untitled(content.playerType)
+            return ([TextLine(string: words.title, font: "Geist-Bold", size: 26, lineHeight: 1.1, top: 66, color: text),
+                     TextLine(string: words.caption, font: "Geist-Medium", size: 16, lineHeight: 1.1, top: 100, color: caption)],
+                    badge(content.playerType) != nil && badge(content.playerType) != "TRK")
+        }
+        var lines: [TextLine]
+        let artistTop: CGFloat
+        if titleSize(title) == 26 {
+            lines = [TextLine(string: title, font: "Geist-Bold", size: 26, lineHeight: 1.15, top: 60, color: text, tracking: -0.01)]
+            artistTop = 94
+        } else {
+            // Wrapped at words; titleLines already fits both lines, so only line 2 can end in an ellipsis.
+            let wrapped = titleLines(title)
+            if wrapped.count > 1 {
+                lines = [TextLine(string: wrapped[0], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1, top: 54, color: text),
+                         TextLine(string: wrapped[1], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1, top: 78, color: text)]
+                artistTop = 103
+            } else {
+                // One line at 20 px: centered where the 26 px line sits (box center 75), the artist where it goes then.
+                lines = [TextLine(string: wrapped[0], font: "Geist-Bold", size: twoLineSize, lineHeight: 1.1,
+                                  top: 75 - twoLineSize * 1.1 / 2, color: text)]
+                artistTop = 94
+            }
+        }
+        lines.append(TextLine(string: content.artist.flatMap { $0.isEmpty ? nil : $0 } ?? "—", font: "Geist-Medium", size: 16,
+                              lineHeight: 1.15, top: artistTop, color: caption))
+        return (lines, true)
     }
 
     /// The four beat sections, clockwise from 12 o'clock; beat 1 a step brighter when unlit.
@@ -304,13 +317,33 @@ public enum JogDisplayRenderer {
     }
 
     /// One centered line whose CSS line box starts at `top`, cut with an ellipsis to the safe circle's chord there.
-    private static func line(_ string: String, font name: String, size: CGFloat, lineHeight: CGFloat, top: CGFloat,
-                             color: CGColor, tracking: CGFloat = 0, in context: CGContext) {
-        guard !string.isEmpty else { return }
-        let font = CTFontCreateWithName(name as CFString, size, nil)
-        let height = lineBoxHeight(font, lineHeight: lineHeight)
-        let fitted = fit(makeLine(string, font: font, color: color, tracking: tracking), font: font, top: top, height: height)
-        draw(fitted, font: font, centerX: center, centerY: top + height / 2, in: context)
+    private static func line(_ text: TextLine, in context: CGContext) {
+        guard !text.string.isEmpty else { return }
+        let font = CTFontCreateWithName(text.font as CFString, text.size, nil)
+        let height = lineBoxHeight(font, lineHeight: text.lineHeight)
+        draw(fitted(text), font: font, centerX: center, centerY: text.top + height / 2, in: context)
+    }
+
+    /// The line as drawn: cut with an ellipsis to the safe circle's chord at its box.
+    private static func fitted(_ text: TextLine) -> CTLine {
+        _ = fontsRegistered
+        let font = CTFontCreateWithName(text.font as CFString, text.size, nil)
+        let height = lineBoxHeight(font, lineHeight: text.lineHeight)
+        return fit(makeLine(text.string, font: font, color: text.color, tracking: text.tracking), font: font, top: text.top,
+                   height: height)
+    }
+
+    /// The characters a line shows once cut: when cut, the last glyph run is the ellipsis, standing for the rest.
+    static func shown(_ text: TextLine) -> String {
+        guard !text.string.isEmpty else { return "" }
+        let line = fitted(text)
+        let runs = CTLineGetGlyphRuns(line) as! [CTRun]
+        let font = CTFontCreateWithName(text.font as CFString, text.size, nil)
+        let whole = makeLine(text.string, font: font, color: text.color, tracking: text.tracking)
+        guard CTLineGetTypographicBounds(line, nil, nil, nil) < CTLineGetTypographicBounds(whole, nil, nil, nil),
+              let last = runs.last else { return text.string }
+        let kept = (text.string as NSString).substring(to: CTRunGetStringRange(last).location)
+        return kept + "…"
     }
 
     /// A CSS line box's height: `lineHeight` × the size, or the font's own ascent + descent + leading for "normal".
