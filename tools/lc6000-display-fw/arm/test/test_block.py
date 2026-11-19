@@ -459,6 +459,21 @@ class NativeFrameTests(unittest.TestCase):
     def test_a_deck_alone(self):
         self.assert_same_frame("deck 2, red, track", (BEGIN, DECK_2_RED_TRACK))
 
+    def test_the_panel_shows_the_native_frame_turned_and_in_rgb565_with_black_around_it(self):
+        # Layer 2 is the whole 320x240 panel: the frame turned 180 degrees at (61, 21), each pixel's top 5, 6 and 5 bits
+        # of red, green and blue; black everywhere else.
+        messages = (BEGIN, DECK_2_RED_TRACK)
+        native = native_frame(messages)
+        chip, _ = chip_frame(messages)
+        layer = struct.unpack(f"<{320 * 240}H", bytes(chip.uc.mem_read(LAYER_AT, 320 * 240 * 2)))
+        want = [0] * (320 * 240)
+        for y in range(SIZE):
+            for x in range(SIZE):
+                p = native[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)]
+                want[(21 + y) * 320 + 61 + x] = (p >> 19 & 0x1F) << 11 | (p >> 10 & 0x3F) << 5 | (p >> 3 & 0x1F)
+        wrong = sum(1 for got, w in zip(layer, want) if got != w)
+        self.assertEqual(wrong, 0, f"{wrong} of the panel's pixels differ")
+
 
 def struct_fields(source, opening, closing):
     """The field names declared between `opening` and `closing` in a C header, comments dropped."""
