@@ -29,6 +29,7 @@ struct DrawnDisplayVectorsTests {
         case "state": return .state(DrawnDisplay.State(rawValue: UInt8(fields["flags"] as! Int)))
         case "beat": return .beat(fields["beat"] as! Int)
         case "needle": return .needle(fields["angle"] as! Int)
+        case "meter": return .meter(level: fields["level"] as! Int, peak: fields["peak"] as! Int)
         case "text":
             return DrawnDisplay.TextField(rawValue: UInt8(fields["field"] as! Int))
                 .map { .text($0, fields["text"] as! String) }
@@ -41,7 +42,7 @@ struct DrawnDisplayVectorsTests {
     func hostMessagesEncode() {
         let entries = (Self.file["messages"] as! [[String: Any]]).filter { $0["direction"] as? String != "unit" }
         #expect(Set(entries.map { $0["kind"] as! String }).isSuperset(of: ["begin", "end", "capability", "deck", "state", "beat", "needle",
-                                                                          "text", "tempo"]))
+                                                                          "text", "tempo", "meter"]))
         for entry in entries {
             let message = Self.message(entry)
             #expect(message != nil, "\(entry["name"]!): unknown kind")
@@ -77,7 +78,7 @@ struct DrawnDisplayVectorsTests {
     func oneCommandByte() {
         let messages: [DrawnDisplay.Message] = [
             .capability(version: 1), .begin(version: 1), .end(version: 127),
-            .deck(number: 4, color: [255, 255, 255], player: .other), .deck(number: 1, color: [], player: .empty), .state([.loaded, .stale]), .beat(0), .needle(16383),
+            .deck(number: 4, color: [255, 255, 255], player: .other), .deck(number: 1, color: [], player: .empty), .state([.loaded, .stale]), .beat(0), .needle(16383), .meter(level: 127, peak: 127),
         ]
         for message in messages { #expect(message.bytes[6] == DrawnDisplay.command) }
         #expect(![0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x72, 0x78, 0x79, 0x7C, 0x7F].contains(DrawnDisplay.command))

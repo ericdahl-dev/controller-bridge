@@ -45,7 +45,9 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
 - `src/draw_live.h`, `src/draw_live.c`: `dfw_draw_live`, called last by `dfw_draw`, draws the live elements over
   design B (#459): the master beat's section lit in the live green, and the marker (Swift's `drawMarker`: a white
   wedge with a 2 px black keyline) at the needle's angle. No marker until a needle message has come since begin.
-  Nothing while the display is stale.
+  Under the marker, the level meter (#461, Swift's `drawMeter`): an arc 80-83 px out on the left, 240° to 300°, a
+  dark track filled green to three quarters and yellow above, all red at clip, with the held peak as a 2° tick. No
+  meter until a meter message has come since begin. Nothing while the display is stale.
 - `src/font_header.h`: glyph coverage for the header's two faces, generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
@@ -93,9 +95,9 @@ ever sends is the capability answer.
 it, never with images made by this code.
 
 - The references are binary PPMs in `test/ref/`.
-- The Swift image also has the title, caption, rule and key/BPM, which this code doesn't draw yet. So only two
-  bands are compared: the ring band (radius 83.5 to 96.5) and the header band (y 20 to 55). Everything else must
-  be plain ground.
+- Three bands are compared: the ring (radius 83.5 to 96.5), the header (y 20 to 55), and the text inside the
+  ring below the header (#458): the title or an untitled deck's words, the artist or caption, the rule in the deck
+  color, and key and BPM. Before a deck's first text message, the text band is the rule alone.
 
 The waiting look (`test/ref/stale.ppm`) is compared over the whole frame, since the logo is all of it.
 `stale-preview.png` is a PNG of it for people to look at; the tests read the PPM. The Kit's `JogLogoTests` read
@@ -106,11 +108,21 @@ The waiting look (`test/ref/stale.ppm`) is compared over the whole frame, since 
 - **Ring:** no pixel more than 6 off.
 - **Header:** at most 24 pixels more than 8 off, and none more than 24 off.
 - **Waiting look:** at most 64 pixels more than 8 off, and none more than 24 off.
+- **Text:** at most 200 pixels more than 8 off, and none more than 56 off (measured worst: 48, and 169 pixels over
+  8, on the titled references; the untitled ones are within 26).
 
 CoreGraphics and this code anti-alias curves slightly differently: up to 18 levels on a few edge pixels of a white
 chip, and within 8 everywhere else. The limits are tight enough that a wrong color, a 1 px shift or a wrong glyph
 fails, and each of those was checked. The test prints each case's worst difference, so a change shows up in the
 log.
+
+The text (#458) is drawn from Geist bitmaps made by `gen/text_font_gen.swift` with CoreText: 4-bit coverage at each
+x phase CoreText snaps glyphs to (halves at 26, 20 and 22 px, thirds at 16 px). Its layout (the title's size, the
+wrap, every ellipsis cut) is checked exactly, not by pixels, against `test/ref/text_layout.h`, which the Kit writes
+from the renderer (`DisplayFirmwareTextLayoutTests`), and its widths against CoreText's in `test/ref/text_widths.h`.
+The text references are `test/ref/text-*.ppm`; a letter the font lacks (0x81) draws Geist's own box, which the
+renderer can't show (it falls back to another font), so a test checks the box's shape instead. A 1 px shift, the
+wrong phase, the key's blue drawn white, or kerning left off each fails.
 
 The live elements (#459) are checked in `test/test_draw_live.c` against references with a beat lit or the marker
 drawn. The Kit's `jog-reference` tool draws neither, so `test/ref/live-reference/` is a small Swift package beside the

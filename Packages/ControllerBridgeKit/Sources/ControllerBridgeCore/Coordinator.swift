@@ -197,7 +197,10 @@ public final class Coordinator {
     /// The ring of the controller that owns the display stays dark while the display uploads (#422).
     private func holdRing() {
         // Only a change is written: this runs every tick.
-        if status.displayFound != jogController.found { status.displayFound = jogController.found }
+        if status.displayFound != jogController.found {
+            status.displayFound = jogController.found
+            status.requiredSubscriptions = requiredSubscriptions   // drawn mode asks for the meter (#461)
+        }
         let held = jogController.uploading
         for (index, entry) in jogEntries.enumerated() where entry.ownsDisplay {
             controllers[index].bridge.ringHeld = held
@@ -696,6 +699,8 @@ public final class Coordinator {
         var needed = Set(bridges.flatMap { Subscription.required(for: $0.mapping) })
         // The jog needle reads the deck's BarRamp (#165): asked for only while the display is on.
         if jogController.enabled { needed.insert(.barRamp) }
+        // The drawn display's level meter reads the mixer's Meter (#461): asked for only while the unit draws.
+        if jogController.drawing { needed.insert(.mixerMeter) }
         return Subscription.allCases.filter(needed.contains)
     }
 

@@ -18,13 +18,13 @@ struct DrawnDisplayTextDriverTests {
     static let daybreak = [Message.text(.title, "Daybreak").bytes, Message.text(.artist, "Bill Hamel, Jeremus").bytes,
                            Message.text(.key, "A#m").bytes, Message.text(.untitled, "").bytes, Message.tempo(128).bytes]
 
-    @Test("After begin: deck, state, title, artist, key, tempo, then the beat")
+    @Test("After begin: deck, state, title, artist, key, tempo, then the beat and (#461) the meter")
     func afterBegin() throws {
         let (rig, port, _) = try Handshake.rig(.custom)
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
         port.wd.removeAll()
         rig.coordinator.jogDisplayReply(Handshake.answer)
-        #expect(DrawnDisplayReconnectTests.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08])
+        #expect(DrawnDisplayReconnectTests.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x0A])
         #expect(Self.textAndTempo(port) == Self.daybreak)
     }
 
@@ -61,7 +61,7 @@ struct DrawnDisplayTextDriverTests {
         port.wd.removeAll()
         clock.now = 1.0
         rig.coordinator.tick()
-        #expect(DrawnDisplayReconnectTests.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08])
+        #expect(DrawnDisplayReconnectTests.ops(port) == [0x01, 0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05, 0x08, 0x0A])
         #expect(Self.textAndTempo(port) == Self.daybreak)
     }
 

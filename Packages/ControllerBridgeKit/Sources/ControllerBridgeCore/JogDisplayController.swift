@@ -21,6 +21,13 @@ final class JogDisplayController {
     private var lastMarkerSent: Double?
     /// At most this many marker updates a second.
     static let markerRate = 30.0
+    /// Each mixer channel's meter from Syndicate (#461): the latest level, 0...1, and the peak held since `peakAt`.
+    private var meters: [Int: (level: Double, peak: Double, peakAt: Double)] = [:]
+    private var lastMeterSent: Double?
+    /// The deck whose meter went out last: a switch sends the new one's at once.
+    private var lastMeterDeck: Int?
+    /// How long a peak holds above the level: the mixer LEDs' default (mixer.meter.hold_ms), as the LC6000 has none.
+    static let peakHold = Double(ProfileKeys.fallback("mixer.meter.hold_ms") as Int) / 1000
 
     init(clock: any Clock) {
         self.clock = clock
@@ -29,6 +36,13 @@ final class JogDisplayController {
     /// Syndicate's header feedback: the master tempo (and, for the ring, the master beat).
     func feedback(_ message: OSCMessage) {
         let address = message.address.lowercased()
+        // A mixer channel's meter (#461), for the drawn display's level meter.
+        if let channel = (1...4).first(where: { address.hasSuffix("/mixer/ch\($0)/meter") }),
+           let level = message.arguments.first?.number {
+            let now = clock.now, old = meters[channel]
+            let fresh = old.map { level >= $0.peak || now - $0.peakAt > Self.peakHold } ?? true
+            meters[channel] = (level, fresh ? level : old!.peak, fresh ? now : old!.peakAt)
+        }
         if address.hasSuffix("/header/bpm"), let bpm = message.arguments.first?.number, bpm > 0 { masterBPM = bpm }
         // The master clock is the lit ring segment, the same on every deck (the user's pick).
         if address.hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber, (1...4).contains(beat) {
@@ -55,6 +69,9 @@ final class JogDisplayController {
     func setStale(_ stale: Bool) {
         driver?.setStale(stale)
     }
+
+    /// Whether the unit draws the screen itself now (#461).
+    var drawing: Bool { if case .customDrawn = driver?.found { true } else { false } }
 
     /// The display firmware found on the unit (#456).
     var found: DisplayFound? { driver?.found }
@@ -126,8 +143,30 @@ final class JogDisplayController {
         for entry in entries { driver.deckPlaying(deck: entry.facts.deck, entry.facts.playing) }
         guard let front else { return }
         let facts = entries[front].facts
-        driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending)
+        meterTick(deck: facts.deck, driver: driver)
+        driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending, loop: facts.looping,
+                         cue: facts.cueHeld)
         driver.playLight(facts.playing || (facts.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
+    }
+
+    /// The deck in front's meter to the drawn display, at most 30 times a second; the peak falls to the level once
+    /// it has held. Nothing until its channel has reported.
+    private func meterTick(deck: Int, driver: JogDisplayDriver) {
+        // A channel that hasn't reported shows an empty meter, not the last deck's (#461).
+        guard var meter = meters[deck] else {
+            lastMeterDeck = deck
+            driver.meter(level: 0, peak: 0)
+            return
+        }
+        if deck == lastMeterDeck, let sent = lastMeterSent, clock.now - sent < 1 / Self.markerRate - 1e-9 { return }
+        lastMeterDeck = deck
+        if clock.now - meter.peakAt > Self.peakHold {
+            meter.peak = meter.level
+            meter.peakAt = clock.now
+            meters[deck] = meter
+        }
+        func scaled(_ value: Double) -> Int { Int((min(max(value, 0), 1) * 127).rounded()) }
+        if driver.meter(level: scaled(meter.level), peak: scaled(meter.peak)) { lastMeterSent = clock.now }
     }
 
     /// Each entry's facts, after Syndicate's feedback: a deck that stops keeps its needle where it is, and a new

@@ -2,6 +2,7 @@
 // center at +0.5. Edges are anti-aliased by coverage: a pixel is blended toward a shape by how much of it the shape
 // covers, estimated from the signed distance between the pixel's center and the shape's edge.
 #include "draw.h"
+#include "text.h"
 #include "draw_live.h"
 #include "font_header.h"
 
@@ -317,6 +318,17 @@ void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
     }
     ring(frame, 0);
     header(frame, &unit->deck);
+    // The rule in the deck color, under the artist (#458): always, as the renderer draws it.
+    dfw_pixel deck = (dfw_pixel)unit->deck.r << 16 | (dfw_pixel)unit->deck.g << 8 | unit->deck.b;
+    for (int y = 127; y < 129; y++)
+        for (int x = 50; x < 148; x++) frame[y * DFW_SIZE + x] = deck;
+    // The words wait for the deck's own text (#458), so a deck change never flashes another deck's.
+    if (unit->text_heard) {
+        dfw_text_block block;
+        dfw_text_block_for(unit, &block);
+        for (int i = 0; i < block.count; i++) dfw_text_draw_line(frame, &block.lines[i]);
+        if (block.foot) dfw_text_draw_foot(frame, unit);
+    }
     dfw_draw_live(frame, unit);
 }
 
