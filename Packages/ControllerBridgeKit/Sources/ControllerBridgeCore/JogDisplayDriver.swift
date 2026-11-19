@@ -178,6 +178,9 @@ public final class JogDisplayDriver {
     static let answerTimeout = 0.5
     /// The last deck message sent in drawn mode, so only a change goes out.
     private var lastDeck: [UInt8]?
+    /// The deck in front's state flags for drawn mode (#464), and the last state message sent.
+    private var drawnState: DrawnDisplay.State = []
+    private var lastState: [UInt8]?
 
     /// Whether it has said hello to a unit (#165); the Coordinator repaints the LEDs after the hello (#426).
     public private(set) var connected = false
@@ -238,6 +241,7 @@ public final class JogDisplayDriver {
         // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
         mode = .images
         lastDeck = nil
+        lastState = nil
         if displayFirmware == .custom {
             mode = .asking(since: clock.now)
             sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
@@ -444,6 +448,7 @@ public final class JogDisplayDriver {
         }
         mode = .images
         lastDeck = nil
+        lastState = nil
         if displayFirmware == .custom {
             mode = .asking(since: clock.now)
             sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
@@ -463,7 +468,18 @@ public final class JogDisplayDriver {
         sendWD(DrawnDisplay.Message.begin(version: version).bytes)
         if wanted == nil { wanted = current }
         current = nil
+        // The full state, every message once, in a fixed order: the deck, then the state.
         next()
+        sendState()
+    }
+
+    /// Drawn mode: the state message, sent only when it changes.
+    private func sendState() {
+        guard connected, case .drawn = mode else { return }
+        let state = DrawnDisplay.Message.state(drawnState).bytes
+        guard state != lastState else { return }
+        lastState = state
+        sendWD(state)
     }
 
     /// Drawn mode: the deck in front as one deck message, sent only when it changes.
