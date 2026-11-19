@@ -4,6 +4,7 @@
 // The Swift image also has the title, caption, rule and key/BPM, which this ticket doesn't draw. So only two bands are
 // compared with the reference: the ring band and the header band. Everywhere else must be plain ground.
 #include "harness.h"
+#include "draw.h"
 #include <string.h>
 
 #define GROUND 0x0B0B0Bu
@@ -71,7 +72,80 @@ static void every_reference_has_the_ring_and_header_to_compare(void) {
     }
 }
 
+/// A pixel is a mismatch when any channel is off by more than this; a band fails past MAX_MISMATCHED such pixels.
+#define TOLERANCE 8
+#define MAX_MISMATCHED 0
+
+static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
+
+static int channel_diff(dfw_pixel a, dfw_pixel b) {
+    int worst = 0;
+    for (int shift = 0; shift <= 16; shift += 8) {
+        int d = (int)(a >> shift & 0xFF) - (int)(b >> shift & 0xFF);
+        if (d < 0) d = -d;
+        if (d > worst) worst = d;
+    }
+    return worst;
+}
+
+typedef enum { RING, HEADER } band;
+
+/// Compares one band with the reference; prints its numbers so the tolerance stays honest.
+static int band_mismatches(const ref_case *c, band which) {
+    int mismatched = 0, worst = 0, pixels = 0;
+    for (int y = 0; y < DFW_SIZE; y++)
+        for (int x = 0; x < DFW_SIZE; x++) {
+            int ring = in_ring(x, y);
+            if (which == RING ? !ring : (ring || !in_header(y))) continue;
+            int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
+            pixels++;
+            if (d > worst) worst = d;
+            if (d > TOLERANCE) mismatched++;
+        }
+    fprintf(stderr, "    %s %s: %d px, worst %d, %d over %d\n", c->file + 9, which == RING ? "ring" : "header", pixels,
+            worst, mismatched, TOLERANCE);
+    return mismatched;
+}
+
+static void draw_case(const ref_case *c) {
+    dfw_deck_state deck = { c->number, c->r, c->g, c->b, c->player };
+    dfw_draw(frame, &deck);
+}
+
+static void outside_the_bands_is_plain_ground(void) {
+    for (size_t c = 0; c < CASES; c++) {
+        draw_case(&cases[c]);
+        int stray = 0;
+        for (int y = 0; y < DFW_SIZE; y++)
+            for (int x = 0; x < DFW_SIZE; x++)
+                if (!in_ring(x, y) && !in_header(y) && frame[y * DFW_SIZE + x] != GROUND) stray++;
+        CHECK(stray == 0);
+    }
+}
+
+static void the_ring_matches_the_reference(void) {
+    for (size_t c = 0; c < CASES; c++) {
+        CHECK(load_reference(cases[c].file));
+        draw_case(&cases[c]);
+        CHECK(band_mismatches(&cases[c], RING) <= MAX_MISMATCHED);
+    }
+}
+
+static void every_pixel_is_written_whatever_the_deck(void) {
+    static const dfw_deck_state decks[] = { { 0, 1, 2, 3, 0 }, { 255, 9, 9, 9, 255 }, { 5, 0, 0, 0, 6 }, { 2, 255, 0, 0, 1 } };
+    for (size_t d = 0; d < sizeof decks / sizeof decks[0]; d++) {
+        for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = 0xDEADBEEFu;
+        dfw_draw(frame, &decks[d]);
+        int unwritten = 0;
+        for (size_t i = 0; i < DFW_SIZE * DFW_SIZE; i++) unwritten += (frame[i] & 0xFF000000u) != 0;
+        CHECK(unwritten == 0);
+    }
+}
+
 const test_case draw_tests[] = {
+    { "outside the bands is plain ground", outside_the_bands_is_plain_ground },
+    { "the ring matches the reference", the_ring_matches_the_reference },
+    { "every pixel is written whatever the deck", every_pixel_is_written_whatever_the_deck },
     { "every reference has the ring and header to compare", every_reference_has_the_ring_and_header_to_compare },
     { 0, 0 },
 };
