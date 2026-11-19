@@ -505,6 +505,21 @@ void an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer(void) {
     }
 }
 
+void an_upper_block_built_for_another_layout_gets_no_answer(void) {
+    // A B from a commit whose dfw_unit differs would draw from the wrong offsets (#516): A stays silent, and takes no
+    // malloc, as with no B at all.
+    cold_boot();
+    hooked_upper();
+    seal_for(DFW_LAYOUT ^ 1u);
+    stock.upper = upper;
+    stock.drawing = NULL;
+    deliver(0, CAPABILITY_V1);
+    deliver(0, BEGIN_V1);
+    tick();
+    CHECK(rec.sends == 0 && rec.presents == 0);
+    CHECK(chip.mallocs == 0);
+}
+
 void a_long_upper_block_is_checked_whole_at_the_first_ask(void) {
     // The app waits 0.5 s for the answer and doesn't ask again until it reconnects: the ask checks all of B first
     // (45 ms for 512 KB at most), never answering for an unchecked B and never staying silent for a good one.
@@ -586,6 +601,7 @@ const test_case all_tests[] = {
     { "with an erased upper block the capability ask gets no answer", with_an_erased_upper_block_the_capability_ask_gets_no_answer },
     { "with a good upper block the capability ask is answered", with_a_good_upper_block_the_capability_ask_is_answered },
     { "an upper block with a bad CRC or another version gets no answer", an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer },
+    { "an upper block built for another layout gets no answer", an_upper_block_built_for_another_layout_gets_no_answer },
     { "a long upper block is checked whole at the first ask", a_long_upper_block_is_checked_whole_at_the_first_ask },
     { "before our first message the tick touches nothing even with an upper block", before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block },
     { "without a drawing the ask takes no malloc", without_a_drawing_the_ask_takes_no_malloc },

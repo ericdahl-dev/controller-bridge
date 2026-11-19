@@ -382,7 +382,11 @@ class UpperBlockTests(unittest.TestCase):
         answer = bytes.fromhex("F000020B01102000020001F7")
         corrupted = bytearray(upper_block())
         corrupted[len(corrupted) // 2] ^= 0x01
-        for upper, drawn in ((upper_block(), True), (bytes(corrupted), False)):
+        # B's own bytes, resealed for another dfw_unit (#516): its CRC is good, only the layout is A's no longer.
+        built = upper_block()
+        layout, entry = struct.unpack_from("<II", built, 16)
+        other_layout = sealed_upper(layout ^ 1, entry, built[24:])
+        for upper, drawn in ((built, True), (bytes(corrupted), False), (other_layout, False)):
             with self.subTest(drawn=drawn):
                 chip = Chip(data=proven, upper=upper)
                 for hexbytes in (CAPABILITY, BEGIN, DECK_2_RED_TRACK):
