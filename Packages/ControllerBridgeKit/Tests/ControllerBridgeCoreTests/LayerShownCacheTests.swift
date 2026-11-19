@@ -59,4 +59,35 @@ struct LayerShownCacheTests {
         #expect(LayersTests.channelsWritten(output) == [1])
         #expect(Self.noteOns(rig).contains("ch1 1=127"))   // deck 3's Play, where the unit takes it
     }
+
+    /// Every LED note the layered rig paints at start.
+    static func painted(_ rig: Rig) -> Set<UInt8> {
+        Set((rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).compactMap { if case .noteOn(_, let note, _) = $0 { note } else { nil } })
+    }
+
+    @Test("Where the unit forgot its lights, the full set still goes after a diff step: a reconnect, the LEDs off and on, a unit-made layer change")
+    func fullSetStays() throws {
+        let rig = try LayersTests.layered()
+        let all = Self.painted(rig)
+        #expect(all.count > 30)
+        rig.clock.now = 5
+        Press.note(rig, 23, down: true)
+        Press.note(rig, 23, down: false)
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        // A reconnect (#429).
+        output.sent.removeAll()
+        rig.coordinator.devicesChanged(removed: [Rig.lc6000.id])
+        #expect(Self.painted(rig).isSuperset(of: all))
+        // LEDs off and on.
+        rig.midi.outputs[Rig.lc6000Out.id]?.sent.removeAll()
+        rig.coordinator.setLEDs(enabled: false)
+        rig.coordinator.setLEDs(enabled: true)
+        #expect(Self.painted(rig).isSuperset(of: all))
+        // The unit's own layer change (its layer note): its deck-select mode cleared its lights (#426).
+        rig.clock.now = 10
+        rig.coordinator.tick()
+        rig.midi.outputs[Rig.lc6000Out.id]?.sent.removeAll()
+        LayersTests.note(rig, channel: 1, 51, 0); LayersTests.note(rig, channel: 3, 51, 127)
+        #expect(Self.painted(rig).isSuperset(of: all.subtracting([23])))
+    }
 }
