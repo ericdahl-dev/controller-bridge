@@ -308,7 +308,7 @@ flash() {
       warn "The read-back failed, so the write can't be checked."
       way_back
     fi
-    if ! drawn upper "$image" "$readback" | grep -q '^holds'; then
+    if ! drawn upper "$UPPER_DFU" "$readback" | grep -q '^holds'; then
       warn "The upper flash isn't exactly block B. Block A checks B's CRC before calling it, so it stays unused."
       note "Don't flash the owner's image on top of this. Stop, and post the message above on #468."
       way_back
@@ -590,7 +590,9 @@ if (( B_DONE )); then
 elif (( B_REPLACE )); then
   say "Rewriting the upper flash with this block B. The read just before this one is the check that it's a B."
   say "Until the owner's image is on, the image there now runs as before: a part or an old B is never called."
-  flash "$UPPER_DFU" "upper" upper REWRITE
+  REWRITE_DFU="$WORK/wd-upper-rewrite-$STAMP.dfu"
+  drawn rewrite "$UPPER_DFU" "$WORK/wd-upper-before-$STAMP.bin" "$REWRITE_DFU" || way_back
+  flash "$REWRITE_DFU" "upper" upper REWRITE
 else
   say "Block B goes first. With only B on the chip, the image there now runs as before: only block A calls B."
   flash "$UPPER_DFU" "upper" upper

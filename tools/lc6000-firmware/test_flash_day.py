@@ -127,8 +127,11 @@ class DrawnPathTests(unittest.TestCase):
         before = self.drawn[self.drawn.index('stage "Before'):self.drawn.index('stage "Step 1 of 2')]
         self.assertIn('[[ "$UPPER_STATE" == replace* ]]', before)
         step_1 = self.drawn[self.drawn.index('stage "Step 1 of 2'):self.drawn.index('stage "Step 2 of 2')]
-        rewrite = step_1.index('flash "$UPPER_DFU" "upper" upper REWRITE')
-        self.assertLess(step_1.index('if (( B_REPLACE ))'), rewrite)
+        # The file written over it is this B then erased bytes to the end of what's there (drawn_flash.py rewrite).
+        built = step_1.index('drawn rewrite "$UPPER_DFU" "$WORK/wd-upper-before-$STAMP.bin" "$REWRITE_DFU"')
+        rewrite = step_1.index('flash "$REWRITE_DFU" "upper" upper REWRITE')
+        self.assertLess(step_1.index('if (( B_REPLACE ))'), built)
+        self.assertLess(built, rewrite)
 
     def test_a_block_b_already_there_is_not_written_again(self):
         step_1 = self.drawn[self.drawn.index('stage "Step 1 of 2'):self.drawn.index('stage "Step 2 of 2')]
@@ -137,7 +140,8 @@ class DrawnPathTests(unittest.TestCase):
     def test_block_bs_write_is_read_back_and_judged(self):
         flash = self.body("flash")
         upper = flash[flash.index('if [[ "$area" == upper ]]; then', flash.index("-D")):]
-        self.assertLess(upper.index('read_upper "$readback"'), upper.index('drawn upper "$image" "$readback"'))
+        # Judged against B's own file, also when the file written was the rewrite.
+        self.assertLess(upper.index('read_upper "$readback"'), upper.index('drawn upper "$UPPER_DFU" "$readback"'))
         self.assertIn("^holds", upper)
 
     def test_the_way_back_says_block_b_stays_and_is_harmless(self):
