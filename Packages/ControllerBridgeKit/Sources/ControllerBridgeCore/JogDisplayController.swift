@@ -186,7 +186,7 @@ final class JogDisplayController {
         if driver.phase(value) { lastPhaseSent = clock.now }
     }
 
-    /// Every deck's drawn preview (#465): its flags, needle while playing, meter and phase, as the unit would get them.
+    /// Every deck's drawn preview (#465): its flags, needle, meter, phase and time, as the unit would get them.
     private func drawnPreviewTick(_ entries: [Entry], driver: JogDisplayDriver) {
         for (index, entry) in entries.enumerated() {
             let facts = entry.facts
@@ -198,7 +198,8 @@ final class JogDisplayController {
             func scaled(_ value: Double) -> Int { Int((min(max(value, 0), 1) * 127).rounded()) }
             let meter = meters[facts.deck].map { (level: scaled($0.level), peak: scaled($0.peak)) }
             driver.drawnPreview(deck: facts.deck, flags: flags, needle: needle(index, at: clock.now), meter: meter,
-                                phase: phases[facts.deck]?.lastValue ?? DrawnPhase.unknown)
+                                phase: phases[facts.deck]?.lastValue ?? DrawnPhase.unknown,
+                                time: .time(elapsed: facts.position, length: facts.duration))
         }
     }
 
