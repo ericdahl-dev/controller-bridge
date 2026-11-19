@@ -108,4 +108,17 @@ struct DrawnPreviewTests {
         #expect(events.filter { $0 == .drawnPreviewsEnded }.count == 1)
         #expect(Self.drawnPreviews(events).isEmpty)
     }
+
+    @Test("Each deck's time goes into its drawn preview: its position and length in whole seconds (#460)")
+    func time() throws {
+        let (rig, take) = try JogDisplayPreviewNoControllerTests.rig()
+        rig.coordinator.setDisplayFirmware(.custom)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)]))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Position", [.float(83.9)]))
+        rig.clock.now = 0.1
+        rig.coordinator.tick()
+        let deck3 = Self.drawnPreviews(take()).last { $0.deck?.number == 3 }
+        #expect(deck3?.time?.elapsed == 83 && deck3?.time?.length == 428)
+    }
 }
