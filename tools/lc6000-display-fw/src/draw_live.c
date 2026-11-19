@@ -5,6 +5,8 @@
 
 #define GROUND 0x0B0B0Bu
 #define LIVE 0x00FF48u
+#define KEYLINE 0x000000u
+#define MARKER 0xFFFFFFu
 
 #define CENTER 99.0f
 #define RING_OUTER 95.0f
@@ -90,7 +92,104 @@ static void lit_section(dfw_pixel *frame, int beat) {
     }
 }
 
+/// sin and cos of the needle's angle, `needle` sixteen-thousandths (16384ths) of a turn clockwise from 12 o'clock.
+/// Folded to the nearest quarter turn, so the series only sees up to an eighth of a turn (π/4), where its terms to
+/// the ninth power are within float precision.
+static void needle_sin_cos(uint16_t needle, float *sin_out, float *cos_out) {
+    int quarter = ((int)(needle & 0x3FFF) + 2048) / 4096;
+    float a = (float)((int)(needle & 0x3FFF) - quarter * 4096) * 3.8349519697e-4f;   // 2π / 16384
+    float a2 = a * a;
+    float s = a * (1.0f - a2 / 6.0f * (1.0f - a2 / 20.0f * (1.0f - a2 / 42.0f * (1.0f - a2 / 72.0f))));
+    float c = 1.0f - a2 / 2.0f * (1.0f - a2 / 12.0f * (1.0f - a2 / 30.0f * (1.0f - a2 / 56.0f)));
+    switch (quarter & 3) {
+    case 0: *sin_out = s; *cos_out = c; break;
+    case 1: *sin_out = c; *cos_out = -s; break;
+    case 2: *sin_out = -s; *cos_out = -c; break;
+    default: *sin_out = -c; *cos_out = s; break;
+    }
+}
+
+/// The marker's corners in its own frame: u out from the center along the needle, v clockwise across it. The tip is
+/// 6 px inside the ring (85 − 6), and the base corners 4.2° either side at radius 98.5, as Swift's drawMarker.
+static const float tip_u = 79.0f, base_u = 98.235476f, base_v = 7.2139624f;
+/// Swift strokes the triangle with a 2 px keyline (round joins) and then fills it.
+#define KEYLINE_WIDTH 2.0f
+
+/// The distance from (u, v) to the segment from (au, av) to (bu, bv), and the direction from its nearest point.
+static float segment_distance(float u, float v, float au, float av, float bu, float bv, float *wu, float *wv) {
+    float eu = bu - au, ev = bv - av;
+    float t = ((u - au) * eu + (v - av) * ev) / (eu * eu + ev * ev);
+    t = clamp01(t);
+    *wu = u - (au + t * eu);
+    *wv = v - (av + t * ev);
+    return root(*wu * *wu + *wv * *wv);
+}
+
+/// The marker as Swift draws it: a white wedge riding the ring's edge, pointing in, with a black 2 px keyline. Each
+/// pixel's signed distance to the triangle (positive outside) gives the keyline's band (within 1 px of the edge,
+/// rounded at the corners as the round joins are); the fill is the three edges' half-planes. Keyline, then fill.
+static void marker(dfw_pixel *frame, uint16_t needle) {
+    float sn, cs;
+    needle_sin_cos(needle, &sn, &cs);
+    // On screen (y down), u runs along (sin, −cos) and v along (cos, sin).
+    const float corner_u[3] = { tip_u, base_u, base_u }, corner_v[3] = { 0.0f, -base_v, base_v };
+    float left = (float)DFW_SIZE, right = 0.0f, top = (float)DFW_SIZE, bottom = 0.0f;
+    for (int i = 0; i < 3; i++) {
+        float x = CENTER + corner_u[i] * sn + corner_v[i] * cs, y = CENTER - corner_u[i] * cs + corner_v[i] * sn;
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+    }
+    const float reach = KEYLINE_WIDTH / 2.0f + 1.0f;
+    int x0 = (int)(left - reach), x1 = (int)(right + reach) + 1, y0 = (int)(top - reach), y1 = (int)(bottom + reach) + 1;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > DFW_SIZE) x1 = DFW_SIZE;
+    if (y1 > DFW_SIZE) y1 = DFW_SIZE;
+    for (int y = y0; y < y1; y++) {
+        float dy = (float)y + 0.5f - CENTER;
+        for (int x = x0; x < x1; x++) {
+            float dx = (float)x + 0.5f - CENTER;
+            float u = dx * sn - dy * cs, v = dx * cs + dy * sn;
+            float distance = 1e9f, wu = 1.0f, wv = 0.0f, fill = 1.0f;
+            int inside = 1;
+            for (int i = 0; i < 3; i++) {
+                int j = (i + 1) % 3;
+                float eu, ev;
+                float d = segment_distance(u, v, corner_u[i], corner_v[i], corner_u[j], corner_v[j], &eu, &ev);
+                if (d < distance) { distance = d; wu = eu; wv = ev; }
+                // The corners run counterclockwise in (u, v): inside is to the left of every edge.
+                float lu = corner_u[j] - corner_u[i], lv = corner_v[j] - corner_v[i], l = root(lu * lu + lv * lv);
+                float cross = (lu * (v - corner_v[i]) - lv * (u - corner_u[i])) / l;
+                if (cross < 0.0f) inside = 0;
+                // The fill is the three half-planes' cover together, as the ring's sections are: a distance field
+                // rounds the corners, and CoreGraphics fills them sharp. The edge's inward normal, on screen.
+                float mu = -lv / l, mv = lu / l;
+                fill *= edge_cover(cross, mu * sn + mv * cs, -mu * cs + mv * sn);
+            }
+            float signed_distance = inside ? -distance : distance;
+            // The direction the distance is measured in, on screen; on the edge itself any will do.
+            float length = root(wu * wu + wv * wv);
+            float nx = 1.0f, ny = 0.0f;
+            if (length > 1e-4f) {
+                wu /= length;
+                wv /= length;
+                nx = wu * sn + wv * cs;
+                ny = -wu * cs + wv * sn;
+            }
+            float half = KEYLINE_WIDTH / 2.0f;
+            float keyline = edge_cover(half - signed_distance, nx, ny) + edge_cover(half + signed_distance, nx, ny) - 1.0f;
+            dfw_pixel *p = &frame[y * DFW_SIZE + x];
+            *p = blend(*p, KEYLINE, keyline);
+            *p = blend(*p, MARKER, fill);
+        }
+    }
+}
+
 void dfw_draw_live(dfw_pixel *frame, const dfw_unit *unit) {
     if (dfw_stale(unit)) return;
     if (unit->beat >= 1 && unit->beat <= 4) lit_section(frame, unit->beat);
+    // Over everything, as Swift draws it last.
+    if (unit->needle_heard) marker(frame, unit->needle);
 }

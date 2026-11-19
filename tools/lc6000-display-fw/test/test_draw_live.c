@@ -130,7 +130,158 @@ static void stale_lights_no_section(void) {
     CHECK(memcmp(frame, without, sizeof frame) == 0);
 }
 
+/// The marker reaches in to radius 78 (its tip at 79, less its keyline) and out past the frame's edge. The chip, the
+/// only other thing drawn for this deck, stays inside 76. So everything from 77 out is compared.
+#define MARKER_IN 77.0f
+/// Measured: the marker is white on a black keyline over the ground, up to 255 levels of contrast. At the quarter
+/// turns every pixel is within 9 (two pixels at 9); off them (1500) two corner pixels are 14 and 20 off, where
+/// CoreGraphics' anti-aliasing of the sharp base corners differs. So 8 with a budget of 4, and nothing past 24. Turning
+/// the marker half a degree puts 87 pixels over 8 and one 244 off; a degree, 119.
+#define MARKER_CLOSE 8
+#define MARKER_BUDGET 4
+#define MARKER_CAP 24
+
+/// Everything from MARKER_IN out against `reference`. Prints its numbers.
+static int marker_band_matches(const char *name) {
+    int worst = 0, loose = 0, over = 0;
+    for (int y = 0; y < DFW_SIZE; y++)
+        for (int x = 0; x < DFW_SIZE; x++) {
+            if (radius2(x, y) < MARKER_IN * MARKER_IN) continue;
+            int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
+            if (d > worst) worst = d;
+            if (d > MARKER_CLOSE) loose++;
+            if (d > MARKER_CAP) over++;
+        }
+    fprintf(stderr, "    %s from %.0f out: worst %d, %d over %d (budget %d)\n", name, (double)MARKER_IN, worst, loose,
+            MARKER_CLOSE, MARKER_BUDGET);
+    return over == 0 && loose <= MARKER_BUDGET;
+}
+
+typedef struct { const char *file; uint16_t needle; } needle_case;
+static const needle_case needles[] = {
+    { "test/ref/deck4-blue-empty-needle0.ppm", 0 },
+    { "test/ref/deck4-blue-empty-needle4096.ppm", 4096 },
+    { "test/ref/deck4-blue-empty-needle8192.ppm", 8192 },
+    { "test/ref/deck4-blue-empty-needle12288.ppm", 12288 },
+    // Off the quarter turns, so the angle's sine and cosine are really computed.
+    { "test/ref/deck4-blue-empty-needle1500.ppm", 1500 },
+};
+#define NEEDLES (sizeof needles / sizeof needles[0])
+
+static dfw_unit live;
+static recording rec;
+
+/// Begin, deck 4 blue empty, then a needle message at `angle`, then a tick.
+static void begin_with_needle(uint16_t angle) {
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7");   // deck 4, 0/128/255, empty
+    char needle[64];
+    snprintf(needle, sizeof needle, "F0 00 02 0B 7F 10 20 00 03 09 %02X %02X F7", angle >> 7, angle & 0x7F);
+    feed(&live, needle);
+    dfw_tick(&live, 0);
+}
+
+static void the_needle_is_drawn_as_the_marker(void) {
+    for (size_t n = 0; n < NEEDLES; n++) {
+        CHECK(load_reference(needles[n].file));
+        begin_with_needle(needles[n].needle);
+        CHECK(rec.presents == 1);
+        memcpy(frame, rec.last, sizeof frame);
+        CHECK(marker_band_matches(needles[n].file + 9));
+    }
+}
+
+/// Not vacuous: each marker reference differs from the unlit one from MARKER_IN out.
+static void each_marker_reference_differs_from_the_unlit_one(void) {
+    static dfw_pixel unlit[DFW_SIZE * DFW_SIZE];
+    CHECK(load_reference(UNLIT));
+    memcpy(unlit, reference, sizeof unlit);
+    for (size_t n = 0; n < NEEDLES; n++) {
+        CHECK(load_reference(needles[n].file));
+        int changed = 0;
+        for (int y = 0; y < DFW_SIZE; y++)
+            for (int x = 0; x < DFW_SIZE; x++)
+                changed += radius2(x, y) >= MARKER_IN * MARKER_IN && reference[y * DFW_SIZE + x] != unlit[y * DFW_SIZE + x];
+        CHECK(changed > 150);
+    }
+}
+
+/// Until a needle message comes there is no marker: the host's full state carries one, and nothing is made up.
+static void no_needle_message_draws_no_marker(void) {
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7");
+    dfw_tick(&live, 0);
+    CHECK(load_reference(UNLIT));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(marker_band_matches("deck4-blue-empty.ppm (no needle)"));
+}
+
+static void a_needle_message_changes_the_frame(void) {
+    static dfw_pixel before[DFW_SIZE * DFW_SIZE];
+    begin_with_needle(0);
+    memcpy(before, rec.last, sizeof before);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 03 09 08 00 F7");   // 1024, an eighth of a turn
+    dfw_tick(&live, 10);
+    CHECK(rec.presents == 2);
+    CHECK(memcmp(rec.last, before, sizeof before) != 0);
+}
+
+/// The first needle message draws the marker even at 0, the angle a fresh unit holds.
+static void the_first_needle_at_12_oclock_presents(void) {
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7");
+    dfw_tick(&live, 0);
+    CHECK(rec.presents == 1);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 03 09 00 00 F7");
+    dfw_tick(&live, 10);
+    CHECK(rec.presents == 2);
+}
+
+static void the_same_angle_does_not_present_again(void) {
+    begin_with_needle(4096);
+    CHECK(rec.presents == 1);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 03 09 20 00 F7");   // 4096 again
+    dfw_tick(&live, 10);
+    CHECK(rec.presents == 1);
+}
+
+/// End forgets the needle: after a new begin there is no marker until a needle message comes.
+static void end_forgets_the_needle(void) {
+    begin_with_needle(4096);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 02 01 F7");
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7");
+    dfw_tick(&live, 10);
+    CHECK(load_reference(UNLIT));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(marker_band_matches("deck4-blue-empty.ppm (after end)"));
+}
+
+/// The waiting look is agent3's; whatever it is, the needle changes none of it.
+static void stale_draws_no_marker(void) {
+    static dfw_pixel without[DFW_SIZE * DFW_SIZE];
+    memset(&unit, 0, sizeof unit);
+    unit.flags = 0x20;
+    draw_beat(0);
+    memcpy(without, frame, sizeof without);
+    unit.needle_heard = 1;
+    unit.needle = 4096;
+    draw_beat(0);
+    CHECK(memcmp(frame, without, sizeof frame) == 0);
+}
+
 const test_case draw_live_tests[] = {
+    { "the needle is drawn as the marker", the_needle_is_drawn_as_the_marker },
+    { "each marker reference differs from the unlit one", each_marker_reference_differs_from_the_unlit_one },
+    { "no needle message draws no marker", no_needle_message_draws_no_marker },
+    { "a needle message changes the frame", a_needle_message_changes_the_frame },
+    { "the first needle at 12 o'clock presents", the_first_needle_at_12_oclock_presents },
+    { "the same angle does not present again", the_same_angle_does_not_present_again },
+    { "end forgets the needle", end_forgets_the_needle },
+    { "stale draws no marker", stale_draws_no_marker },
     { "each beat lights its section", each_beat_lights_its_section },
     { "each lit reference differs from the unlit one", each_lit_reference_differs_from_the_unlit_one },
     { "no master clock lights no section", no_master_clock_lights_no_section },

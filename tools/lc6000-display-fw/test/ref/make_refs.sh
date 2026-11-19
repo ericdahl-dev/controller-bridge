@@ -22,3 +22,6 @@ live=$(swift build --package-path "$here/live-reference" --show-bin-path)/live-r
 for beat in 1 2 3 4; do
     "$live" 4 0 128 255 empty "$beat" - "$here/deck4-blue-empty-beat$beat.ppm"
 done
+for needle in 0 4096 8192 12288 1500; do
+    "$live" 4 0 128 255 empty - "$needle" "$here/deck4-blue-empty-needle$needle.ppm"
+done

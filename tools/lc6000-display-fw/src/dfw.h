@@ -44,6 +44,8 @@ typedef struct {
     /// The master clock's beat, 1-4, or 0 with none (#459); the deck's needle, 0-16383 for a turn from 12 o'clock.
     uint8_t beat;
     uint16_t needle;
+    /// Whether a needle message has come since begin: until one does, no marker is drawn.
+    uint8_t needle_heard;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
     /// The clock at the tick that is drawing, for anything drawn over time.

@@ -107,6 +107,7 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->flags = 0;
         unit->beat = 0;
         unit->needle = 0;
+        unit->needle_heard = 0;
         break;
     case OP_DECK:
         if (!unit->drawn) break;
@@ -128,8 +129,10 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         break;
     case OP_NEEDLE: {
         uint16_t angle = (uint16_t)((args[0] << 7) | args[1]);
-        if (!unit->drawn || unit->needle == angle) break;
+        // The first one draws the marker, whatever its angle; after that, only a change.
+        if (!unit->drawn || (unit->needle_heard && unit->needle == angle)) break;
         unit->needle = angle;
+        unit->needle_heard = 1;
         unit->dirty = 1;
         break;
     }
