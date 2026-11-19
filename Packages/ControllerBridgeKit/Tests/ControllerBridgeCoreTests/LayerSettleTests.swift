@@ -56,22 +56,30 @@ struct LayerSettleTests {
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
     }
 
-    @Test("The steps seen on the unit (16:35:26.47, 27.26, 27.84, 28.22): two repaints, the first layer at once and the last after the settle")
+    /// Every LED write so far (note-ons; color messages aren't recorded by the fake output).
+    static func ledNoteOns(_ rig: Rig) -> [String] {
+        (rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).compactMap {
+            if case .noteOn(let channel, let note, let velocity) = $0 { "ch\(channel + 1) \(note)=\(velocity)" } else { nil }
+        }
+    }
+
+    @Test("The steps seen on the unit (16:35:26.47, 27.26, 27.84, 28.22), decks 2 and 4 playing: each is a lone step at 0.3 s, and the four send 12 note-ons, not about 156")
     func observed() throws {
         let rig = try Self.alternating()
         rig.clock.now = 26
         rig.coordinator.tick()
-        let start = Self.playWrites(rig).count
+        rig.midi.outputs[Rig.lc6000Out.id]?.sent.removeAll()
         for time in [26.47, 27.26, 27.84, 28.22] {
             rig.clock.now = time
             Press.note(rig, 23, down: true)
             Press.note(rig, 23, down: false)
             rig.coordinator.tick()
         }
-        #expect(Self.playWrites(rig).dropFirst(start) == [127])
-        rig.clock.now = 28.22 + LayerSettle.interval
+        rig.clock.now = 30
         rig.coordinator.tick()
-        #expect(Self.playWrites(rig).dropFirst(start) == [127, 1])
+        // Each step: Play (the one light that differs) and deck select's press flash, full then dim.
+        #expect(Self.ledNoteOns(rig) == ["ch1 1=127", "ch1 23=127", "ch1 23=1", "ch1 1=1", "ch1 23=127", "ch1 23=1",
+                                          "ch1 1=127", "ch1 23=127", "ch1 23=1", "ch1 1=1", "ch1 23=127", "ch1 23=1"])
         #expect(rig.coordinator.status.controllers.map(\.activeLayer) == [true, false, false, false])
     }
 
