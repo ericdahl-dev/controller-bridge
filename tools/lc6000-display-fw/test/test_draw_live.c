@@ -517,6 +517,18 @@ static void the_longest_time_has_three_digit_minutes(void) {
     CHECK(ink > 10);
 }
 
+/// The needle crosses the ring on top: the marker at 3 o'clock over the fill at 83/165, compared from MARKER_IN out.
+static void the_marker_is_drawn_over_the_progress_ring(void) {
+    CHECK(load_reference("test/ref/deck4-blue-empty-time83-165-needle4096.ppm"));
+    begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 03 09 20 00 F7");   // 4096
+    dfw_tick(&live, 10);
+    CHECK(rec.presents == 2);
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(band_from_matches("deck4-blue-empty-time83-165-needle4096.ppm", PROGRESS_CLOSE, PROGRESS_BUDGET_FILL,
+                            PROGRESS_CAP));
+}
+
 static void the_progress_ring_is_drawn(void) {
     for (size_t n = 0; n < TIMES; n++) {
         CHECK(load_reference(times[n].file));
@@ -580,6 +592,7 @@ static void stale_draws_no_time(void) {
 const test_case draw_live_tests[] = {
     { "the progress ring is drawn", the_progress_ring_is_drawn },
     { "the time left is drawn", the_time_left_is_drawn },
+    { "the marker is drawn over the progress ring", the_marker_is_drawn_over_the_progress_ring },
     { "the longest time has three digit minutes", the_longest_time_has_three_digit_minutes },
     { "each time reference differs from the plain one", each_time_reference_differs_from_the_plain_one },
     { "an unknown length draws nothing", an_unknown_length_draws_nothing },
