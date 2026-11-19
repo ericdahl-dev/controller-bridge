@@ -25,6 +25,12 @@ static inline int dfw_panel_index(int x, int y) {
     return py * DFW_LAYER_STRIDE + px;
 }
 
+/// The inverse: the layer's pixel `index` to its frame (x, y), turned back (below 0 or past 197 outside the square).
+static inline void dfw_panel_to_frame(int index, int *x, int *y) {
+    *x = DFW_FRAME_X + DFW_SIZE - 1 - index % DFW_LAYER_STRIDE;
+    *y = DFW_FRAME_Y + DFW_SIZE - 1 - index / DFW_LAYER_STRIDE;
+}
+
 /// A 0x00RRGGBB pixel as the layer's RGB565: each channel's top 5, 6 and 5 bits.
 static inline uint16_t dfw_rgb565(dfw_pixel p) {
     return (uint16_t)(((p >> 8) & 0xF800u) | ((p >> 5) & 0x07E0u) | ((p >> 3) & 0x001Fu));

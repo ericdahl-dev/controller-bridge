@@ -203,8 +203,9 @@ static void want_put(void *ctx, int x, int y, dfw_pixel color) {
 
 /// Whether the panel pixel (px, py) is in the band's annulus outside the frame: what dfw_draw_band clears.
 static int in_cleared_band(int px, int py) {
-    int x = DFW_FRAME_X + DFW_SIZE - 1 - px, y = DFW_FRAME_Y + DFW_SIZE - 1 - py;
-    if (x >= 0 && x < DFW_SIZE && y >= 0 && y < DFW_SIZE) return 0;
+    int x, y;
+    dfw_panel_to_frame(py * DFW_LAYER_STRIDE + px, &x, &y);
+    if (dfw_in_frame(x, y)) return 0;
     float dx = (float)x + 0.5f - 99.0f, dy = (float)y + 0.5f - 99.0f, r2 = dx * dx + dy * dy;
     return r2 >= 101.5f * 101.5f && r2 <= 108.5f * 108.5f;
 }
@@ -250,10 +251,10 @@ static void the_bands_clear_leaves_the_frames_corners(void) {
     for (int y = 0; y < DFW_SIZE; y++)
         for (int x = 0; x < DFW_SIZE; x++)
             layer[dfw_panel_index(x, y)] = dfw_rgb565(rec.last[y * DFW_SIZE + x]);
-    uint16_t corner = layer[193 * DFW_LAYER_W + 85];
+    uint16_t corner = layer[dfw_panel_index(173, 25)];
     CHECK(corner == dfw_rgb565(0x0080FFu));   // the fill, past 1:30 at 83/165
     dfw_draw_band(layer, &unit);
-    CHECK(layer[193 * DFW_LAYER_W + 85] == corner);
+    CHECK(layer[dfw_panel_index(173, 25)] == corner);
     // And every pixel of the square is the frame's still.
     int off = 0;
     for (int y = 0; y < DFW_SIZE; y++)

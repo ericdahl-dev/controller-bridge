@@ -16,8 +16,9 @@ static uint16_t recorder_read(void *ctx, int index) { return ((layer_recorder *)
 
 static void recorder_write(void *ctx, int index, uint16_t value) {
     layer_recorder *r = ctx;
-    int px = index % DFW_LAYER_W, py = index / DFW_LAYER_W;
-    if (px >= DFW_FRAME_X && px < DFW_FRAME_X + DFW_SIZE && py >= DFW_FRAME_Y && py < DFW_FRAME_Y + DFW_SIZE) r->in_square++;
+    int x, y;
+    dfw_panel_to_frame(index, &x, &y);
+    if (dfw_in_frame(x, y)) r->in_square++;
     if (r->blacked[index] && value != 0) r->dark_then_lit++;
     if (value == 0) r->blacked[index] = 1;
     if (r->pixels[index] == value) r->unchanged++;

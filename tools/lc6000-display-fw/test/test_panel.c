@@ -26,10 +26,27 @@ static void the_square_is_the_frames(void) {
     CHECK(dfw_in_frame(0, 0) && dfw_in_frame(197, 197) && !dfw_in_frame(-1, 0) && !dfw_in_frame(198, 5));
 }
 
+/// The inverse: every panel pixel to its frame (x, y), and back to the same index through dfw_panel_index.
+static void the_panel_maps_back_to_the_frame(void) {
+    int off = 0;
+    for (int i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) {
+        int x, y;
+        dfw_panel_to_frame(i, &x, &y);
+        off += dfw_panel_index(x, y) != i;
+    }
+    CHECK(off == 0);
+    int x, y;
+    dfw_panel_to_frame(218 * 320 + 258, &x, &y);
+    CHECK(x == 0 && y == 0);
+    dfw_panel_to_frame(0, &x, &y);
+    CHECK(x == 258 && y == 218);
+}
+
 const test_case panel_tests[] = {
     { "the panel is 320 by 240 with the frame at 61, 21", the_panel_is_320_by_240_with_the_frame_at_61_21 },
     { "the frame lands turned 180 degrees", the_frame_lands_turned_180_degrees },
     { "the pack keeps the top 5, 6, 5 bits", the_pack_keeps_the_top_5_6_5_bits },
     { "the square is the frame's", the_square_is_the_frames },
+    { "the panel maps back to the frame", the_panel_maps_back_to_the_frame },
     { 0, 0 },
 };
