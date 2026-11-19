@@ -11,43 +11,19 @@ static const uint32_t nibbles[16] = {
     0xEDB88320u, 0xF00F9344u, 0xD6D6A3E8u, 0xCB61B38Cu, 0x9B64C2B0u, 0x86D3D2D4u, 0xA00AE278u, 0xBDBDF21Cu,
 };
 
-void upper_start(upper_progress *progress, const uint8_t *b) {
-    progress->status = UPPER_BAD;
-    progress->entry = 0;
-    if (word(b) != UPPER_MARKER || word(b + 4) != UPPER_VERSION) return;
-    progress->length = word(b + 8);
-    if (progress->length < UPPER_HEADER || progress->length > UPPER_LIMIT) return;
-    progress->done = 16;
-    progress->crc = 0xFFFFFFFFu;
-    progress->status = UPPER_CHECKING;
-}
-
-uint8_t upper_step(upper_progress *progress, const uint8_t *b, uint32_t budget) {
-    if (progress->status != UPPER_CHECKING) return progress->status;
-    uint32_t end = progress->length - progress->done > budget ? progress->done + budget : progress->length;
-    uint32_t crc = progress->crc;
-    for (uint32_t i = progress->done; i < end; i++) {
+uint32_t upper_check(const uint8_t *b) {
+    if (word(b) != UPPER_MARKER || word(b + 4) != UPPER_VERSION) return 0;
+    uint32_t length = word(b + 8);
+    if (length < UPPER_HEADER || length > UPPER_LIMIT) return 0;
+    uint32_t crc = 0xFFFFFFFFu;
+    for (uint32_t i = 16; i < length; i++) {
         crc ^= b[i];
         crc = (crc >> 4) ^ nibbles[crc & 15u];
         crc = (crc >> 4) ^ nibbles[crc & 15u];
     }
-    progress->crc = crc;
-    progress->done = end;
-    if (end < progress->length) return UPPER_CHECKING;
+    if (~crc != word(b + 12)) return 0;
     uint32_t draw = word(b + 16);
-    // The CRC, then Thumb code (bit 0 set) past the header and before B's end.
-    if (~crc != word(b + 12) || !(draw & 1u) || draw < UPPER_BASE + UPPER_HEADER || draw >= UPPER_BASE + end) {
-        progress->status = UPPER_BAD;
-    } else {
-        progress->entry = draw;
-        progress->status = UPPER_GOOD;
-    }
-    return progress->status;
-}
-
-uint32_t upper_check(const uint8_t *b) {
-    upper_progress progress;
-    upper_start(&progress, b);
-    upper_step(&progress, b, UPPER_LIMIT);
-    return progress.entry;
+    // Thumb code (bit 0 set) past the header and before B's end.
+    if (!(draw & 1u) || draw < UPPER_BASE + UPPER_HEADER || draw >= UPPER_BASE + length) return 0;
+    return draw;
 }

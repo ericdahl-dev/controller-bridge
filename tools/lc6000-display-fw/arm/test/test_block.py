@@ -287,12 +287,10 @@ def full_upper():
 class UpperSwitchTests(unittest.TestCase):
     """Block A reads B only when built with the "upper flash proven" switch (#501)."""
 
-    def test_the_check_costs_a_tick_under_a_millisecond_and_an_ask_well_under_the_apps_half_second(self):
-        # Measured at 99k instructions a tick and 6.1M for an ask that finishes all 512 KB: at 180 MHz and about
-        # 1.3 cycles an instruction (flash wait states), about 0.7 ms and 45 ms. The app waits 0.5 s.
+    def test_checking_all_512_kb_at_the_ask_stays_well_under_the_apps_half_second(self):
+        # Measured at 6.1M instructions for all 512 KB: at 180 MHz and about 1.3 cycles an instruction (flash wait
+        # states), about 45 ms, once per boot. Today's B (about 10 KB) is about 1 ms. The app waits 0.5 s.
         chip = Chip(data=proven_block(), upper=full_upper())
-        chip.call(dfupatch.HOOK_RENDER_ENTRY)
-        self.assertLess(chip.instructions, 120_000)
         message = chip.receive(CAPABILITY)
         chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8],
                   r8=0)
@@ -304,6 +302,15 @@ class UpperSwitchTests(unittest.TestCase):
         message = chip.receive(CAPABILITY)
         chip.call(dfupatch.HOOK_COMMAND_ENTRY, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8], r8=0)
         chip.call(dfupatch.HOOK_RENDER_ENTRY)
+
+    def test_with_the_switch_the_tick_touches_nothing_before_our_first_message(self):
+        # A power cycle clears any crash of ours only if our code runs after our first message (#501).
+        chip = Chip(data=proven_block(), upper=upper_block())
+        for _ in range(3):
+            chip.call(dfupatch.HOOK_RENDER_ENTRY)
+        self.assertEqual(chip.upper_reads, 0)
+        self.assertEqual(chip.word(STATE_AT), 0xA5A5A5A5)
+        self.assertEqual(chip.uc.mem_read(WITNESS, 1), b"\x00")
 
     def test_without_the_switch_block_a_never_reads_the_upper_flash(self):
         chip = Chip(upper=good_upper())

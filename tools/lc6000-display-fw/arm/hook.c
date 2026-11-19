@@ -48,18 +48,21 @@ static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
     state->last_uptime = now;
     state->now_ms = 0;
     state->sub_ms = 0;
-    state->heard = 0;
-    if (stock->upper) upper_start(&state->upper, stock->upper);
-    else state->upper.status = UPPER_NONE;
+    state->upper_checked = 0;
     state->magic = HOOK_MAGIC;
     state->check = ~HOOK_MAGIC;
     if (stock->witness) *stock->witness = HOOK_WITNESS;
 }
 
-/// Checks up to `budget` more of B (#501). Once B checks out, the unit draws through B's entry.
-static void check_upper(hook_state *state, const hook_stock *stock, uint32_t budget) {
-    if (upper_step(&state->upper, stock->upper, budget) != UPPER_GOOD || state->unit.drawing) return;
-    state->upper_drawing.draw = (void (*)(dfw_pixel *, const struct dfw_unit *))(uintptr_t)state->upper.entry;
+/// Checks B once per boot, at the first capability ask or begin (#501): about 1 ms for today's B, 45 ms for all
+/// 512 KB, once. Never at boot, so our code still runs only after our first message. Once B checks out, the unit
+/// draws through B's entry.
+static void check_upper(hook_state *state, const hook_stock *stock) {
+    if (!stock->upper || state->upper_checked) return;
+    state->upper_checked = 1;
+    uint32_t entry = upper_check(stock->upper);
+    if (!entry) return;
+    state->upper_drawing.draw = (void (*)(dfw_pixel *, const struct dfw_unit *))(uintptr_t)entry;
     state->unit.drawing = &state->upper_drawing;
 }
 
@@ -79,12 +82,9 @@ void hook_command(hook_state *state, const hook_stock *stock, uint8_t cmd, const
     if (!valid(state) || reset_seen(state, stock, now)) start(state, stock, now);
     advance(state, now);
     state->stock = stock;
-    state->heard = 1;
     uint8_t op = msg[9];
     if (op == OP_CAPABILITY || op == OP_BEGIN) {
-        // An ask during B's check finishes it here (at most about 45 ms for all 512 KB): never an answer for an
-        // unchecked B, and never silence for a good one.
-        check_upper(state, stock, UPPER_LIMIT);
+        check_upper(state, stock);
         ensure_frame(state, stock);
     }
     // A begin with no frame is still passed on: dfw then presents nothing, so the screen stays stock's.
@@ -92,21 +92,14 @@ void hook_command(hook_state *state, const hook_stock *stock, uint8_t cmd, const
 }
 
 void hook_tick(hook_state *state, const hook_stock *stock) {
-    if (!marker_present(stock)) return;
+    if (!marker_present(stock) || !valid(state)) return;
     uint32_t now = *stock->uptime;
-    if (!valid(state) || reset_seen(state, stock, now)) {
-        // With B to check, the tick starts our state at boot and checks B a chunk at a time, read-only, so it's
-        // done before the app asks (#501). Without B, the tick waits for our first message.
-        if (!stock->upper) {
-            if (valid(state)) state->magic = 0;  // a reset ends the session; garbage is left as it is
-            return;
-        }
-        start(state, stock, now);
+    if (reset_seen(state, stock, now)) {
+        state->magic = 0;
+        return;
     }
     advance(state, now);
     state->stock = stock;
-    check_upper(state, stock, UPPER_CHUNK);
-    if (!state->heard) return;
     dfw_tick(&state->unit, state->now_ms);
     if (state->shown && !state->unit.drawn) {
         state->shown = 0;

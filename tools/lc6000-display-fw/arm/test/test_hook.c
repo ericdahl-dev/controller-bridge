@@ -461,33 +461,34 @@ void an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer(void) {
     }
 }
 
-void a_long_upper_block_is_checked_a_chunk_a_tick_from_boot(void) {
-    // So the check is done long before the app asks, and no one tick holds up stock's main loop.
-    cold_boot();
-    long_upper();
-    stock.upper = upper;
-    stock.drawing = NULL;
-    tick();
-    CHECK(state.upper.status == UPPER_CHECKING && state.upper.done <= 16 + UPPER_CHUNK);
-    for (uint32_t i = 0; i < 0x20020 / UPPER_CHUNK + 1; i++) tick();
-    CHECK(state.upper.status == UPPER_GOOD);
-    CHECK(rec.sends == 0 && rec.presents == 0 && chip.mallocs == 0 && chip.hides == 0);
-}
-
-void an_ask_during_the_check_waits_for_it_and_answers_only_a_good_block(void) {
-    // The app waits 0.5 s for the answer and doesn't ask again until it reconnects: the ask finishes the check.
+void a_long_upper_block_is_checked_whole_at_the_first_ask(void) {
+    // The app waits 0.5 s for the answer and doesn't ask again until it reconnects: the ask checks all of B first
+    // (45 ms for 512 KB at most), never answering for an unchecked B and never staying silent for a good one.
     for (int corrupt = 0; corrupt < 2; corrupt++) {
         cold_boot();
         long_upper();
-        if (corrupt) upper[0x2001F] = 1;  // past the first chunk: only a finished check sees it
+        if (corrupt) upper[0x2001F] = 1;  // B's last byte: only a whole check sees it
         stock.upper = upper;
         stock.drawing = NULL;
-        tick();
-        CHECK(state.upper.status == UPPER_CHECKING);
         deliver(0, CAPABILITY_V1);
         tick();
         CHECK(rec.sends == (corrupt ? 0 : 1));
     }
+}
+
+void before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block(void) {
+    // Our code runs only after our first message, so a power cycle clears any crash of ours (#501): B is
+    // checked at the first ask, never at boot.
+    cold_boot();
+    long_upper();
+    stock.upper = upper;
+    stock.drawing = NULL;
+    for (int i = 0; i < 100; i++) tick();
+    const uint8_t *bytes = (const uint8_t *)&state;
+    size_t touched = 0;
+    for (size_t i = 0; i < sizeof state; i++) touched += bytes[i] != 0xA5;
+    CHECK(touched == 0);
+    CHECK(chip.witness == 0);
 }
 
 const test_case all_tests[] = {
@@ -524,8 +525,8 @@ const test_case all_tests[] = {
     { "with an erased upper block the capability ask gets no answer", with_an_erased_upper_block_the_capability_ask_gets_no_answer },
     { "with a good upper block the capability ask is answered", with_a_good_upper_block_the_capability_ask_is_answered },
     { "an upper block with a bad CRC or another version gets no answer", an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer },
-    { "a long upper block is checked a chunk a tick from boot", a_long_upper_block_is_checked_a_chunk_a_tick_from_boot },
-    { "an ask during the check waits for it and answers only a good block", an_ask_during_the_check_waits_for_it_and_answers_only_a_good_block },
+    { "a long upper block is checked whole at the first ask", a_long_upper_block_is_checked_whole_at_the_first_ask },
+    { "before our first message the tick touches nothing even with an upper block", before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block },
     { 0, 0 },
 };
 
