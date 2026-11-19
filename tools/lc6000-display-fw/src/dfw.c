@@ -11,6 +11,8 @@ static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
 enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_STATE = 0x07 };
 /// Bit 6 of the state flags is reserved: a message with it set is malformed.
 #define STATE_RESERVED 0x40
+/// Bit 5 of the state flags: Syndicate's feedback has stopped.
+#define FLAG_STALE 0x20
 
 void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame) {
     memset(unit, 0, sizeof *unit);
@@ -80,6 +82,8 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
         uint8_t number = args[0], player = args[7];
         if (number < 1 || number > 4 || r < 0 || g < 0 || b < 0 || player > 5 || !unit->drawn) break;
         unit->deck = (dfw_deck_state){ number, (uint8_t)r, (uint8_t)g, (uint8_t)b, player };
+        // A new deck's play flags wait for its own state message (#464); only feedback stale carries over.
+        unit->flags &= FLAG_STALE;
         unit->dirty = 1;
         break;
     }

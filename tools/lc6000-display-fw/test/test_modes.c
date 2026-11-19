@@ -85,6 +85,9 @@ static void a_second_begin_doesnt_redraw_the_old_deck(void) {
 void the_state_flags_decode(void);
 void a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored(void);
 
+void begin_while_drawing_changes_nothing(void);
+void a_deck_clears_the_deck_flags_but_not_stale(void);
+
 const test_case all_tests[] = {
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
     { "a deck before begin draws nothing", a_deck_before_begin_draws_nothing },
@@ -111,5 +114,7 @@ const test_case all_tests[] = {
     { "the state flags decode", the_state_flags_decode },
     { "a state with the reserved bit or a wrong length is ignored",
       a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored },
+    { "begin while drawing changes nothing", begin_while_drawing_changes_nothing },
+    { "a deck clears the deck flags but not stale", a_deck_clears_the_deck_flags_but_not_stale },
     { 0, 0 },
 };
