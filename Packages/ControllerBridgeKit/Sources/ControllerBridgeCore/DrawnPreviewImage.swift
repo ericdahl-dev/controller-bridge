@@ -26,7 +26,7 @@ extension DrawnDisplayState {
         if let time, let timeAt {
             let since = max(0, now - timeAt)
             look = JogTrackTime.look(elapsed: time.elapsed, length: time.length, playing: flags.contains(.playing),
-                                     phase: since - since.rounded(.down))
+                                     looping: flags.contains(.loopOn), phase: since - since.rounded(.down))
         }
         let live = DrawnLive(beat: beat == 0 ? nil : beat, needle: needle,
                              meter: meter.map { DrawnLive.Meter(level: $0.level, peak: $0.peak) },

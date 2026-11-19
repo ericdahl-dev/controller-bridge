@@ -94,9 +94,9 @@ typedef struct dfw_unit {
     dfw_pixel *frame;
 } dfw_unit;
 
-/// The track time's look (#460, JogTrackTime): no warning; the last minute's warning in its red half (the first
-/// 500 ms of each second, from when the time last changed); its normal half.
-enum { DFW_TIME_NORMAL = 0, DFW_TIME_RED = 1, DFW_TIME_WARNING_NORMAL = 2 };
+/// The track time's look (#460, #524, JogTrackTime): no warning; the warning's red (the first 500 ms of each second of
+/// the blink, from when the time last changed); the blink's white half, text and fill, whatever the deck color.
+enum { DFW_TIME_NORMAL = 0, DFW_TIME_RED = 1, DFW_TIME_WHITE = 2 };
 /// dfw_unit's layout as one word (#516): block B, the drawing, reads A's dfw_unit, so B's header carries the layout
 /// it was built for and block A calls B only when it matches A's own. Each field's offset has its own odd multiplier,
 /// so a moved, resized or swapped field changes the word. A new field in dfw_unit or dfw_deck_state goes in here too.

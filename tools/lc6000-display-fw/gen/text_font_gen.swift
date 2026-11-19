@@ -96,8 +96,9 @@ let faces = [
          about: "the title at 20 px, line box tops 54, 78 and 64, 1.1: all on the same pixel phase"),
     Face(name: "caption16", file: "Geist-Medium.ttf", postScriptName: "Geist-Medium", size: 16, ink: caption, ground: ground,
          middle: 94 + 16 * 1.15 / 2, tracking: 0, kerned: false, about: "the artist, line box tops 94 and 103, 1.15; an untitled deck's caption, top 100, 1.1"),
-    Face(name: "mono22", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 22, ink: text,
-         ground: ground, middle: -1, tracking: 0, kerned: false, about: "key and BPM, line box top 136, normal height"),
+    Face(name: "mono18", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 18, ink: text,
+         ground: ground, middle: 140.5, tracking: 0, kerned: false,
+         about: "key and BPM in drawn mode (#524), line box middle 140.5"),
 ]
 
 let pad = 16, box = 64
