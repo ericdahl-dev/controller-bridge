@@ -14,8 +14,41 @@ def c_bytes(hex_text):
     return "{" + ", ".join(f"0x{v:02X}" for v in values) + "}", len(values)
 
 
+LOOKS = {"normal": 0, "red": 1, "white": 2}
+EXPECT = ["drawn", "deck", "flags", "stale", "beat", "needle", "tempo", "phase", "time", "text_heard", "look"]
+
+
+def sequences(data):
+    """The sequence cases (#569) as C: each step's time and message (NULL: a tick only), and the expected state, a
+    bit per expectation the case makes."""
+    out = ["// Generated from vectors/messages.json by test/vectors_to_c.py --sequences. Don't edit.", ""]
+    rows = []
+    for case in data["sequences"]["cases"]:
+        steps = ", ".join("{ %d, %s }" % (s["at_ms"], json.dumps(s["send"]) if "send" in s else "0") for s in case["steps"])
+        expect = case["expect"]
+        unknown = set(expect) - set(EXPECT)
+        if unknown:
+            raise SystemExit(f"{case['name']!r}: expectations the C walker doesn't know: {sorted(unknown)}")
+        mask = sum(1 << EXPECT.index(k) for k in expect)
+        def value(key):
+            v = expect.get(key)
+            if key == "look":
+                return LOOKS[v] if v is not None else 0
+            if key in ("needle",):
+                return -1 if v is None else v
+            if key == "time":
+                return "-1, -1" if v is None else f"{v[0]}, {v[1]}"
+            return int(v) if v is not None else 0
+        fields = ", ".join(str(value(k)) for k in EXPECT)
+        rows.append(f'    {{ {json.dumps(case["name"], ensure_ascii=True)}, {len(case["steps"])}, {{ {steps} }}, {mask}, {fields} }},')
+    out += ["static const seq_case seq_cases[] = {", *rows, "};"]
+    print("\n".join(out))
+
+
 def main():
     data = json.load(open(sys.argv[1]))
+    if "--sequences" in sys.argv:
+        return sequences(data)
     out = ["// Generated from vectors/messages.json by test/vectors_to_c.py. Don't edit.", ""]
     valid, invalid = data.get("messages", []), data.get("invalid", [])
     if not valid or not invalid:

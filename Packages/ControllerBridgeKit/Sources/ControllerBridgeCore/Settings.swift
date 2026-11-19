@@ -21,6 +21,8 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     /// Pads and ring in exact RGB through Denon's color message (#530), where the controller's profile lists them. On by
     /// default, also for settings saved before it; off is the way back to the 64-color table.
     public var colorMessages = true
+    /// The brightness of the color-message LEDs (pads and ring, #532), in percent: 100 is the colors as they are.
+    public var lightBrightness = 100
     /// Light or dark (#127). Syndicate's own LIGHT MODE can't be read over OSC, so the DJ picks it to match.
     public var appearance = Appearance.matchMacOS
     /// "Show the deck on the jog display" (#165). On for new settings since the v1.1 hardware check.
@@ -34,7 +36,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
         case followSyndicateDeckColors, customDeckColors, appearance, ringColors, jogDisplay, profileChoices
-        case displayFirmware, colorMessages
+        case displayFirmware, colorMessages, lightBrightness
     }
 
     /// Settings saved before #123 have no deck colors: they load with the defaults.
@@ -51,6 +53,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         appearance = try c.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .matchMacOS
         ringColors = try c.decodeIfPresent(RingColors.self, forKey: .ringColors) ?? .vivid
         colorMessages = try c.decodeIfPresent(Bool.self, forKey: .colorMessages) ?? true
+        lightBrightness = try c.decodeIfPresent(Int.self, forKey: .lightBrightness) ?? 100
         // Settings saved before the switch existed keep it off; new settings have it on (v1.1, RELEASE step 3).
         jogDisplay = try c.decodeIfPresent(Bool.self, forKey: .jogDisplay) ?? false
         profileChoices = try c.decodeIfPresent([String: String].self, forKey: .profileChoices) ?? [:]
@@ -101,6 +104,7 @@ extension BridgeSettings {
         out.appearance = pick(\.appearance)
         out.ringColors = pick(\.ringColors)
         out.colorMessages = pick(\.colorMessages)
+        out.lightBrightness = pick(\.lightBrightness)
         out.jogDisplay = pick(\.jogDisplay)
         out.displayFirmware = pick(\.displayFirmware)
         out.profileChoices = pick(\.profileChoices)

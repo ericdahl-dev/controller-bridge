@@ -145,6 +145,10 @@ final class Bridge {
     var phaseOffset: Double?
     /// When the last pulsed beat of Syndicate's master clock arrived, if any.
     var lastPulseTime: Double?
+    /// Syndicate's master BPM, for the smooth pulse (#533).
+    var masterBPM: Double?
+    /// When the smooth pulse may send the ring again (#533).
+    var nextPulseSend: Double?
     /// When any master clock beat last arrived, pulsed or not.
     var lastClockTime: Double?
     var loaded = false
@@ -168,8 +172,13 @@ final class Bridge {
     /// What each light shows (#383, #530, #554): shared with the other layers on this output, so an unchanged light
     /// is never sent twice, and a layer change sends only the lights that differ.
     var shown = LEDShown()
+    /// The gap between color messages (#531): 0, since the burst test on the unit (9 at once, three ways) was clean.
+    static let colorMessageGap = 0.0
+    private var colorPacer = ColorPacer(gap: Bridge.colorMessageGap)
     /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
     var colorMessages = false
+    /// The color-message LEDs' brightness, in percent (#532).
+    var lightBrightness = 100
 
     /// The pads' MIDI channel, 0-15 (#224): the deck's unless the profile gives the pads their own.
     let padChannel: UInt8
@@ -329,6 +338,7 @@ final class Bridge {
         if address == (root + "ColorPalette").lowercased() { return colorPalette(message.arguments) }
         // The master clock is one for all decks too.
         if address == (root + "Header/Clock").lowercased() { return headerClock(message.arguments) }
+        if address == (root + "Header/BPM").lowercased() { return headerBPM(message.arguments) }
         // The mixer channel of this deck (#207).
         if mapping.mixer != nil, let mixer = MixerOSC.parse(message.address, root: root) {
             if mixer.channel == mapping.deck.number { mixerFeedback(mixer.value, message.arguments) }
@@ -511,7 +521,7 @@ final class Bridge {
     }
 
     /// The color-message encoder in use (#530): nil when the setting is off or the profile has none.
-    var colorMessageEncoder: LEDColorEncoder? { colorMessages ? LEDColorEncoder(mapping) : nil }
+    var colorMessageEncoder: LEDColorEncoder? { colorMessages ? LEDColorEncoder(mapping, brightness: lightBrightness) : nil }
 
     /// A pad or the ring in exact RGB (#530), through Denon's color message.
     func colorLED(_ message: LEDColorMessage) {
@@ -520,8 +530,20 @@ final class Bridge {
         let light = LEDShown.Light(note: Int(message.note), onPads: mapping.pads.channel != nil
                                    && mapping.notes.pads.contains(Int(message.note)))
         guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, shown.write(light, .color(rgb)) else { return }
+        sendColors(colorPacer.send(message, at: clock.now))
+    }
+
+    /// Color messages the pacer lets go (#531).
+    func sendColors(_ messages: [LEDColorMessage]) {
         guard let output else { return }
-        do { try output.send(color: message) } catch { outputFailed = true }
+        for message in messages {
+            do { try output.send(color: message) } catch { outputFailed = true }
+        }
+    }
+
+    /// Lets the pacer's waiting color messages out, on the timing tick (#531).
+    func colorTick() {
+        sendColors(colorPacer.tick(at: clock.now))
     }
 
     /// An LED driven by a CC, such as a VU meter (#207): straight out, as the caller limits how often. False when held,

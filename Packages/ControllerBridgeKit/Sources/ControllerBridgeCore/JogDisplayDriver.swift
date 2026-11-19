@@ -401,7 +401,11 @@ public final class JogDisplayDriver {
         if let meter { messages.append(.meter(level: meter.level, peak: meter.peak)) }
         if let time { messages.append(time) }
         var state = drawnPreviews[deck] ?? DrawnDisplayState()
-        for bytes in messages.map(\.bytes) + Self.texts(content) { state.apply(bytes) }
+        // On the driver's clock (#569): fed every tick, the copy hears the host as the chip would, so it goes silent
+        // only if the feed stops.
+        let now = Int(clock.now * 1000)
+        for bytes in messages.map(\.bytes) + Self.texts(content) { state.apply(bytes, atMs: now) }
+        state.tick(atMs: now)
         drawnPreviews[deck] = state
         guard previewsDrawn else {
             if !reportedDrawn.isEmpty { onEvent?(.drawnPreviewsEnded) }

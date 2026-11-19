@@ -238,6 +238,7 @@ final class BridgeModel {
         }
         if new.ringColors != old.ringColors { producer.send(.setRingColors(new.ringColors)) }
         if new.colorMessages != old.colorMessages { producer.send(.setColorMessages(new.colorMessages)) }
+        if new.lightBrightness != old.lightBrightness { producer.send(.setLightBrightness(new.lightBrightness)) }
         if new.profileChoices != old.profileChoices { producer.send(.setProfileChoices(new.profileChoices)) }
         if new.jogDisplay != old.jogDisplay { producer.send(.setJogDisplay(enabled: new.jogDisplay)) }
         if new.displayFirmware != old.displayFirmware { producer.send(.setDisplayFirmware(new.displayFirmware)) }
@@ -333,7 +334,10 @@ final class BridgeModel {
         })
         let midi = midi!
         let queuedMIDI = QueuedMIDISystem(inner: midi, queue: sendQueue)
-        let jogDisplay = (try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)).map { sendQueue.jogDisplayPort($0) }
+        let coreJogDisplay = try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)
+        // Its ports are remembered until a device comes or goes (#552).
+        if let coreJogDisplay { midi.observeChanges { coreJogDisplay.forgetEndpoints() } }
+        let jogDisplay = coreJogDisplay.map { sendQueue.jogDisplayPort($0) }
         // The entries the Coordinator starts with: the saved ones, a controller following its layers as one per layer
         // (#79). It starts straight on them (#105), so nothing is sent after start to correct it.
         let running = ControllerSettings.expanded(settings.controllers, layers: layers)
@@ -347,6 +351,7 @@ final class BridgeModel {
         pipe.producer.send(.setDeckColors(followSyndicate: settings.followSyndicateDeckColors, custom: settings.customDeckColors))
         pipe.producer.send(.setRingColors(settings.ringColors))
         pipe.producer.send(.setColorMessages(settings.colorMessages))
+        pipe.producer.send(.setLightBrightness(LightBrightness.snapped(settings.lightBrightness)))
         // Profiles chosen by hand (#200): a device only they name connects now.
         pipe.producer.send(.setProfileChoices(settings.profileChoices))
         // Before the switch, so the first uploads already know how many slots the unit shows (#425).
