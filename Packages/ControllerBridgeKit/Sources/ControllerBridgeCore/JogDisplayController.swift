@@ -40,7 +40,8 @@ final class JogDisplayController {
         // A mixer channel's meter (#461), for the drawn display's level meter.
         if let channel = (1...4).first(where: { address.hasSuffix("/mixer/ch\($0)/meter") }),
            let level = message.arguments.first?.number {
-            meters[channel, default: MeterBallistics()].sample(level, at: clock.now)
+            // On the meter's dB scale (#582), so the fall runs evenly down the drawn arc.
+            meters[channel, default: MeterBallistics()].sample(MeterScale.position(level), at: clock.now)
         }
         if address.hasSuffix("/header/bpm"), let bpm = message.arguments.first?.number, bpm > 0 { masterBPM = bpm }
         // The master clock is the lit ring segment, the same on every deck (the user's pick).
