@@ -142,7 +142,7 @@ class SizeTests(unittest.TestCase):
 class Chip:
     """A synthetic display chip: flash with our block in the padding and stubs where stock's functions are."""
 
-    def __init__(self, marker=True, data=None, upper=None):
+    def __init__(self, marker=True, data=None, upper=None, count_upper_reads=False):
         self.uc = uc = unicorn.Uc(unicorn.UC_ARCH_ARM, unicorn.UC_MODE_THUMB | unicorn.UC_MODE_MCLASS)
         for base, size in ((0x08000000, 0x100000), (0x10000000, 0x10000), (0x20000000, 0x30000),
                            (0x40016000, 0x1000), (0xD0000000, 0x200000), (0xE000E000, 0x1000)):
@@ -159,7 +159,11 @@ class Chip:
 
         def on_upper_read(uc, access, address, size, value, _):
             self.upper_reads += 1
-        uc.hook_add(unicorn.UC_HOOK_MEM_READ, on_upper_read, begin=UPPER, end=UPPER + UPPER_SIZE - 1)
+        # Only for the tests that prove nothing reads it: with a read hook over the code B runs from, unicorn 2.1.4
+        # skips instructions in that code (#515 found an `mls` skipped mid-glyph; the same B with no hook draws as the
+        # native build does), so a chip that runs B has none.
+        if count_upper_reads:
+            uc.hook_add(unicorn.UC_HOOK_MEM_READ, on_upper_read, begin=UPPER, end=UPPER + UPPER_SIZE - 1)
         bx_lr = b"\x70\x47"
         uc.mem_write(STOCK_RENDER, b"\x55\x20" + bx_lr)  # movs r0, #0x55 ; bx lr
         uc.mem_write(STOCK_MALLOC, b"\x00\x48" + bx_lr + struct.pack("<I", FRAME_AT))  # ldr r0, =FRAME_AT ; bx lr
@@ -330,7 +334,7 @@ class UpperSwitchTests(unittest.TestCase):
 
     def test_with_the_switch_the_tick_touches_nothing_before_our_first_message(self):
         # A power cycle clears any crash of ours only if our code runs after our first message (#501).
-        chip = Chip(data=proven_block(), upper=upper_block())
+        chip = Chip(data=proven_block(), upper=upper_block(), count_upper_reads=True)
         for _ in range(3):
             chip.call(dfupatch.HOOK_RENDER_ENTRY)
         self.assertEqual(chip.upper_reads, 0)
@@ -338,7 +342,7 @@ class UpperSwitchTests(unittest.TestCase):
         self.assertEqual(chip.uc.mem_read(WITNESS, 1), b"\x00")
 
     def test_without_the_switch_block_a_never_reads_the_upper_flash(self):
-        chip = Chip(upper=good_upper())
+        chip = Chip(upper=good_upper(), count_upper_reads=True)
         for _ in range(3):
             chip.call(dfupatch.HOOK_RENDER_ENTRY)
         self.ask(chip)
@@ -443,6 +447,98 @@ class UpperBlockTests(unittest.TestCase):
         deliver(END)
         deliver()
         self.assertEqual(corner(), 0, "end presents nothing, so no band")
+
+
+FRAME_DUMP = os.environ.get("FRAME_DUMP", os.path.join(FW, "build", "frame-dump"))
+SIZE = 198
+
+
+def native_frame(messages):
+    """The frame the native build (the Mac's compiler, the same src/) draws for these messages: 198x198 0x00RRGGBB."""
+    out = subprocess.run([FRAME_DUMP, *messages], check=True, capture_output=True).stdout
+    return struct.unpack(f"<{SIZE * SIZE}I", out)
+
+
+def chip_frame(messages):
+    """The frame emulated block A and B draw for the same messages: B's back buffer at FRAME_AT, before A turns it."""
+    chip = Chip(data=proven_block(), upper=upper_block())
+    for hexbytes in (CAPABILITY, *messages):
+        message = chip.receive(hexbytes)
+        chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8], r8=0)
+    chip.call(dfupatch.HOOK_RENDER_ENTRY, count=200_000_000)
+    return chip, struct.unpack(f"<{SIZE * SIZE}I", bytes(chip.uc.mem_read(FRAME_AT, SIZE * SIZE * 4)))
+
+
+def frame_difference(a, b):
+    """How many pixels differ, and the worst channel difference."""
+    count = worst = 0
+    for p, q in zip(a, b):
+        if p != q:
+            count += 1
+            worst = max(worst, *(abs((p >> s & 0xFF) - (q >> s & 0xFF)) for s in (0, 8, 16)))
+    return count, worst
+
+
+class NativeFrameTests(unittest.TestCase):
+    """#515: the emulated chip draws, pixel for pixel, what the native build draws for the same messages. Both come
+    from the same source, so any difference is the Arm's: its float math, its libc stand-ins, an uninitialized read."""
+
+    def assert_same_frame(self, name, messages):
+        native = native_frame(messages)
+        _, arm = chip_frame(messages)
+        count, worst = frame_difference(native, arm)
+        self.assertEqual((count, worst), (0, 0), f"{name}: {count} pixels differ, worst by {worst}")
+
+    def test_a_deck_alone(self):
+        self.assert_same_frame("deck 2, red, track", (BEGIN, DECK_2_RED_TRACK))
+
+    def test_every_drawn_element_matches(self):
+        def message(op, args=b""):
+            body = bytes([op]) + args
+            return (bytes.fromhex("F000020B7F1020") + bytes([len(body) >> 7, len(body) & 0x7F]) + body + b"\xf7").hex()
+
+        def text(field, chars):
+            # Windows-1252, 0x80 and up as 7F then the code minus 0x80.
+            escaped = b"".join(bytes([0x7F, c - 0x80]) if c >= 0x80 else bytes([c]) for c in chars.encode("cp1252"))
+            return message(0x04, bytes([field]) + escaped)
+
+        deck = message(0x03, bytes([2, 1, 0x7F, 0, 0, 0, 0, 1]))   # deck 2, 255/0/0, a track
+        empty_deck = message(0x03, bytes([4, 0, 0, 1, 0, 1, 0x7F, 0]))   # deck 4, 0/128/255, empty
+        cases = {
+            # The text path: a title over two lines at 20 px, an artist with an é cut at the circle, key and tempo.
+            "text": (BEGIN, deck, text(0, "Night Drive And Another Line"),
+                     text(1, "Café del Mar with a name long enough to cut"), text(2, "11B"), message(0x05, bytes([0x0A, 0]))),
+            # An empty deck: no title, the untitled words and the caption.
+            "untitled": (BEGIN, empty_deck, text(0, ""), text(3, "No track")),
+            # A letter the font lacks: the box (0x81).
+            "box": (BEGIN, deck, message(0x04, bytes([0, 0x41, 0x7F, 0x01]))),
+            # The live elements: beat 3 lit, the needle at 1500, the meter at 64 with the peak held at 90.
+            "live": (BEGIN, deck, message(0x08, bytes([3])), message(0x09, bytes([1500 >> 7, 1500 & 0x7F])),
+                     message(0x0A, bytes([64, 90]))),
+            # The phase rule: in phase (the tick), then a hundredth of a beat behind (the bar).
+            "in phase": (BEGIN, deck, message(0x0B, bytes([0, 0]))),
+            "behind": (BEGIN, deck, message(0x0B, bytes([0x7E, 0x5C]))),
+            # The waiting look: loaded, feedback stale.
+            "stale": (BEGIN, deck, message(0x07, bytes([0x21]))),
+        }
+        for name, messages in cases.items():
+            with self.subTest(name):
+                self.assert_same_frame(name, messages)
+
+    def test_the_panel_shows_the_native_frame_turned_and_in_rgb565_with_black_around_it(self):
+        # Layer 2 is the whole 320x240 panel: the frame turned 180 degrees at (61, 21), each pixel's top 5, 6 and 5 bits
+        # of red, green and blue; black everywhere else.
+        messages = (BEGIN, DECK_2_RED_TRACK)
+        native = native_frame(messages)
+        chip, _ = chip_frame(messages)
+        layer = struct.unpack(f"<{320 * 240}H", bytes(chip.uc.mem_read(LAYER_AT, 320 * 240 * 2)))
+        want = [0] * (320 * 240)
+        for y in range(SIZE):
+            for x in range(SIZE):
+                p = native[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)]
+                want[(21 + y) * 320 + 61 + x] = (p >> 19 & 0x1F) << 11 | (p >> 10 & 0x3F) << 5 | (p >> 3 & 0x1F)
+        wrong = sum(1 for got, w in zip(layer, want) if got != w)
+        self.assertEqual(wrong, 0, f"{wrong} of the panel's pixels differ")
 
 
 def struct_fields(source, opening, closing):

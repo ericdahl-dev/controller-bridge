@@ -26,13 +26,14 @@ clean:
 ARM_TESTS := $(wildcard arm/test/test_*.c)
 .PHONY: arm-test
 # The block tests build with an empty drawing (ARM_DRAW=stub) until drawing has its own block (#501).
-arm-test: $(BUILD)/hook-tests
+arm-test: $(BUILD)/hook-tests $(BUILD)/frame-dump
 	$(BUILD)/hook-tests
 	sh arm/check_symbols.sh $(BUILD)/freestanding-arm
 	$(MAKE) ARM_BUILD=$(BUILD)/arm-stub ARM_DRAW=stub $(BUILD)/arm-stub/block.bin $(BUILD)/arm-stub/upper.bin
 	ARM_BUILD=$(BUILD)/arm-stub $(PYTHON) -I arm/test/test_block.py
 
-# The block tests need the `unicorn` package (pip install unicorn): `make arm-test PYTHON=path/to/venv/python`.
+# The block tests need the `unicorn` package, as CI pins it (pip install unicorn==2.1.4):
+# `make arm-test PYTHON=path/to/venv/python`. Without it the tests fail at the import; nothing is skipped.
 PYTHON ?= python3
 
 $(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
@@ -40,3 +41,8 @@ $(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h $(ARM_
 	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c $(ARM_TESTS) test/harness.c
 
 include arm/arm.mk
+
+# The native frame for a list of messages (#515), which the block tests compare with the emulated chip's.
+$(BUILD)/frame-dump: $(SRC) test/frame_dump.c $(wildcard src/*.h)
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC) test/frame_dump.c

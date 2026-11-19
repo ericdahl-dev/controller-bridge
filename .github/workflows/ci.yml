@@ -78,7 +78,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi binutils-arm-none-eabi
           arm-none-eabi-gcc --version | head -1
           python3 -m venv "$RUNNER_TEMP/fw"
-          "$RUNNER_TEMP/fw/bin/pip" install unicorn
+          # Pinned (#515): 2.1.4 skips instructions in code under a memory-read hook, which the block tests now avoid;
+          # another version could behave differently. A missing package fails the import, never skips a test.
+          "$RUNNER_TEMP/fw/bin/pip" install unicorn==2.1.4
       # The 9,184-byte padding limit on this runner's GCC: prints the size with drawing and hook-only, fails if over.
       - name: Block sizes (A 9,184 bytes, B 512 KB)
         run: make -s -C tools/lc6000-display-fw arm-size
