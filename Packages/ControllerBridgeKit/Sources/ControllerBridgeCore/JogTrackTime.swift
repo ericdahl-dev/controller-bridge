@@ -20,11 +20,11 @@ public enum JogTrackTime {
         case warningWhite
     }
 
-    /// Playing with a known length: steady red with `warningSeconds` or less left; with `blinkSeconds` or less, a
+    /// Playing, not looping (a loop holds the warning) and a known length: steady red with `warningSeconds` or less left; with `blinkSeconds` or less, a
     /// 1 Hz blink. `phase` is the time since the shown second last changed (0 to 1), so red starts on the frame the
     /// digit changes.
-    public static func look(elapsed: Int, length: Int, playing: Bool, phase: Double) -> Look {
-        guard playing, length > 0 else { return .normal }
+    public static func look(elapsed: Int, length: Int, playing: Bool, looping: Bool, phase: Double) -> Look {
+        guard playing, !looping, length > 0 else { return .normal }
         let left = length - elapsed
         guard left <= warningSeconds else { return .normal }
         return left <= blinkSeconds && phase >= 0.5 ? .warningWhite : .warningRed
