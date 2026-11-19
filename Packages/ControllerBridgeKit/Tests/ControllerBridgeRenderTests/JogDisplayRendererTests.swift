@@ -152,4 +152,28 @@ struct JogDisplayRendererTests {
             #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0B0B0B, by: 4), "ground (\(x), \(y))")
         }
     }
+
+    @Test("Ahead: the bar grows right from the center instead")
+    func phaseAhead() {
+        let image = Self.phaseImage(164)
+        for (x, y) in [(99, 126), (115, 129)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0080FF, by: 4), "bar (\(x), \(y))")
+        }
+        for (x, y) in [(98, 127), (116, 127)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), Self.dimBlue, by: 4), "dim (\(x), \(y))")
+        }
+    }
+
+    @Test("The bar's length in px for an offset in 1/16384 beats: at least 1, a hundredth of a beat 17, a tenth 42, half a beat 49",
+          arguments: [(1, 1), (33, 5), (164, 17), (-164, 17), (1638, 42), (8191, 49), (-8191, 49)])
+    func phaseBarLength(phase: Int, px: Int) {
+        #expect(JogDisplayRenderer.phaseBar(phase) == px)
+    }
+
+    @Test("Unknown phase draws the plain rule: no tick, nothing dimmed")
+    func phaseUnknown() {
+        let image = Self.phaseImage(nil)
+        #expect(Self.near(Self.pixel(image, x: 52, y: 127), 0x0080FF, by: 4))
+        #expect(Self.near(Self.pixel(image, x: 98, y: 125), 0x0B0B0B, by: 4))
+    }
 }
