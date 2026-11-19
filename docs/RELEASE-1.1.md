@@ -57,7 +57,8 @@ The LC6000's jog display shows the deck (#165).
   once per bar with that deck's own phase, so you can see at a glance whether the decks are in sync. Turning the platter
   doesn't move it; a seek on a paused deck does, once Syndicate reports it (#388).
 - It follows the controller's deck layers, and gives the screen back to the LC6000 when switched off, unplugged or quit.
-  While a new card loads, the screen shows "Loading…" instead of going black.
+  Every deck's screen stays loaded on the LC6000, so a deck switch shows at once; a new track's screen replaces the
+  old one as it lands, never black.
 - Diagnostics › Jog display previews every deck's screen live, even without an LC6000 connected (#221).
 
 Controller:

@@ -26,8 +26,7 @@ DeckBridge 1.1.0 shows the deck on the LC6000's jog display, and adds a few cont
 - The ring and needle: play a deck. The lit green segment should step with the master beat, and the needle should go
   round once per bar, in time. Turn the platter: the needle stays with the deck. Pause and seek with the jog: the needle
   moves to the new spot.
-- Deck layers: switch to deck 2 with Shift + deck select. The screen should show "Loading…", then redraw as deck 2,
-  never black.
+- Deck layers: switch to deck 2 with Shift + deck select. The screen should change to deck 2 at once, never black.
 - Off and back: turn the switch off (the unit's own screen comes back), then on. Unplug and replug. Quit DeckBridge: the
   unit goes back to its own screen.
 - Without the unit: open Diagnostics › Jog display. It previews every deck's screen live, even with no LC6000.
