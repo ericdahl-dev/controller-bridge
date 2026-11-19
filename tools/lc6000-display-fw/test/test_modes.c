@@ -47,8 +47,43 @@ void every_vector_decodes(void);
 void every_invalid_vector_is_ignored(void);
 
 void with_no_frame_nothing_is_drawn(void);
+void a_frame_handed_in_after_end_draws_nothing(void);
 void a_frame_handed_in_later_is_drawn(void);
 void with_no_frame_the_capability_ask_gets_no_answer(void);
+
+#define STATE_LOADED "F0 00 02 0B 7F 10 20 00 02 07 01 F7"
+
+static void an_end_before_the_tick_draws_nothing(void) {
+    fresh(&unit, &rec);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, DECK_2_RED_TRACK);
+    feed(&unit, END_V1);
+    dfw_tick(&unit);
+    CHECK(rec.presents == 0);
+}
+
+static void a_state_before_any_deck_draws_nothing(void) {
+    fresh(&unit, &rec);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, STATE_LOADED);
+    dfw_tick(&unit);
+    CHECK(rec.presents == 0);
+}
+
+static void a_second_begin_doesnt_redraw_the_old_deck(void) {
+    fresh(&unit, &rec);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, DECK_2_RED_TRACK);
+    dfw_tick(&unit);
+    feed(&unit, END_V1);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, STATE_LOADED);
+    dfw_tick(&unit);
+    CHECK(rec.presents == 1);
+}
+
+void the_state_flags_decode(void);
+void a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored(void);
 
 const test_case all_tests[] = {
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
@@ -67,7 +102,14 @@ const test_case all_tests[] = {
     { "every vector decodes", every_vector_decodes },
     { "every invalid vector is ignored", every_invalid_vector_is_ignored },
     { "with no frame nothing is drawn", with_no_frame_nothing_is_drawn },
+    { "a frame handed in after end draws nothing", a_frame_handed_in_after_end_draws_nothing },
     { "a frame handed in later is drawn", a_frame_handed_in_later_is_drawn },
     { "with no frame the capability ask gets no answer", with_no_frame_the_capability_ask_gets_no_answer },
+    { "an end before the tick draws nothing", an_end_before_the_tick_draws_nothing },
+    { "a state before any deck draws nothing", a_state_before_any_deck_draws_nothing },
+    { "a second begin doesn't redraw the old deck", a_second_begin_doesnt_redraw_the_old_deck },
+    { "the state flags decode", the_state_flags_decode },
+    { "a state with the reserved bit or a wrong length is ignored",
+      a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored },
     { 0, 0 },
 };

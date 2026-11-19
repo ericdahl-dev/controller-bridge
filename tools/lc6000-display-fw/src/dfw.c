@@ -1,4 +1,5 @@
 #include "dfw.h"
+#include "draw.h"
 
 #include <string.h>
 
@@ -65,7 +66,14 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
         if (args[0] != 0) unit->drawn = 1;
         break;
     case OP_END:
-        if (args[0] != 0) unit->drawn = 0;
+        // Back to image mode: nothing waiting is drawn, and the deck is forgotten, so a later begin waits for a
+        // new one rather than redrawing this.
+        if (args[0] != 0) {
+            unit->drawn = 0;
+            unit->dirty = 0;
+            unit->deck = (dfw_deck_state){ 0, 0, 0, 0, 0 };
+            unit->flags = 0;
+        }
         break;
     case OP_DECK: {
         int r = channel(args + 1), g = channel(args + 3), b = channel(args + 5);
@@ -91,7 +99,9 @@ void dfw_tick(dfw_unit *unit) {
         act(unit, slot->bytes, slot->length);
         unit->tail = (uint8_t)((unit->tail + 1) % DFW_INBOX);
     }
-    if (!unit->dirty || !unit->frame) return;
+    // Only drawn mode draws, and only once a deck is known.
+    if (!unit->dirty || !unit->frame || !unit->drawn || unit->deck.number == 0) return;
     unit->dirty = 0;
+    dfw_draw(unit->frame, &unit->deck);
     unit->port.present(unit->port.ctx, unit->frame);
 }

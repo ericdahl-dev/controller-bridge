@@ -21,7 +21,8 @@ typedef struct {
 
 /// The longest message kept: the longest valid one (deck, 19 bytes) with room to spare. Longer ones are dropped.
 #define DFW_MESSAGE_MAX 32
-/// Messages waiting for the next tick. The hook may run in the USB interrupt, so it only copies.
+/// Messages waiting for the next tick. The hook copies them in as the stock parser dispatches them (main loop, #466),
+/// never keeping a pointer into the stock SysEx buffer; the tick acts on them.
 #define DFW_INBOX 16
 
 typedef struct {
