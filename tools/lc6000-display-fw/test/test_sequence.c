@@ -171,3 +171,62 @@ void a_new_decks_words_wait_for_its_text(void) {
     dfw_tick(&unit, 40);
     CHECK(unit.text_heard);
 }
+
+#define TIME_65_OF_293 "F0 00 02 0B 7F 10 20 00 05 06 00 41 02 25 F7"
+#define TIME_66_OF_293 "F0 00 02 0B 7F 10 20 00 05 06 00 42 02 25 F7"
+#define TIME_0_OF_0 "F0 00 02 0B 7F 10 20 00 05 06 00 00 00 00 F7"
+
+/// Time (#460): the first time message presents even at 0 of unknown, the values a fresh unit holds; a changed one
+/// presents; the heartbeat's unchanged one presents nothing.
+void the_first_time_presents_and_an_unchanged_one_does_not(void) {
+    drawing_deck_4();
+    CHECK(!unit.time_heard);
+    feed(&unit, TIME_0_OF_0);
+    dfw_tick(&unit, 10);
+    CHECK(unit.time_heard && rec.presents == 2);
+    feed(&unit, TIME_65_OF_293);
+    dfw_tick(&unit, 20);
+    CHECK(rec.presents == 3);
+    feed(&unit, TIME_65_OF_293);
+    dfw_tick(&unit, 1000);
+    CHECK(rec.presents == 3);
+    feed(&unit, TIME_66_OF_293);
+    dfw_tick(&unit, 1010);
+    CHECK(rec.presents == 4 && unit.elapsed == 66 && unit.track_length == 293);
+}
+
+/// A new deck's time waits for its own message, as its text does: the host sends it right after.
+void a_deck_change_clears_the_time(void) {
+    drawing_deck_4();
+    feed(&unit, TIME_65_OF_293);
+    feed(&unit, DECK_4_BLUE_EMPTY);   // the heartbeat's same deck keeps it
+    dfw_tick(&unit, 10);
+    CHECK(unit.time_heard && unit.elapsed == 65);
+    feed(&unit, DECK_3_RED_TRACK);
+    dfw_tick(&unit, 20);
+    CHECK(!unit.time_heard && unit.elapsed == 0 && unit.track_length == 0);
+    feed(&unit, TIME_65_OF_293);
+    dfw_tick(&unit, 30);
+    CHECK(unit.time_heard && rec.presents == 4);
+}
+
+/// End forgets the time: after a new begin there is none until a time message comes.
+void end_forgets_the_time(void) {
+    drawing_deck_4();
+    feed(&unit, TIME_65_OF_293);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 02 01 F7");
+    feed(&unit, BEGIN_V1);
+    feed(&unit, DECK_4_BLUE_EMPTY);
+    dfw_tick(&unit, 10);
+    CHECK(!unit.time_heard);
+}
+
+/// Only drawn mode takes the time, as every other live element.
+void a_time_before_begin_is_dropped(void) {
+    fresh(&unit, &rec);
+    feed(&unit, TIME_65_OF_293);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, DECK_4_BLUE_EMPTY);
+    dfw_tick(&unit, 0);
+    CHECK(!unit.time_heard);
+}

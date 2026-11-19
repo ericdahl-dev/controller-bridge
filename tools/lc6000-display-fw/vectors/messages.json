@@ -359,6 +359,42 @@
         "tenths": 16383
       },
       "bytes": "F0 00 02 0B 7F 10 20 00 03 05 7F 7F F7"
+    },
+    {
+      "name": "time, 1:05 into a 4:53 track",
+      "kind": "time",
+      "fields": {
+        "elapsed": 65,
+        "length": 293
+      },
+      "bytes": "F0 00 02 0B 7F 10 20 00 05 06 00 41 02 25 F7"
+    },
+    {
+      "name": "time, unknown length (0: no time drawn)",
+      "kind": "time",
+      "fields": {
+        "elapsed": 42,
+        "length": 0
+      },
+      "bytes": "F0 00 02 0B 7F 10 20 00 05 06 00 2A 00 00 F7"
+    },
+    {
+      "name": "time at the clamp (16383 s each)",
+      "kind": "time",
+      "fields": {
+        "elapsed": 16383,
+        "length": 16383
+      },
+      "bytes": "F0 00 02 0B 7F 10 20 00 05 06 7F 7F 7F 7F F7"
+    },
+    {
+      "name": "time, elapsed past the length",
+      "kind": "time",
+      "fields": {
+        "elapsed": 200,
+        "length": 180
+      },
+      "bytes": "F0 00 02 0B 7F 10 20 00 05 06 01 48 01 34 F7"
     }
   ],
   "invalid": [

@@ -70,6 +70,10 @@ typedef struct dfw_unit {
     uint16_t tempo;
     /// Whether a text message has come since the deck last changed: until one has, no words are drawn (#458).
     uint8_t text_heard;
+    /// The deck's track time (#460): elapsed and the track's length in whole seconds, 0-16383; a length of 0 is
+    /// unknown. Whether a time message has come since the deck last changed: until one has, none is drawn.
+    uint16_t elapsed, track_length;
+    uint8_t time_heard;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
     /// The clock at the tick that is drawing, for anything drawn over time.
