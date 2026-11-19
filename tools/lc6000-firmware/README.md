@@ -42,6 +42,25 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_wd_update_00_50
 - an edit falls outside the image, reaches into the 32-byte trailer, overlaps another edit, or has old and new bytes of different lengths;
 - the output already exists, or is inside the repository.
 
+## Flash day kit (#435)
+
+Three pieces for the first real flash of the display chip, all run **by the unit's owner**, never by an agent:
+
+- `flash-day.sh`: a step-by-step wizard. It checks the stock file, puts the display chip into update mode, lists what `dfu-util` sees (exactly one device, or it stops), backs up the settings sector and the app (read-only), flashes the **stock** image over itself after you type `FLASH`, reads it back and compares, then has you power-cycle and checks the display's MIDI port returns. A patched image is an optional last step, off by default. Everything it saves goes to `~/lc6000` (or `$LC6000_WORK`), outside the repo.
+- `enter-update-mode.swift`: sends the stock updater's one "enter update mode" SysEx to the unit's WD port. `selftest` and `check` send nothing; `send` needs `--yes-enter-update-mode` and exactly one WD port.
+- `dfupatch.py compare <file.dfu> <readback.bin>`: checks a raw read-back of the app area against a `.dfu`'s image and says where the first difference is.
+
+```sh
+brew install dfu-util
+tools/lc6000-firmware/flash-day.sh
+```
+
+**Unproven on hardware** until #435 is done: whether Denon's bootloader allows reading flash, whether a power cycle clears its update-mode flag, and whether it accepts a changed image. The wizard stops at each surprise and prints the way back (power cycle, then Denon's own updater, then SWD, #433). Have an ST-Link on the desk first. Never run Denon's updater "to look": it starts erasing as soon as it finds the unit.
+
+The top panel chip needs none of this: hold BACK + FWD + VINYL at power-on and it enters ST's ROM bootloader (seen on hardware, #432); a power cycle leaves it.
+
+The tests (`test_flash_day.py`) guard the kit's shape without hardware: one write, behind the typed word; no mass-erase, unprotect, option-byte or bootloader-sector access; reads only in the settings and app sectors.
+
 ## What it recomputes
 
 1. **The `wd` trailer CRC.** The last 32 bytes of the image are a trailer: version, `0xDEADBEEF`, the number of bytes covered (element size − 20), the CRC, then `EndOfFlashToken\0`. The CRC is the **STM32 hardware CRC unit**'s algorithm (CRC-32, polynomial `0x04C11DB7`, init `0xFFFFFFFF`, little-endian 32-bit words, no reflection, no final XOR) over element bytes `0` to `0x77FEB`, so it includes the length field. On the stock image it gives `0x3A7CE2CA`, the hex in the file name.
