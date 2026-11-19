@@ -17,8 +17,10 @@ enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_
 #define FLAG_STALE 0x20
 /// Bit 1 of the state flags: the deck is playing.
 #define FLAG_PLAYING 0x02
-/// The last minute's warning (#460): this many seconds or fewer left, and each half of its blink this long.
+/// The last minute's warning (#460, #524): steady red with this many seconds or fewer left, blinking with
+/// BLINK_SECONDS or fewer, and each half of the blink this long.
 #define WARNING_SECONDS 60
+#define BLINK_SECONDS 30
 #define BLINK_HALF_MS 500u
 /// No drawn-display message for this long draws the waiting look (#464): three missed heartbeats.
 #define SILENCE_MS 3000u
@@ -248,12 +250,13 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
 
 int dfw_stale(const dfw_unit *unit) { return unit->silent || (unit->flags & FLAG_STALE); }
 
-/// The warning while playing a track of known length with a minute or less left: red for the first half of each
-/// second from the last change, then white. With no new time it keeps alternating off the last change (a dropped
+/// The warning while playing a track of known length with a minute or less left: steady red, then from 30 s left
+/// red for the first half of each second from the last change, then white. With no new time it keeps alternating off the last change (a dropped
 /// message never freezes it red). Unsigned subtraction, so the clock wrapping is no jump.
 static uint8_t time_look(const dfw_unit *unit, uint32_t now_ms) {
     if (!unit->time_heard || unit->track_length == 0 || !(unit->flags & FLAG_PLAYING) || dfw_stale(unit) ||
         (int)unit->track_length - (int)unit->elapsed > WARNING_SECONDS) return DFW_TIME_NORMAL;
+    if ((int)unit->track_length - (int)unit->elapsed > BLINK_SECONDS) return DFW_TIME_RED;
     return ((now_ms - unit->time_at) / BLINK_HALF_MS) % 2u == 0 ? DFW_TIME_RED : DFW_TIME_WHITE;
 }
 

@@ -687,16 +687,44 @@ static void paused_in_the_last_minute_draws_the_normal_colors(void) {
     CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF0000u);
 }
 
-/// The warning's edge: 61 s left doesn't blink, 60 does; past the end (elapsed over the length) does.
-static void the_warning_covers_the_last_60_seconds(void) {
+/// The warning's first stage (#524): steady red from 60 s left to 31 s, whatever the phase. At 45 s left it is the
+/// renderer's red, and stays red past 500 ms and 1.5 s with no white frame and no redraw for a flip.
+static void the_warning_is_steady_red_from_60_to_31_seconds(void) {
+    CHECK(load_reference("test/ref/deck4-blue-empty-time120-165-red.ppm"));
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 120, 165, 0);
+    CHECK(rec.presents == 1);
+    memcpy(frame, rec.last, sizeof frame);
+    // The fill at 120/165 (262°): measured worst 7, 31 pixels over 6, all on the circles, as 83/165's.
+    CHECK(progress_matches("deck4-blue-empty-time120-165-red.ppm", PROGRESS_CLOSE, PROGRESS_BUDGET_FILL, PROGRESS_CAP));
+    CHECK(time_text_matches("deck4-blue-empty-time120-165-red.ppm", TIME_RED_CLOSE, TIME_RED_BUDGET, TIME_RED_CAP));
+    dfw_tick(&live, 500);
+    dfw_tick(&live, 1000);
+    dfw_tick(&live, 1500);
+    CHECK(rec.presents == 1);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+}
+
+/// The stages' edges: 61 s left is normal; 60 s and 31 s are steady red; 30 s blinks; past the end (elapsed over the
+/// length) blinks.
+static void the_warning_stages_start_at_60_and_30_seconds(void) {
     begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 104, 165, 0);
     CHECK(rec.last[3 * DFW_SIZE + 115] == 0x0080FFu);
     dfw_tick(&live, 500);
     CHECK(rec.presents == 1);
-    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 105, 165, 0);
-    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
-    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 200, 165, 0);
-    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+    static const uint16_t steady[] = { 105, 134 };
+    for (size_t n = 0; n < 2; n++) {
+        begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, steady[n], 165, 0);
+        CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+        dfw_tick(&live, 500);
+        CHECK(rec.presents == 1);
+    }
+    static const uint16_t blinking[] = { 135, 200 };
+    for (size_t n = 0; n < 2; n++) {
+        begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, blinking[n], 165, 0);
+        CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+        dfw_tick(&live, 500);
+        CHECK(rec.presents == 2 && rec.last[3 * DFW_SIZE + 115] == 0xEDEDEAu);
+    }
 }
 
 /// The clock wrapping mid-blink is 500 ms like any other.
@@ -793,7 +821,8 @@ const test_case draw_live_tests[] = {
     { "the warning keeps blinking without a new second", the_warning_keeps_blinking_without_a_new_second },
     { "a new second restarts the red", a_new_second_restarts_the_red },
     { "paused in the last minute draws the normal colors", paused_in_the_last_minute_draws_the_normal_colors },
-    { "the warning covers the last 60 seconds", the_warning_covers_the_last_60_seconds },
+    { "the warning is steady red from 60 to 31 seconds", the_warning_is_steady_red_from_60_to_31_seconds },
+    { "the warning stages start at 60 and 30 seconds", the_warning_stages_start_at_60_and_30_seconds },
     { "the blink survives the clock wrapping", the_blink_survives_the_clock_wrapping },
     { "every deck's white half is white", every_decks_white_half_is_white },
     { "the marker is drawn over the progress ring", the_marker_is_drawn_over_the_progress_ring },
