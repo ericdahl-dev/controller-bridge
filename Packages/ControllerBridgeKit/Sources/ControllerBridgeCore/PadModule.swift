@@ -113,9 +113,11 @@ struct PadModule {
     func colors(held: Set<Int>) -> [[Int]] {
         switch mode {
         case .hotCue:
-            return cues.map { slot in
+            return cues.enumerated().map { index, slot in
                 guard slot != 0 else { return [0, 0, 0] }
-                return palette[slot] ?? [255, 255, 255]
+                let color = palette[slot] ?? [255, 255, 255]
+                // Held: brighter in its own color, exact (no vivid rounding with the color message).
+                return held.contains(index) ? Self.brightest(color) : color
             }
         default:
             return Array(repeating: [0, 0, 0], count: cues.count)

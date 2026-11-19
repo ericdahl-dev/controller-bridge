@@ -44,4 +44,15 @@ struct PadColorMessageTests {
         #expect(Self.shows(output, 34) == "color 0 0 0")
         #expect(!output.sent.contains { if case .noteOn(_, 32...39, let v) = $0 { v > 0 } else { false } })
     }
+
+    @Test("A held pad is brighter in its own color: its strongest channel at full, exact; released, it's back")
+    func heldPad() throws {
+        let rig = try Self.loaded()
+        Self.cues(rig, [2, 4, 0, 0, 0, 0, 0, 0])
+        let output = try Ring.output(rig)
+        PadsTests.down(rig, 32)
+        #expect(Self.shows(output, 32) == "color 127 63 31")   // (255, 127, 63): 200, 100, 50 scaled up
+        PadsTests.up(rig, 32)
+        #expect(Self.shows(output, 32) == "color 100 50 25")
+    }
 }
