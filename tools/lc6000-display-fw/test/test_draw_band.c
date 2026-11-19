@@ -4,6 +4,7 @@
 #include "draw_band.h"
 #include "band_geometry.h"
 #include "band_table.h"
+#include "layer_record.h"
 #include <string.h>
 
 #define CANVAS 216
@@ -192,21 +193,19 @@ static void no_ring_puts_nothing(void) {
 static uint16_t layer[DFW_LAYER_W * DFW_LAYER_H];
 static uint16_t want[DFW_LAYER_W * DFW_LAYER_H];
 
-static uint16_t rgb565(dfw_pixel p) {
-    return (uint16_t)(((p >> 8) & 0xF800u) | ((p >> 5) & 0x07E0u) | ((p >> 3) & 0x001Fu));
-}
 
 /// What the layer should get: each band pixel outside the 198 square, turned as the frame is, in RGB565.
 static void want_put(void *ctx, int x, int y, dfw_pixel color) {
     (void)ctx;
     if (x >= 0 && x < DFW_SIZE && y >= 0 && y < DFW_SIZE) return;
-    want[(DFW_FRAME_Y + DFW_SIZE - 1 - y) * DFW_LAYER_W + DFW_FRAME_X + DFW_SIZE - 1 - x] = rgb565(color);
+    want[dfw_panel_index(x, y)] = dfw_rgb565(color);
 }
 
 /// Whether the panel pixel (px, py) is in the band's annulus outside the frame: what dfw_draw_band clears.
 static int in_cleared_band(int px, int py) {
-    int x = DFW_FRAME_X + DFW_SIZE - 1 - px, y = DFW_FRAME_Y + DFW_SIZE - 1 - py;
-    if (x >= 0 && x < DFW_SIZE && y >= 0 && y < DFW_SIZE) return 0;
+    int x, y;
+    dfw_panel_to_frame(py * DFW_LAYER_STRIDE + px, &x, &y);
+    if (dfw_in_frame(x, y)) return 0;
     float dx = (float)x + 0.5f - 99.0f, dy = (float)y + 0.5f - 99.0f, r2 = dx * dx + dy * dy;
     return r2 >= 101.5f * 101.5f && r2 <= 108.5f * 108.5f;
 }
@@ -230,7 +229,7 @@ static void the_band_lands_on_the_layer_turned_and_in_rgb565(void) {
     // Over half the band is inside the square, at the diagonals: the rest is still well over a thousand pixels.
     CHECK(set > 1000);
     // 12 o'clock, r 105, is the fill's start in the deck's blue: frame (98, -7) lands at panel (160, 225).
-    CHECK(layer[(DFW_FRAME_Y + DFW_SIZE - 1 + 7) * DFW_LAYER_W + DFW_FRAME_X + DFW_SIZE - 1 - 99] != 0x1234u);
+    CHECK(layer[dfw_panel_index(99, -7)] != 0x1234u);
     // The ring gone: the band's black, the rest untouched.
     feed(&unit, "F0 00 02 0B 7F 10 20 00 05 06 00 2A 00 00 F7");   // unknown length
     dfw_tick(&unit, 10);
@@ -251,18 +250,16 @@ static void the_bands_clear_leaves_the_frames_corners(void) {
     for (int i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) layer[i] = 0;
     for (int y = 0; y < DFW_SIZE; y++)
         for (int x = 0; x < DFW_SIZE; x++)
-            layer[(DFW_FRAME_Y + y) * DFW_LAYER_W + DFW_FRAME_X + x] =
-                rgb565(rec.last[(DFW_SIZE - 1 - y) * DFW_SIZE + (DFW_SIZE - 1 - x)]);
-    uint16_t corner = layer[193 * DFW_LAYER_W + 85];
-    CHECK(corner == rgb565(0x0080FFu));   // the fill, past 1:30 at 83/165
+            layer[dfw_panel_index(x, y)] = dfw_rgb565(rec.last[y * DFW_SIZE + x]);
+    uint16_t corner = layer[dfw_panel_index(173, 25)];
+    CHECK(corner == dfw_rgb565(0x0080FFu));   // the fill, past 1:30 at 83/165
     dfw_draw_band(layer, &unit);
-    CHECK(layer[193 * DFW_LAYER_W + 85] == corner);
+    CHECK(layer[dfw_panel_index(173, 25)] == corner);
     // And every pixel of the square is the frame's still.
     int off = 0;
     for (int y = 0; y < DFW_SIZE; y++)
         for (int x = 0; x < DFW_SIZE; x++)
-            off += layer[(DFW_FRAME_Y + y) * DFW_LAYER_W + DFW_FRAME_X + x] !=
-                   rgb565(rec.last[(DFW_SIZE - 1 - y) * DFW_SIZE + (DFW_SIZE - 1 - x)]);
+            off += layer[dfw_panel_index(x, y)] != dfw_rgb565(rec.last[y * DFW_SIZE + x]);
     CHECK(off == 0);
 }
 
@@ -274,43 +271,17 @@ static void the_frame_draws_the_rings_corners(void) {
     CHECK(rec.last[25 * DFW_SIZE + 173] == 0x4A4A4Au);
 }
 
-/// A recording layer (#468): the layer's pixels, and per pixel how many writes this call made and whether one wrote
-/// black and a later one a color (the shimmer: the ring went dark on the visible layer before it was drawn again).
-typedef struct {
-    uint16_t pixels[DFW_LAYER_W * DFW_LAYER_H];
-    uint8_t writes[DFW_LAYER_W * DFW_LAYER_H];
-    uint8_t blacked[DFW_LAYER_W * DFW_LAYER_H];
-    int total, dark_then_lit, in_square;
-} recorder;
-static recorder record;
+/// The recording adapter (test/layer_record.c): the seam's every write, per present.
+static layer_recorder record;
 
-static uint16_t record_read(void *ctx, int index) { return ((recorder *)ctx)->pixels[index]; }
-
-static void record_write(void *ctx, int index, uint16_t value) {
-    recorder *r = ctx;
-    int px = index % DFW_LAYER_W, py = index / DFW_LAYER_W;
-    if (px >= DFW_FRAME_X && px < DFW_FRAME_X + DFW_SIZE && py >= DFW_FRAME_Y && py < DFW_FRAME_Y + DFW_SIZE) r->in_square++;
-    if (r->blacked[index] && value != 0) r->dark_then_lit++;
-    if (value == 0) r->blacked[index] = 1;
-    if (r->writes[index] < 255) r->writes[index]++;
-    r->total++;
-    r->pixels[index] = value;
-}
-
-/// One present's band through the recorder: the counts start again, the pixels stay (the layer is the memory).
+/// One present's band through the recorder.
 static void record_band(void) {
-    memset(record.writes, 0, sizeof record.writes);
-    memset(record.blacked, 0, sizeof record.blacked);
-    record.total = record.dark_then_lit = record.in_square = 0;
-    const dfw_layer_io io = { record_read, record_write, &record };
-    dfw_band_layer(&unit, &io);
+    recorder_next_present(&record);
+    const dfw_layer layer = recorder_layer(&record);
+    dfw_band_layer(&unit, &layer);
 }
 
-static int most_writes(void) {
-    int most = 0;
-    for (int i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) if (record.writes[i] > most) most = record.writes[i];
-    return most;
-}
+static int most_writes(void) { return recorder_most_writes(&record); }
 
 /// (1), (2), (5): a present's band writes each pixel at most once, never black and then a color, and never in the square.
 /// From a black layer and from a layer holding another ring (83 then 120 of 165).

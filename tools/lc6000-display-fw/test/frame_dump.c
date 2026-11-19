@@ -6,6 +6,7 @@
 #include "dfw.h"
 #include "draw.h"
 #include "draw_band.h"
+#include "present.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,9 +18,10 @@ static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
 static dfw_unit unit;
 static uint16_t panel[DFW_LAYER_W * DFW_LAYER_H];
 
-static uint16_t rgb565(dfw_pixel p) {
-    return (uint16_t)(((p >> 8) & 0xF800u) | ((p >> 5) & 0x07E0u) | ((p >> 3) & 0x001Fu));
-}
+/// frame-dump's adapter of the layer seam (#568): the panel above.
+static uint16_t dump_read(void *ctx, int index) { (void)ctx; return panel[index]; }
+static void dump_write(void *ctx, int index, uint16_t value) { (void)ctx; panel[index] = value; }
+static const dfw_layer dump_layer = { dump_read, dump_write, 0 };
 
 int main(int argc, char **argv) {
     dfw_port port = { present, send, 0 };
@@ -36,11 +38,9 @@ int main(int argc, char **argv) {
     }
     dfw_tick(&unit, 0);
     if (as_panel) {
-        for (int y = 0; y < DFW_SIZE; y++)
-            for (int x = 0; x < DFW_SIZE; x++)
-                panel[(DFW_FRAME_Y + y) * DFW_LAYER_W + DFW_FRAME_X + x] =
-                    rgb565(frame[(DFW_SIZE - 1 - y) * DFW_SIZE + (DFW_SIZE - 1 - x)]);
-        dfw_draw_band(panel, &unit);
+        // A's present, composed through the seam (test/present.c; on the unit it is A's own copy), then B's band.
+        present_through_layer(&dump_layer, frame);
+        dfw_band_layer(&unit, &dump_layer);
         for (size_t i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) {
             uint8_t le[2] = { (uint8_t)panel[i], (uint8_t)(panel[i] >> 8) };
             fwrite(le, 1, 2, stdout);

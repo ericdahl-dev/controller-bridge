@@ -55,6 +55,13 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   every deck (#524). The tick
   works the look out from `now_ms`, so the flip draws a frame; with no new time it keeps alternating off the last one.
   Nothing while the display is stale.
+- `src/panel_geometry.h`: the panel, defined once (#568): the 320 x 240 RGB565 layer, the frame at (61, 21) turned 180
+  degrees, the pack, and the layer seam `dfw_layer` {read, write, ctx}. Every write to the panel goes through a
+  `dfw_layer`: the real layer inside `dfw_draw_band` (the only code that touches the layer's pointer), the recording
+  adapter the tests use (`test/layer_record.c`), and frame-dump's. A's present (arm/adapter.c, as flashed) takes the
+  same geometry; the tests compose its copy natively through the seam (`test/present.c`) and check every present on the
+  whole panel (`test/test_panel_record.c`): no pixel written twice, none black then lit, the band writing only what
+  changes. Known gap: A's copy rewrites the whole square, 39,204 writes, every present (#570).
 - `src/draw_band.h`, `src/draw_band.c`: the progress ring (#524), out in the panel's black band round the frame: r 103-107
   from the frame's center, a 0x4A4A4A track and the fill clockwise from 12 o'clock in the deck color, or the
   warning's red or white. `dfw_band_pixels` puts its pixels in the frame's coordinates (some below 0 or past 197),
