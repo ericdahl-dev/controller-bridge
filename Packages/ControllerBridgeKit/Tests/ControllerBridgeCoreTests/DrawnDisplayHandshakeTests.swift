@@ -65,7 +65,7 @@ struct DrawnDisplayHandshakeTests {
         let (rig, port, _) = try Self.rig(.custom)
         rig.coordinator.jogDisplayReply(Self.answer)
         let drawn = Self.drawn(port)
-        #expect(drawn.count == 5)   // the question, begin, the deck, (#464) the state and (#459) the beat
+        #expect(drawn.count == 9)   // the question, begin, the deck, (#464) the state, (#458) 3 texts and the tempo, (#459) the beat
         #expect(drawn.dropFirst().first == DrawnDisplay.Message.begin(version: 1).bytes)
         let deck = drawn.first { $0[9] == 0x03 }
         #expect(deck?[10] == 1 && deck?[17] == DrawnDisplay.Player.empty.rawValue)
@@ -212,7 +212,8 @@ struct DrawnDisplayHandshakeTests {
         port.wd.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [.string("Daybreak"), .string("Kid"), .string("8A"),
                                                                              .float(124), .float(200), .int(100), .int(400), .string("track")]))
-        #expect(Self.drawn(port).isEmpty)
+        // Only the new title (#458), no deck message.
+        #expect(Self.drawn(port) == [DrawnDisplay.Message.text(.title, "Daybreak").bytes])
     }
 }
 
