@@ -1,7 +1,7 @@
 # LC6000 drawn jog display firmware
 
 This is the C for the LC6000 PRIME's display chip that draws the jog display itself from small messages, instead of
-showing uploaded images (spec #455, this part #457). DeckBridge sends the messages over the WD port. This code
+showing uploaded images (spec #455; #457 and #464 so far). DeckBridge sends the messages over the WD port. This code
 parses them and draws today's design B into a back buffer.
 
 Everything here builds and is tested natively, on a Mac or on Linux, with no hardware and no vendor data. The
@@ -28,11 +28,16 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
 - `src/dfw.h`, `src/dfw.c`: the unit.
   - `dfw_init` takes the port: `present` sends a finished frame to the panel, and `send` sends a reply to the host.
   - `dfw_message` only copies a whole message (F0 through F7) into a fixed inbox. It can be called from anywhere.
-  - `dfw_tick` parses what's waiting, then redraws and presents if something changed.
+  - `dfw_tick(unit, now_ms)` parses what's waiting, then redraws and presents if something changed. `now_ms` is
+    a millisecond clock that may wrap; on the unit it's the HAL tick.
+  - With none of our messages for 3 s, or the state's feedback-stale bit set, the unit is stale (`dfw_stale`) and
+    draws the waiting look. Any of our messages ends the silence (#464).
   - The back buffer belongs to the caller (`dfw_set_frame`). On the unit it is in SDRAM.
   - With no frame, nothing is drawn and the capability ask gets no answer, so DeckBridge falls back to images.
 - `src/draw.h`, `src/draw.c`: `dfw_draw` draws design B for the deck in front. For now that is the ground, the
-  unlit ring, the deck chip and the player badge. It uses `float` only, with no `double` and no libm (Cortex-M4F).
+  unlit ring, the deck chip and the player badge. When stale it draws the waiting look instead: our logo (the app
+  icon's deck ring) with the beat ring dark. The logo is drawn from the icon SVG's own numbers, not stored as an
+  image. It uses `float` only, with no `double` and no libm (Cortex-M4F).
 - `src/font_header.h`: glyph coverage for the header's two faces, generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
@@ -81,10 +86,15 @@ it, never with images made by this code.
   bands are compared: the ring band (radius 83.5 to 96.5) and the header band (y 20 to 55). Everything else must
   be plain ground.
 
+The waiting look (`test/ref/stale.ppm`) is compared over the whole frame, since the logo is all of it.
+`stale-preview.png` is a PNG of it for people to look at; the tests read the PPM. The Kit's `JogLogoTests` read
+`design/icon/icon-1-deck-ring.svg` and fail if the logo's numbers no longer match the icon.
+
 **Tolerance**, per channel, 0-255:
 
 - **Ring:** no pixel more than 6 off.
 - **Header:** at most 24 pixels more than 8 off, and none more than 24 off.
+- **Waiting look:** at most 64 pixels more than 8 off, and none more than 24 off.
 
 CoreGraphics and this code anti-alias curves slightly differently: up to 18 levels on a few edge pixels of a white
 chip, and within 8 everywhere else. The limits are tight enough that a wrong color, a 1 px shift or a wrong glyph
@@ -100,7 +110,8 @@ log.
    ```
 
 2. Add a row for it to `cases[]` in `test/test_draw.c`.
-3. Commit the new or changed `.ppm` with the change that needed it, so the review shows it.
+3. Commit the new or changed `.ppm` (and the preview PNG) with the change that needed it, so the review shows it.
+   The script needs a Mac: it builds the Kit and uses `sips` for the preview.
 
 Never regenerate the references to make a failing test pass. They change only when design B changes in the
 Swift renderer.
