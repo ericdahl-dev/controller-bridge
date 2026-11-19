@@ -51,7 +51,7 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   Swift's `drawTime`): the progress ring (r 96-98, a dark track and the deck color's fill clockwise from 12 o'clock)
   and the time left, "-m:ss" in GeistMono-SemiBold 14 at (99, 169). None until a time message has come since begin or
   the deck changed, and none for an unknown length. In the last minute while playing it blinks at 1 Hz: red for the
-  first 500 ms from when the time last changed, then its normal half (the ring white for a deck near red). The tick
+  first 500 ms from when the time last changed, then white, text and fill, for every deck (#524). The tick
   works the look out from `now_ms`, so the flip draws a frame; with no new time it keeps alternating off the last one.
   Nothing while the display is stale.
 - `src/font_header.h`: glyph coverage for the header's two faces and the track time's (#460), generated from the bundled Geist fonts

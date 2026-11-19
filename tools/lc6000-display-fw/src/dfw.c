@@ -249,12 +249,12 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
 int dfw_stale(const dfw_unit *unit) { return unit->silent || (unit->flags & FLAG_STALE); }
 
 /// The warning while playing a track of known length with a minute or less left: red for the first half of each
-/// second from the last change, then normal. With no new time it keeps alternating off the last change (a dropped
+/// second from the last change, then white. With no new time it keeps alternating off the last change (a dropped
 /// message never freezes it red). Unsigned subtraction, so the clock wrapping is no jump.
 static uint8_t time_look(const dfw_unit *unit, uint32_t now_ms) {
     if (!unit->time_heard || unit->track_length == 0 || !(unit->flags & FLAG_PLAYING) || dfw_stale(unit) ||
         (int)unit->track_length - (int)unit->elapsed > WARNING_SECONDS) return DFW_TIME_NORMAL;
-    return ((now_ms - unit->time_at) / BLINK_HALF_MS) % 2u == 0 ? DFW_TIME_RED : DFW_TIME_WARNING_NORMAL;
+    return ((now_ms - unit->time_at) / BLINK_HALF_MS) % 2u == 0 ? DFW_TIME_RED : DFW_TIME_WHITE;
 }
 
 void dfw_tick(dfw_unit *unit, uint32_t now_ms) {
