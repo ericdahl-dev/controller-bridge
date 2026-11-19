@@ -74,6 +74,7 @@ struct CensorDeckSelectLightsTests {
         let rig = try Self.layered()
         #expect(rig.leds[23] == 1)
         for step in 0..<(LayersTests.lc6000Layers.count + 1) {
+            rig.clock.now = Double(step)   // a second apart: each a lone step (#553)
             Press.note(rig, 23, down: true)
             #expect(rig.leds[23] == 127, "step \(step) pressed")
             Press.note(rig, 23, down: false)

@@ -18,6 +18,8 @@ struct DeckSelectChannelTests {
         LayersTests.note(rig, channel: 1, 51, 0); LayersTests.note(rig, channel: 2, 51, 127)
         LayersTests.note(rig, channel: 2, 1, 127)
         LayersTests.note(rig, channel: 2, 51, 0); LayersTests.note(rig, channel: 1, 51, 127)
+        rig.clock.now = 5   // well after the unit's own layer changes, so a step is a lone one (#553)
+        rig.coordinator.tick()   // and they've settled
         return rig
     }
 
