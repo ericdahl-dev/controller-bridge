@@ -539,7 +539,6 @@ static void the_marker_is_drawn_over_the_progress_ring(void) {
 
 /// The last minute's warning (#460, JogTrackTime): while playing with 60 s or less left, red (text and fill) for the
 /// first 500 ms after the time changes, then the normal half. 135 of 165 is 30 s left.
-#define WARN_CLOSE 6
 
 /// The red half: the frame the time message lands on.
 static void the_warning_starts_red(void) {
