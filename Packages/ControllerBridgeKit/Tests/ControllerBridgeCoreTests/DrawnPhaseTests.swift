@@ -40,4 +40,23 @@ struct DrawnPhaseTests {
         #expect(phase.value(offset: 0.003, playing: false) == -8192)
         #expect(phase.value(offset: 0.003, playing: true) == 49)
     }
+
+    @Test("Wrap guard: an unsynced deck drifting through ±0.5 holds its side as a full bar until it's back under 0.4")
+    func wrapSweep() {
+        // Drifting ahead: 0.3 to the wrap, then Syndicate's offset jumps to -0.5 and comes back up.
+        let values = Self.run([0.3, 0.45, 0.499, -0.499, -0.45, -0.41, -0.39, -0.3])
+        #expect(values == [4915, 7373, 8176, 8191, 8191, 8191, -6390, -4915])
+        // The other way: behind through the wrap.
+        #expect(Self.run([-0.45, 0.48, 0.41, 0.39]) == [-7373, -8191, -8191, 6390])
+    }
+
+    @Test("Jitter at the wrap never flips the side")
+    func wrapJitter() {
+        #expect(Self.run([0.49, -0.49, 0.49, -0.49, -0.495]) == [8028, 8191, 8028, 8191, 8191])
+    }
+
+    @Test("Past 0.4 with no side yet (the first value), the offset shows as it is")
+    func wrapFirst() {
+        #expect(Self.run([-0.45]) == [-7373])
+    }
 }
