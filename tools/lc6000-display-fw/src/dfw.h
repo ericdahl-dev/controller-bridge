@@ -64,6 +64,8 @@ typedef struct dfw_unit {
     uint8_t text[DFW_TEXT_FIELDS][DFW_TEXT_MAX];
     uint8_t text_length[DFW_TEXT_FIELDS];
     uint16_t tempo;
+    /// Whether a text message has come since the deck last changed: until one has, no words are drawn (#458).
+    uint8_t text_heard;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
     /// The clock at the tick that is drawing, for anything drawn over time.

@@ -374,3 +374,4 @@ const test_case all_tests[] = {
 /// The shared harness also walks agent3's drawing table; the hook's tests have none of their own.
 const test_case draw_tests[] = { { 0, 0 } };
 const test_case draw_live_tests[] = { { 0, 0 } };
+const test_case text_tests[] = { { 0, 0 } };
