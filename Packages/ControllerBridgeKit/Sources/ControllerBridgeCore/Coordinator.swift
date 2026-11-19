@@ -587,8 +587,10 @@ public final class Coordinator {
             if velocity > 0, let at = layers.firstIndex(of: current) {
                 let target = layers[(at + 1) % layers.count]
                 // The bridge's own step: the unit didn't touch its lights, so only those that differ go (#554).
+                // It paints where the unit takes LEDs: the unit's own selected deck's channel, which a bridge step
+                // doesn't change, and which the deck select note itself came on (agent2's #481 reading).
                 activateLayer(target, leaving: current, among: layers, multiChannel: multiChannelUnits.contains(source),
-                              unitCleared: false)
+                              unitCleared: false, unitChannel: channel)
             }
             // No layer handles the note itself. Its light stays at its idle level, sent with the new layer's repaint:
             // the unit showed no brighter level for it on a press (#480), so a press sends it nothing.
@@ -623,15 +625,22 @@ public final class Coordinator {
     /// `unitCleared`: the unit made the change (its layer note, a control or pad on a layer's channel) and its
     /// deck-select mode cleared its lights (#426), so the new layer paints every one; the bridge's own deck select step
     /// (#420) paints only the lights that differ from what the unit shows (#554).
+    /// `unitChannel`: the channel the unit takes LEDs on now, when the bridge stepped on its own (#420) and the unit's
+    /// selected deck didn't move; nil when the unit made the change and its channel is the layer's.
     private func activateLayer(_ target: Int, leaving current: Int, among layers: [Int], multiChannel: Bool,
-                               unitCleared: Bool = true) {
+                               unitCleared: Bool = true, unitChannel: UInt8? = nil) {
         if current != target { controllers[current].bridge.releaseAll() }
         for index in layers where index != target {
             status.controllers[index].activeLayer = false
             controllers[index].bridge.layerShown = false
         }
         status.controllers[target].activeLayer = true
-        controllers[target].bridge.ledChannel = multiChannel || controllers[target].bridge.mapping.midi.channel == 1 ? nil : 0
+        let bridge = controllers[target].bridge
+        if let unitChannel {
+            bridge.ledChannel = unitChannel == bridge.channel ? nil : unitChannel
+        } else {
+            bridge.ledChannel = multiChannel || bridge.mapping.midi.channel == 1 ? nil : 0
+        }
         // The one pitch fader stayed where it was, and the unit doesn't send it again: the new layer takes its
         // position, so the pitch arrows point the right way at once (#475).
         if current != target { controllers[target].bridge.takeFader(from: controllers[current].bridge) }

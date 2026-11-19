@@ -40,4 +40,21 @@ struct LayerShownCacheTests {
         #expect(rig.coordinator.status.controllers[0].activeLayer)
         #expect(Self.noteOns(rig).isEmpty)   // layers 3, 4 and 1 all show the same lights
     }
+
+    @Test("Multi-channel mode: a deck select step paints the new layer on the unit's current channel (the one deck select came on), not the layer's own")
+    func unitChannel() throws {
+        let rig = try LayersTests.layered()
+        let output = try #require(rig.midi.outputs[Rig.lc6000Out.id])
+        LayersTests.note(rig, channel: 1, 51, 0); LayersTests.note(rig, channel: 2, 51, 127)
+        LayersTests.note(rig, channel: 2, 1, 127)   // Play on ch2: the unit is in its multi-channel state, on layer 2
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Playing", [.int(1)]))
+        output.sent.removeAll()
+        rig.clock.now = 5   // well after the unit's own layer change, so the step isn't settled with it (#553)
+        // Deck select comes on ch1 (the trace: always ch1), the unit's own channel: the bridge steps to layer 3.
+        LayersTests.note(rig, channel: 1, 23, 127)
+        LayersTests.note(rig, channel: 1, 23, 0)
+        #expect(rig.coordinator.status.controllers[2].activeLayer)
+        #expect(LayersTests.channelsWritten(output) == [1])
+        #expect(Self.noteOns(rig).contains("ch1 1=127"))   // deck 3's Play, where the unit takes it
+    }
 }
