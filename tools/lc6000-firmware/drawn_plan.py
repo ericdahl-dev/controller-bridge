@@ -6,6 +6,7 @@ step out; the shell only does what it's told (dfu-util, the keyboard) and record
   python3 -I drawn_plan.py next PLAN.json         one action, its fields separated by tabs
   python3 -I drawn_plan.py record PLAN.json KEY VALUE
   python3 -I drawn_plan.py devices LISTING        the stock wizard's look: one PATH, ask PATH QUESTION, or stop WHY
+  python3 -I drawn_plan.py find-record UPPER.dfu OWNER.dfu   the build record the kit left beside them: one PATH, or ask WHY
 
 Actions:
   ask KEY QUESTION                 a y/N question; record y or n
@@ -125,6 +126,24 @@ def devices(listing_path):
             if path:
                 found.setdefault(path.group(1), []).append(name.group(1) if name else "")
     return found
+
+
+def find_record(upper, owner):
+    """The build record the kit tools left beside the two .dfu files (#593): ("one", path) when there's exactly one
+    record, the same copy beside both counting once; else ("ask", why). Finding it judges nothing: the plan does."""
+    found = {}
+    for dfu in (upper, owner):
+        path = build_record.carried(dfu)
+        try:
+            with open(path, "rb") as f:
+                found.setdefault(f.read(), path)
+        except OSError:
+            continue
+    if len(found) == 1:
+        return ("one", next(iter(found.values())))
+    if found:
+        return ("ask", "The build records beside the two .dfu files differ: they're from different builds.")
+    return ("ask", "No build record beside the two .dfu files.")
 
 
 # MARK: the plan
@@ -359,6 +378,8 @@ def main(argv=None):
         print("\t".join(field.replace("\\", "\\\\").replace("\n", "\\n") for field in next_action(argv[1])))
     elif command == "devices" and len(argv) == 2:
         print("\t".join(judge_devices(argv[1])))
+    elif command == "find-record" and len(argv) == 3:
+        print("\t".join(find_record(argv[1], argv[2])))
     elif command == "record" and len(argv) == 4:
         record(argv[1], argv[2], argv[3])
     else:

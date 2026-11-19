@@ -492,8 +492,15 @@ ask UPPER_DFU "Path to block B's .dfu:"
 UPPER_DFU="${UPPER_DFU/#\~/$HOME}"
 ask OWNER_DFU "Path to the owner's image .dfu:"
 OWNER_DFU="${OWNER_DFU/#\~/$HOME}"
-ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
-RECORD="${RECORD/#\~/$HOME}"
+# The blocks' build record (#593): the kit tools leave a copy beside each .dfu; ask only without exactly one.
+IFS=$'\t' read -r found RECORD < <(plan find-record "$UPPER_DFU" "$OWNER_DFU") || true
+if [[ "$found" == "one" ]]; then
+  say "Build record: $RECORD"
+else
+  say "${RECORD:-No build record found.}"
+  ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
+  RECORD="${RECORD/#\~/$HOME}"
+fi
 write_env CURRENT_WD "$CURRENT_WD"
 write_env UPPER_DFU "$UPPER_DFU"
 write_env OWNER_DFU "$OWNER_DFU"

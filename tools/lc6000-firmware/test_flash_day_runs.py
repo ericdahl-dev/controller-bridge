@@ -3,12 +3,14 @@ and swiftc on a PATH that holds only them and /usr/bin:/bin, with HOME and the w
 real dfu-util, the real update-mode tool in ~/lc6000 and MIDI are out of reach, and each test checks that first: the
 owner's unit may be plugged in while these run.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import os, shutil, subprocess, sys, tempfile, textwrap, unittest
+import contextlib, io, json, os, shutil, subprocess, sys, tempfile, textwrap, unittest
 
+import build_owner_image
+import build_record
 import build_upper_dfu
 import dfupatch
 from test_drawn_plan import write_record
-from test_build_owner_image import stock_like_element
+from test_build_owner_image import stock_like_element, synthetic_block
 from test_build_upper_dfu import good_block
 from test_dfupatch import dfuse_file, full_wd_element
 
@@ -214,6 +216,33 @@ class FlashDayRunTests(unittest.TestCase):
                 result = self.run_wizard(self.answers())
                 self.assert_stopped_with_the_way_back(result, "couldn't be read")
                 self.assertEqual(self.downloads(), [])
+
+
+    def test_built_by_the_kit_the_record_is_found_and_never_asked_for(self):
+        # make arm's folder, then the two kit tools into the owner's folder, as the README says (#593).
+        arm, kit = os.path.join(self.dir.name, "arm"), os.path.join(self.dir.name, "lc6000")
+        os.makedirs(arm), os.makedirs(kit)
+        block, upper = os.path.join(arm, "block.bin"), os.path.join(arm, "upper.bin")
+        with open(block, "wb") as f:
+            f.write(synthetic_block())
+        with open(upper, "wb") as f:
+            f.write(good_block())
+        with open(os.path.join(arm, "build.json"), "w") as f:
+            json.dump(build_record.record_of(synthetic_block(), good_block(), "1", "1"), f)
+        stock, proof = self.file("stock.dfu", dfuse_file(self.owner_element)), self.file("proof.bin", b"\xff" * 0x80000)
+        self.upper, self.owner = os.path.join(kit, "wd-upper-drawing.dfu"), os.path.join(kit, "wd-owner.dfu")
+        for tool, argv in ((build_upper_dfu, [upper, self.upper, "--proof", proof]),
+                           (build_owner_image, [stock, block, self.owner, "--no-show-slot-16"])):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(tool.main(argv), 0)
+        self.unit_holds(self.current_element)
+        answers = ["", self.current, self.upper, self.owner,   # no record path: it's found
+                   "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+        result = self.run_wizard(answers)
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertIn("Build record: " + os.path.join(kit, "wd-upper-drawing.build.json"), result.stdout)
+        self.assertEqual(len(self.downloads()), 2)
+        self.assertEqual(self.memory("upper.bin")[:len(good_block())], good_block())
 
 
 if __name__ == "__main__":

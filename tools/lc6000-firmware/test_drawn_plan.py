@@ -344,6 +344,53 @@ class BuildRecordTests(DrawnPlanTests):
         self.assertEqual(len(unit.log), 1)
 
 
+class FindRecordTests(unittest.TestCase):
+    """`drawn_plan.py find-record UPPER.dfu OWNER.dfu` (#593): the record each kit tool left beside its .dfu, so the owner
+    types no fourth path. Exactly one record, or ask."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.upper = os.path.join(self.dir.name, "wd-upper-drawing.dfu")
+        self.owner = os.path.join(self.dir.name, "owner", "wd-owner.dfu")
+        os.makedirs(os.path.dirname(self.owner))
+
+    def leave(self, dfu, content):
+        path = os.path.splitext(dfu)[0] + ".build.json"
+        with open(path, "w") as f:
+            f.write(content)
+        return path
+
+    def find(self):
+        import contextlib, io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = drawn_plan.main(["find-record", self.upper, self.owner])
+        self.assertEqual(code, 0)
+        return out.getvalue().rstrip("\n").split("\t")
+
+    def test_one_record_beside_either_file_is_the_one(self):
+        self.assertEqual(self.find_with(upper='{"x": 1}'), ["one", os.path.splitext(self.upper)[0] + ".build.json"])
+        self.setUp()
+        self.assertEqual(self.find_with(owner='{"x": 1}'), ["one", os.path.splitext(self.owner)[0] + ".build.json"])
+
+    def find_with(self, upper=None, owner=None):
+        if upper is not None:
+            self.leave(self.upper, upper)
+        if owner is not None:
+            self.leave(self.owner, owner)
+        return self.find()
+
+    def test_the_same_record_beside_both_is_one(self):
+        self.assertEqual(self.find_with(upper='{"x": 1}', owner='{"x": 1}')[0], "one")
+
+    def test_none_or_two_different_asks(self):
+        self.assertEqual(self.find()[0], "ask")
+        kind, why = self.find_with(upper='{"x": 1}', owner='{"x": 2}')
+        self.assertEqual(kind, "ask")
+        self.assertIn("differ", why)
+
+
 class DevicesCommandTests(unittest.TestCase):
     """`drawn_plan.py devices LISTING`, for the stock wizard's look() (#567): the same judgment the drawn plan makes,
     so the shell no longer counts devices itself."""
