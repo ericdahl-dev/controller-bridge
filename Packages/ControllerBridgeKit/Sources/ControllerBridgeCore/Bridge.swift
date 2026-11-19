@@ -165,11 +165,9 @@ final class Bridge {
     /// none until the capture ends and it repaints.
     var ledsCaptured = false
 
-    /// The last velocity sent to each LED, buttons and pads on their own channel (#224) apart, so an unchanged LED is
-    /// never sent twice (#383).
-    private var ledCache = LEDCache()
-    /// What each color-message LED shows (#530), as last sent: only a change goes out, as with the velocity cache.
-    private var colorCache: [UInt8: [UInt8]] = [:]
+    /// What each light shows (#383, #530, #554): shared with the other layers on this output, so an unchanged light
+    /// is never sent twice, and a layer change sends only the lights that differ.
+    var shown = LEDShown()
     /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
     var colorMessages = false
     /// The color-message LEDs' brightness, in percent (#532).
@@ -229,10 +227,11 @@ final class Bridge {
     }
 
     /// Shown from scratch: every LED painted again, once (#428: after the layer steps settle).
-    func showLayer() {
+    /// `full`: the unit forgot its lights (a layer change it made, #426), so every one goes again; otherwise only the
+    /// lights that differ from what the unit shows (#554).
+    func showLayer(full: Bool = true) {
         layerShown = true
-        ledCache.flush()
-        colorCache = [:]
+        if full { shown.flush() }
         refreshLEDs()
     }
 
@@ -241,8 +240,8 @@ final class Bridge {
         feedbackStale = stale
         rearmPickup()
         rearmMixer()
-        ledCache.flush()
-        colorCache = [:]
+        // A hidden layer paints nothing, so it leaves the unit's lights, and the shared record of them, alone (#554).
+        if layerShown { shown.flush() }
         mixerModule.forgetMeterShown()   // shown again on the next tick, on what may be a new port (#320)
         refreshLEDs()
     }
@@ -450,8 +449,7 @@ final class Bridge {
 
     /// Clears the LED cache and repaints every LED from the current state, as after an LED sweep.
     func repaintLEDs() {
-        ledCache.flush()
-        colorCache = [:]
+        shown.flush()
         // The meter shows again on its next tick (#320).
         mixerModule.forgetMeterShown()
         refreshLEDs()
@@ -463,23 +461,25 @@ final class Bridge {
         guard enabled != ledsEnabled else { return }
         if enabled {
             ledsEnabled = true
-            ledCache.flush()
-            colorCache = [:]
+            shown.flush()
             mixerModule.forgetMeterShown()
             refreshLEDs()
         } else {
             // A button goes to the profile's off (#194); a pad or the ring to no color.
             let colorNotes = Set(mapping.notes.pads + [mapping.leds.ring] + [PadMode.hotCue, .roll, .loop, .slicer].flatMap(padNotes))
-            for lit in ledCache.shown(onPads: false) {
-                let off = colorNotes.contains(lit.note) ? Self.off : offLevel
-                if lit.velocity != off { led(lit.note, off) }
-            }
-            for lit in ledCache.shown(onPads: true) where lit.velocity != Self.off {
-                padLED(lit.note, Self.off)
-            }
-            // The color-message LEDs (#530): each lit one off with its own message.
-            for entry in colorCache.sorted(by: { $0.key < $1.key }) where entry.value != [0, 0, 0] {
-                if let message = colorMessageEncoder?.message(note: Int(entry.key), rgb: [0, 0, 0]) { colorLED(message) }
+            for onPads in [false, true] {
+                for lit in shown.shown(onPads: onPads) {
+                    switch lit.value {
+                    case .velocity(let velocity):
+                        let off = onPads || colorNotes.contains(lit.note) ? Self.off : offLevel
+                        if velocity != off { onPads ? padLED(lit.note, off) : led(lit.note, off) }
+                    // The color-message LEDs (#530): each lit one off with its own message.
+                    case .color(let rgb):
+                        if rgb != [0, 0, 0], let message = colorMessageEncoder?.message(note: lit.note, rgb: [0, 0, 0]) {
+                            colorLED(message)
+                        }
+                    }
+                }
             }
             // The VU meter too (#320).
             if let meter = mapping.mixer?.meter, let shown = mixerModule.meterShownValue, shown != 0, ledCC(UInt8(meter.cc), 0) {
@@ -501,7 +501,8 @@ final class Bridge {
     func led(_ note: Int, _ velocity: UInt8) {
         // During an LED sweep (#26) the bridge's own writes wait; the sweep ends with a repaint.
         // A deck layer the controller isn't showing writes nothing: the unit shows one layer at a time (#79).
-        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, ledCache.write(note, velocity, onPads: false) else { return }
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown,
+              shown.write(LEDShown.Light(note: note, onPads: false), .velocity(velocity)) else { return }
         guard let output else { return }
         do {
             try output.send(.noteOn(channel: ledChannel ?? channel, note: UInt8(note), velocity: velocity))
@@ -517,8 +518,10 @@ final class Bridge {
     /// A pad or the ring in exact RGB (#530), through Denon's color message.
     func colorLED(_ message: LEDColorMessage) {
         let rgb = [message.red, message.green, message.blue]
-        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, colorCache[message.note] != rgb else { return }
-        colorCache[message.note] = rgb
+        // The same light a note-on to this note would light: a pad on the pads' own channel, or a button note.
+        let light = LEDShown.Light(note: Int(message.note), onPads: mapping.pads.channel != nil
+                                   && mapping.notes.pads.contains(Int(message.note)))
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, shown.write(light, .color(rgb)) else { return }
         guard let output else { return }
         do { try output.send(color: message) } catch { outputFailed = true }
     }
@@ -534,7 +537,8 @@ final class Bridge {
     /// A pad's LED (#224): on the pads' own channel when the profile gives one, else like any other LED.
     func padLED(_ note: Int, _ velocity: UInt8) {
         guard mapping.pads.channel != nil else { return led(note, velocity) }
-        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, ledCache.write(note, velocity, onPads: true) else { return }
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown,
+              shown.write(LEDShown.Light(note: note, onPads: true), .velocity(velocity)) else { return }
         guard let output else { return }
         do { try output.send(.noteOn(channel: padChannel, note: UInt8(note), velocity: velocity)) } catch { outputFailed = true }
     }

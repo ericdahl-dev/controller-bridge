@@ -321,14 +321,26 @@ final class BridgeModel {
 
         ticker = Ticker(producer: pipe.producer)
         observeSleep(pipe.producer)
+        // Every MIDI send leaves the engine's task through one queue (#552): a port that stops taking data (#428) no
+        // longer stalls OSC, the ticks or the trace. A port stuck past the bound is said once, and dropped until it
+        // reconnects.
+        let recoveryProducer = pipe.producer
+        let sendQueue = MIDISendQueue(label: "dev.ericdahl.ControllerBridge.midi-send", onStuck: { name in
+            log.log("MIDI port \(name) stopped taking data: sends to it are dropped until it takes data again")
+        }, onRecovered: { name in
+            // What was dropped meanwhile is lost: every light is painted again.
+            log.log("MIDI port \(name) takes data again: repainting its lights")
+            recoveryProducer.send(.portRecovered)
+        })
         let midi = midi!
-        let jogDisplay = try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)
+        let queuedMIDI = QueuedMIDISystem(inner: midi, queue: sendQueue)
+        let jogDisplay = (try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)).map { sendQueue.jogDisplayPort($0) }
         // The entries the Coordinator starts with: the saved ones, a controller following its layers as one per layer
         // (#79). It starts straight on them (#105), so nothing is sent after start to correct it.
         let running = ControllerSettings.expanded(settings.controllers, layers: layers)
         engine = Task.detached(name: "Bridge engine") {
             await BridgeHost.run(
-                profiles: profiles, midi: midi, osc: osc, log: log, status: status, diagnostics: diagnostics,
+                profiles: profiles, midi: queuedMIDI, osc: osc, log: log, status: status, diagnostics: diagnostics,
                 jogSimulator: jogSimulator, controllers: running, ledsEnabled: settings.ledsEnabled, jogDisplay: jogDisplay, events: pipe.events
             )
         }
