@@ -27,6 +27,8 @@ typedef struct {
 void fresh(dfw_unit *unit, recording *rec);
 /// The same, with no back buffer yet.
 void fresh_without_frame(dfw_unit *unit, recording *rec);
+/// The same with a frame but no drawing (the hook block before the drawing block checks out, #501).
+void fresh_without_drawing(dfw_unit *unit, recording *rec);
 /// Hex ("F0 00 ... F7") to bytes; returns how many.
 size_t parse_hex(const char *hex, uint8_t *bytes, size_t capacity);
 /// Feeds one message, given as hex ("F0 00 ... F7").

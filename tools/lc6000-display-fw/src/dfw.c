@@ -17,10 +17,11 @@ enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_
 /// No drawn-display message for this long draws the waiting look (#464): three missed heartbeats.
 #define SILENCE_MS 3000u
 
-void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame) {
+void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame, const dfw_drawing *drawing) {
     memset(unit, 0, sizeof *unit);
     unit->port = *port;
     unit->frame = frame;
+    unit->drawing = drawing;
 }
 
 void dfw_set_frame(dfw_unit *unit, dfw_pixel *frame) { unit->frame = frame; }
@@ -87,8 +88,8 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
     }
     switch (op) {
     case OP_CAPABILITY:
-        // No back buffer means we can't draw: no answer, so the app falls back to images.
-        if (unit->frame) {
+        // No back buffer or no drawing means we can't draw: no answer, so the app falls back to images.
+        if (unit->frame && unit->drawing) {
             // The reply header (as the unit's acks), then the version both sides speak.
             const uint8_t answer[] = { 0xF0, 0x00, 0x02, 0x0B, 0x01, 0x10, DFW_CMD, 0x00, 0x02, OP_CAPABILITY,
                                        args[0] < DFW_VERSION ? args[0] : DFW_VERSION, 0xF7 };
@@ -159,7 +160,7 @@ void dfw_tick(dfw_unit *unit, uint32_t now_ms) {
         unit->dirty = 1;
     }
     // Only drawn mode draws, and only once a deck is known.
-    if (!unit->dirty || !unit->frame || !unit->drawn || unit->deck.number == 0) return;
+    if (!unit->dirty || !unit->frame || !unit->drawing || !unit->drawn || unit->deck.number == 0) return;
     unit->dirty = 0;
     unit->now_ms = now_ms;
     dfw_draw(unit->frame, unit);

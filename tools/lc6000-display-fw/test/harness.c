@@ -1,4 +1,5 @@
 #include "harness.h"
+#include "draw.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -20,10 +21,18 @@ static void send(void *ctx, const uint8_t *bytes, size_t length) {
 /// The back buffer the tests hand in, as the hook hands in one in SDRAM.
 static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
 
-void fresh_without_frame(dfw_unit *unit, recording *rec) {
+static void start(dfw_unit *unit, recording *rec, const dfw_drawing *drawing) {
     memset(rec, 0, sizeof *rec);
     dfw_port port = { .present = present, .send = send, .ctx = rec };
-    dfw_init(unit, &port, NULL);
+    dfw_init(unit, &port, NULL, drawing);
+}
+
+void fresh_without_frame(dfw_unit *unit, recording *rec) { start(unit, rec, &dfw_drawn); }
+
+void fresh_without_drawing(dfw_unit *unit, recording *rec) {
+    start(unit, rec, NULL);
+    memset(frame, 0, sizeof frame);
+    dfw_set_frame(unit, frame);
 }
 
 void fresh(dfw_unit *unit, recording *rec) {
