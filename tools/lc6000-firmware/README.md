@@ -185,10 +185,24 @@ python3 -I tools/lc6000-firmware/build_upper_dfu.py tools/lc6000-display-fw/buil
 
 It refuses:
 - **The proof:** if `--proof` is missing, or the file isn't the whole read of step 4 above (524,288 bytes, all `0xFF`), or it is inside the repository. A flag anyone can type isn't proof, so the tool reads the file itself.
-- **The block:** if its header doesn't check out the way block A checks it: marker `DFWB`, version 4, a length equal to the file and at most 512 KB, CRC-32, and a draw entry and a band entry (#524) that are Thumb code inside B. It can't check the layout word (#516): only block A can, on the chip, so A and B come from the same commit.
+- **The block:** if its header doesn't check out the way block A checks it (`upper_header.py`, #572): marker `DFWB`, version 4, a length equal to the file and at most 512 KB, CRC-32, and a draw entry and a band entry (#524) that are Thumb code inside B. It can't check the layout word (#516): only block A can, on the chip, so A and B come from the same commit.
 - **The output:** if it is inside the repository, or the file already exists.
 
 **Order, after the read-only checks:** build with `ARM_UPPER_PROVEN=1`, flash B's `.dfu`, then the owner's image. Either order is safe: A checks B's header before it calls anything in B, and stays silent until B checks out. Each flash is a separate step the owner runs, with its own OK. `flash-day.sh drawn` walks through both (see "The drawn flash" below).
+
+### The build record (#572)
+
+`make arm` writes `build.json` next to `block.bin` and `upper.bin`. It holds each block's sha1, plus `ARM_DRAW` and `ARM_UPPER_PROVEN` for block A.
+
+```sh
+python3 -I tools/lc6000-firmware/build_record.py check build.json OWNER.dfu UPPER.dfu
+```
+
+`check` trusts the record only for the bytes it names. Block A inside the owner's image and block B inside its `.dfu` must both have the record's sha1. That also shows A and B come from the same build. Then A must have been built with `ARM_DRAW=1` and `ARM_UPPER_PROVEN=1`.
+
+A missing, unreadable or mismatched record refuses. Nothing is assumed and no one is asked.
+
+The flags live in the record, not on the unit. Making them readable from a read of the unit would need new header fields, which wait for #570's two-block flash.
 
 ## Flash day kit (#435)
 

@@ -3,7 +3,7 @@ in an emulator (unicorn) against a synthetic flash. The stock functions the shim
 
 Run from tools/lc6000-display-fw after `make arm`:  python3 -I arm/test/test_block.py [BUILD_DIR]
 Needs arm-none-eabi binutils and the `unicorn` Python package (pip install unicorn)."""
-import os, shutil, struct, subprocess, sys, tempfile, unittest
+import hashlib, json, os, shutil, struct, subprocess, sys, tempfile, unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FW = os.path.dirname(os.path.dirname(HERE))
@@ -92,6 +92,24 @@ class ReproducibleTests(unittest.TestCase):
             for name in ("block.bin", "block.elf"):
                 with open(os.path.join(one, name), "rb") as a, open(os.path.join(two, name), "rb") as b:
                     self.assertEqual(a.read(), b.read(), name)
+
+
+class BuildRecordTests(unittest.TestCase):
+    def test_make_arm_records_the_bytes_and_flags_of_what_it_built(self):
+        # #572: the kit reads this record instead of asking the owner how A was built.
+        for proven in ("1", "0"):
+            with self.subTest(proven=proven), tempfile.TemporaryDirectory() as out:
+                subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", f"ARM_UPPER_PROVEN={proven}"],
+                               check=True, capture_output=True)
+                with open(os.path.join(out, "build.json")) as f:
+                    record = json.load(f)
+                with open(os.path.join(out, "block.bin"), "rb") as f:
+                    a = f.read()
+                with open(os.path.join(out, "upper.bin"), "rb") as f:
+                    b = f.read()
+                self.assertEqual(record["block_a"]["sha1"], hashlib.sha1(a).hexdigest())
+                self.assertEqual(record["block_b"]["sha1"], hashlib.sha1(b).hexdigest())
+                self.assertEqual((record["block_a"]["draw"], record["block_a"]["proven"]), ("1", proven))
 
 
 class SizeTests(unittest.TestCase):

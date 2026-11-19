@@ -19,16 +19,23 @@ ARM_C := arm/adapter.c arm/libc_min.c $(if $(filter 0,$(ARM_DRAW)),,$(ARM_SRC_DR
 ARM_OBJ := $(ARM_BUILD)/entry.o $(patsubst %.c,$(ARM_BUILD)/%.o,$(notdir $(ARM_C)))
 
 .PHONY: arm
-arm: $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.bin
+arm: $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.bin $(ARM_BUILD)/build.json
+
+# How A and B were built (#572), for the kit to read instead of asking the owner: each block's sha1 and A's two flags.
+# The kit trusts it only for those exact bytes (tools/lc6000-firmware/build_record.py).
+$(ARM_BUILD)/build.json: $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.bin ../lc6000-firmware/build_record.py
+	@$(PYTHON) -I ../lc6000-firmware/build_record.py write $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.bin \
+		--draw $(ARM_DRAW) --proven $(ARM_UPPER_PROVEN) $@
 
 # The build's flags, ARM_UPPER_PROVEN above all, kept with its outputs (#501). Make doesn't see a variable change,
 # and its timestamps here are whole seconds, so when the flags differ from the last build in this directory, that
 # build's outputs go and are built again: `make arm` then `make arm ARM_UPPER_PROVEN=1` never leaves the old block A.
 # It runs as the makefile is read, before make decides what is up to date.
 ARM_FLAGS := $(ARM_CFLAGS) | $(ARM_C)
-ifneq ($(filter arm arm-test %/block.bin %/upper.bin,$(or $(MAKECMDGOALS),none)),)
+ifneq ($(filter arm arm-test %/block.bin %/upper.bin %/build.json,$(or $(MAKECMDGOALS),none)),)
 $(shell mkdir -p $(ARM_BUILD) && if [ "$$(cat $(ARM_BUILD)/flags.txt 2>/dev/null)" != "$(ARM_FLAGS)" ]; then \
-	rm -f $(ARM_BUILD)/block.elf $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.elf $(ARM_BUILD)/upper.bin; \
+	rm -f $(ARM_BUILD)/block.elf $(ARM_BUILD)/block.bin $(ARM_BUILD)/upper.elf $(ARM_BUILD)/upper.bin \
+		$(ARM_BUILD)/build.json; \
 	echo "$(ARM_FLAGS)" > $(ARM_BUILD)/flags.txt; fi)
 endif
 
