@@ -3,6 +3,7 @@
 #ifndef DFW_DRAW_BAND_H
 #define DFW_DRAW_BAND_H
 #include "dfw.h"
+#include "panel_geometry.h"
 
 /// Receives one pixel of the ring: x, y in the 198 frame's own coordinates (they may be below 0 or past 197), and its
 /// final color over what lies under it there (the frame's ground inside the 198 square, the panel's black outside).
@@ -20,21 +21,9 @@ void dfw_band_pixels(const dfw_unit *unit, dfw_put put, void *ctx);
 /// square are the frame's, drawn by dfw_draw, and never touched.
 void dfw_draw_band(uint16_t *layer, const dfw_unit *unit);
 
-/// The layer as dfw_draw_band reaches it, a pixel at a time by its index (y * 320 + x): on the chip, plain memory; in
-/// the tests, a recording, so what it writes and when can be checked (#468: the band showed through the visible layer).
-typedef struct {
-    uint16_t (*read)(void *ctx, int index);
-    void (*write)(void *ctx, int index, uint16_t value);
-    void *ctx;
-} dfw_layer_io;
+/// The band through the layer seam (panel_geometry.h): dfw_draw_band over the real layer, the tests and frame-dump over
+/// their own adapters.
+void dfw_band_layer(const dfw_unit *unit, const dfw_layer *layer);
 
-/// dfw_draw_band through `io`.
-void dfw_band_layer(const dfw_unit *unit, const dfw_layer_io *io);
-
-/// The band's 320 x 240 layer, and where the frame's corner lands in it.
-#define DFW_LAYER_W 320
-#define DFW_LAYER_H 240
-#define DFW_FRAME_X ((DFW_LAYER_W - DFW_SIZE) / 2)
-#define DFW_FRAME_Y ((DFW_LAYER_H - DFW_SIZE) / 2)
 
 #endif

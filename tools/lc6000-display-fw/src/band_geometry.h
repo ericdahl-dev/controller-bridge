@@ -6,6 +6,7 @@
 #include "dfw.h"
 #include "layout_generated.h"
 #include "geometry.h"
+#include "panel_geometry.h"
 
 #define CENTER DFW_CENTER
 #define BAND_INNER DFW_BAND_INNER
@@ -26,7 +27,8 @@
 #define CLEAR_OUTER 108.5f
 
 
-static inline int in_frame(int x, int y) { return x >= 0 && x < DFW_SIZE && y >= 0 && y < DFW_SIZE; }
+/// The frame's own square (panel_geometry.h).
+static inline int in_frame(int x, int y) { return dfw_in_frame(x, y); }
 
 /// The ring's shape at frame pixel (x, y), whatever its progress: how much of the pixel the band covers (0 when none),
 /// how much lies clockwise of the 12 o'clock ray (the fill's start edge), and the track blended over what lies under it

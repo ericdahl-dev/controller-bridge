@@ -54,10 +54,6 @@ public enum JogLayout {
     public static let untitledTop = 66
     /// An untitled deck's caption: its line box top.
     public static let untitledCaptionTop = 100
-    /// Steady red from this many seconds left (#524).
-    public static let warningSeconds = 60
-    /// Blinking from this many seconds left.
-    public static let blinkSeconds = 30
     /// The deck number is white under this WCAG relative luminance.
     public static let numberWhiteBelow: Double = 0.1791
 }

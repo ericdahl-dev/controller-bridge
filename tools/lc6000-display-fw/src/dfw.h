@@ -19,12 +19,10 @@ typedef struct {
     void *ctx;
 } dfw_port;
 
-/// The most a text message carries (#458): 96 bytes of characters after escapes, so at most 96 characters.
-#define DFW_TEXT_MAX 96
-/// Text fields: title, artist, key, and the untitled words (player 5's own name).
-#define DFW_TEXT_FIELDS 4
-/// The longest message kept: the longest valid one (text, 108 bytes) with room to spare. Longer ones are dropped.
-#define DFW_MESSAGE_MAX 112
+/// The protocol's caps come from its one description (#569), through the generated protocol.h: DFW_TEXT_MAX, the most
+/// a text message carries (96 bytes of characters after escapes, #458); DFW_TEXT_FIELDS, title, artist, key and the
+/// untitled words; DFW_MESSAGE_MAX, the longest message kept (text's 108 bytes with room to spare; longer is dropped).
+#include "protocol.h"
 /// Messages waiting for the next tick. The hook copies them in as the stock parser dispatches them (main loop, #466),
 /// never keeping a pointer into the stock SysEx buffer; the tick acts on them.
 #define DFW_INBOX 16
@@ -47,7 +45,7 @@ typedef struct {
 typedef struct { uint8_t number, r, g, b, player; } dfw_deck_state;
 
 /// The phase message's reserved value (#462): not measured (not playing, no master clock, none since load).
-#define DFW_PHASE_UNKNOWN (-8192)
+#define DFW_PHASE_UNKNOWN DFW_PHASE_UNKNOWN_VALUE
 
 typedef struct dfw_unit {
     dfw_port port;

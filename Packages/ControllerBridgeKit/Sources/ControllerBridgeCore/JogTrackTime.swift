@@ -3,9 +3,9 @@
 
 public enum JogTrackTime {
     /// Steady red from this many seconds left.
-    public static let warningSeconds = JogLayout.warningSeconds
+    public static let warningSeconds = DrawnDisplayProtocol.warningSeconds
     /// Blinking from this many seconds left.
-    public static let blinkSeconds = JogLayout.blinkSeconds
+    public static let blinkSeconds = DrawnDisplayProtocol.blinkSeconds
     /// The warning's red, 0xFF3B30.
     public static let warningRed = channels(JogLayout.warningRed)
     /// The blink's other color, the text's white, 0xEDEDEA, whatever the deck color.

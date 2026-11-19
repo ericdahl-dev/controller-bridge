@@ -54,10 +54,6 @@
 #define DFW_UNTITLED_TOP 66
 /// An untitled deck's caption: its line box top.
 #define DFW_UNTITLED_CAPTION_TOP 100
-/// Steady red from this many seconds left (#524).
-#define DFW_WARNING_SECONDS 60
-/// Blinking from this many seconds left.
-#define DFW_BLINK_SECONDS 30
 /// The deck number is white under this WCAG relative luminance.
 #define DFW_NUMBER_WHITE_BELOW 0.1791f
 

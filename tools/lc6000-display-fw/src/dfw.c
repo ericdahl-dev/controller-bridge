@@ -1,31 +1,33 @@
 #include "dfw.h"
-#include "layout_generated.h"
 
 #include <string.h>
 
-/// inMusic's SysEx header from the host to the unit, then our command (#456). 0x20 is a placeholder until #466.
-static const uint8_t host_header[] = { 0xF0, 0x00, 0x02, 0x0B, 0x7F, 0x10 };
-#define DFW_CMD 0x20
+/// The protocol's numbers come from its one description, vectors/messages.json, through the generated protocol.h (#569).
+#include "protocol.h"
+
+/// inMusic's SysEx header from the host to the unit, then our command (#456).
+static const uint8_t host_header[] = DFW_HEADER;
+#define DFW_CMD DFW_COMMAND
 /// The protocol version this code speaks.
-#define DFW_VERSION 1
-enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01, OP_END = 0x02, OP_DECK = 0x03, OP_TEXT = 0x04, OP_TEMPO = 0x05,
-       OP_TIME = 0x06, OP_STATE = 0x07, OP_BEAT = 0x08, OP_NEEDLE = 0x09, OP_METER = 0x0A, OP_PHASE = 0x0B };
+#define DFW_VERSION DFW_PROTOCOL_VERSION
+enum { OP_CAPABILITY = DFW_OP_CAPABILITY, OP_BEGIN = DFW_OP_BEGIN, OP_END = DFW_OP_END, OP_DECK = DFW_OP_DECK,
+       OP_TEXT = DFW_OP_TEXT, OP_TEMPO = DFW_OP_TEMPO, OP_TIME = DFW_OP_TIME, OP_STATE = DFW_OP_STATE,
+       OP_BEAT = DFW_OP_BEAT, OP_NEEDLE = DFW_OP_NEEDLE, OP_METER = DFW_OP_METER, OP_PHASE = DFW_OP_PHASE };
 /// A text escape: the next byte plus 0x80 is the Windows-1252 code.
 #define TEXT_ESCAPE 0x7F
-/// Bit 6 of the state flags is reserved: a message with it set is malformed.
-#define STATE_RESERVED 0x40
-/// Bit 5 of the state flags: Syndicate's feedback has stopped.
-#define FLAG_STALE 0x20
-/// Bit 1 of the state flags: the deck is playing. Bit 4: loop on, which holds the time's warning (#524).
-#define FLAG_PLAYING 0x02
-#define FLAG_LOOP 0x10
-/// The last minute's warning (#460, #524): steady red with this many seconds or fewer left, blinking with
-/// BLINK_SECONDS or fewer, and each half of the blink this long.
+/// The state flag a message must not set (it's malformed), and the ones the chip reads: Syndicate's feedback has
+/// stopped; the deck is playing; a loop is on, which holds the time's warning (#524).
+#define STATE_RESERVED DFW_FLAG_RESERVED
+#define FLAG_STALE DFW_FLAG_STALE
+#define FLAG_PLAYING DFW_FLAG_PLAYING
+#define FLAG_LOOP DFW_FLAG_LOOP_ON
+/// No drawn-display message for this long draws the waiting look (#464): three missed heartbeats. The last minute's
+/// warning (#460, #524): steady red with WARNING_SECONDS or fewer left, blinking with BLINK_SECONDS or fewer, and each
+/// half of the blink BLINK_HALF_MS.
+#define SILENCE_MS DFW_SILENCE_MS
 #define WARNING_SECONDS DFW_WARNING_SECONDS
 #define BLINK_SECONDS DFW_BLINK_SECONDS
-#define BLINK_HALF_MS 500u
-/// No drawn-display message for this long draws the waiting look (#464): three missed heartbeats.
-#define SILENCE_MS 3000u
+#define BLINK_HALF_MS DFW_BLINK_HALF_MS
 
 void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame, const dfw_drawing *drawing) {
     memset(unit, 0, sizeof *unit);
@@ -48,11 +50,18 @@ void dfw_message(dfw_unit *unit, const uint8_t *bytes, size_t length) {
 /// Each op's one exact length, counting the op itself; 0 for an op this version doesn't take.
 static uint8_t op_length(uint8_t op) {
     switch (op) {
-    case OP_CAPABILITY: case OP_BEGIN: case OP_END: case OP_STATE: case OP_BEAT: return 2;
-    case OP_NEEDLE: case OP_TEMPO: case OP_METER: case OP_PHASE: return 3;
-    case OP_TIME: return 5;
-    case OP_DECK: return 9;
-    default: return 0;
+    case OP_CAPABILITY: return DFW_OP_CAPABILITY_LENGTH;
+    case OP_BEGIN: return DFW_OP_BEGIN_LENGTH;
+    case OP_END: return DFW_OP_END_LENGTH;
+    case OP_STATE: return DFW_OP_STATE_LENGTH;
+    case OP_BEAT: return DFW_OP_BEAT_LENGTH;
+    case OP_NEEDLE: return DFW_OP_NEEDLE_LENGTH;
+    case OP_TEMPO: return DFW_OP_TEMPO_LENGTH;
+    case OP_METER: return DFW_OP_METER_LENGTH;
+    case OP_PHASE: return DFW_OP_PHASE_LENGTH;
+    case OP_TIME: return DFW_OP_TIME_LENGTH;
+    case OP_DECK: return DFW_OP_DECK_LENGTH;
+    default: return 0;   // text (framed by len) and any op this version doesn't take
     }
 }
 
