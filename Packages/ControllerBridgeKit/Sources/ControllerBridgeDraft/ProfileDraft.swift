@@ -235,6 +235,8 @@ public struct ProfileDraft: Sendable {
             if key.hasPrefix("mapping.notes."), key != "mapping.notes.pads" { continue }
             // Optional and controller-specific: the LC6000's layer note would read as a layer switch elsewhere (#280).
             if key == "mapping.midi.layer_note" { continue }
+            // Denon's color message (#530): the LC6000's would send Denon's SysEx to another controller's LEDs.
+            if key.hasPrefix("mapping.leds.color_message") { continue }
             if absent.contains(where: { key.hasPrefix("mapping.\($0).") }) { continue }
             if relativeJog, ["mapping.jog.msb_cc", "mapping.jog.lsb_cc"].contains(key) { continue }
             if sevenBitPitch, key == "mapping.pitch.lsb_cc" { continue }
@@ -248,7 +250,7 @@ public struct ProfileDraft: Sendable {
         guard let data = try? Mapping.defaultMappingJSON(),
               let schema = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         for section in ["notes", "leds"] {
-            for key in ((schema[section] as? [String: Any]) ?? [:]).keys.sorted() where key != "pads" && key != "shifted" {
+            for key in ((schema[section] as? [String: Any]) ?? [:]).keys.sorted() where key != "pads" && key != "shifted" && key != "color_message" {
                 let path = "mapping.\(section).\(key)"
                 guard profile.value(at: path) == nil, !todos.contains(where: { $0.key == path }) else { continue }
                 todo(path, section == "notes"
