@@ -184,6 +184,8 @@ public final class JogDisplayDriver {
     /// The deck in front's state flags for drawn mode (#464), and the last state message sent.
     private var drawnState: DrawnDisplay.State = []
     private var lastState: [UInt8]?
+    /// The deck in front's text and tempo messages last sent in drawn mode (#458), in full-state order.
+    private var lastTexts: [[UInt8]] = []
     /// When drawn mode last sent begin and the full state (#464): the heartbeat sends them again every second, so a
     /// chip that reset without its port going away is brought back, and one whose host is gone goes stale on its own.
     private var lastFullState: Double?
@@ -506,6 +508,7 @@ public final class JogDisplayDriver {
         let state = DrawnDisplay.Message.state(drawnState).bytes
         lastState = state
         sendWD(state)
+        for text in lastTexts { sendWD(text) }
         sendLive()
         lastFullState = clock.now
     }
@@ -553,9 +556,25 @@ public final class JogDisplayDriver {
         guard deck != lastDeck else { return }
         lastDeck = deck
         sendWD(deck)
-        // Every deck message is followed by its state: the flags are the deck's (#464).
+        // Every deck message is followed by its state: the flags are the deck's (#464). A new deck clears the chip's
+        // texts and tempo, so they follow (#458).
         lastState = nil
         sendState()
+        lastTexts = Self.texts(content)
+        for text in lastTexts { sendWD(text) }
+    }
+
+    /// A deck's text and tempo messages (#458): title, artist and key (empty clears one), the untitled words only for
+    /// player "other" (the player type's own name; the chip knows the others'), then the tempo.
+    static func texts(_ content: JogDisplayContent) -> [[UInt8]] {
+        typealias Message = DrawnDisplay.Message
+        var messages = [Message.text(.title, content.title ?? ""), .text(.artist, content.artist ?? ""),
+                        .text(.key, content.key ?? "")]
+        if DrawnDisplay.Player(playerType: content.playerType) == .other {
+            messages.append(.text(.untitled, content.playerType ?? ""))
+        }
+        messages.append(.tempo(content.bpm))
+        return messages.map(\.bytes)
     }
 
     private func next() {
