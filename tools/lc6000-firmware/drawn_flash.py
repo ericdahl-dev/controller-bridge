@@ -11,6 +11,9 @@
         replace  part of this B (a write cut off), or another B whose header and CRC check out (an older build),
                  then erased: step 1 rewrites it, behind its own typed word.
       Anything else is refused, with the first address that isn't this B.
+  python3 -I drawn_flash.py rewrite UPPER.dfu READ.bin OUT.dfu
+      Only when `upper` says replace: B's element followed by erased bytes to the end of what the upper flash holds,
+      so the write's erase covers an older, longer B too.
 
 Standard library only."""
 import argparse, struct, sys, zlib
@@ -50,9 +53,8 @@ def files(args):
           f"the owner's image, {len(image)} bytes at 0x{APP_BASE:08X}")
 
 
-def upper(args):
-    block = upper_block(args.upper)
-    read = dfupatch.read(args.read)
+def judge(block, read):
+    """What the upper flash holds, against this B: (its state line, where what's there ends). Refuses the rest."""
     size = build_upper_dfu.PROOF_SIZE
     if len(read) != size:
         raise dfupatch.Refused(f"the read is {len(read)} bytes, not all {size} of 0x08080000-0x080FFFFF")
@@ -76,7 +78,27 @@ def upper(args):
     if rest is not None:
         raise dfupatch.Refused(f"the upper flash holds something past where block B ends: the first other byte is "
                                f"at 0x{base + rest:08X}. Stop; nothing is written over it")
+    return state, end
+
+
+def upper(args):
+    state, _ = judge(upper_block(args.upper), dfupatch.read(args.read))
     print(state)
+
+
+def rewrite(args):
+    """Step 1's file over part of a B or an older one: this B, then erased bytes to the end of what's there, so the
+    write's erase covers all of it (a DfuSe write erases only the sectors its element covers)."""
+    block = upper_block(args.upper)
+    state, end = judge(block, dfupatch.read(args.read))
+    if not state.startswith("replace"):
+        raise dfupatch.Refused(f"nothing to rewrite: the upper flash is {state.split()[0]}")
+    if dfupatch.inside(args.output, dfupatch.repository_root()):
+        raise dfupatch.Refused("write the rewrite file outside the repository")
+    element = block + b"\xff" * max(0, end - len(block))
+    with open(args.output, "xb") as f:
+        f.write(build_upper_dfu.dfuse(element))
+    print(f"wrote {args.output}: block B, then erased to 0x{build_upper_dfu.UPPER_BASE + len(element):08X}")
 
 
 def other_block(read):
@@ -95,10 +117,15 @@ def main(argv=None):
     pair.add_argument("upper")
     pair.add_argument("owner")
     pair.set_defaults(run=files)
-    judge = commands.add_parser("upper", help="judge a read of 0x08080000-0x080FFFFF against B's file")
-    judge.add_argument("upper")
-    judge.add_argument("read")
-    judge.set_defaults(run=upper)
+    state = commands.add_parser("upper", help="judge a read of 0x08080000-0x080FFFFF against B's file")
+    state.add_argument("upper")
+    state.add_argument("read")
+    state.set_defaults(run=upper)
+    over = commands.add_parser("rewrite", help="step 1's file over part of a B or an older one")
+    over.add_argument("upper")
+    over.add_argument("read")
+    over.add_argument("output")
+    over.set_defaults(run=rewrite)
     args = parser.parse_args(argv)
     try:
         args.run(args)

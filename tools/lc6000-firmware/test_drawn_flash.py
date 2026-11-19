@@ -126,5 +126,46 @@ class UpperTests(DrawnFlashTests):
         self.assertRefused(run("upper", self.upper_dfu(), self.read(b"\xff" * (UPPER_SIZE - 1))), "524288")
 
 
+class RewriteTests(DrawnFlashTests):
+    """The file step 1 writes over part of a B or an older one (#468). A DfuSe write erases only the sectors its element
+    covers, so an older B reaching further would leave its tail: the rewrite carries erased bytes over all of it."""
+
+    def rewrite(self, old):
+        read = self.path("wd-upper-read.bin", old + b"\xff" * (UPPER_SIZE - len(old)))
+        out = os.path.join(self.dir.name, "rewrite.dfu")
+        return run("rewrite", self.upper_dfu(), read, out), out
+
+    def element(self, path):
+        import dfupatch
+        image = dfupatch.parse(dfupatch.read(path))
+        return image.address, image.element
+
+    def test_over_a_longer_older_b_it_is_this_b_then_erased_to_the_old_ones_end(self):
+        import struct, zlib
+        rest = bytes((i * 5 + 1) & 0xFF for i in range(0x30000 - 16))  # spans sectors 8 and 9
+        old = struct.pack("<IIII", 0x42574644, 2, 0x30000, zlib.crc32(rest)) + rest
+        (code, _, err), out = self.rewrite(old)
+        self.assertEqual(code, 0, err)
+        address, element = self.element(out)
+        block = good_block()
+        self.assertEqual(address, UPPER)
+        self.assertEqual(len(element), 0x30000)
+        self.assertEqual(element[:len(block)], block)
+        self.assertEqual(set(element[len(block):]), {0xFF})
+
+    def test_over_part_of_this_b_it_is_this_b(self):
+        (code, _, err), out = self.rewrite(good_block()[:20])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.element(out), (UPPER, good_block()))
+
+    def test_with_nothing_to_rewrite_it_is_refused(self):
+        for read in (b"", good_block()):
+            with self.subTest(len(read)):
+                (code, _, err), out = self.rewrite(read)
+                self.assertEqual(code, 1)
+                self.assertIn("nothing to rewrite", err)
+                self.assertFalse(os.path.exists(out))
+
+
 if __name__ == "__main__":
     unittest.main()
