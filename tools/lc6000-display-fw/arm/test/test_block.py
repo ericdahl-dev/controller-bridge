@@ -537,6 +537,10 @@ class NativeFrameTests(unittest.TestCase):
             for x in range(SIZE):
                 p = native[(SIZE - 1 - y) * SIZE + (SIZE - 1 - x)]
                 want[(21 + y) * 320 + 61 + x] = (p >> 19 & 0x1F) << 11 | (p >> 10 & 0x3F) << 5 | (p >> 3 & 0x1F)
+        # B's band (#524) draws into the border after each present. Until the real band is in src/, B links
+        # arm/test/band_stub.c, which writes this one pixel at panel (0, 0); the real band replaces it with the
+        # native band's pixels.
+        want[0] = 0xF81F
         wrong = sum(1 for got, w in zip(layer, want) if got != w)
         self.assertEqual(wrong, 0, f"{wrong} of the panel's pixels differ")
 
