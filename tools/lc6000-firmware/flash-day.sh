@@ -492,6 +492,8 @@ ask UPPER_DFU "Path to block B's .dfu:"
 UPPER_DFU="${UPPER_DFU/#\~/$HOME}"
 ask OWNER_DFU "Path to the owner's image .dfu:"
 OWNER_DFU="${OWNER_DFU/#\~/$HOME}"
+ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
+RECORD="${RECORD/#\~/$HOME}"
 write_env CURRENT_WD "$CURRENT_WD"
 write_env UPPER_DFU "$UPPER_DFU"
 write_env OWNER_DFU "$OWNER_DFU"
@@ -505,7 +507,7 @@ fi
 
 stage "The drawn flash"
 PLAN="$WORK/drawn-plan-$STAMP.json"
-plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$WORK"
+plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK"
 while :; do
   action="" a1="" a2="" a3="" a4=""
   IFS=$'\t' read -r action a1 a2 a3 a4 < <(plan next "$PLAN") || true

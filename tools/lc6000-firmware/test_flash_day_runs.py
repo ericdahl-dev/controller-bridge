@@ -7,6 +7,7 @@ import os, shutil, subprocess, sys, tempfile, textwrap, unittest
 
 import build_upper_dfu
 import dfupatch
+from test_drawn_plan import write_record
 from test_build_owner_image import stock_like_element
 from test_build_upper_dfu import good_block
 from test_dfupatch import dfuse_file, full_wd_element
@@ -83,6 +84,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.current = self.file("current.dfu", dfuse_file(self.current_element))
         self.owner = self.file("owner.dfu", dfuse_file(self.owner_element))
         self.upper = self.file("upper.dfu", build_upper_dfu.dfuse(good_block()))
+        self.record = write_record(os.path.join(self.dir.name, "build.json"), self.owner, self.upper)
         self.env = {"PATH": f"{self.stubs}:/usr/bin:/bin", "HOME": self.home, "LC6000_WORK": self.work,
                     "FAKE_UNIT": self.unit, "TERM": "dumb"}
 
@@ -145,7 +147,8 @@ class FlashDayRunTests(unittest.TestCase):
     def test_a_fresh_flash_writes_b_and_the_owners_image(self):
         self.unit_holds(self.current_element)
         answers = ["", self.current, self.upper, self.owner,   # banner; the three paths
-                   "y", "y", "y",                               # both true, all true, the probe
+                   self.record,                                 # the build record
+                   "y", "y",                                    # all true, the probe
                    "y",                                         # send the update-mode message
                    "FLASH", "FLASH",                            # block B, then the owner's image
                    "",                                          # power cycle: back on
@@ -161,7 +164,7 @@ class FlashDayRunTests(unittest.TestCase):
     def test_a_b_only_rewrite_leaves_the_app_area_alone(self):
         old_b = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
         self.unit_holds(self.owner_element, upper=old_b + b"\xff" * (0x80000 - len(old_b)))
-        answers = ["", self.owner, self.upper, self.owner, "y", "y", "y", "y", "REWRITE", "", "y", "", ""]
+        answers = ["", self.owner, self.upper, self.owner, self.record, "y", "y", "y", "REWRITE", "", "y", "", ""]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertEqual(len(self.downloads()), 1)
@@ -172,16 +175,17 @@ class FlashDayRunTests(unittest.TestCase):
 
     def test_a_wrong_word_writes_nothing(self):
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", self.current, self.upper, self.owner, "y", "y", "y", "y", "flash"])
+        result = self.run_wizard(["", self.current, self.upper, self.owner, self.record, "y", "y", "y", "flash"])
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.downloads(), [])
         self.assertEqual(self.memory("app.bin"), self.current_element)
 
 
-    FRESH = ["", "{current}", "{upper}", "{owner}", "y", "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+    FRESH = ["", "{current}", "{upper}", "{owner}", "{record}", "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
 
     def answers(self):
-        return [a.format(current=self.current, upper=self.upper, owner=self.owner) for a in self.FRESH]
+        return [a.format(current=self.current, upper=self.upper, owner=self.owner, record=self.record)
+                for a in self.FRESH]
 
     def assert_stopped_with_the_way_back(self, result, reason):
         self.assertNotEqual(result.returncode, 0)
