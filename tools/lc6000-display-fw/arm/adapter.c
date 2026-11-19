@@ -3,6 +3,9 @@
 #include <stdint.h>
 
 #include "hook.h"
+#if HOOK_STUB_DRAWING
+#include "draw.h"
+#endif
 
 #ifndef HOOK_DRAWING
 #define HOOK_DRAWING 1
@@ -88,6 +91,13 @@ static const hook_stock stock = {
     .malloc = (void *(*)(size_t))0x08017861u,
     .hide = layer_hide,
     .port = { .present = layer_present, .send = stock_send, .ctx = 0 },
+    // No drawing in this block (#501): NULL until the drawing block's header checks out. The stub test build alone
+    // carries an empty drawing, so the block tests can see the capability answer.
+#if HOOK_STUB_DRAWING
+    .drawing = &dfw_drawn,
+#else
+    .drawing = 0,
+#endif
 };
 
 /// Our state, in the top of SRAM that stock never uses (0x2002AE94-0x2002FFFF, #466). Nothing zeroes it.

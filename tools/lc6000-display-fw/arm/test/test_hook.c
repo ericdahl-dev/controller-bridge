@@ -4,6 +4,7 @@
 
 #include "harness.h"
 #include "hook.h"
+#include "draw.h"
 
 #define CAPABILITY_V1 "F0 00 02 0B 7F 10 20 00 02 00 01 F7"
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
@@ -55,7 +56,8 @@ static void power_on(void) {
     memset(&rec, 0, sizeof rec);
     marker_word = HOOK_MARKER;
     stock = (hook_stock){ .marker = &marker_word, .uptime = &chip.uptime, .witness = &chip.witness, .rx_count = &chip.rx_count,
-                          .malloc = stock_malloc, .hide = hide, .port = { .present = present, .send = send, .ctx = &rec } };
+                          .malloc = stock_malloc, .hide = hide, .port = { .present = present, .send = send, .ctx = &rec },
+                          .drawing = &dfw_drawn };
 }
 
 /// A cold first boot: our state is SRAM garbage too.
@@ -267,6 +269,34 @@ void a_backwards_step_from_low_in_the_count_is_a_reboot(void) {
     CHECK(chip.mallocs == 1);  // one malloc in the new boot's heap
 }
 
+/// Ticks with the 100 us counter `units` further on, in one step.
+static void tick_after(uint32_t units) {
+    chip.uptime += units;
+    hook_tick(&state, &stock);
+}
+
+void three_seconds_of_silence_turn_the_screen_stale(void) {
+    // dfw's clock is milliseconds; the stock counter is 100 us, so 30,000 counts are 3 s (#464).
+    cold_boot();
+    drawing_session();
+    tick_after(29000);
+    CHECK(!dfw_stale(&state.unit));
+    tick_after(2000);
+    CHECK(dfw_stale(&state.unit));
+}
+
+void the_millisecond_clock_runs_on_across_a_counter_wrap(void) {
+    // counter / 10 would jump back by 429,496 ms at the wrap and look like a long silence; our clock doesn't.
+    cold_boot();
+    chip.uptime = 0xFFFFFF00u;
+    drawing_session();
+    tick_after(20000);  // 2 s on, across the wrap
+    CHECK(state.magic == HOOK_MAGIC);
+    CHECK(!dfw_stale(&state.unit));
+    tick_after(11000);
+    CHECK(dfw_stale(&state.unit));
+}
+
 void garbage_with_the_magic_but_a_bad_check_word_is_fresh_state(void) {
     cold_boot();
     state.magic = HOOK_MAGIC;
@@ -302,7 +332,21 @@ void nothing_is_hidden_that_was_never_shown(void) {
     CHECK(chip.hides == 0);
 }
 
+/// The hook block draws only with the table stock hands it (#501): with none (the drawing block not yet checked), the
+/// capability ask gets no answer and nothing is drawn, so the app falls back to images.
+void with_no_drawing_from_stock_the_capability_ask_gets_no_answer(void) {
+    cold_boot();
+    stock.drawing = NULL;
+    deliver(0, CAPABILITY_V1);
+    deliver(0, BEGIN_V1);
+    deliver(0, DECK_2_RED_TRACK);
+    tick();
+    CHECK(rec.sends == 0 && rec.presents == 0);
+}
+
 const test_case all_tests[] = {
+    { "with no drawing from stock the capability ask gets no answer",
+      with_no_drawing_from_stock_the_capability_ask_gets_no_answer },
     { "end hands the screen back once", end_hands_the_screen_back_once },
     { "nothing is hidden that was never shown", nothing_is_hidden_that_was_never_shown },
     { "the tick does nothing before our first message", the_tick_does_nothing_before_our_first_message },
@@ -322,8 +366,11 @@ const test_case all_tests[] = {
     { "a counter wrap keeps the session and its frame", a_counter_wrap_keeps_the_session_and_its_frame },
     { "a backwards step from low in the count is a reboot", a_backwards_step_from_low_in_the_count_is_a_reboot },
     { "garbage with the magic but a bad check word is fresh state", garbage_with_the_magic_but_a_bad_check_word_is_fresh_state },
+    { "three seconds of silence turn the screen stale", three_seconds_of_silence_turn_the_screen_stale },
+    { "the millisecond clock runs on across a counter wrap", the_millisecond_clock_runs_on_across_a_counter_wrap },
     { 0, 0 },
 };
 
 /// The shared harness also walks agent3's drawing table; the hook's tests have none of their own.
 const test_case draw_tests[] = { { 0, 0 } };
+const test_case draw_live_tests[] = { { 0, 0 } };

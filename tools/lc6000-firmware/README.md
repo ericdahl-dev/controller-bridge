@@ -107,6 +107,7 @@ python3 -I tools/lc6000-firmware/dfupatch.py apply ~/lc6000/jc20_tp_update_00_31
 `build_owner_image.py` builds the one file to flash. It takes the stock file and our block, applies the hook patch, places the block in the padding, and recomputes both CRCs.
 - The output must be outside the repository.
 - It refuses a block that isn't exactly the 9,184-byte padding or doesn't end with our marker, so the hook never goes out without its block.
+- **Not yet buildable with drawing:** the drawing code has outgrown the padding, so `make arm` fails until drawing gets its own block (#501).
 
 ```sh
 make -C tools/lc6000-display-fw arm

@@ -20,6 +20,12 @@ for symbol in $(grep -v '^+' "$out/symbols"); do
         *) bad="$bad $symbol" ;;
     esac
 done
+# The protocol reaches the drawing only through its table (#501), so it links without draw.c: the hook block can't.
+for symbol in $(nm -u "$out/dfw.o" | awk '{print $NF}' | sed 's/^_//'); do
+    case "$symbol" in
+        dfw_draw*) bad="$bad $symbol(dfw.o)" ;;
+    esac
+done
 if [ -n "$bad" ]; then
     echo "not allowed in firmware sources:$bad" >&2
     exit 1

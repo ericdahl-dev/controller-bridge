@@ -319,3 +319,5 @@ void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
     header(frame, &unit->deck);
     dfw_draw_live(frame, unit);
 }
+
+const dfw_drawing dfw_drawn = { dfw_draw };
