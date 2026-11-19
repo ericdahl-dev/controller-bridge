@@ -12,10 +12,16 @@ SITE_ONLY = ["website/*", "scripts/check_site.py", "scripts/test_check_site.py",
              # the domain docs' check (GLOSSARY.md, docs/adr), which the Site check job runs
              "scripts/check_domain_docs.py", "scripts/test_check_domain_docs.py",
              # the LC6000 firmware patch tool (#430) and its tests, which the Site check job runs
-             "tools/lc6000-firmware/*"]
+             "tools/lc6000-firmware/*",
+             # the drawn display firmware (#457) and its tests, which the Display firmware job runs
+             "tools/lc6000-display-fw/*"]
+# Inside those, paths the Mac jobs also test: the shared message vectors (#456), walked by the Kit tests too.
+ALSO_MAC = ["tools/lc6000-display-fw/vectors/*"]
 
 
 def site_only(path):
+    if any(fnmatch.fnmatchcase(path, pattern) for pattern in ALSO_MAC):
+        return False
     return not path.startswith(".github/") and any(fnmatch.fnmatchcase(path, pattern) for pattern in SITE_ONLY)
 
 

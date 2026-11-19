@@ -65,9 +65,10 @@ struct DrawnDisplayHandshakeTests {
         let (rig, port, _) = try Self.rig(.custom)
         rig.coordinator.jogDisplayReply(Self.answer)
         let drawn = Self.drawn(port)
-        #expect(drawn.count == 3)
+        #expect(drawn.count == 4)   // the question, begin, the deck and (#464) the state
         #expect(drawn.dropFirst().first == DrawnDisplay.Message.begin(version: 1).bytes)
-        #expect(drawn.last?[9] == 0x03 && drawn.last?[10] == 1 && drawn.last?[17] == DrawnDisplay.Player.empty.rawValue)
+        let deck = drawn.first { $0[9] == 0x03 }
+        #expect(deck?[10] == 1 && deck?[17] == DrawnDisplay.Player.empty.rawValue)
         #expect(!port.wd.contains(where: Self.isUpload))
     }
 
@@ -121,7 +122,7 @@ struct DrawnDisplayHandshakeTests {
         let before = JogDisplayRingHoldTests.ring(rig).count
         rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: JogDisplayRingHoldTests.lc6000.id)
         rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: JogDisplayRingHoldTests.lc6000.id)
-        let drawn = Self.drawn(port)
+        let drawn = Self.drawn(port).filter { $0[9] == 0x03 }   // and its state after it (#464)
         #expect(drawn.count == 1)
         #expect(drawn.first?[9] == 0x03 && drawn.first?[10] == 2)
         #expect(!port.wd.contains(where: Self.isUpload))

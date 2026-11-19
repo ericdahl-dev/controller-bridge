@@ -1,0 +1,106 @@
+# LC6000 drawn jog display firmware
+
+This is the C for the LC6000 PRIME's display chip that draws the jog display itself from small messages, instead of
+showing uploaded images (spec #455, this part #457). DeckBridge sends the messages over the WD port. This code
+parses them and draws today's design B into a back buffer.
+
+Everything here builds and is tested natively, on a Mac or on Linux, with no hardware and no vendor data. The
+Arm build and the hook in the stock image are #467. The repo never holds vendor firmware or built
+images.
+
+## Build and test
+
+```sh
+make -C tools/lc6000-display-fw test
+```
+
+This needs only a C compiler and Python 3, which turns the vectors file into a C header. It does two things:
+
+- Builds `src/` and `test/` with AddressSanitizer and UndefinedBehaviorSanitizer, and runs every test.
+- Builds `src/` again with `-ffreestanding -O2` and no sanitizers, and fails if the objects need anything from
+  libc but `memcpy`, `memmove`, `memset` and `memcmp` (`test/check_symbols.sh`). That catches malloc, stdio and
+  libm. The chip has none of them to give.
+
+CI runs the same command in the Display firmware job, on Linux with gcc.
+
+## How it fits together
+
+- `src/dfw.h`, `src/dfw.c`: the unit.
+  - `dfw_init` takes the port: `present` sends a finished frame to the panel, and `send` sends a reply to the host.
+  - `dfw_message` only copies a whole message (F0 through F7) into a fixed inbox. It can be called from anywhere.
+  - `dfw_tick` parses what's waiting, then redraws and presents if something changed.
+  - The back buffer belongs to the caller (`dfw_set_frame`). On the unit it is in SDRAM.
+  - With no frame, nothing is drawn and the capability ask gets no answer, so DeckBridge falls back to images.
+- `src/draw.h`, `src/draw.c`: `dfw_draw` draws design B for the deck in front. For now that is the ground, the
+  unlit ring, the deck chip and the player badge. It uses `float` only, with no `double` and no libm (Cortex-M4F).
+- `src/font_header.h`: glyph coverage for the header's two faces, generated from the bundled Geist fonts
+  (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
+
+  ```sh
+  swift tools/lc6000-display-fw/gen/font_gen.swift > tools/lc6000-display-fw/src/font_header.h
+  ```
+
+  The generator copies how CoreText places glyphs, so the C text lands where the Swift renderer's does. Add a
+  glyph by adding it to the generator's list.
+
+## The messages
+
+`vectors/messages.json` is the one definition, shared with the Swift side (#456).
+
+- It names each message and gives its exact bytes.
+- The Kit tests walk it with the Swift encoder, and `test/test_vectors.c` walks it with this decoder.
+- Its `invalid` entries must all be ignored.
+- The `about` field describes the framing.
+
+To add a message:
+
+1. Add its entries to the file, valid and invalid.
+2. Teach `test/vectors_to_c.py` its kind. An unknown kind fails the build.
+3. Add the case to the walk, then to the decoder, red first.
+
+A change to the vectors file runs the Mac jobs too, so the Swift walk always runs on it.
+
+Anything that isn't exactly one of our messages is ignored:
+
+- wrong header or command;
+- a length that isn't the op's one exact length, or isn't the bytes actually received;
+- F7 anywhere but its place;
+- a data byte with its top bit set;
+- a version of 0, or a value out of range.
+
+Commands 0x78 and 0x79, which write the unit's settings flash, are never acted on. The only reply this code
+ever sends is the capability answer.
+
+## Reference images
+
+`test/test_draw.c` compares the drawing with design B as the app's Swift renderer (`JogDisplayRenderer`) draws
+it, never with images made by this code.
+
+- The references are binary PPMs in `test/ref/`.
+- The Swift image also has the title, caption, rule and key/BPM, which this code doesn't draw yet. So only two
+  bands are compared: the ring band (radius 83.5 to 96.5) and the header band (y 20 to 55). Everything else must
+  be plain ground.
+
+**Tolerance**, per channel, 0-255:
+
+- **Ring:** no pixel more than 6 off.
+- **Header:** at most 24 pixels more than 8 off, and none more than 24 off.
+
+CoreGraphics and this code anti-alias curves slightly differently: up to 18 levels on a few edge pixels of a white
+chip, and within 8 everywhere else. The limits are tight enough that a wrong color, a 1 px shift or a wrong glyph
+fails, and each of those was checked. The test prints each case's worst difference, so a change shows up in the
+log.
+
+**To add or change a reference image:**
+
+1. Add a line to `test/ref/make_refs.sh`, which renders it through the Kit's `jog-reference` tool, and run it:
+
+   ```sh
+   sh tools/lc6000-display-fw/test/ref/make_refs.sh
+   ```
+
+2. Add a row for it to `cases[]` in `test/test_draw.c`.
+3. Commit the new or changed `.ppm` with the change that needed it, so the review shows it.
+
+Never regenerate the references to make a failing test pass. They change only when design B changes in the
+Swift renderer.

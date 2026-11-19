@@ -666,6 +666,7 @@ public final class Coordinator {
         health.answerWindow = Double(oscSettings.feedbackAnswerMs) / 1000
         let output = step(&health, clock.now)
         status.feedback = health.feedback
+        jogController.setStale(health.feedback == .stale)
         if output.deckDataProven { status.noDeckData = false }
         if let verdict = output.verdict {
             status.noDeckData = verdict.noDeckData
