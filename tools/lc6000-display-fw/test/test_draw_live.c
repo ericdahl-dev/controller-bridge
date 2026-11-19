@@ -437,6 +437,48 @@ static void stale_draws_no_meter(void) {
     CHECK(memcmp(frame, without, sizeof frame) == 0);
 }
 
+/// The phase rule (#462): the rule and room around it (rows 120-135, x 40-157, where no text or ring reaches) against the renderer's references, exactly.
+/// Its shapes are whole-pixel rectangles and the dim is rounded to a whole level on both sides, so nothing is smoothed.
+typedef struct { const char *file; int16_t phase; } phase_case;
+static const phase_case phases[] = {
+    { "test/ref/deck4-blue-empty-phase0.ppm", 0 },
+    { "test/ref/deck4-blue-empty-phase-164.ppm", -164 },
+    { "test/ref/deck4-blue-empty-phase164.ppm", 164 },
+    { "test/ref/deck4-blue-empty-phase-1638.ppm", -1638 },
+    { "test/ref/deck4-blue-empty-phase8191.ppm", 8191 },
+    // Unknown: the plain rule, as every other reference draws it.
+    { UNLIT, DFW_PHASE_UNKNOWN },
+};
+#define PHASES (sizeof phases / sizeof phases[0])
+
+/// Rows 120-135, x 40-157 (the rule with room, inside the ring) of `frame` against `reference`: how many differ at all.
+static int rule_rows_off(void) {
+    int off = 0;
+    for (int y = 120; y < 136; y++)
+        for (int x = 40; x < 158; x++) off += frame[y * DFW_SIZE + x] != reference[y * DFW_SIZE + x];
+    return off;
+}
+
+static void the_phase_rule_is_drawn(void) {
+    for (size_t n = 0; n < PHASES; n++) {
+        CHECK(load_reference(phases[n].file));
+        fresh(&live, &rec);
+        feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+        feed(&live, "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7");   // deck 4, 0/128/255, empty
+        if (phases[n].phase != DFW_PHASE_UNKNOWN) {
+            char phase[64];
+            int raw = phases[n].phase & 0x3FFF;
+            snprintf(phase, sizeof phase, "F0 00 02 0B 7F 10 20 00 03 0B %02X %02X F7", raw >> 7, raw & 0x7F);
+            feed(&live, phase);
+        }
+        dfw_tick(&live, 0);
+        memcpy(frame, rec.last, sizeof frame);
+        int off = rule_rows_off();
+        if (off) fprintf(stderr, "    %s: %d pixels of the rule's rows off\n", phases[n].file + 9, off);
+        CHECK(off == 0);
+    }
+}
+
 /// Track time (#460): the progress ring (r 96-98, just outside the beat ring) and the time left under key/BPM, against
 /// test/ref/*-time*.ppm. The ring is compared from PROGRESS_FROM out: only the ring there for these decks.
 #define PROGRESS_FROM 95.5f
@@ -761,6 +803,7 @@ const test_case draw_live_tests[] = {
     { "each time reference differs from the plain one", each_time_reference_differs_from_the_plain_one },
     { "an unknown length draws nothing", an_unknown_length_draws_nothing },
     { "stale draws no time", stale_draws_no_time },
+    { "the phase rule is drawn", the_phase_rule_is_drawn },
     { "the meter is drawn", the_meter_is_drawn },
     { "each meter reference differs from the unlit one", each_meter_reference_differs_from_the_unlit_one },
     { "stale draws no meter", stale_draws_no_meter },

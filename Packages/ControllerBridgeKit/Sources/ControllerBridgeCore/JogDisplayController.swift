@@ -145,6 +145,7 @@ final class JogDisplayController {
         let facts = entries[front].facts
         meterTick(deck: facts.deck, driver: driver)
         timeTick(facts, driver: driver)
+        phaseTick(entries, front: front, driver: driver)
         driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending, loop: facts.looping,
                          cue: facts.cueHeld)
         driver.playLight(facts.playing || (facts.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
@@ -161,6 +162,27 @@ final class JogDisplayController {
         if facts.deck == lastTimeDeck, let sent = lastTimeSent, clock.now - sent < 1 / Self.timeRate - 1e-9 { return }
         lastTimeDeck = facts.deck
         if driver.time(.time(elapsed: facts.position, length: facts.duration)) { lastTimeSent = clock.now }
+    }
+
+    /// Each deck's phase value (#462), from its PhaseOffset with DrawnPhase's hysteresis and wrap guard, kept for every
+    /// deck so a switch shows the new one's at once.
+    private var phases: [Int: DrawnPhase] = [:]
+    private var lastPhaseSent: Double?
+    private var lastPhaseDeck: Int?
+
+    /// The deck in front's phase to the drawn display, at most 30 times a second (Syndicate sends about 45 during a
+    /// nudge); a held-back change goes once the interval is up, and a deck switch at once.
+    private func phaseTick(_ entries: [Entry], front: Int, driver: JogDisplayDriver) {
+        var value = DrawnPhase.unknown
+        for (index, entry) in entries.enumerated() {
+            let facts = entry.facts
+            let deckValue = phases[facts.deck, default: DrawnPhase()].value(offset: facts.phaseOffset, playing: facts.playing)
+            if index == front { value = deckValue }
+        }
+        let deck = entries[front].facts.deck
+        if deck == lastPhaseDeck, let sent = lastPhaseSent, clock.now - sent < 1 / Self.markerRate - 1e-9 { return }
+        lastPhaseDeck = deck
+        if driver.phase(value) { lastPhaseSent = clock.now }
     }
 
     private func meterTick(deck: Int, driver: JogDisplayDriver) {

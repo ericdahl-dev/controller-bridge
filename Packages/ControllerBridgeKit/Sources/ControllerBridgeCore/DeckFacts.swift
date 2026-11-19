@@ -33,6 +33,9 @@ struct DeckFacts: Equatable, Sendable {
     /// Where the deck is, in seconds, from Position.
     var position: Double?
     var barRamp: BarRamp?
+    /// The deck's beat offset from the master clock (#462), from PhaseOffset: in beats, negative behind, 0 in phase.
+    /// Syndicate sends it only while it changes, so this is the last one; nil until one comes after a load.
+    var phaseOffset: Double?
 }
 
 extension Bridge {
@@ -41,7 +44,7 @@ extension Bridge {
             deck: mapping.deck.number, playing: playing, loaded: loaded, playPending: playPending, looping: looping,
             cueHeld: cueDown, bpm: bpm,
             track: track.map { DeckFacts.Track(title: $0.title, artist: $0.artist, key: $0.key, bpm: $0.bpm, playerType: $0.playerType) },
-            duration: duration, position: cueMemory.position, barRamp: barRamp
+            duration: duration, position: cueMemory.position, barRamp: barRamp, phaseOffset: phaseOffset
         )
     }
 }

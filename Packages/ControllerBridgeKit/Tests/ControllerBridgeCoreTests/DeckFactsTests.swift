@@ -39,4 +39,14 @@ struct DeckFactsTests {
         bridge.handle(OSCMessage("/Syndicate/Deck/2/BarRamp", [.float(0.5)]))
         #expect(bridge.facts == DeckFacts(deck: 1))
     }
+
+    @Test("PhaseOffset (#462): the deck's beat offset from the master, negative behind, kept until the next; an unload forgets it")
+    func phaseOffset() throws {
+        let (bridge, _) = try DeckLifecycleTests.bridge()
+        Self.feed(bridge, "Loaded", [.int(1)])
+        Self.feed(bridge, "PhaseOffset", [.float(-0.04)])
+        #expect(bridge.facts.phaseOffset.map { abs($0 + 0.04) < 1e-6 } == true)
+        Self.feed(bridge, "Loaded", [.int(0)])
+        #expect(bridge.facts.phaseOffset == nil)
+    }
 }
