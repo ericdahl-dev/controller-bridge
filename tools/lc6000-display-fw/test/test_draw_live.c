@@ -310,7 +310,75 @@ static void the_play_flags_change_no_pixels(void) {
     }
 }
 
+/// The level meter (#461): an arc 80-83 inside the ring on the left, Swift's drawMeter. Compared, as the marker is,
+/// from MARKER_IN out: the meter, the ring and nothing else of this deck's.
+#define METER_CLOSE 6
+#define METER_BUDGET 0
+#define METER_CAP 6
+
+typedef struct { const char *file; uint8_t level, peak; } meter_case;
+static const meter_case meters[] = {
+    { "test/ref/deck4-blue-empty-meter0-0.ppm", 0, 0 },
+};
+#define METERS (sizeof meters / sizeof meters[0])
+
+/// Begin, deck 4 blue empty, then a meter message, then a tick.
+static void begin_with_meter(uint8_t level, uint8_t peak) {
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7");
+    char meter[64];
+    snprintf(meter, sizeof meter, "F0 00 02 0B 7F 10 20 00 03 0A %02X %02X F7", level, peak);
+    feed(&live, meter);
+    dfw_tick(&live, 0);
+}
+
+static void the_meter_is_drawn(void) {
+    for (size_t n = 0; n < METERS; n++) {
+        CHECK(load_reference(meters[n].file));
+        begin_with_meter(meters[n].level, meters[n].peak);
+        CHECK(rec.presents == 1);
+        memcpy(frame, rec.last, sizeof frame);
+        CHECK(band_from_matches(meters[n].file + 9, METER_CLOSE, METER_BUDGET, METER_CAP));
+    }
+}
+
+/// Not vacuous: each meter reference differs from the unlit one, from MARKER_IN out.
+static void each_meter_reference_differs_from_the_unlit_one(void) {
+    static dfw_pixel unlit[DFW_SIZE * DFW_SIZE];
+    static const char *const files[] = { "test/ref/deck4-blue-empty-meter0-0.ppm",
+                                         "test/ref/deck4-blue-empty-meter64-90.ppm",
+                                         "test/ref/deck4-blue-empty-meter127-127.ppm" };
+    CHECK(load_reference(UNLIT));
+    memcpy(unlit, reference, sizeof unlit);
+    for (int f = 0; f < 3; f++) {
+        CHECK(load_reference(files[f]));
+        int changed = 0;
+        for (int y = 0; y < DFW_SIZE; y++)
+            for (int x = 0; x < DFW_SIZE; x++)
+                changed += radius2(x, y) >= MARKER_IN * MARKER_IN && reference[y * DFW_SIZE + x] != unlit[y * DFW_SIZE + x];
+        CHECK(changed > 300);
+    }
+}
+
+/// The waiting look is agent3's; whatever it is, the meter changes none of it.
+static void stale_draws_no_meter(void) {
+    static dfw_pixel without[DFW_SIZE * DFW_SIZE];
+    memset(&unit, 0, sizeof unit);
+    unit.flags = 0x20;
+    draw_beat(0);
+    memcpy(without, frame, sizeof without);
+    unit.meter_heard = 1;
+    unit.level = 64;
+    unit.peak = 90;
+    draw_beat(0);
+    CHECK(memcmp(frame, without, sizeof frame) == 0);
+}
+
 const test_case draw_live_tests[] = {
+    { "the meter is drawn", the_meter_is_drawn },
+    { "each meter reference differs from the unlit one", each_meter_reference_differs_from_the_unlit_one },
+    { "stale draws no meter", stale_draws_no_meter },
     { "the play flags change no pixels", the_play_flags_change_no_pixels },
     { "the needle is drawn as the marker", the_needle_is_drawn_as_the_marker },
     { "the marker is drawn over the lit section", the_marker_is_drawn_over_the_lit_section },

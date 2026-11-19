@@ -92,15 +92,21 @@ static void lit_section(dfw_pixel *frame, int beat) {
     }
 }
 
+/// sin and cos by their series to the ninth power: within float precision up to an eighth of a turn (π/4).
+static void series_sin_cos(float a, float *s, float *c) {
+    float a2 = a * a;
+    *s = a * (1.0f - a2 / 6.0f * (1.0f - a2 / 20.0f * (1.0f - a2 / 42.0f * (1.0f - a2 / 72.0f))));
+    *c = 1.0f - a2 / 2.0f * (1.0f - a2 / 12.0f * (1.0f - a2 / 30.0f * (1.0f - a2 / 56.0f)));
+}
+
 /// sin and cos of the needle's angle, `needle` sixteen-thousandths (16384ths) of a turn clockwise from 12 o'clock.
 /// Folded to the nearest quarter turn, so the series only sees up to an eighth of a turn (π/4), where its terms to
 /// the ninth power are within float precision.
 static void needle_sin_cos(uint16_t needle, float *sin_out, float *cos_out) {
     int quarter = ((int)(needle & 0x3FFF) + 2048) / 4096;
     float a = (float)((int)(needle & 0x3FFF) - quarter * 4096) * 3.8349519697e-4f;   // 2π / 16384
-    float a2 = a * a;
-    float s = a * (1.0f - a2 / 6.0f * (1.0f - a2 / 20.0f * (1.0f - a2 / 42.0f * (1.0f - a2 / 72.0f))));
-    float c = 1.0f - a2 / 2.0f * (1.0f - a2 / 12.0f * (1.0f - a2 / 30.0f * (1.0f - a2 / 56.0f)));
+    float s, c;
+    series_sin_cos(a, &s, &c);
     switch (quarter & 3) {
     case 0: *sin_out = s; *cos_out = c; break;
     case 1: *sin_out = c; *cos_out = -s; break;
@@ -225,9 +231,69 @@ static void marker(dfw_pixel *frame, uint16_t needle) {
     }
 }
 
+/// The level meter (#461), Swift's drawMeter: the band 80-83 from 240° (the bottom, fraction 0) to 300° (the top,
+/// fraction 1) clockwise from 12 o'clock.
+#define METER_INNER 80.0f
+#define METER_OUTER 83.0f
+#define METER_TRACK 0x2C2C2Cu
+/// cos 30°: the arc's ends are 30° either side of 9 o'clock.
+#define COS_30 0.8660254f
+
+/// A stretch of the arc, from fraction `from` to `to`, in one color: its two radial edges as normals pointing into it.
+typedef struct { float start_nx, start_ny, end_nx, end_ny; dfw_pixel color; } meter_sector;
+
+static meter_sector sector(float from, float to, dfw_pixel color) {
+    // Measured from 9 o'clock (270°), so the series sees at most 30°: a point at φ is (−cos φ, −sin φ) from the
+    // center, and clockwise from it is (sin φ, −cos φ).
+    const float third_pi = 1.0471976f;
+    float s0, c0, s1, c1;
+    series_sin_cos((from - 0.5f) * third_pi, &s0, &c0);
+    series_sin_cos((to - 0.5f) * third_pi, &s1, &c1);
+    return (meter_sector){ s0, -c0, -s1, c1, color };
+}
+
+/// Fills each sector over the ones before it, as CoreGraphics fills each path over the last: in a pixel on an edge,
+/// the later color is blended over the earlier. Only the arc's bounding box is visited, about 15 × 85 pixels.
+static void meter(dfw_pixel *frame, const meter_sector *sectors, int count) {
+    int x0 = (int)(CENTER - METER_OUTER - 1.0f), x1 = (int)(CENTER - METER_INNER * COS_30) + 2;
+    int y0 = (int)(CENTER - METER_OUTER / 2.0f - 1.0f), y1 = (int)(CENTER + METER_OUTER / 2.0f + 1.0f) + 1;
+    for (int y = y0; y < y1; y++) {
+        float dy = (float)y + 0.5f - CENTER;
+        for (int x = x0; x < x1; x++) {
+            float dx = (float)x + 0.5f - CENTER;
+            float d2 = dx * dx + dy * dy;
+            if (d2 > (METER_OUTER + 1.0f) * (METER_OUTER + 1.0f) || d2 < (METER_INNER - 1.0f) * (METER_INNER - 1.0f))
+                continue;
+            float r = root(d2), nx = dx / r, ny = dy / r;
+            float band = edge_cover(METER_OUTER - r, nx, ny) + edge_cover(r - METER_INNER, nx, ny) - 1.0f;
+            if (band <= 0.0f) continue;
+            dfw_pixel *p = &frame[y * DFW_SIZE + x];
+            for (int i = 0; i < count; i++) {
+                const meter_sector *m = &sectors[i];
+                // Inside both edges: the sum less one, not the product, so a sliver under a pixel wide isn't
+                // over-covered.
+                float cover = edge_cover(dx * m->start_nx + dy * m->start_ny, m->start_nx, m->start_ny)
+                    + edge_cover(dx * m->end_nx + dy * m->end_ny, m->end_nx, m->end_ny) - 1.0f;
+                if (cover > 0.0f) *p = blend(*p, m->color, band * cover);
+            }
+        }
+    }
+}
+
+/// The meter's sectors for a level and a held peak, 0-127 each, in the order Swift fills them.
+static void draw_meter(dfw_pixel *frame, uint8_t level, uint8_t peak) {
+    (void)level;
+    (void)peak;
+    meter_sector sectors[1];
+    int count = 0;
+    sectors[count++] = sector(0.0f, 1.0f, METER_TRACK);
+    meter(frame, sectors, count);
+}
+
 void dfw_draw_live(dfw_pixel *frame, const dfw_unit *unit) {
     if (dfw_stale(unit)) return;
     if (unit->beat >= 1 && unit->beat <= 4) lit_section(frame, unit->beat);
+    if (unit->meter_heard) draw_meter(frame, unit->level, unit->peak);
     // Over everything, as Swift draws it last.
     if (unit->needle_heard) marker(frame, unit->needle);
 }
