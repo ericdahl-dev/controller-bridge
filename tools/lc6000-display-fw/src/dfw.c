@@ -140,6 +140,7 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->level = 0;
         unit->peak = 0;
         unit->meter_heard = 0;
+        unit->phase = DFW_PHASE_UNKNOWN;
         break;
     case OP_DECK: {
         if (!unit->drawn) break;
@@ -149,11 +150,12 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         if (memcmp(&deck, &unit->deck, sizeof deck) == 0) break;
         unit->deck = deck;
         // A new deck's play flags wait for its own state message (#464); only feedback stale carries over. Its text
-        // and tempo wait for their own messages too (#458).
+        // and tempo wait for their own messages too (#458), and its phase is unknown until its own comes (#462).
         unit->flags &= FLAG_STALE;
         memset(unit->text_length, 0, sizeof unit->text_length);
         unit->tempo = 0;
         unit->text_heard = 0;
+        unit->phase = DFW_PHASE_UNKNOWN;
         unit->dirty = 1;
         break;
     }

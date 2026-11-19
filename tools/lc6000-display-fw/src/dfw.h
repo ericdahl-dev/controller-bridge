@@ -46,6 +46,9 @@ typedef struct {
 /// The deck in front, as the deck message gave it.
 typedef struct { uint8_t number, r, g, b, player; } dfw_deck_state;
 
+/// The phase message's reserved value (#462): not measured (not playing, no master clock, none since load).
+#define DFW_PHASE_UNKNOWN (-8192)
+
 typedef struct dfw_unit {
     dfw_port port;
     const dfw_drawing *drawing;
