@@ -380,10 +380,12 @@ public final class JogDisplayDriver {
     /// that didn't shows images; with no unit, Custom shows the drawn look so it can be tried, Denon the images.
     public var previewsDrawn: Bool { connected ? drawing : displayFirmware == .custom }
     private var drawnPreviews: [Int: DrawnDisplayState] = [:]
+    /// Each deck's drawn preview as last reported; forgotten while previews show images, so the switch back reports all.
+    private var reportedDrawn: [Int: DrawnDisplayState] = [:]
 
     /// A deck's live drawn values for the preview (#465): its flags, needle, meter and phase, with its content as
     /// `preview` last gave it and the master beat. They go through the deck's own copy of the chip's state as the
-    /// messages the host would send, and a change is reported while previews are drawn.
+    /// messages the host would send, and a change is reported while previews are drawn (all of them again once they are).
     public func drawnPreview(deck: Int, flags: DrawnDisplay.State, needle: Int?, meter: (level: Int, peak: Int)?,
                              phase: Int) {
         guard let content = previews[deck] else { return }
@@ -396,10 +398,12 @@ public final class JogDisplayDriver {
         if let needle { messages.append(.needle(needle)) }
         if let meter { messages.append(.meter(level: meter.level, peak: meter.peak)) }
         var state = drawnPreviews[deck] ?? DrawnDisplayState()
-        var changed = false
-        for bytes in messages.map(\.bytes) + Self.texts(content) { changed = state.apply(bytes) || changed }
+        for bytes in messages.map(\.bytes) + Self.texts(content) { state.apply(bytes) }
         drawnPreviews[deck] = state
-        if changed, previewsDrawn { onEvent?(.drawnPreview(state)) }
+        guard previewsDrawn else { return reportedDrawn.removeAll() }
+        guard reportedDrawn[deck] != state else { return }
+        reportedDrawn[deck] = state
+        onEvent?(.drawnPreview(state))
     }
 
     /// Whether the previews show the waiting look: only while the unit draws, as only then does its screen (#502).
