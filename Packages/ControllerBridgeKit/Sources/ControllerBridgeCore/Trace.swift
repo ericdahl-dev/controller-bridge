@@ -136,5 +136,8 @@ struct TracingOutput: MIDIOutput {
         try inner.send(event)
         trace(.midiOut, "\(name) ch\(Int(event.channel) + 1) \(event.midoText)")
     }
+    func send(color: LEDColorMessage) throws {
+        try inner.send(color: color)
+    }
     func close() { inner.close() }
 }

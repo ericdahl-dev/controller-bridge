@@ -15,6 +15,12 @@ final class Rig {
             if failing { throw SendFailed() }
             sent.append(event)
         }
+        /// Denon's color messages (#530), in order, apart from the channel messages.
+        var colors: [LEDColorMessage] = []
+        func send(color: LEDColorMessage) throws {
+            if failing { throw SendFailed() }
+            colors.append(color)
+        }
         func close() { closed = true }
     }
 

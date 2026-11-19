@@ -165,6 +165,10 @@ final class Bridge {
     /// The last velocity sent to each LED, buttons and pads on their own channel (#224) apart, so an unchanged LED is
     /// never sent twice (#383).
     private var ledCache = LEDCache()
+    /// The LEDs that take Denon's color message (#530), from the profile; nil without it.
+    private(set) lazy var colorEncoder = LEDColorEncoder(mapping)
+    /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
+    var colorMessages = false
 
     /// The pads' MIDI channel, 0-15 (#224): the deck's unless the profile gives the pads their own.
     let padChannel: UInt8
@@ -481,6 +485,15 @@ final class Bridge {
             // The Coordinator treats this as an unplug once the current event is handled.
             outputFailed = true
         }
+    }
+
+    /// The color-message encoder in use (#530): nil when the setting is off or the profile has none.
+    var colorMessageEncoder: LEDColorEncoder? { colorMessages ? colorEncoder : nil }
+
+    /// A pad or the ring in exact RGB (#530), through Denon's color message.
+    func colorLED(_ message: LEDColorMessage) {
+        guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, let output else { return }
+        do { try output.send(color: message) } catch { outputFailed = true }
     }
 
     /// An LED driven by a CC, such as a VU meter (#207): straight out, as the caller limits how often. False when held,
