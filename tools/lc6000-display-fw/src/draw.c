@@ -112,11 +112,15 @@ static const dfw_glyph *glyph(const dfw_face *face, char code) {
 }
 
 /// A glyph's coverage blended in the face's ink, with its origin at x on the face's baseline row. CoreText snaps the
-/// origin down to a half pixel; the bitmaps are kept at both halves.
+/// origin down to 1/phases of a pixel; the bitmaps are kept at each of those phases.
 static void draw_glyph(dfw_pixel *frame, const dfw_face *face, const dfw_glyph *g, float x, int baseline_row) {
-    int half = floor_int(x * 2.0f);
-    const dfw_glyph_bitmap *b = &g->phase[half & 1];
-    int left = (half >> 1) + b->left, top = baseline_row + b->top;
+    int whole = floor_int(x);
+    int phase = floor_int((x - (float)whole) * (float)face->phases);
+    if (phase < 0) phase = 0;
+    if (phase >= face->phases || phase >= DFW_PHASES_MAX) phase = face->phases - 1;
+    const dfw_glyph_bitmap *b = &g->phase[phase];
+    if (!b->coverage) return;
+    int left = whole + b->left, top = baseline_row + b->top;
     for (int row = 0; row < b->height; row++) {
         int y = top + row;
         if (y < 0 || y >= DFW_SIZE) continue;
@@ -151,12 +155,78 @@ static void disc(dfw_pixel *frame, float cx, float cy, float radius, dfw_pixel c
     }
 }
 
+/// A rounded rectangle's outline, `width` wide, centered on the path through (x, y, w, h) with corner radius `radius`.
+/// Coverage comes from the signed distance to the path and the direction it is measured in.
+static void rounded_outline(dfw_pixel *frame, float x, float y, float w, float h, float radius, float width,
+                            dfw_pixel color) {
+    float cx = x + w / 2.0f, cy = y + h / 2.0f, hx = w / 2.0f - radius, hy = h / 2.0f - radius;
+    for (int py = floor_int(y - width - 1.0f); py <= floor_int(y + h + width + 1.0f); py++) {
+        if (py < 0 || py >= DFW_SIZE) continue;
+        for (int px = floor_int(x - width - 1.0f); px <= floor_int(x + w + width + 1.0f); px++) {
+            if (px < 0 || px >= DFW_SIZE) continue;
+            float dx = (float)px + 0.5f - cx, dy = (float)py + 0.5f - cy;
+            float qx = (dx < 0.0f ? -dx : dx) - hx, qy = (dy < 0.0f ? -dy : dy) - hy;
+            float d, nx, ny;
+            if (qx > 0.0f && qy > 0.0f) {
+                // Beside a corner: the distance to its arc, along the line from the arc's center.
+                float r = root(qx * qx + qy * qy);
+                d = r - radius;
+                nx = qx / r;
+                ny = qy / r;
+            } else if (qx > qy) {
+                d = qx - radius;
+                nx = 1.0f;
+                ny = 0.0f;
+            } else {
+                d = qy - radius;
+                nx = 0.0f;
+                ny = 1.0f;
+            }
+            float cover = edge_cover(width / 2.0f - d, nx, ny) + edge_cover(width / 2.0f + d, nx, ny) - 1.0f;
+            dfw_pixel *p = &frame[py * DFW_SIZE + px];
+            *p = blend(*p, color, cover);
+        }
+    }
+}
+
+/// A line's width as CoreText lays it out: each glyph's advance plus the tracking, the last one's too.
+static float line_width(const dfw_face *face, const char *text) {
+    float width = 0.0f;
+    for (int i = 0; text[i] && i < 8; i++) {
+        const dfw_glyph *g = glyph(face, text[i]);
+        if (g) width += g->advance + face->tracking;
+    }
+    return width;
+}
+
+static void draw_line(dfw_pixel *frame, const dfw_face *face, const char *text, float x, float middle) {
+    int row = baseline_row(face, middle);
+    for (int i = 0; text[i] && i < 8; i++) {
+        const dfw_glyph *g = glyph(face, text[i]);
+        if (!g) continue;
+        draw_glyph(frame, face, g, x, row);
+        x += g->advance + face->tracking;
+    }
+}
+
 #define CHIP 26.0f
+#define BADGE_GAP 6.0f
+#define BADGE_HEIGHT 22.0f
+#define BADGE_PADDING 15.0f
+#define BADGE_STROKE 1.5f
+#define BADGE_CORNER 4.25f
+#define BADGE_OUTLINE 0xBDBDBDu
 #define HEADER_MIDDLE 37.0f
 
-/// The deck chip, a 26 px circle in the deck color with the number in the ground color, centered at y 37.
+/// The player badge for each player (#209): none for empty (0) and other (5), whose name the deck message doesn't carry.
+static const char *const badges[] = { 0, "TRK", "OSC", "MIDI", "SEQ", 0 };
+
+/// The deck chip (a 26 px circle in the deck color, the number in the ground color) and the player badge, centered
+/// together at y 37. The badge is its label in a 1.5 px outline, 22 px tall, 6 px after the chip.
 static void header(dfw_pixel *frame, const dfw_deck_state *deck) {
-    float left = CENTER - CHIP / 2.0f;
+    const char *label = deck->player < sizeof badges / sizeof badges[0] ? badges[deck->player] : 0;
+    float text = label ? line_width(&badge_face, label) : 0.0f, badge = text + BADGE_PADDING;
+    float left = CENTER - (CHIP + (label ? BADGE_GAP + badge : 0.0f)) / 2.0f;
     dfw_pixel color = (dfw_pixel)deck->r << 16 | (dfw_pixel)deck->g << 8 | deck->b;
     disc(frame, left + CHIP / 2.0f, HEADER_MIDDLE, CHIP / 2.0f, color);
     // A number outside 1-4 has no glyph: the chip alone.
@@ -164,6 +234,11 @@ static void header(dfw_pixel *frame, const dfw_deck_state *deck) {
     if (number && deck->number >= 1 && deck->number <= 4)
         draw_glyph(frame, &number_face, number, left + CHIP / 2.0f - number->advance / 2.0f,
                    baseline_row(&number_face, HEADER_MIDDLE));
+    if (!label) return;
+    float inset = BADGE_STROKE / 2.0f, x = left + CHIP + BADGE_GAP;
+    rounded_outline(frame, x + inset, HEADER_MIDDLE - BADGE_HEIGHT / 2.0f + inset, badge - 2.0f * inset,
+                    BADGE_HEIGHT - 2.0f * inset, BADGE_CORNER, BADGE_STROKE, BADGE_OUTLINE);
+    draw_line(frame, &badge_face, label, x + badge / 2.0f - text / 2.0f, HEADER_MIDDLE + 0.5f);
 }
 
 void dfw_draw(dfw_pixel *frame, const dfw_deck_state *deck) {

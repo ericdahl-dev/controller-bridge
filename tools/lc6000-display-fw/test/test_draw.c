@@ -74,11 +74,12 @@ static void every_reference_has_the_ring_and_header_to_compare(void) {
 
 /// A pixel is a mismatch when any channel is off by more than TOLERANCE; a band fails past MAX_MISMATCHED such pixels.
 ///
-/// Why 16 and none: CoreGraphics' anti-aliasing is not exact pixel area. On the chip's 45° edges it covers up to about
-/// 5% less than the true area, which is 12 levels on a 244-level step (blue on the ground); everywhere else the C
-/// frame is within 3-5. 16 (6% of full scale) leaves room for that and nothing more. Real mistakes are far bigger: the
-/// chip a pixel off, its radius 12, a ring gap of 6, or another digit each put dozens of pixels 30 to 240 levels off.
-#define TOLERANCE 16
+/// Why 24 and none: CoreGraphics' anti-aliasing is not exact pixel area. Near 45° on the chip's curve it covers up to
+/// about 7% less than the true area, which is 18 levels for a white chip on the ground (244 levels apart); the ring
+/// (79 levels) is within 3, and the glyphs, rasterized by CoreText itself, within 13. 24 (9% of full scale) covers that
+/// with a little room. Real mistakes are bigger: the chip a pixel off or its radius 12, another digit or label, a glyph
+/// half a pixel off, or a ring gap of 6 each put pixels 40 to 240 levels off.
+#define TOLERANCE 24
 #define MAX_MISMATCHED 0
 
 static dfw_pixel frame[DFW_SIZE * DFW_SIZE];
@@ -148,6 +149,11 @@ static void the_header_matches_the_reference(uint8_t player) {
 static void an_empty_deck_draws_its_chip_alone(void) { the_header_matches_the_reference(0); }
 static void another_player_draws_its_chip_alone(void) { the_header_matches_the_reference(5); }
 
+static void a_track_draws_the_trk_badge(void) { the_header_matches_the_reference(1); }
+static void an_osc_clip_draws_the_osc_badge(void) { the_header_matches_the_reference(2); }
+static void a_midi_clip_draws_the_midi_badge(void) { the_header_matches_the_reference(3); }
+static void a_sequencer_draws_the_seq_badge(void) { the_header_matches_the_reference(4); }
+
 static void every_pixel_is_written_whatever_the_deck(void) {
     static const dfw_deck_state decks[] = { { 0, 1, 2, 3, 0 }, { 255, 9, 9, 9, 255 }, { 5, 0, 0, 0, 6 }, { 2, 255, 0, 0, 1 } };
     for (size_t d = 0; d < sizeof decks / sizeof decks[0]; d++) {
@@ -164,6 +170,10 @@ const test_case draw_tests[] = {
     { "the ring matches the reference", the_ring_matches_the_reference },
     { "an empty deck draws its chip alone", an_empty_deck_draws_its_chip_alone },
     { "another player draws its chip alone", another_player_draws_its_chip_alone },
+    { "a track draws the TRK badge", a_track_draws_the_trk_badge },
+    { "an OSC clip draws the OSC badge", an_osc_clip_draws_the_osc_badge },
+    { "a MIDI clip draws the MIDI badge", a_midi_clip_draws_the_midi_badge },
+    { "a sequencer draws the SEQ badge", a_sequencer_draws_the_seq_badge },
     { "every pixel is written whatever the deck", every_pixel_is_written_whatever_the_deck },
     { "every reference has the ring and header to compare", every_reference_has_the_ring_and_header_to_compare },
     { 0, 0 },
