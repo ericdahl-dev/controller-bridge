@@ -50,20 +50,14 @@ struct CensorDeckSelectLightsTests {
         #expect(rig.leds[7] == 1)
     }
 
-    /// The deck select button's light (23) stays at its idle level: on the unit a press showed no brighter level (the
-    /// unit seems to own that light while the button is down), so no press message is sent for it (#480, live check).
-    static func note23(_ rig: Rig) -> [UInt8] {
-        noteOns(rig.midi.outputs[Rig.lc6000Out.id]?.sent ?? []).filter { $0.note == 23 }.map(\.velocity)
-    }
-
-    @Test("Deck select (23), with no layers: idle dim, and a press sends it nothing")
+    @Test("Deck select (23), with no layers: idle dim, full while pressed")
     func deckSelectAlone() throws {
         let rig = try Press.started()
         #expect(rig.leds[23] == 1)
-        rig.midi.outputs[Rig.lc6000Out.id]?.sent.removeAll()
         Press.note(rig, 23, down: true)
+        #expect(rig.leds[23] == 127)
         Press.note(rig, 23, down: false)
-        #expect(Self.note23(rig).isEmpty)
+        #expect(rig.leds[23] == 1)
     }
 
     /// The LC6000 with its deck layers: deck select steps to the next layer (#420).
@@ -75,15 +69,17 @@ struct CensorDeckSelectLightsTests {
         return rig
     }
 
-    @Test("Deck select with layers: each press steps the layer and its repaint shows the button idle; never full")
+    @Test("Deck select with layers: full on press on the layer it steps to, idle on release, round every layer and back")
     func deckSelectLayers() throws {
         let rig = try Self.layered()
         #expect(rig.leds[23] == 1)
-        for _ in 0..<(LayersTests.lc6000Layers.count + 1) {
+        for step in 0..<(LayersTests.lc6000Layers.count + 1) {
+            rig.clock.now = Double(step)   // a second apart: each a lone step (#553)
             Press.note(rig, 23, down: true)
+            #expect(rig.leds[23] == 127, "step \(step) pressed")
             Press.note(rig, 23, down: false)
+            #expect(rig.leds[23] == 1, "step \(step) released")
         }
-        #expect(!Self.note23(rig).contains(127) && rig.leds[23] == 1)
     }
 
     /// Every light from #476 and #477: the dark buttons, Censor and deck select.
