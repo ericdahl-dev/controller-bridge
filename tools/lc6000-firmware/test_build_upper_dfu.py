@@ -48,6 +48,18 @@ class BuildUpperDfuTests(unittest.TestCase):
         self.assertEqual(image.address, UPPER)
         self.assertEqual(image.element, good_block())
 
+    def assertRefused(self, result, reason):
+        code, out, err, output = result
+        self.assertEqual(code, 1)
+        self.assertIn(reason, err)
+        self.assertFalse(os.path.exists(output), "nothing is written when refused")
+
+    def test_without_the_proof_it_is_refused(self):
+        blob = self.path("upper.bin", good_block())
+        output = self.path("upper.dfu")
+        code, out, err = run(blob, output)
+        self.assertRefused((code, out, err, output), "--proof")
+
 
 if __name__ == "__main__":
     unittest.main()

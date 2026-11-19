@@ -23,6 +23,13 @@ def dfuse(block):
     return data + struct.pack("<I", dfupatch.suffix_crc(data))
 
 
+def check_proof(path):
+    """The owner's read of the upper flash, which says sector 8 exists and is empty. Refuses unless it checks out."""
+    if path is None:
+        raise dfupatch.Refused("--proof is required: the owner's read-only read of the upper flash "
+                               "(README, \"Read-only checks\"); B is never flashed before it")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Write block B as its own DfuSe file at 0x08080000.")
     parser.add_argument("block")
@@ -30,6 +37,7 @@ def main(argv=None):
     parser.add_argument("--proof", help="the owner's read-only read of 0x08080000-0x080FFFFF (wd-upper-512k.bin)")
     args = parser.parse_args(argv)
     try:
+        check_proof(args.proof)
         out = dfuse(dfupatch.read(args.block))
         with open(args.output, "xb") as f:
             f.write(out)
