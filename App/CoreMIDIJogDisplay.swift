@@ -7,7 +7,8 @@ import os
 import ControllerBridgeCore
 import Synchronization
 
-/// Sends to the unit's WD port and its Controller port, found by name on each send so a replug just works; listens to
+/// Sends to the unit's WD port and its Controller port, found by name and remembered until CoreMIDI's setup changes, so
+/// a replug just works; listens to
 /// the WD port for the unit's upload answers. Nothing is sent unless the Coordinator's switch is on.
 final class CoreMIDIJogDisplay: JogDisplayPort {
     /// The unit's two ports, as CoreMIDI names them: "… LC6000 PRIME WD" and "… LC6000 PRIME Controller".
@@ -23,6 +24,23 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
     /// A send slower than this is logged: what a stall looks like from here.
     private static let slowSend: Double = 0.1
     private let listening = Mutex<MIDIUniqueID?>(nil)
+    /// The ports found by name, or found missing, until CoreMIDI's setup changes (#552): `isAttached` runs on the
+    /// Engine's loop on every tick, and each lookup is a round-trip to the MIDI server per endpoint.
+    private let found = Mutex<[String: MIDIEndpointRef?]>([:])
+
+    /// CoreMIDI's setup changed (a device came or went): the next lookup reads the ports again.
+    func forgetEndpoints() {
+        found.withLock { $0.removeAll() }
+    }
+
+    /// `find`, remembered until `forgetEndpoints`.
+    private func cachedFind(sources: Bool, hint: String) -> MIDIEndpointRef? {
+        let key = (sources ? "source " : "destination ") + hint
+        if let known = found.withLock({ $0[key] }) { return known }
+        let ref = Self.find(sources: sources, hint: hint)
+        found.withLock { $0[key] = .some(ref) }
+        return ref
+    }
 
     /// Makes the ports on the app's MIDI client. Must run on the main thread, as the client was.
     @MainActor
@@ -40,7 +58,7 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
     /// Connects the WD source, when it's there and not yet connected: before each WD send, so the answers to it are
     /// heard, after a replug too.
     private func listen() {
-        guard let source = Self.find(sources: true, hint: Self.wdHint) else { return }
+        guard let source = cachedFind(sources: true, hint: Self.wdHint) else { return }
         var id: MIDIUniqueID = 0
         MIDIObjectGetIntegerProperty(source, kMIDIPropertyUniqueID, &id)
         let isNew = listening.withLock { current in
@@ -51,7 +69,7 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
     }
 
     /// The WD port is there now (#305): without it, nothing is sent and no upload is waited on.
-    var isAttached: Bool { Self.find(sources: false, hint: Self.wdHint) != nil }
+    var isAttached: Bool { cachedFind(sources: false, hint: Self.wdHint) != nil }
 
     func sendController(_ bytes: [UInt8]) {
         sends.async { self.send(bytes, hint: Self.controllerHint) }
@@ -72,7 +90,7 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
                 Self.logger.error("Slow send to \(hint, privacy: .public): \(bytes.count) bytes took \(Int(took * 1000)) ms")
             }
         }
-        guard let destination = Self.find(sources: false, hint: hint) else { return }
+        guard let destination = cachedFind(sources: false, hint: hint) else { return }
         let words: [[UInt32]] = bytes.first == 0xF0 ? UMP.sysex7(bytes) : [[UMP.voice(bytes)]]
         // At most 512 packets a list, about 4 KB of SysEx: big enough to be fast, small enough for any buffer.
         let capacity = 1024 * 4 * 8 + 1024
