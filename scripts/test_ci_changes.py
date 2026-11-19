@@ -31,6 +31,12 @@ class NeedsMacTests(unittest.TestCase):
             "GLOSSARY.md", "docs/adr/0001-native-swift-menu-bar-app.md",
             "scripts/check_domain_docs.py", "scripts/test_check_domain_docs.py"]))
 
+    def test_the_lc6000_firmware_tool_skips_the_mac_jobs(self):
+        # tools/lc6000-firmware (#430): Python with its own tests, run by the Site check job
+        self.assertFalse(ci_changes.needs_mac([
+            "tools/lc6000-firmware/dfupatch.py", "tools/lc6000-firmware/test_dfupatch.py",
+            "tools/lc6000-firmware/.gitignore"]))
+
     def test_workflow_and_release_script_changes_run_the_mac_jobs(self):
         for path in [".github/workflows/ci.yml", "scripts/ci_profile.py", "scripts/smoke.sh", "project.yml",
                      ".github/pull_request_template.md"]:
