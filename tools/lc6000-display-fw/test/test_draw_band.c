@@ -4,6 +4,7 @@
 #include "draw_band.h"
 #include "band_geometry.h"
 #include "band_table.h"
+#include "layer_record.h"
 #include <string.h>
 
 #define CANVAS 216
@@ -269,43 +270,17 @@ static void the_frame_draws_the_rings_corners(void) {
     CHECK(rec.last[25 * DFW_SIZE + 173] == 0x4A4A4Au);
 }
 
-/// A recording layer (#468): the layer's pixels, and per pixel how many writes this call made and whether one wrote
-/// black and a later one a color (the shimmer: the ring went dark on the visible layer before it was drawn again).
-typedef struct {
-    uint16_t pixels[DFW_LAYER_W * DFW_LAYER_H];
-    uint8_t writes[DFW_LAYER_W * DFW_LAYER_H];
-    uint8_t blacked[DFW_LAYER_W * DFW_LAYER_H];
-    int total, dark_then_lit, in_square;
-} recorder;
-static recorder record;
+/// The recording adapter (test/layer_record.c): the seam's every write, per present.
+static layer_recorder record;
 
-static uint16_t record_read(void *ctx, int index) { return ((recorder *)ctx)->pixels[index]; }
-
-static void record_write(void *ctx, int index, uint16_t value) {
-    recorder *r = ctx;
-    int px = index % DFW_LAYER_W, py = index / DFW_LAYER_W;
-    if (px >= DFW_FRAME_X && px < DFW_FRAME_X + DFW_SIZE && py >= DFW_FRAME_Y && py < DFW_FRAME_Y + DFW_SIZE) r->in_square++;
-    if (r->blacked[index] && value != 0) r->dark_then_lit++;
-    if (value == 0) r->blacked[index] = 1;
-    if (r->writes[index] < 255) r->writes[index]++;
-    r->total++;
-    r->pixels[index] = value;
-}
-
-/// One present's band through the recorder: the counts start again, the pixels stay (the layer is the memory).
+/// One present's band through the recorder.
 static void record_band(void) {
-    memset(record.writes, 0, sizeof record.writes);
-    memset(record.blacked, 0, sizeof record.blacked);
-    record.total = record.dark_then_lit = record.in_square = 0;
-    const dfw_layer_io io = { record_read, record_write, &record };
-    dfw_band_layer(&unit, &io);
+    recorder_next_present(&record);
+    const dfw_layer layer = recorder_layer(&record);
+    dfw_band_layer(&unit, &layer);
 }
 
-static int most_writes(void) {
-    int most = 0;
-    for (int i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) if (record.writes[i] > most) most = record.writes[i];
-    return most;
-}
+static int most_writes(void) { return recorder_most_writes(&record); }
 
 /// (1), (2), (5): a present's band writes each pixel at most once, never black and then a color, and never in the square.
 /// From a black layer and from a layer holding another ring (83 then 120 of 165).

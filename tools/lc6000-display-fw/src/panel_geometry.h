@@ -30,4 +30,13 @@ static inline uint16_t dfw_rgb565(dfw_pixel p) {
     return (uint16_t)(((p >> 8) & 0xF800u) | ((p >> 5) & 0x07E0u) | ((p >> 3) & 0x001Fu));
 }
 
+/// The layer seam (#568): every write that reaches the panel goes through one of these, a pixel at a time by its index
+/// (y * DFW_LAYER_STRIDE + x), as RGB565. Its adapters: the real layer (dfw_draw_band, B's band entry, the only code
+/// that touches the layer's pointer), a recording one for the tests (test/layer_record.c), and frame-dump's.
+typedef struct {
+    uint16_t (*read)(void *ctx, int index);
+    void (*write)(void *ctx, int index, uint16_t rgb565);
+    void *ctx;
+} dfw_layer;
+
 #endif

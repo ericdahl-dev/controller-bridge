@@ -21,16 +21,9 @@ void dfw_band_pixels(const dfw_unit *unit, dfw_put put, void *ctx);
 /// square are the frame's, drawn by dfw_draw, and never touched.
 void dfw_draw_band(uint16_t *layer, const dfw_unit *unit);
 
-/// The layer as dfw_draw_band reaches it, a pixel at a time by its index (y * 320 + x): on the chip, plain memory; in
-/// the tests, a recording, so what it writes and when can be checked (#468: the band showed through the visible layer).
-typedef struct {
-    uint16_t (*read)(void *ctx, int index);
-    void (*write)(void *ctx, int index, uint16_t value);
-    void *ctx;
-} dfw_layer_io;
-
-/// dfw_draw_band through `io`.
-void dfw_band_layer(const dfw_unit *unit, const dfw_layer_io *io);
+/// The band through the layer seam (panel_geometry.h): dfw_draw_band over the real layer, the tests and frame-dump over
+/// their own adapters.
+void dfw_band_layer(const dfw_unit *unit, const dfw_layer *layer);
 
 
 #endif

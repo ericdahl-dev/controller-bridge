@@ -78,7 +78,7 @@ void dfw_band_pixels(const dfw_unit *unit, dfw_put put, void *ctx) {
 /// black where it doesn't reach), written only if the layer doesn't hold it already. So the visible layer never shows a
 /// pixel between two values (#468: a clear pass turned the ring black on screen for the few ms the ring took to draw,
 /// every present: the shimmer), and an unchanged ring writes nothing.
-void dfw_band_layer(const dfw_unit *unit, const dfw_layer_io *io) {
+void dfw_band_layer(const dfw_unit *unit, const dfw_layer *layer) {
     ring_state ring = ring_of(unit);
     for (int i = 0; i < dfw_band_entries; i++) {
         const dfw_band_entry *e = &dfw_band_table[i];
@@ -86,14 +86,15 @@ void dfw_band_layer(const dfw_unit *unit, const dfw_layer_io *io) {
         int index = dfw_panel_index(e->x, e->y);
         if (index < 0) continue;
         uint16_t value = ring.on && e->ring ? dfw_rgb565(ring_color(&ring, e)) : 0;
-        if (io->read(io->ctx, index) != value) io->write(io->ctx, index, value);
+        if (layer->read(layer->ctx, index) != value) layer->write(layer->ctx, index, value);
     }
 }
 
+/// The real layer's adapter: the only code that reads or writes the layer's pointer (#568).
 static uint16_t memory_read(void *ctx, int index) { return ((const uint16_t *)ctx)[index]; }
 static void memory_write(void *ctx, int index, uint16_t value) { ((uint16_t *)ctx)[index] = value; }
 
-void dfw_draw_band(uint16_t *layer, const dfw_unit *unit) {
-    const dfw_layer_io io = { memory_read, memory_write, layer };
-    dfw_band_layer(unit, &io);
+void dfw_draw_band(uint16_t *pixels, const dfw_unit *unit) {
+    const dfw_layer layer = { memory_read, memory_write, pixels };
+    dfw_band_layer(unit, &layer);
 }

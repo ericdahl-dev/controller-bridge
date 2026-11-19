@@ -37,8 +37,8 @@ $(BUILD)/vectors.h: vectors/messages.json test/vectors_to_c.py
 	@mkdir -p $(BUILD)
 	python3 -I test/vectors_to_c.py $< > $@
 
-$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h $(wildcard src/*.h) $(BUILD)/vectors.h
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c -lm
+$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h test/layer_record.c test/layer_record.h $(wildcard src/*.h) $(BUILD)/vectors.h
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c -lm
 
 clean:
 	rm -rf $(BUILD)
