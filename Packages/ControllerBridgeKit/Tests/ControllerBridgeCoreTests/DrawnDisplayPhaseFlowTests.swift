@@ -125,3 +125,33 @@ struct DrawnDisplayPhaseFlowTests {
         #expect(Self.phases(port) == [DrawnDisplay.Message.phase(164).bytes])
     }
 }
+
+@Suite("Drawn display: phase's subscription")
+struct DrawnDisplayPhaseSubscriptionTests {
+    typealias Handshake = DrawnDisplayHandshakeTests
+
+    @Test("While drawing, PhaseOffset joins the required subscriptions; not before, not after")
+    func required() throws {
+        let (rig, _, _) = try Handshake.rig(.custom)
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.phaseOffset))   // still asking
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        #expect(rig.coordinator.status.requiredSubscriptions.contains(.phaseOffset))
+        rig.coordinator.setJogDisplay(enabled: false)
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.phaseOffset))
+    }
+
+    @Test("A Resend's answer for a loaded deck with no PhaseOffset reports it missing; with one, nothing")
+    func judged() {
+        let answer = EverySubscriptionTests.deck1.map(\.1)
+        let required = Subscription.always + [.phaseOffset]
+        #expect(SubscriptionCheck(answer: answer, required: required)?.missing == [.phaseOffset])
+        let with = answer + [OSCMessage("/Syndicate/Deck/1/PhaseOffset", [.float(0)])]
+        #expect(SubscriptionCheck(answer: with, required: required)?.missing == [])
+    }
+
+    @Test("What it breaks names the jog display's phase rule")
+    func breaks() {
+        #expect(Subscription.phaseOffset.syndicateName == "PhaseOffset")
+        #expect(Subscription.phaseOffset.breaks == "the jog display's rule doesn't show the deck's phase")
+    }
+}

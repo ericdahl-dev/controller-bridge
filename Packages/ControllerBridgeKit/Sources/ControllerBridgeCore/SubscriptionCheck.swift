@@ -6,6 +6,9 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
     case playing, playPending, loaded, progress, tempoSlider, cues, sync, loop
     /// The deck's phase in the bar, for the jog display's needle (#165). Asked for only while the display is on.
     case barRamp
+    /// The deck's beat offset from the master, for the drawn display's phase rule (#462). Asked for only while the
+    /// unit draws.
+    case phaseOffset
     /// The mixer's (#207), asked for only by a profile with those controls. Their checkbox names are from Syndicate's
     /// feedback addresses; the screen's own labels are unconfirmed.
     case mixerVolume, mixerTrim, mixerEQ, mixerFilter, mixerButtons, mixerMeter
@@ -23,6 +26,7 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .sync: ["BPM", "Sync"]
         case .loop: ["Loop"]
         case .barRamp: ["BarRamp"]
+        case .phaseOffset: ["PhaseOffset"]
         case .mixerVolume: ["Volume"]
         case .mixerTrim: ["Trim"]
         case .mixerEQ: ["Low", "Mid", "High"]
@@ -78,6 +82,7 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .sync: "the Sync LED doesn't follow the deck"
         case .loop: "the loop LEDs don't follow the deck"
         case .barRamp: "the jog display's needle doesn't follow the deck"
+        case .phaseOffset: "the jog display's rule doesn't show the deck's phase"
         case .mixerVolume: "the channel fader can jump"
         case .mixerTrim: "the trim knob can jump"
         case .mixerEQ: "the EQ knobs can jump"
@@ -100,6 +105,7 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .sync: ["sync", "bpm"]
         case .loop: ["loop"]
         case .barRamp: ["barramp"]
+        case .phaseOffset: ["phaseoffset"]
         default: []
         }
     }
