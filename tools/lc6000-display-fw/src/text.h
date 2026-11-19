@@ -11,7 +11,7 @@ typedef struct dfw_text_face dfw_text_face;
 
 /// Geist-Bold 26 (the one-line title; an untitled deck's words), Geist-Bold 20 (the title on two lines), Geist-Medium
 /// 16 (the artist; an untitled deck's caption), GeistMono-SemiBold 22 (key and BPM).
-extern const dfw_text_face *const dfw_title26, *const dfw_title20, *const dfw_caption16, *const dfw_mono22;
+extern const dfw_text_face *const dfw_title26, *const dfw_title20, *const dfw_caption16, *const dfw_mono18;
 
 /// A line's width in pixels. `tracked`: the one-line title's tracking and kerning (the face's own; no other line has
 /// either, as the renderer's lines have neither).

@@ -385,11 +385,11 @@ public final class JogDisplayDriver {
     /// Each deck's drawn preview as last reported; forgotten while previews show images, so the switch back reports all.
     private var reportedDrawn: [Int: DrawnDisplayState] = [:]
 
-    /// A deck's live drawn values for the preview (#465): its flags, needle, meter and phase, with its content as
+    /// A deck's live drawn values for the preview (#465): its flags, needle, meter, phase and time (op 06's message), with its content as
     /// `preview` last gave it and the master beat. They go through the deck's own copy of the chip's state as the
     /// messages the host would send, and a change is reported while previews are drawn (all of them again once they are).
     public func drawnPreview(deck: Int, flags: DrawnDisplay.State, needle: Int?, meter: (level: Int, peak: Int)?,
-                             phase: Int) {
+                             phase: Int, time: DrawnDisplay.Message? = nil) {
         guard let content = previews[deck] else { return }
         typealias Message = DrawnDisplay.Message
         let color = content.color.count == 3 ? content.color : [255, 255, 255]
@@ -399,6 +399,7 @@ public final class JogDisplayDriver {
                                    .beat(lastMasterBeat ?? 0), .phase(phase)]
         if let needle { messages.append(.needle(needle)) }
         if let meter { messages.append(.meter(level: meter.level, peak: meter.peak)) }
+        if let time { messages.append(time) }
         var state = drawnPreviews[deck] ?? DrawnDisplayState()
         for bytes in messages.map(\.bytes) + Self.texts(content) { state.apply(bytes) }
         drawnPreviews[deck] = state

@@ -10,7 +10,7 @@ static const dfw_text_face *face_named(const char *name) {
     if (strcmp(name, "title26") == 0) return dfw_title26;
     if (strcmp(name, "title20") == 0) return dfw_title20;
     if (strcmp(name, "caption16") == 0) return dfw_caption16;
-    if (strcmp(name, "mono22") == 0) return dfw_mono22;
+    if (strcmp(name, "mono18") == 0) return dfw_mono18;
     return NULL;
 }
 

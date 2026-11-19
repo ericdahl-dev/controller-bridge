@@ -15,7 +15,9 @@ struct JogSimulatorState: Sendable {
     /// Each deck's last uploaded content: what its preview draws.
     var contents: [Int: JogDisplayContent] = [:]
     /// Each deck's drawn display state while the jog display would draw (#465); empty while it shows images.
-    var drawnStates: [Int: DrawnDisplayState] = [:]
+    var drawn = DrawnPreviews()
+    /// The drawn previews' clock, in quarter seconds: the warning's blink redraws as it moves.
+    var drawnClock = 0.0
     /// Each deck's needle redraws at most 30 times a second (#221), whatever rate it arrives at.
     var needleLimiters: [Int: RedrawLimiter<Int>] = [:]
 
@@ -41,14 +43,14 @@ struct JogSimulatorState: Sendable {
             case .deckPlaying(let deck, let playing): sim.apply(.playing(deck: deck, playing))
             // Every deck's content, live (#221): the simulator draws all of them, not only the one uploaded.
             case .preview(let content): contents[content.deck] = content
-            // The drawn layout's state (#465): kept for the preview; drawing it comes with the renderer's drawn image.
-            case .drawnPreview(let state): if let deck = state.deck?.number { drawnStates[deck] = state }
-            case .drawnPreviewsEnded: drawnStates.removeAll()
+            // The drawn layout (#465): while the jog display would draw, each deck's preview draws it.
+            case .drawnPreview, .drawnPreviewsEnded: drawn.apply(event, at: now.timeIntervalSinceReferenceDate)
             }
         }
 
     /// The display timer: each deck's needle held back by its limiter, once its interval has passed.
     mutating func tick(_ now: Date) {
+        if drawn.drawing { drawnClock = (now.timeIntervalSinceReferenceDate * 4).rounded(.down) / 4 }
         for deck in needleLimiters.keys.sorted() {
             if let value = needleLimiters[deck]?.tick(at: now.timeIntervalSinceReferenceDate) { sim.apply(.marker(deck: deck, pitchBend: value)) }
         }
@@ -89,6 +91,8 @@ final class JogSimulatorFeed: @unchecked Sendable {
 final class JogSimulatorLog {
     private(set) var sim = JogSimulator()
     private(set) var contents: [Int: JogDisplayContent] = [:]
+    private(set) var drawn = DrawnPreviews()
+    private(set) var drawnClock = 0.0
     @ObservationIgnored nonisolated let feed = JogSimulatorFeed()
 
     init() {
@@ -108,6 +112,8 @@ final class JogSimulatorLog {
         let state = feed.take()
         if sim != state.sim { sim = state.sim }
         if contents != state.contents { contents = state.contents }
+        if drawn != state.drawn { drawn = state.drawn }
+        if drawnClock != state.drawnClock { drawnClock = state.drawnClock }
     }
 }
 
@@ -130,7 +136,10 @@ struct JogDisplayPane: View {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Theme.Step.x3)], spacing: Theme.Step.x4) {
                         ForEach(decks, id: \.self) { deck in
-                            if let content = log.contents[deck] { JogDeckPreview(deck: deck, content: content, sim: log.sim).equatable() }
+                            if let content = log.contents[deck] {
+                                JogDeckPreview(deck: deck, content: content, sim: log.sim,
+                                               drawn: log.drawn.image(deck: deck, now: log.drawnClock)).equatable()
+                            }
                         }
                     }
                     .padding(Theme.Step.x4)
@@ -160,8 +169,11 @@ private struct JogDeckPreview: View, Equatable {
     let litBeat: Int?
     let marker: Double
     let playing: Bool
+    /// The drawn layout's inputs while the jog display would draw (#465); nil for today's image preview.
+    let drawn: DrawnPreviewImage?
 
-    init(deck: Int, content: JogDisplayContent, sim: JogSimulator) {
+    init(deck: Int, content: JogDisplayContent, sim: JogSimulator, drawn: DrawnPreviewImage? = nil) {
+        self.drawn = drawn
         self.deck = deck
         self.content = content
         onUnit = sim.onUnit(deck: deck)
@@ -174,7 +186,16 @@ private struct JogDeckPreview: View, Equatable {
     var body: some View {
         let summary = JogDeckSummary(deck: deck, title: content.title, key: content.key, bpm: content.bpm, beat: litBeat)
         VStack(spacing: Theme.Step.x2) {
-            if let image = Self.image(JogDisplayRenderer.simulatorImage(content, litBeat: litBeat, marker: marker)) {
+            if let drawn, let image = Self.image(JogDisplayRenderer.drawnImage(drawn.content, live: drawn.live),
+                                                 size: JogDisplayRenderer.drawnSize) {
+                // The panel the unit's layer covers, round as its window: 216 px with the 198 frame 9 px in.
+                Image(decorative: image, scale: 1)
+                    .interpolation(.high)
+                    .resizable()
+                    .frame(width: 153, height: 153)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
+            } else if let image = Self.image(JogDisplayRenderer.simulatorImage(content, litBeat: litBeat, marker: marker)) {
                 Image(decorative: image, scale: 1)
                     .interpolation(.high)
                     .resizable()
@@ -205,9 +226,8 @@ private struct JogDeckPreview: View, Equatable {
         .accessibilityValue(card.replacingOccurrences(of: "\n", with: ". "))
     }
 
-    /// The renderer's RGBA (198×198, premultiplied, top row first) as an image.
-    static func image(_ rgba: [UInt8]) -> CGImage? {
-        let size = JogDisplayRenderer.size
+    /// The renderer's RGBA (`size` square, 198 or the drawn 216; premultiplied, top row first) as an image.
+    static func image(_ rgba: [UInt8], size: Int = JogDisplayRenderer.size) -> CGImage? {
         guard rgba.count == size * size * 4, let provider = CGDataProvider(data: Data(rgba) as CFData) else { return nil }
         return CGImage(
             width: size, height: size, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: size * 4,

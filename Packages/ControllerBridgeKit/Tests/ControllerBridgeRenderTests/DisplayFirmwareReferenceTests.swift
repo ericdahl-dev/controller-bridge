@@ -55,14 +55,28 @@ struct DisplayFirmwareReferenceTests {
     @Test("Each reference is what the renderer draws now", arguments: references.map(\.file))
     func referenceIsCurrent(file: String) throws {
         let content = try #require(Self.references.first { $0.file == file }?.content)
-        try compare(file, with: JogDisplayRenderer.render(content))
+        try compare(file, with: Self.drawnFrame(content))
+    }
+
+    /// The drawn display's 198 frame (#524): drawnImage, drawn mode's own layout, cropped to the frame, RGBA, as
+    /// make_refs.sh's tools write it. The chip draws drawn mode only.
+    static func drawnFrame(_ content: JogDisplayContent, live: DrawnLive = DrawnLive()) -> [UInt8] {
+        let rgba = JogDisplayRenderer.drawnImage(content, live: live)
+        let size = JogDisplayRenderer.size, drawn = JogDisplayRenderer.drawnSize, inset = (drawn - size) / 2
+        var out: [UInt8] = []
+        out.reserveCapacity(size * size * 4)
+        for y in 0..<size {
+            let row = ((y + inset) * drawn + inset) * 4
+            out += rgba[row..<row + size * 4]
+        }
+        return out
     }
 
     /// The phase rule's references (#462), as make_refs.sh renders them with live-reference: deck 4, empty, blue.
     @Test("Each phase reference is what the renderer draws now", arguments: [0, -164, 164, -1638, 8191])
     func phaseReferenceIsCurrent(phase: Int) throws {
         let content = JogDisplayContent(deck: 4, color: [0, 128, 255], playerType: "empty")
-        let file = "deck4-blue-empty-phase\(phase).ppm", rendered = JogDisplayRenderer.render(content, phase: phase)
+        let file = "deck4-blue-empty-phase\(phase).ppm", rendered = Self.drawnFrame(content, live: DrawnLive(phase: phase))
         try compare(file, with: rendered)
         // The rule's rows hold no text, so no rasterizer slack: every pixel there within `close`.
         let reference = try #require(Self.rgb(file))

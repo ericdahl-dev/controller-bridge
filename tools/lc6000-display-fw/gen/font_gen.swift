@@ -63,13 +63,14 @@ let faces = [
     // The player badge: GeistMono-SemiBold 14 in 0xEDEDEA on the ground, tracked 0.04 em, centered at y 37.5.
     Face(name: "badge", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 14, ink: 0xEDEDEA,
          ground: 0x0B0B0B, middle: 37.5, tracking: 0.04, glyphs: "CDEIKMOQRST", lines: ["TRK", "OSC", "MIDI", "SEQ"]),
-    // The time left (#460): GeistMono-SemiBold 14 in 0xEDEDEA on the ground, untracked, centered at y 169.
-    Face(name: "time", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 14, ink: 0xEDEDEA,
-         ground: 0x0B0B0B, middle: 169, tracking: 0, glyphs: "-0123456789:", lines: ["-2:45", "-1:22", "-99:59", "-0:00"]),
+    // The time left (#460, #524): drawn mode's GeistMono-SemiBold 21 in 0xEDEDEA on the ground, untracked, centered
+    // at y 160.
+    Face(name: "time", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 21, ink: 0xEDEDEA,
+         ground: 0x0B0B0B, middle: 160, tracking: 0, glyphs: "-0123456789:", lines: ["-2:45", "-1:22", "-99:59", "-0:00"]),
     // The same in the last minute's warning red, 0xFF3B30 (#460): light text is drawn heavier, so red has its own
     // coverage, read from the red channel (its green is only 48 levels off the ground).
-    Face(name: "time_red", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 14, ink: 0xFF3B30,
-         ground: 0x0B0B0B, middle: 169, tracking: 0, glyphs: "-0123456789:", lines: ["-0:30", "-0:59"], channel: 0),
+    Face(name: "time_red", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 21, ink: 0xFF3B30,
+         ground: 0x0B0B0B, middle: 160, tracking: 0, glyphs: "-0123456789:", lines: ["-0:30", "-0:59"], channel: 0),
 ]
 
 let pad = 16, box = 48
