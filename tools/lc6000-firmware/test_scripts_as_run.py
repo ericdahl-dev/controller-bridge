@@ -35,7 +35,6 @@ class ScriptsAsRunTests(unittest.TestCase):
         with open(os.path.join(HERE, "flash-day.sh")) as f:
             wizard = f.read()
         self.assertIn('dfupatch() { python3 -I "$HERE/dfupatch.py" "$@"; }', wizard)
-        self.assertIn('drawn() { python3 -I "$HERE/drawn_flash.py" "$@"; }', wizard)
         self.assertIn('plan() { python3 -I "$HERE/drawn_plan.py" "$@"; }', wizard)
 
 

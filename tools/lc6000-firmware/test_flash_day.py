@@ -44,11 +44,8 @@ class WizardTests(unittest.TestCase):
         self.assertTrue(start < downloads[0] < end)
         drawn = self.stages.index("run_drawn() {")
         self.assertGreater(downloads[1], drawn)
-        gate = self.stages.index('[[ -n "$word" && "$typed" == "$word" ]] || way_back')
+        gate = self.stages.index('[[ "$typed" == "FLASH" ]] || way_back')
         self.assertTrue(start < gate < downloads[0])
-        # The word is FLASH unless the caller names another. The drawn path's words (FLASH, REWRITE) come from
-        # drawn_plan.py (#567).
-        self.assertIn('word="${4:-FLASH}"', self.body("flash"))
 
     def test_no_dangerous_dfu_util_options_appear(self):
         # 0x1FFF only as the option bytes' 16-byte read (#468): never the system memory or anything else up there.
@@ -88,6 +85,13 @@ class WizardTests(unittest.TestCase):
         self.assertIn("update mode", way_back)
         self.assertIn("refuses a unit that's running and current", way_back)
         self.assertIn("BACK + FWD + VINYL", way_back)
+
+    def test_no_part_of_the_script_branches_on_pythons_printed_words(self):
+        # #567: every drawn decision is drawn_plan.py's; the stock wizard never judged B or the app against the owner's
+        # image, so none of that is left anywhere in the shell.
+        for text in ("^holds", "holds*", "replace*", "drawn upper", "drawn app", "read_upper", "read_options",
+                     '\ndrawn() {'):
+            self.assertNotIn(text, self.stages, text)
 
     def test_look_asks_the_plan_about_the_devices_and_counts_nothing_itself(self):
         # One judgment for both wizards (#567): exactly one device, and the display chip, not the top panel chip.

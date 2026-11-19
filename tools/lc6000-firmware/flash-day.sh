@@ -209,7 +209,6 @@ OPTION_ADDRESS="0x1FFFC000"; OPTION_SIZE="16"
 DFU_PATH=""
 
 dfupatch() { python3 -I "$HERE/dfupatch.py" "$@"; }
-drawn() { python3 -I "$HERE/drawn_flash.py" "$@"; }
 plan() { python3 -I "$HERE/drawn_plan.py" "$@"; }
 
 # way_back prints how to get the unit back to stock, then stops the wizard.
@@ -278,49 +277,23 @@ read_app() {
   dfu-util -p "$DFU_PATH" -a 0 -s "$APP_ADDRESS:$APP_SIZE" -U "$1"
 }
 
-# read_upper FILE reads all of the flash above the image, sectors 8-11, back from the chip (read-only).
-read_upper() {
-  dfu-util -p "$DFU_PATH" -a 0 -s "$UPPER_ADDRESS:$UPPER_SIZE" -U "$1"
-}
 
-# read_options FILE reads the option bytes (alt 1, read-only).
-read_options() {
-  dfu-util -p "$DFU_PATH" -a 1 -s "$OPTION_ADDRESS:$OPTION_SIZE" -U "$1"
-}
 
-# flash IMAGE LABEL [AREA] [WORD] writes one .dfu to the display chip, after the typed WORD (FLASH unless named), then
-# reads it back and compares. AREA is app (the image, 0x08008000) or upper (block B, 0x08080000); the caller has
-# checked the file is one. Only a rewrite of the upper flash names its own word, REWRITE (#468).
+# flash IMAGE LABEL writes one .dfu to the display chip's app area, after a typed FLASH, then reads it back and
+# compares. The stock wizard's only write; the drawn wizard's writes are drawn_plan.py's (#567).
 flash() {
-  local image="$1" label="$2" area="${3:-app}" word="${4:-FLASH}" typed="" readback="$WORK/wd-readback-$STAMP-$2.bin"
-  if [[ "$area" == upper ]]; then
-    warn "This ERASES and WRITES the display chip's upper flash, from 0x08080000 as far as block B reaches, with:"
-  else
-    warn "This ERASES and WRITES the display chip's app area (0x08008000-0x0807FFFF) with:"
-  fi
+  local image="$1" label="$2" typed="" readback="$WORK/wd-readback-$STAMP-$2.bin"
+  warn "This ERASES and WRITES the display chip's app area (0x08008000-0x0807FFFF) with:"
   say  "  $image"
   note "The bootloader and the settings sector are not touched. Don't unplug or power off while it runs."
-  printf '  %s? Type %s to write it, anything else to stop:%s ' "$YELLOW" "$word" "$RESET"
+  printf '  %s? Type FLASH to write it, anything else to stop:%s ' "$YELLOW" "$RESET"
   read -r typed || true
-  [[ -n "$word" && "$typed" == "$word" ]] || way_back
+  [[ "$typed" == "FLASH" ]] || way_back
   if ! dfu-util -p "$DFU_PATH" -a 0 -D "$image" 2>&1 | tee "$WORK/flash-$STAMP-$label.log"; then
     warn "dfu-util reported an error. Don't retry blindly."
     way_back
   fi
   say "Reading it back to check (the stock updater never does this)…"
-  if [[ "$area" == upper ]]; then
-    if ! read_upper "$readback"; then
-      warn "The read-back failed, so the write can't be checked."
-      way_back
-    fi
-    if ! drawn upper "$UPPER_DFU" "$readback" | grep -q '^holds'; then
-      warn "The upper flash isn't exactly block B. Block A checks B's CRC before calling it, so it stays unused."
-      note "Don't flash the owner's image on top of this. Stop, and post the message above on #468."
-      way_back
-    fi
-    printf '  %s✓%s the upper flash holds exactly block B, then erased flash\n' "$GREEN" "$RESET"
-    return
-  fi
   if ! read_app "$readback"; then
     warn "The read-back failed, so the write can't be checked."
     way_back
