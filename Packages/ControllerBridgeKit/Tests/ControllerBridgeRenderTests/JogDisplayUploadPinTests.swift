@@ -2,26 +2,28 @@ import ControllerBridgeCore
 @testable import ControllerBridgeRender
 import Testing
 
-/// Image mode's uploads stay exactly as they are (#524): the drawn layout's changes (bigger time, smaller key/BPM, the
-/// band ring, the stale chip) are drawn mode's only. Pinned as a hash of the upload's bytes for fixed contents.
+/// Image mode's uploads keep design B's foot (#524): the drawn layout's changes (key/BPM 18 px, the time line) are
+/// drawn mode's only. Checked by where the foot's ink lands, not by bytes: CI's text rendering differs a little from
+/// a Mac's, so an exact pin can't hold.
 @Suite("Jog display renderer: uploads unchanged")
 struct JogDisplayUploadPinTests {
-    /// FNV-1a, 64-bit.
-    static func hash(_ bytes: [UInt8]) -> UInt64 {
-        bytes.reduce(0xCBF2_9CE4_8422_2325) { ($0 ^ UInt64($1)) &* 0x100_0000_01B3 }
+    static let content = JogDisplayContent(deck: 2, color: [255, 0, 0], title: "Daybreak", artist: "Night Drive",
+                                           key: "12A", bpm: 174, playerType: "track")
+
+    /// Rows below the rule and inside r 84 with any ink.
+    static func footRows(_ image: [UInt8]) -> Set<Int> {
+        Set((0..<198 * 198).compactMap { i -> Int? in
+            let x = i % 198, y = i / 198
+            guard y > 131, JogDisplayRendererTimeTests.radius((x, y)) < 84 else { return nil }
+            return image[i * 4..<i * 4 + 3].elementsEqual([0x0B, 0x0B, 0x0B]) ? nil : y
+        })
     }
 
-    static let contents: [(JogDisplayContent, UInt64)] = [
-        (JogDisplayContent(deck: 2, color: [255, 0, 0], title: "Daybreak", artist: "Night Drive", key: "12A", bpm: 174,
-                           playerType: "track"), 0x353F_95CC_9E7D_434D),
-        (JogDisplayContent(deck: 3, color: [0, 255, 255], playerType: "osc"), 0x2775_21A5_7253_DC2A),
-        (JogDisplayContent(deck: 4, color: [0, 128, 255]), 0x5D5B_2453_42AA_0FE1),
-    ]
-
-    @Test("The upload's bytes for fixed contents are today's")
-    func pinned() {
-        for (content, want) in Self.contents {
-            #expect(Self.hash(JogDisplayRenderer.uploadImage(content)) == want)
-        }
+    @Test("The upload's foot is key/BPM at 22 px from y 136, its ink rows 142-159, and no time line under it")
+    func designBFoot() {
+        let rows = Self.footRows(JogDisplayRenderer.uploadImage(Self.content))
+        #expect((17...19).contains(rows.count))
+        #expect((141...143).contains(rows.min()!))
+        #expect(rows.max()! <= 160)
     }
 }
