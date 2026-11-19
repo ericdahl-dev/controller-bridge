@@ -40,4 +40,12 @@ typedef struct {
 
 void dfw_text_block_for(const dfw_unit *unit, dfw_text_block *block);
 
+/// Draws one line of the block centered on the screen, as the renderer does: the baseline at the box's middle plus
+/// (ascent - descent) / 2, in the face's own ink.
+void dfw_text_draw_line(dfw_pixel *frame, const dfw_text_line *line);
+
+/// Draws key and BPM below the rule (the foot): the key in blue, a space, the BPM to one decimal, each "—" when the
+/// host sent none; monospaced, centered, never cut.
+void dfw_text_draw_foot(dfw_pixel *frame, const dfw_unit *unit);
+
 #endif

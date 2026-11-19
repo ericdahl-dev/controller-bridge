@@ -34,6 +34,8 @@ struct DisplayFirmwareReferenceTests {
                                            artist: "Wolfgang Amadeus Mozart and the Vienna Philharmonic", playerType: "track")),
         ("text-accents.ppm", JogDisplayContent(deck: 4, color: [0, 128, 255], title: "Tänzer aus Tübingen",
                                                artist: "Léa Seydoux & “Don’t”", key: "Ebm", bpm: 174, playerType: "track")),
+        // An untitled deck of another kind: its own name, "no title", and key and BPM ("—" for both).
+        ("text-automation.ppm", JogDisplayContent(deck: 3, color: [0, 200, 80], playerType: "Automation")),
     ]
 
     /// A binary PPM's RGB bytes, or nil if it isn't a 198×198 one.

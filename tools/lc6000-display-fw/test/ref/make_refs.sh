@@ -23,6 +23,7 @@ bin=$(swift build --package-path "$kit" --show-bin-path)/jog-reference
 "$bin" 3 0 200 80 track "$here/text-cut.ppm" "title=Mark Knight Underworld Sander Van Doorn Remix Edition" \
     "artist=Wolfgang Amadeus Mozart and the Vienna Philharmonic"
 "$bin" 4 0 128 255 track "$here/text-accents.ppm" "title=Tänzer aus Tübingen" "artist=Léa Seydoux & “Don’t”" key=Ebm bpm=174
+"$bin" 3 0 200 80 Automation "$here/text-automation.ppm"
 sips -s format png -Z 396 "$here/text-ten.ppm" --out "$here/text-ten-preview.png" >/dev/null
 # A PNG of the waiting look, for people to look at (the PR, the README); the tests read the PPM.
 sips -s format png -Z 396 "$here/stale.ppm" --out "$here/stale-preview.png" >/dev/null
