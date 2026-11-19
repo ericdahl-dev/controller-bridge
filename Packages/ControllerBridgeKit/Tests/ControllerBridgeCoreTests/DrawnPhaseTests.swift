@@ -19,4 +19,25 @@ struct DrawnPhaseTests {
         var phase = DrawnPhase()
         #expect(phase.value(offset: offset, playing: true) == wire)
     }
+
+    /// The values in turn for a run of offsets, all while playing.
+    static func run(_ offsets: [Double], from start: DrawnPhase = DrawnPhase()) -> [Int] {
+        var phase = start
+        return offsets.map { phase.value(offset: $0, playing: true) }
+    }
+
+    @Test("In phase is entered under 0.002 of a beat and left only over 0.004, so the tick doesn't flicker at the edge")
+    func hysteresis() {
+        // 0.003 is off phase coming in, in phase once in (until it passes 0.004); behind the same.
+        #expect(Self.run([0.003, 0.0019, 0.003, 0.0039, 0.0041]) == [49, 0, 0, 0, 67])
+        #expect(Self.run([-0.003, -0.001, -0.004, -0.0045]) == [-49, 0, 0, -74])
+    }
+
+    @Test("Stopping forgets in phase: playing again starts outside it")
+    func stoppingForgets() {
+        var phase = DrawnPhase()
+        #expect(phase.value(offset: 0.001, playing: true) == 0)
+        #expect(phase.value(offset: 0.003, playing: false) == -8192)
+        #expect(phase.value(offset: 0.003, playing: true) == 49)
+    }
 }
