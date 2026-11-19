@@ -192,6 +192,45 @@ static void begin_then_deck_presents_the_reference(void) {
     CHECK(band_matches(c, HEADER));
 }
 
+/// The waiting look (#464), compared over the whole frame: our logo is all of it. The limits are the header's: the
+/// logo is curves and a turned capsule, anti-aliased like the chip.
+#define STALE_REF "test/ref/stale.ppm"
+#define STALE_BUDGET 64
+
+static int stale_matches(void) {
+    int loose = 0, over_cap = 0, worst = 0;
+    for (int i = 0; i < DFW_SIZE * DFW_SIZE; i++) {
+        int d = channel_diff(frame[i], reference[i]);
+        if (d > worst) worst = d;
+        if (d > HEADER_CLOSE) loose++;
+        if (d > CAP) over_cap++;
+    }
+    fprintf(stderr, "    stale: worst %d, %d over %d (budget %d), %d over %d\n", worst, loose, HEADER_CLOSE, STALE_BUDGET,
+            over_cap, CAP);
+    return over_cap == 0 && loose <= STALE_BUDGET;
+}
+
+static void stale_draws_the_logo(void) {
+    static dfw_unit stale_unit;
+    stale_unit.deck = (dfw_deck_state){ 2, 255, 0, 0, 1 };
+    stale_unit.flags = 0x21;   // loaded, feedback stale
+    CHECK(load_reference(STALE_REF));
+    dfw_draw(frame, &stale_unit);
+    CHECK(stale_matches());
+}
+
+static void three_silent_seconds_present_the_logo(void) {
+    fresh(&unit, &rec);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");
+    dfw_tick(&unit, 0);
+    dfw_tick(&unit, 3000);
+    CHECK(rec.presents == 2);
+    CHECK(load_reference(STALE_REF));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(stale_matches());
+}
+
 const test_case draw_tests[] = {
     { "outside the bands is plain ground", outside_the_bands_is_plain_ground },
     { "the ring matches the reference", the_ring_matches_the_reference },
@@ -204,5 +243,7 @@ const test_case draw_tests[] = {
     { "every pixel is written whatever the deck", every_pixel_is_written_whatever_the_deck },
     { "every reference has the ring and header to compare", every_reference_has_the_ring_and_header_to_compare },
     { "begin then deck presents the reference", begin_then_deck_presents_the_reference },
+    { "stale draws the logo", stale_draws_the_logo },
+    { "three silent seconds present the logo", three_silent_seconds_present_the_logo },
     { 0, 0 },
 };
