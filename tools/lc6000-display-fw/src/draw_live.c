@@ -319,6 +319,10 @@ static void draw_meter(dfw_pixel *frame, uint8_t level, uint8_t peak) {
 #define PROGRESS_OUTER 98.0f
 /// The time's text, the renderer's text white.
 #define TIME_TEXT 0xEDEDEAu
+/// The last minute's warning (#460): its red, the red's hue, and how near a deck's hue counts as red.
+#define WARNING_RED 0xFF3B30u
+#define WARNING_HUE 3.5f
+#define NEAR_RED_DEGREES 25.0f
 
 /// sin and cos of `turns` (0-1) of a turn clockwise from 12 o'clock, folded to the nearest quarter turn as the needle's.
 static void turn_sin_cos(float turns, float *sin_out, float *cos_out) {
@@ -364,12 +368,30 @@ static void progress(dfw_pixel *frame, float turns, dfw_pixel fill) {
     }
 }
 
+/// Whether a deck colour is near the warning's red, so its normal half fills white instead (JogTrackTime's
+/// warningNormalFill): the channels' spread at least half the brightest, and the hue within 25° of the red's 3.5°.
+static int near_red(const dfw_deck_state *deck) {
+    float r = deck->r, g = deck->g, b = deck->b;
+    float high = r > g ? (r > b ? r : b) : (g > b ? g : b), low = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    float spread = high - low;
+    if (high <= 0.0f || spread < high / 2.0f) return 0;
+    float hue = high == r ? 60.0f * (g - b) / spread : high == g ? 60.0f * (2.0f + (b - r) / spread)
+                                                                 : 60.0f * (4.0f + (r - g) / spread);
+    if (hue < 0.0f) hue += 360.0f;
+    float distance = hue > WARNING_HUE ? hue - WARNING_HUE : WARNING_HUE - hue;
+    if (360.0f - distance < distance) distance = 360.0f - distance;
+    return distance <= NEAR_RED_DEGREES;
+}
+
 /// The track time: nothing until a time message has come, or while the length is unknown (0).
 static void draw_time(dfw_pixel *frame, const dfw_unit *unit) {
     if (!unit->time_heard || unit->track_length == 0) return;
     uint16_t elapsed = unit->elapsed < unit->track_length ? unit->elapsed : unit->track_length;
     dfw_pixel deck = (dfw_pixel)unit->deck.r << 16 | (dfw_pixel)unit->deck.g << 8 | unit->deck.b;
-    progress(frame, (float)elapsed / (float)unit->track_length, deck);
+    dfw_pixel fill = deck;
+    if (unit->time_look == DFW_TIME_RED) fill = WARNING_RED;
+    else if (unit->time_look == DFW_TIME_WARNING_NORMAL && near_red(&unit->deck)) fill = TIME_TEXT;
+    progress(frame, (float)elapsed / (float)unit->track_length, fill);
     // What's left as "-m:ss", minutes not wrapped to hours: up to "-273:03" from the wire's 16383 s.
     unsigned left = (unsigned)(unit->track_length - elapsed), minutes = left / 60u, seconds = left % 60u;
     char text[8], *p = text;
@@ -381,7 +403,7 @@ static void draw_time(dfw_pixel *frame, const dfw_unit *unit) {
     *p++ = (char)('0' + seconds / 10u);
     *p++ = (char)('0' + seconds % 10u);
     *p = 0;
-    dfw_draw_time_text(frame, text, TIME_TEXT);
+    dfw_draw_time_text(frame, text, unit->time_look == DFW_TIME_RED);
 }
 
 void dfw_draw_live(dfw_pixel *frame, const dfw_unit *unit) {

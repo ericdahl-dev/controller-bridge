@@ -47,7 +47,13 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   wedge with a 2 px black keyline) at the needle's angle. No marker until a needle message has come since begin.
   Under the marker, the level meter (#461, Swift's `drawMeter`): an arc 80-83 px out on the left, 240° to 300°, a
   dark track filled green to three quarters and yellow above, all red at clip, with the held peak as a 2° tick. No
-  meter until a meter message has come since begin. Nothing while the display is stale.
+  meter until a meter message has come since begin. Over the meter and under the marker, the track time (#460,
+  Swift's `drawTime`): the progress ring (r 96-98, a dark track and the deck colour's fill clockwise from 12 o'clock)
+  and the time left, "-m:ss" in GeistMono-SemiBold 14 at (99, 169). None until a time message has come since begin or
+  the deck changed, and none for an unknown length. In the last minute while playing it blinks at 1 Hz: red for the
+  first 500 ms from when the time last changed, then its normal half (the ring white for a deck near red). The tick
+  works the look out from `now_ms`, so the flip draws a frame; with no new time it keeps alternating off the last one.
+  Nothing while the display is stale.
 - `src/font_header.h`: glyph coverage for the header's two faces and the track time's (#460), generated from the bundled Geist fonts
   (SIL OFL 1.1). Don't edit it. Regenerate it from the repo root with:
 
@@ -131,6 +137,11 @@ The lit section is the live green on the ground, three times the contrast of the
 its pixels may be more than 6 off, and none more than 10 (measured worst: 8 on 7 pixels). The marker is compared from
 radius 77 out (inside that is only the chip, for deck 4 empty) as the unlit ring is: none more than 6 off (measured
 worst: 3, at the references and at 19 more angles swept round the turn). Half a degree off fails.
+
+The track time (#460) is checked against `*-time*.ppm` the same way: the progress ring from radius 95.5 out, the text in
+a box around its line. The ring is all edge, as the meter is: the dark track within 2, the fills worst 10 with up to
+65 pixels over 6, all on its circles, so 6 with a budget a little over each case's count and nothing past 16. The text
+is within 1 (2, no budget); its warning red has glyphs of its own, since light text is drawn heavier.
 
 **To add or change a reference image:**
 

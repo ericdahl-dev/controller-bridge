@@ -74,6 +74,10 @@ typedef struct dfw_unit {
     /// unknown. Whether a time message has come since the deck last changed: until one has, none is drawn.
     uint16_t elapsed, track_length;
     uint8_t time_heard;
+    /// When the time last changed, on the tick's clock: the last minute's warning blinks from it.
+    uint32_t time_at;
+    /// How the time looks now (dfw_time_look), worked out at each tick so a flip of the blink draws a frame.
+    uint8_t time_look;
     /// When the last of our messages came, and whether 3 s have passed since (the waiting look).
     uint32_t heard;
     /// The clock at the tick that is drawing, for anything drawn over time.
@@ -83,6 +87,10 @@ typedef struct dfw_unit {
     /// The back buffer, DFW_SIZE * DFW_SIZE pixels, owned by the caller: on the unit it lives in SDRAM (#466).
     dfw_pixel *frame;
 } dfw_unit;
+
+/// The track time's look (#460, JogTrackTime): no warning; the last minute's warning in its red half (the first
+/// 500 ms of each second, from when the time last changed); its normal half.
+enum { DFW_TIME_NORMAL = 0, DFW_TIME_RED = 1, DFW_TIME_WARNING_NORMAL = 2 };
 
 /// Starts the unit. `frame` may be NULL until the hook has one (see dfw_set_frame); `drawing` is NULL when there is
 /// none to call.

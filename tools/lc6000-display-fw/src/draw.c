@@ -214,10 +214,9 @@ static void draw_line(dfw_pixel *frame, const dfw_face *face, const char *text, 
     }
 }
 
-void dfw_draw_time_text(dfw_pixel *frame, const char *text, dfw_pixel ink) {
-    dfw_face face = time_face;
-    face.ink = ink;
-    draw_line(frame, &face, text, TIME_CENTER_X - line_width(&face, text) / 2.0f, TIME_MIDDLE);
+void dfw_draw_time_text(dfw_pixel *frame, const char *text, int warning_red) {
+    const dfw_face *face = warning_red ? &time_red_face : &time_face;
+    draw_line(frame, face, text, TIME_CENTER_X - line_width(face, text) / 2.0f, TIME_MIDDLE);
 }
 
 #define CHIP 26.0f

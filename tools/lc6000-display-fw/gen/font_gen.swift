@@ -52,6 +52,8 @@ struct Face {
     let glyphs: String
     /// Strings the layout draws, checked to be laid out as the advances plus tracking say.
     let lines: [String]
+    /// The channel coverage is read from (0 red, 1 green, 2 blue): the one where ink and ground are furthest apart.
+    var channel = 1
 }
 
 let faces = [
@@ -64,6 +66,10 @@ let faces = [
     // The time left (#460): GeistMono-SemiBold 14 in 0xEDEDEA on the ground, untracked, centered at y 169.
     Face(name: "time", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 14, ink: 0xEDEDEA,
          ground: 0x0B0B0B, middle: 169, tracking: 0, glyphs: "-0123456789:", lines: ["-2:45", "-1:22", "-99:59", "-0:00"]),
+    // The same in the last minute's warning red, 0xFF3B30 (#460): light text is drawn heavier, so red has its own
+    // coverage, read from the red channel (its green is only 48 levels off the ground).
+    Face(name: "time_red", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 14, ink: 0xFF3B30,
+         ground: 0x0B0B0B, middle: 169, tracking: 0, glyphs: "-0123456789:", lines: ["-0:30", "-0:59"], channel: 0),
 ]
 
 let pad = 16, box = 48
@@ -155,11 +161,12 @@ for face in faces {
         var phases: [String] = []
         for p in 0..<phaseCount {
             let pixels = rasterize(ch, CGFloat(p) / CGFloat(phaseCount))
-            // Coverage from the green channel: how far each pixel moved from the ground toward the ink.
-            let ground = Double(face.ground >> 8 & 0xFF), ink = Double(face.ink >> 8 & 0xFF)
+            // Coverage from the face's channel: how far each pixel moved from the ground toward the ink.
+            let shift = (2 - face.channel) * 8
+            let ground = Double(face.ground >> shift & 0xFF), ink = Double(face.ink >> shift & 0xFF)
             var coverage = [UInt8](repeating: 0, count: box * box)
             for i in 0..<(box * box) {
-                let c = (Double(pixels[i * 4 + 1]) - ground) / (ink - ground)
+                let c = (Double(pixels[i * 4 + face.channel]) - ground) / (ink - ground)
                 coverage[i] = UInt8(max(0, min(255, (c * 255).rounded())))
             }
             var minX = box, minY = box, maxX = -1, maxY = -1
