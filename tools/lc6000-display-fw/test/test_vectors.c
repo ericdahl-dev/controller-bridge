@@ -3,12 +3,12 @@
 #include "harness.h"
 #include <string.h>
 
-enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK };
+enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE };
 typedef struct {
     const char *name;
     int kind, from_unit, version, number;
     int color[3];
-    int player;
+    int player, flags;
     size_t length;
     uint8_t bytes[64];
 } vector;
@@ -23,6 +23,7 @@ typedef struct {
 
 #define COUNT(a) (sizeof(a) / sizeof((a)[0]))
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
+#define STATE_LOADED_PLAYING "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
 #define DECK_3_GREEN_SEQ "F0 00 02 0B 7F 10 20 00 09 03 03 00 00 01 7F 00 00 04 F7"
 
 static dfw_unit unit;
@@ -70,6 +71,12 @@ void every_vector_decodes(void) {
             check(rec.presents == 1 && unit.deck.number == v->number && unit.deck.r == v->color[0] &&
                   unit.deck.g == v->color[1] && unit.deck.b == v->color[2] && unit.deck.player == v->player, v->name);
             break;
+        case KIND_STATE:
+            feed(&unit, BEGIN_V1);
+            dfw_message(&unit, v->bytes, v->length);
+            dfw_tick(&unit);
+            check(unit.flags == v->flags, v->name);
+            break;
         default:
             check(0, v->name);
         }
@@ -83,11 +90,14 @@ void every_invalid_vector_is_ignored(void) {
         fresh(&unit, &rec);
         feed(&unit, BEGIN_V1);
         feed(&unit, DECK_3_GREEN_SEQ);
+        feed(&unit, STATE_LOADED_PLAYING);
         dfw_tick(&unit);
         dfw_deck_state before = unit.deck;
+        uint8_t flags = unit.flags;
         dfw_message(&unit, v->bytes, v->length);
         dfw_tick(&unit);
-        check(unit.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&unit.deck, &before, sizeof before) == 0,
+        check(unit.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&unit.deck, &before, sizeof before) == 0 &&
+              unit.flags == flags,
               v->name);
     }
 }

@@ -38,6 +38,8 @@ typedef struct {
     dfw_slot inbox[DFW_INBOX];
     uint8_t drawn;
     dfw_deck_state deck;
+    /// The state message's flags: bit 0 loaded, 1 playing, 2 play pending, 3 cue held, 4 loop on, 5 feedback stale.
+    uint8_t flags;
     uint8_t dirty;
     /// The back buffer, DFW_SIZE * DFW_SIZE pixels, owned by the caller: on the unit it lives in SDRAM (#466).
     dfw_pixel *frame;
