@@ -26,11 +26,15 @@ typedef struct {
     uint8_t bytes[DFW_MESSAGE_MAX];
 } dfw_slot;
 
+/// The deck in front, as the deck message gave it.
+typedef struct { uint8_t number, r, g, b, player; } dfw_deck_state;
+
 typedef struct {
     dfw_port port;
     volatile uint8_t head, tail;
     dfw_slot inbox[DFW_INBOX];
     uint8_t drawn;
+    dfw_deck_state deck;
     uint8_t dirty;
     dfw_pixel frame[DFW_SIZE * DFW_SIZE];
 } dfw_unit;

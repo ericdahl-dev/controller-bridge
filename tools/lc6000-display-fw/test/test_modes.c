@@ -32,9 +32,18 @@ static void a_deck_after_end_draws_nothing(void) {
     CHECK(rec.presents == 0);
 }
 
+void a_malformed_deck_is_ignored(void);
+void a_malformed_begin_is_ignored(void);
+void an_oversized_message_is_ignored(void);
+void random_bytes_change_nothing(void);
+
 const test_case all_tests[] = {
     { "begin then deck presents a frame", begin_then_deck_presents_a_frame },
     { "a deck before begin draws nothing", a_deck_before_begin_draws_nothing },
     { "a deck after end draws nothing", a_deck_after_end_draws_nothing },
+    { "a malformed deck is ignored", a_malformed_deck_is_ignored },
+    { "a malformed begin is ignored", a_malformed_begin_is_ignored },
+    { "an oversized message is ignored", an_oversized_message_is_ignored },
+    { "random bytes change nothing", random_bytes_change_nothing },
     { 0, 0 },
 };
