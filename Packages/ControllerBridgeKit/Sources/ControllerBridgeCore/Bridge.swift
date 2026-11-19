@@ -222,8 +222,13 @@ final class Bridge {
     /// The controller switched to this deck layer (#79): it shows this layer's LEDs now, so paint them all. The one
     /// pitch fader is shared by every layer, so its position belongs to another deck now: wait for pickup again.
     func becameActiveLayer() {
-        layerShown = true
         rearmPickup()
+        showLayer()
+    }
+
+    /// Shown from scratch: every LED painted again, once (#428: after the layer steps settle).
+    func showLayer() {
+        layerShown = true
         ledCache.flush()
         colorCache = [:]
         refreshLEDs()

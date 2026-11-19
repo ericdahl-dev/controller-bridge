@@ -39,6 +39,10 @@ public enum JogDisplayRenderer {
             frame(content, litBeat: live.beat, marker: live.needle.map { Double($0) / 16384 },
                   meter: live.meter.map { ($0.level, $0.peak) }, phase: live.phase,
                   time: live.time.map { ($0.elapsed, $0.length) }, look: live.look, drawn: true, in: context)
+            // The band outside the frame (#524): the progress ring, in the frame's coordinates.
+            if let time = live.time, time.length > 0, !content.stale {
+                drawRing(elapsed: time.elapsed, length: time.length, look: live.look, deck: content.color, in: context)
+            }
         }
     }
 
@@ -82,6 +86,9 @@ public enum JogDisplayRenderer {
 
     static let background = rgb(0x0B0B0B), text = rgb(0xEDEDEA), caption = rgb(0xBDBDBD), keyColor = rgb(0x9DC3EE)
     static let live = rgb(0x00FF48), beatOff = rgb(0x2C2C2C), downbeatOff = rgb(0x5A5A5A)
+    /// The deck number's ink on its color: black, or white on a dark one (DeckNumberInk).
+    private static func numberInk(_ deck: [Int]) -> CGColor { DeckNumberInk.white(on: deck) ? text : background }
+
     /// The level meter (#461): an arc just inside the ring on the left, from 240° (bottom) to 300° clockwise from
     /// 12 o'clock. Green to `meterYellowFrom` of the arc, yellow above; the whole fill red at clip (127).
     static let meterInner: CGFloat = 80, meterOuter: CGFloat = 83
@@ -96,8 +103,10 @@ public enum JogDisplayRenderer {
         static let image = Layout(keySize: 22, keyCenterY: nil, timeSize: 14, timeCenterY: 169)
         static let drawn = Layout(keySize: 18, keyCenterY: 140.5, timeSize: 21, timeCenterY: 160)
     }
-    /// The progress ring, just outside the beat ring: 1 px clear of it (r 95) and of the image's edge (r 99).
-    static let progressInner: CGFloat = 96, progressOuter: CGFloat = 98
+    /// The progress ring (#524), in the panel's black band outside the frame: r 103–107 from the frame's center, a
+    /// 0x4A4A4A track. How much of the band the round window shows is checked on the unit (#469).
+    static let progressInner: CGFloat = 103, progressOuter: CGFloat = 107
+    static let progressTrack = rgb(0x4A4A4A)
     /// The peak tick's width, in degrees.
     static let meterTick: CGFloat = 2
     static let meterYellow = rgb(0xFFD400), meterClip = rgb(0xFF3B30), meterPeak = rgb(0xFFFFFF)
@@ -138,14 +147,20 @@ public enum JogDisplayRenderer {
         context.setFillColor(background)
         context.fill(CGRect(x: 0, y: 0, width: 198, height: 198))
         if content.stale {
-            // The waiting look (#464): nothing of the deck, the beat ring dark, our logo in the middle.
+            // The waiting look (#464): the beat ring dark, our logo in the middle.
             ring(litBeat: nil, allDark: true, in: context)
-            JogLogo.draw(in: context, center: CGPoint(x: center, y: center), scale: JogLogo.scale)
+            // #524, the user's pick: the deck in the logo's hub, in its color with its number in black. The deck layer
+            // is the controller's own and can change while Syndicate is silent.
+            JogLogo.draw(in: context, center: CGPoint(x: center, y: center), scale: JogLogo.scale, hub: color(content.color))
+            let number = CTFontCreateWithName("Geist-Bold" as CFString, 18, nil)
+            draw(makeLine("\(content.deck)", font: number, color: numberInk(content.color)), font: number, centerX: center,
+                 centerY: center, in: context)
             return
         }
         ring(litBeat: litBeat, in: context)
         let deckColor = color(content.color)
-        header(deck: content.deck, color: deckColor, badge: badge(content.playerType), in: context)
+        header(deck: content.deck, color: deckColor, ink: numberInk(content.color), badge: badge(content.playerType),
+               in: context)
 
         let block = textBlock(content)
         for text in block.lines { line(text, in: context) }
@@ -250,7 +265,8 @@ public enum JogDisplayRenderer {
     }
 
     /// The deck chip (a 26 px circle in the deck color, its number in black) and the player badge, centered at y 37.
-    private static func header(deck: Int, color deckColor: CGColor, badge label: String?, in context: CGContext) {
+    private static func header(deck: Int, color deckColor: CGColor, ink: CGColor, badge label: String?,
+                               in context: CGContext) {
         let chip: CGFloat = 26, gap: CGFloat = 6, mid: CGFloat = 37
         let badgeFont = CTFontCreateWithName("GeistMono-SemiBold" as CFString, 14, nil)
         let badgeLine = label.map { makeLine($0, font: badgeFont, color: text, tracking: 0.04) }
@@ -260,7 +276,7 @@ public enum JogDisplayRenderer {
         context.setFillColor(deckColor)
         context.fillEllipse(in: CGRect(x: left, y: mid - chip / 2, width: chip, height: chip))
         let number = CTFontCreateWithName("Geist-Bold" as CFString, 18, nil)
-        draw(makeLine("\(deck)", font: number, color: background), font: number, centerX: left + chip / 2, centerY: mid,
+        draw(makeLine("\(deck)", font: number, color: ink), font: number, centerX: left + chip / 2, centerY: mid,
              in: context)
         guard let badgeLine else { return }
         // A 1.5 px outline, 5 px corners, 22 px tall.
@@ -290,19 +306,31 @@ public enum JogDisplayRenderer {
 
     /// Track time (#460): the time left, "-m:ss" (minutes past 59 stay minutes), in the slot under key/BPM. Seconds.
     /// Around the edge, the progress ring: the deck color clockwise from 12 o'clock, the rest a dark track.
-    /// The warning's red draws text and fill red; the blink's white half draws both white.
+    /// The warning's color now: red, or white in the blink's other half; nil for none.
+    private static func warningColor(_ look: JogTrackTime.Look) -> CGColor? {
+        switch look {
+        case .normal: nil
+        case .warningRed: color(JogTrackTime.warningRed)
+        case .warningWhite: color(JogTrackTime.warningWhite)
+        }
+    }
+
+    /// The time left, "-m:ss", under key/BPM: white, or the warning's color.
     private static func drawTime(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int], layout: Layout,
                                  in context: CGContext) {
-        let warning = look == .warningRed ? color(JogTrackTime.warningRed)
-            : look == .warningWhite ? color(JogTrackTime.warningWhite) : nil
-        let fill = warning ?? color(deck)
-        let elapsed = min(max(elapsed, 0), length), left = length - elapsed
-        band(inner: progressInner, outer: progressOuter, from: 0, to: 360, color: beatOff, in: context)
-        band(inner: progressInner, outer: progressOuter, from: 0, to: 360 * CGFloat(elapsed) / CGFloat(length),
-             color: fill, in: context)
+        let left = length - min(max(elapsed, 0), length)
         let font = CTFontCreateWithName("GeistMono-SemiBold" as CFString, layout.timeSize, nil)
-        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: warning ?? text), font: font,
-             centerX: center, centerY: layout.timeCenterY, in: context)
+        draw(makeLine(String(format: "-%d:%02d", left / 60, left % 60), font: font, color: warningColor(look) ?? text),
+             font: font, centerX: center, centerY: layout.timeCenterY, in: context)
+    }
+
+    /// The progress ring in the band outside the frame (#524): the track all round, the fill clockwise from 12 in the
+    /// deck color or the warning's.
+    private static func drawRing(elapsed: Int, length: Int, look: JogTrackTime.Look, deck: [Int], in context: CGContext) {
+        let elapsed = min(max(elapsed, 0), length)
+        band(inner: progressInner, outer: progressOuter, from: 0, to: 360, color: progressTrack, in: context)
+        band(inner: progressInner, outer: progressOuter, from: 0, to: 360 * CGFloat(elapsed) / CGFloat(length),
+             color: warningColor(look) ?? color(deck), in: context)
     }
 
     /// The level meter (#461): the dark track, the fill from the bottom, the held peak as a tick. Levels 0–127.

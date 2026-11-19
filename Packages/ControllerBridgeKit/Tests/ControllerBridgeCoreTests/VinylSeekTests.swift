@@ -100,6 +100,8 @@ struct VinylSeekTests {
         #expect(output.sent.contains(.noteOn(channel: 1, note: 19, velocity: 1)))
         #expect(!output.sent.contains(.noteOn(channel: 1, note: 19, velocity: 127)))
         output.sent.removeAll()
+        // Apart from the last change by more than the layer settle (#553), so it repaints at once.
+        rig.clock.now += 1
         LayersTests.switchLayer(rig, from: 2, to: 1)
         // Back on layer 1: still on.
         #expect(output.sent.contains(.noteOn(channel: 0, note: 19, velocity: 127)))
