@@ -6,6 +6,7 @@
 #include "dfw.h"
 #include "draw.h"
 #include "draw_band.h"
+#include "present.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,8 +38,8 @@ int main(int argc, char **argv) {
     }
     dfw_tick(&unit, 0);
     if (as_panel) {
-        for (int y = 0; y < DFW_SIZE; y++)
-            for (int x = 0; x < DFW_SIZE; x++) panel[dfw_panel_index(x, y)] = dfw_rgb565(frame[y * DFW_SIZE + x]);
+        // A's present, composed through the seam (test/present.c; on the unit it is A's own copy), then B's band.
+        present_through_layer(&dump_layer, frame);
         dfw_band_layer(&unit, &dump_layer);
         for (size_t i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) {
             uint8_t le[2] = { (uint8_t)panel[i], (uint8_t)(panel[i] >> 8) };

@@ -4,7 +4,7 @@
 void recorder_next_present(layer_recorder *r) {
     memset(r->writes, 0, sizeof r->writes);
     memset(r->blacked, 0, sizeof r->blacked);
-    r->total = r->dark_then_lit = r->in_square = 0;
+    r->total = r->dark_then_lit = r->in_square = r->unchanged = 0;
 }
 
 void recorder_fill(layer_recorder *r, uint16_t value) {
@@ -20,6 +20,7 @@ static void recorder_write(void *ctx, int index, uint16_t value) {
     if (px >= DFW_FRAME_X && px < DFW_FRAME_X + DFW_SIZE && py >= DFW_FRAME_Y && py < DFW_FRAME_Y + DFW_SIZE) r->in_square++;
     if (r->blacked[index] && value != 0) r->dark_then_lit++;
     if (value == 0) r->blacked[index] = 1;
+    if (r->pixels[index] == value) r->unchanged++;
     if (r->writes[index] < 255) r->writes[index]++;
     r->total++;
     r->pixels[index] = value;

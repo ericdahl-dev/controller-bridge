@@ -45,6 +45,8 @@ const uint32_t hook_marker __attribute__((section(".marker"), used)) = HOOK_MARK
 
 /// Uploads show rotated 180 degrees unless the host pre-rotates them (#121), so the panel shows the frame buffer
 /// upside down; dfw draws upright, so the copy turns it. To check on the unit.
+/// It copies the whole square on every present, changed or not. test/present.c mirrors this copy natively through the
+/// layer seam (#568), so the recording tests see the whole panel; on the unit this is the copy that runs.
 
 static void layer_present(void *ctx, const dfw_pixel *frame) {
     (void)ctx;

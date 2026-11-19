@@ -10,8 +10,9 @@ typedef struct {
     uint16_t pixels[DFW_LAYER_W * DFW_LAYER_H];
     uint8_t writes[DFW_LAYER_W * DFW_LAYER_H];
     uint8_t blacked[DFW_LAYER_W * DFW_LAYER_H];
-    /// This present: all writes, those that lit a pixel this present made black, and those inside the frame's square.
-    int total, dark_then_lit, in_square;
+    /// This present: all writes, those that lit a pixel this present made black, those inside the frame's square, and
+    /// those that wrote the value the pixel already held.
+    int total, dark_then_lit, in_square, unchanged;
 } layer_recorder;
 
 /// Every pixel set to `value`, as a layer holds what was drawn before; the counts start again.

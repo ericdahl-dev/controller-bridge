@@ -37,8 +37,8 @@ $(BUILD)/vectors.h: vectors/messages.json test/vectors_to_c.py
 	@mkdir -p $(BUILD)
 	python3 -I test/vectors_to_c.py $< > $@
 
-$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h test/layer_record.c test/layer_record.h $(wildcard src/*.h) $(BUILD)/vectors.h
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c -lm
+$(BUILD)/tests: $(SRC) $(TESTS) test/harness.c test/harness.h test/layer_record.c test/layer_record.h test/present.c test/present.h $(wildcard src/*.h) $(BUILD)/vectors.h
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -I$(BUILD) -o $@ $(SRC) $(TESTS) test/harness.c test/layer_record.c test/present.c -lm
 
 clean:
 	rm -rf $(BUILD)
@@ -64,6 +64,6 @@ $(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h $(ARM_
 include arm/arm.mk
 
 # The native frame for a list of messages (#515), which the block tests compare with the emulated chip's.
-$(BUILD)/frame-dump: $(SRC) test/frame_dump.c $(wildcard src/*.h)
+$(BUILD)/frame-dump: $(SRC) test/frame_dump.c test/present.c test/present.h $(wildcard src/*.h)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -Isrc -o $@ $(SRC) test/frame_dump.c
+	$(CC) $(CFLAGS) -Isrc -Itest -o $@ $(SRC) test/frame_dump.c test/present.c
