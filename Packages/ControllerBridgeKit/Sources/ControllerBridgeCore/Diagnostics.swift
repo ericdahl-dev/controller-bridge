@@ -65,6 +65,13 @@ extension MIDIEvent {
 }
 
 extension Mapping {
+    /// A pad or ring LED's name for the trace (#530): "ring", "pad1"…, or the note.
+    func ledName(note: Int) -> String {
+        if note == leds.ring { return "ring" }
+        if let index = notes.pads.firstIndex(of: note) { return "pad\(index + 1)" }
+        return "note \(note)"
+    }
+
     /// The mapping name of a message, as the Python monitor printed it: a button name, "pad1"…"pad8", a CC name, or
     /// "UNMAPPED". Any channel.
     func monitorName(for event: MIDIEvent) -> String {

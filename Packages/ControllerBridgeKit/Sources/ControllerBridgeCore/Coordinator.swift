@@ -397,7 +397,10 @@ public final class Coordinator {
         if let destination = chosenOutput ?? sameName ?? Self.match(allowed, bridge.mapping.midi.output) {
             do {
                 let opened = try midiSystem.openOutput(destination: destination)
-                bridge.output = trace.map { TracingOutput(inner: opened, name: destination.name, trace: $0) } ?? opened
+                let leds = bridge.mapping
+                bridge.output = trace.map {
+                    TracingOutput(inner: opened, name: destination.name, trace: $0, ledName: { leds.ledName(note: Int($0)) })
+                } ?? opened
                 // Layers sharing a unit open the same port: say it once.
                 if controllers[index].destination?.id != destination.id,
                    !controllers.contains(where: { $0.destination?.id == destination.id }) {
