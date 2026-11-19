@@ -147,6 +147,8 @@ public enum ProfileKeys {
         ProfileKey("notes.param_forward", .wholeNumber, "69", range: note),
         ProfileKey("leds", .object, "{}"),
         ProfileKey("leds.pitch_center", .wholeNumber, "42", range: note),
+        ProfileKey("leds.pitch_arrow_back", .wholeNumber, "41", range: note),
+        ProfileKey("leds.pitch_arrow_forward", .wholeNumber, "43", range: note),
         ProfileKey("leds.ring", .wholeNumber, "40", range: note),
         ProfileKey("leds.ring_color", .list, "[0, 128, 255]", count: 3...3),
         ProfileKey("leds.ring_color[]", .wholeNumber, "0", range: byte),
