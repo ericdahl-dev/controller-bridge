@@ -56,6 +56,7 @@ LC6000 ◀──MIDI LEDs──  DeckBridge  ◀──OSC feedback :9096── S
 
 **Jog display** (the LC6000's round screen in the platter, #165):
 - It shows the deck in front: its number in the deck's color, the title and artist, key and BPM, and the master beat around the edge. Turn it on or off in **Settings › Controller › Show the deck on the jog display**.
+- **Key display** writes the key as Syndicate sends it (**Traditional**, the default, such as `C#m`) or as its Camelot code (**Camelot**, `12A`). Syndicate always sends the traditional name, whatever its own key setting, so pick the one that matches it. The jog display and the Diagnostics preview change at once.
 - On Denon's own firmware (**Firmware: Denon**, the default) DeckBridge uploads a picture of each deck.
 - **Firmware: Custom** is only for a unit flashed with DeckBridge's display firmware, an experiment that isn't part of the release. Such a unit answers DeckBridge and draws the screen itself from small messages: the needle, the beat, the time left with a warning near the end, the level meter, and the deck's phase against the master. It shows our logo with the deck's number when Syndicate stops answering. A unit that doesn't answer gets pictures, as on Denon's firmware.
 - **Diagnostics › Jog display** previews every deck's screen, drawn or pictures, as the unit would show it.
