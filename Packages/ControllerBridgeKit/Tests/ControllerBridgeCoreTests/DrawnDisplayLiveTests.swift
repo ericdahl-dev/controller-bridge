@@ -75,4 +75,23 @@ struct DrawnDisplayLiveTests {
         rig.coordinator.tick()
         #expect(!Self.ops(port, 0x09).isEmpty)
     }
+
+    @Test("The state carries loaded, playing and play pending for the deck in front; only changes go out")
+    func stateFlags() throws {
+        let (rig, port, _) = try Handshake.rig(.custom)
+        rig.coordinator.jogDisplayReply(Handshake.answer)   // deck 1 loaded
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        func step(_ path: String, _ value: Int32) {
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/" + path, [.int(value)]))
+            rig.coordinator.tick()
+        }
+        step("Playing", 1)
+        step("Playing", 1)
+        step("Playing", 0)
+        step("PlayPending", 1)
+        step("PlayPending", 0)
+        step("Playing", 1)
+        #expect(Self.ops(port, 0x07).map { $0[10] } == [0x03, 0x01, 0x05, 0x01, 0x03])
+    }
 }

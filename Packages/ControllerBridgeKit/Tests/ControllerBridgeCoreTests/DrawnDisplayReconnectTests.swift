@@ -59,13 +59,16 @@ struct DrawnDisplayReconnectTests {
         rig.coordinator.jogDisplayReply(Handshake.answer)
         rig.clock.now = 0.5
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))
+        rig.coordinator.tick()   // the deck's loaded flag (#459)
         port.wd.removeAll()
         for time in [10.5, 12.5, 13.0] {
             rig.clock.now = time
             rig.coordinator.tick()
         }
         #expect(rig.coordinator.status.feedback == .stale)
-        #expect(Handshake.drawn(port) == [DrawnDisplay.Message.state(.stale).bytes])
+        // Stale, then (#459) Syndicate's deck state cleared, as the LEDs' is: the deck isn't known loaded any more.
+        #expect(Handshake.drawn(port) == [DrawnDisplay.Message.state([.loaded, .stale]).bytes,
+                                          DrawnDisplay.Message.state(.stale).bytes])
         port.wd.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Playing", [.int(0)]))
         rig.coordinator.tick()
@@ -86,7 +89,9 @@ struct DrawnDisplayReconnectTests {
     func heartbeat() throws {
         let (rig, port, clock) = try Handshake.rig(.custom)
         rig.coordinator.jogDisplayReply(Handshake.answer)
-        let full = Handshake.drawn(port).dropFirst()   // begin, deck, state
+        rig.coordinator.tick()   // the deck's loaded flag (#459)
+        let full = [DrawnDisplay.Message.begin(version: 1).bytes] + Handshake.drawn(port).filter { $0[9] == 0x03 }
+            + [DrawnDisplay.Message.state(.loaded).bytes, DrawnDisplay.Message.beat(0).bytes]
         port.wd.removeAll()
         clock.now = 0.99
         rig.coordinator.tick()

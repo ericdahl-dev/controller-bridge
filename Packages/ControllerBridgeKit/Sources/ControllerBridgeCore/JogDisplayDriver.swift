@@ -509,6 +509,13 @@ public final class JogDisplayDriver {
         lastFullState = clock.now
     }
 
+    /// The deck in front's play state for drawn mode (#459): loaded, playing, a quantized start waiting.
+    public func deckState(loaded: Bool, playing: Bool, pending: Bool) {
+        let flags: [(DrawnDisplay.State, Bool)] = [(.loaded, loaded), (.playing, playing), (.playPending, pending)]
+        for (flag, on) in flags { if on { drawnState.insert(flag) } else { drawnState.remove(flag) } }
+        sendState()
+    }
+
     /// Syndicate's feedback stopped or came back (#464): drawn mode shows the waiting look while stale.
     public func setStale(_ stale: Bool) {
         if stale { drawnState.insert(.stale) } else { drawnState.remove(.stale) }
