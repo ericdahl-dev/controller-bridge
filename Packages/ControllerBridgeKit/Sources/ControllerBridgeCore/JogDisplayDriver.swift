@@ -84,7 +84,11 @@ public final class JogDisplayDriver {
     /// The unit's display firmware (#425): Denon's shows slots 1-15 (it drops a show above 15, though it stores 16);
     /// a unit flashed with the slot 16 patch shows all 16. Changing it uploads, or stops using, deck 4's fourth beat.
     public var displayFirmware = DisplayFirmware.denon {
-        didSet { if displayFirmware != oldValue, upload == nil { next() } }
+        didSet {
+            guard displayFirmware != oldValue else { return }
+            if connected { handshakeAgain() }
+            if upload == nil { next() }
+        }
     }
     /// Deck N's beat B lives in slot (N - 1) × 4 + B (#424), so every deck's images stay on the unit and a deck switch
     /// is one show. Nil past the last slot the firmware shows: on Denon's, deck 4's beat 4, where its screen holds.
@@ -356,7 +360,7 @@ public final class JogDisplayDriver {
             return draw(version: min(version, DrawnDisplay.version))
         }
         // Denon's firmware refuses a command it doesn't know (ack 06): no need to wait.
-        if case .asking = mode, case .refused = JogDisplay.Reply(bytes) { return showImages() }
+        if case .asking = mode, upload == nil, case .refused = JogDisplay.Reply(bytes) { return showImages() }
         guard var running = upload, let reply = JogDisplay.Reply(bytes) else { return }
         switch reply {
         case .accepted where !running.finished:
@@ -426,6 +430,22 @@ public final class JogDisplayDriver {
         beatFailures[running.slot] = failures
         if failures >= Self.beatTries {
             log.log("The jog display gave up on slot \(running.slot) after \(Self.beatTries) tries")
+        }
+    }
+
+    /// Settings' firmware changed while connected (#456): Custom asks the unit; Denon's ends drawn mode, and the deck
+    /// in front goes up as images.
+    private func handshakeAgain() {
+        if case .drawn(let version) = mode {
+            sendWD(DrawnDisplay.Message.end(version: version).bytes)
+            if wanted == nil { wanted = current }
+            current = nil
+        }
+        mode = .images
+        lastDeck = nil
+        if displayFirmware == .custom {
+            mode = .asking(since: clock.now)
+            sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
         }
     }
 

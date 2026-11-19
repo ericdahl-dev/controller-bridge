@@ -176,6 +176,43 @@ struct DrawnDisplayHandshakeTests {
         silent.coordinator.tick()
         #expect(silent.coordinator.status.displayFound?.label == "Custom (images)")
     }
+
+    @Test("Settings flipped from Denon to Custom while connected: the question goes out then, and an answer draws")
+    func flipToCustomAsks() throws {
+        let (rig, port, _) = try Self.rig(.denon)
+        port.wd.removeAll()
+        rig.coordinator.setDisplayFirmware(.custom)
+        #expect(port.wd == [Self.ask])
+        #expect(rig.coordinator.status.displayFound == nil)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        #expect(rig.coordinator.status.displayFound?.label == "Custom (drawn display, protocol 1)")
+    }
+
+    @Test("Settings flipped from Custom to Denon while drawing: end, then images as on Denon's")
+    func flipToDenonEnds() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        port.wd.removeAll()
+        rig.coordinator.setDisplayFirmware(.denon)
+        #expect(port.wd.first == Self.end)
+        #expect(Self.uploadSlots(port) == [1])
+        #expect(rig.coordinator.status.displayFound?.label == "Denon")
+    }
+
+    @Test("In drawn mode a new title on the deck in front sends no deck message: the deck didn't change")
+    func sameDeckNoMessage() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        port.wd.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [.string("Night Drive"), .string("Kid"), .string("8A"),
+                                                                             .float(124), .float(200), .int(100), .int(400), .string("track")]))
+        // The player type turned from empty to track: that one deck message.
+        #expect(Self.drawn(port).filter { $0[9] == 0x03 }.map { $0[17] } == [DrawnDisplay.Player.track.rawValue])
+        port.wd.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [.string("Daybreak"), .string("Kid"), .string("8A"),
+                                                                             .float(124), .float(200), .int(100), .int(400), .string("track")]))
+        #expect(Self.drawn(port).isEmpty)
+    }
 }
 
 /// Settings' Firmware row (#425, #456): what the setting means, then what was found on the unit.
