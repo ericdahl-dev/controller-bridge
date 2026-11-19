@@ -150,13 +150,20 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length, uint32_t no
         unit->flags &= FLAG_STALE;
         memset(unit->text_length, 0, sizeof unit->text_length);
         unit->tempo = 0;
+        unit->text_heard = 0;
         unit->dirty = 1;
         break;
     }
     case OP_TEXT:
+        if (!unit->drawn) break;
+        // The first since the deck changed lets the words show, even an empty one (an empty deck's title).
+        if (!unit->text_heard) {
+            unit->text_heard = 1;
+            unit->dirty = 1;
+        }
         // Unchanged (the heartbeat's), it changes nothing.
-        if (!unit->drawn || (unit->text_length[args[0]] == code_count &&
-                             memcmp(unit->text[args[0]], codes, (size_t)code_count) == 0)) break;
+        if (unit->text_length[args[0]] == code_count &&
+            memcmp(unit->text[args[0]], codes, (size_t)code_count) == 0) break;
         memcpy(unit->text[args[0]], codes, (size_t)code_count);
         unit->text_length[args[0]] = (uint8_t)code_count;
         unit->dirty = 1;

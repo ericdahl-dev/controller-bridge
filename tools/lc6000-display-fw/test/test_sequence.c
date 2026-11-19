@@ -90,3 +90,27 @@ void a_deck_change_clears_the_text_and_tempo(void) {
     dfw_tick(&unit, 100);
     CHECK(unit.text_length[0] == 0 && unit.tempo == 0);
 }
+
+#define TITLE_EMPTY "F0 00 02 0B 7F 10 20 00 02 04 00 F7"
+
+/// The words wait for the new deck's own text (#458): until one comes, no text is drawn, so a deck change never
+/// flashes the empty deck's words for a tick. An empty title counts: it's how an empty deck says so.
+void a_new_decks_words_wait_for_its_text(void) {
+    fresh(&unit, &rec);
+    feed(&unit, BEGIN_V1);
+    feed(&unit, DECK_2_RED_TRACK);
+    dfw_tick(&unit, 0);
+    CHECK(!unit.text_heard);
+    feed(&unit, TITLE_STROBE);
+    dfw_tick(&unit, 10);
+    CHECK(unit.text_heard);
+    feed(&unit, DECK_2_RED_TRACK);   // the heartbeat's same deck: still heard
+    dfw_tick(&unit, 20);
+    CHECK(unit.text_heard);
+    feed(&unit, DECK_3_RED_TRACK);
+    dfw_tick(&unit, 30);
+    CHECK(!unit.text_heard);
+    feed(&unit, TITLE_EMPTY);
+    dfw_tick(&unit, 40);
+    CHECK(unit.text_heard);
+}
