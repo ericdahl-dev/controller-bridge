@@ -67,7 +67,7 @@ $(ARM_BUILD)/upper.elf: $(UPPER_C) arm/upper.ld arm/upper.h arm/include/string.h
 	$(ARM_PREFIX)gcc $(ARM_CPU) -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--build-id=none \
 		-Wl,-T,arm/upper.ld -Wl,-Map,$(ARM_BUILD)/upper.map $(UPPER_EXTRA_LDFLAGS) -o $@ $(UPPER_OBJ) -lgcc
 
-$(ARM_BUILD)/upper.bin: $(ARM_BUILD)/upper.elf arm/upper_seal.py
+$(ARM_BUILD)/upper.bin: $(ARM_BUILD)/upper.elf arm/upper_seal.py arm/upper_header.py
 	$(ARM_PREFIX)objcopy -O binary -j .upper_header -j .text -j .data $< $@
 	@$(PYTHON) -I arm/upper_seal.py $@
 

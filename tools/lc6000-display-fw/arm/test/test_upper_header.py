@@ -6,7 +6,7 @@ in both. Runs from `make test` with the pin tool it builds:
   python3 -I arm/test/test_upper_header.py build/upper-pin
 
 Standard library only."""
-import os, subprocess, sys, tempfile, unittest
+import os, re, subprocess, sys, tempfile, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))  # -I leaves arm/ off sys.path
 import upper_header  # noqa: E402
@@ -88,6 +88,47 @@ class PinTests(unittest.TestCase):
             upper_header.check(block, LAYOUT)
         # The kit can't know A's layout from B alone (#516): it checks the rest.
         self.assertEqual(upper_header.check(block).layout, LAYOUT + 1)
+
+
+TOOLS = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", ".."))
+# The header's two descriptions, C's one CRC, and this pin (which names what a copy looks like).
+OWNERS = {"lc6000-display-fw/arm/upper.h", "lc6000-display-fw/arm/upper_header.py", "lc6000-display-fw/arm/upper_crc.h",
+          "lc6000-display-fw/arm/test/test_upper_header.py"}
+# Files that still carry their own copy, each removed as it moves onto the modules (#572).
+NOT_YET = {
+    "lc6000-display-fw/arm/test/test_block.py",
+    "lc6000-display-fw/arm/test/test_hook.c",
+    "lc6000-firmware/build_upper_dfu.py",
+    "lc6000-firmware/drawn_flash.py",
+    "lc6000-firmware/test_build_upper_dfu.py",
+    "lc6000-firmware/test_drawn_flash.py",
+}
+# What a copy looks like: B's marker as a number, a CRC table, a CRC-32 in a file about block B, or a header word
+# written by hand.
+COPY = [re.compile(r"0x42574644"), re.compile(r"nibbles\["), re.compile(r"put_word\(upper \+ (4|12)\b")]
+CRC = re.compile(r"zlib\.crc32\(")
+ABOUT_B = re.compile(r"upper", re.I)
+
+
+def copies():
+    found = set()
+    for root, dirs, names in os.walk(TOOLS):
+        dirs[:] = [d for d in dirs if d not in ("build", "__pycache__", ".venv")]
+        for name in names:
+            if not name.endswith((".py", ".c", ".h", ".sh")):
+                continue
+            path = os.path.join(root, name)
+            rel = os.path.relpath(path, TOOLS)
+            with open(path, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+            if any(p.search(text) for p in COPY) or (CRC.search(text) and ABOUT_B.search(text)):
+                found.add(rel)
+    return found - OWNERS
+
+
+class OneDescriptionTests(unittest.TestCase):
+    def test_no_tool_or_test_carries_its_own_header_or_crc(self):
+        self.assertEqual(copies(), NOT_YET)
 
 
 if __name__ == "__main__":
