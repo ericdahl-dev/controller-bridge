@@ -30,6 +30,8 @@ def check_proof(path):
     if path is None:
         raise dfupatch.Refused("--proof is required: the owner's read-only read of the upper flash "
                                "(README, \"Read-only checks\"); B is never flashed before it")
+    if dfupatch.inside(path, dfupatch.repository_root()):
+        raise dfupatch.Refused("the proof must be the owner's own read, kept outside the repository (~/lc6000)")
     proof = dfupatch.read(path)
     if len(proof) != PROOF_SIZE:
         raise dfupatch.Refused(f"the proof is {len(proof)} bytes, not the {PROOF_SIZE} of a whole read of "

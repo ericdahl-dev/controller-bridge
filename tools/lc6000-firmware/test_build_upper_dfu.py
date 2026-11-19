@@ -72,5 +72,17 @@ class BuildUpperDfuTests(unittest.TestCase):
         self.assertRefused(self.build(proof=bytes(proof)), "erased")
 
 
+    def test_a_proof_inside_the_repository_is_refused(self):
+        repo_dir = tempfile.TemporaryDirectory(dir=dfupatch.repository_root())
+        self.addCleanup(repo_dir.cleanup)
+        proof = os.path.join(repo_dir.name, "wd-upper-512k.bin")
+        with open(proof, "wb") as f:
+            f.write(b"\xff" * PROOF_SIZE)
+        blob = self.path("upper.bin", good_block())
+        output = self.path("upper.dfu")
+        code, out, err = run(blob, output, "--proof", proof)
+        self.assertRefused((code, out, err, output), "outside the repository")
+
+
 if __name__ == "__main__":
     unittest.main()
