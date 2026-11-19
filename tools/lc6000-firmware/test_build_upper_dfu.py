@@ -101,5 +101,20 @@ class BuildUpperDfuTests(unittest.TestCase):
                 self.assertRefused(self.build(block=block), reason)
 
 
+    def test_it_wont_write_inside_the_repository_or_over_a_file(self):
+        repo_dir = tempfile.TemporaryDirectory(dir=dfupatch.repository_root())
+        self.addCleanup(repo_dir.cleanup)
+        blob = self.path("upper.bin", good_block())
+        proof = self.path("wd-upper-512k.bin", b"\xff" * PROOF_SIZE)
+        inside = os.path.join(repo_dir.name, "upper.dfu")
+        code, out, err = run(blob, inside, "--proof", proof)
+        self.assertRefused((code, out, err, inside), "outside the repository")
+        existing = self.path("upper.dfu", b"keep me")
+        code, out, err = run(blob, existing, "--proof", proof)
+        self.assertEqual(code, 1)
+        self.assertIn("already exists", err)
+        self.assertEqual(dfupatch.read(existing), b"keep me")
+
+
 if __name__ == "__main__":
     unittest.main()

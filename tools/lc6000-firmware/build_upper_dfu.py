@@ -4,7 +4,7 @@
   python3 -I build_upper_dfu.py UPPER.bin OUT.dfu --proof ~/lc6000/wd-upper-512k.bin
 
 Nothing here talks to the unit. Standard library only."""
-import argparse, struct, sys, zlib
+import argparse, os, struct, sys, zlib
 
 import dfupatch
 
@@ -72,6 +72,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         check_proof(args.proof)
+        if dfupatch.inside(args.output, dfupatch.repository_root()):
+            raise dfupatch.Refused("write B's DfuSe file outside the repository: built images are never committed")
+        if os.path.exists(args.output):
+            raise dfupatch.Refused(f"{args.output} already exists; not overwriting it")
         block = dfupatch.read(args.block)
         check_block(block)
         out = dfuse(block)
