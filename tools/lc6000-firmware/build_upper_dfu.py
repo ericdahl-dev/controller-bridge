@@ -6,7 +6,8 @@
 Nothing here talks to the unit. Standard library only."""
 import argparse, os, struct, sys, zlib
 
-import dfupatch
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))  # -I leaves this folder off sys.path (#468)
+import dfupatch  # noqa: E402
 
 UPPER_BASE = 0x08080000
 # B's header (arm/upper.h): marker "DFWB", version, length, CRC-32 (zlib's) from +16 to length, the dfw_unit layout
