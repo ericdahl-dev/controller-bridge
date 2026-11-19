@@ -3,7 +3,8 @@
 Usage: vectors_to_c.py messages.json > vectors.h. Fails on an empty file, or an entry with no bytes."""
 import json, sys
 
-KINDS = {"capability": 0, "capability_answer": 1, "begin": 2, "end": 3, "deck": 4, "state": 5, "beat": 6, "needle": 7}
+KINDS = {"capability": 0, "capability_answer": 1, "begin": 2, "end": 3, "deck": 4, "state": 5, "beat": 6, "needle": 7, "text": 8,
+         "tempo": 9}
 
 
 def c_bytes(hex_text):
@@ -27,14 +28,17 @@ def main():
         f = m["fields"]
         color = f.get("color", [0, 0, 0])
         body, n = c_bytes(m["bytes"])
-        rows.append(f'    {{ {json.dumps(m["name"])}, {KINDS[kind]}, {int(m.get("direction", "host") == "unit")}, '
+        codes = [int(b, 16) for b in f.get("codes", "").split()]
+        text = "{" + ", ".join(f"0x{c:02X}" for c in codes) + "}" if codes else "{0}"
+        rows.append(f'    {{ {json.dumps(m["name"], ensure_ascii=True)}, {KINDS[kind]}, {int(m.get("direction", "host") == "unit")}, '
                     f'{f.get("version", 0)}, {f.get("number", 0)}, {{ {color[0]}, {color[1]}, {color[2]} }}, '
-                    f'{f.get("player", 0)}, {f.get("flags", 0)}, {f.get("beat", 0)}, {f.get("angle", 0)}, {n}, {body} }},')
+                    f'{f.get("player", 0)}, {f.get("flags", 0)}, {f.get("beat", 0)}, {f.get("angle", 0)}, '
+                    f'{f.get("field", 0)}, {len(codes)}, {text}, {f.get("tenths", 0)}, {n}, {body} }},')
     out += ["static const vector valid_vectors[] = {", *rows, "};", ""]
     rows = []
     for m in invalid:
         body, n = c_bytes(m["bytes"])
-        rows.append(f'    {{ {json.dumps(m["name"])}, {int(m.get("direction", "host") == "unit")}, {n}, {body} }},')
+        rows.append(f'    {{ {json.dumps(m["name"], ensure_ascii=True)}, {int(m.get("direction", "host") == "unit")}, {n}, {body} }},')
     out += ["static const bad_vector invalid_vectors[] = {", *rows, "};"]
     print("\n".join(out))
 

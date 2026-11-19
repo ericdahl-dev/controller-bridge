@@ -184,6 +184,8 @@ public final class JogDisplayDriver {
     /// The deck in front's state flags for drawn mode (#464), and the last state message sent.
     private var drawnState: DrawnDisplay.State = []
     private var lastState: [UInt8]?
+    /// The deck in front's text and tempo messages last sent in drawn mode (#458), in full-state order.
+    private var lastTexts: [[UInt8]] = []
     /// When drawn mode last sent begin and the full state (#464): the heartbeat sends them again every second, so a
     /// chip that reset without its port going away is brought back, and one whose host is gone goes stale on its own.
     private var lastFullState: Double?
@@ -524,6 +526,7 @@ public final class JogDisplayDriver {
         let state = DrawnDisplay.Message.state(drawnState).bytes
         lastState = state
         sendWD(state)
+        for text in lastTexts { sendWD(text) }
         sendLive()
         lastFullState = clock.now
     }
@@ -571,12 +574,34 @@ public final class JogDisplayDriver {
         let color = content.color.count == 3 ? content.color : [255, 255, 255]
         let deck = DrawnDisplay.Message.deck(number: content.deck, color: color,
                                              player: DrawnDisplay.Player(playerType: content.playerType)).bytes
-        guard deck != lastDeck else { return }
+        guard deck != lastDeck else { return sendChangedTexts(content) }
         lastDeck = deck
         sendWD(deck)
-        // Every deck message is followed by its state: the flags are the deck's (#464).
+        // Every deck message is followed by its state: the flags are the deck's (#464). A new deck clears the chip's
+        // texts and tempo, so they follow (#458).
         lastState = nil
         sendState()
+        lastTexts = Self.texts(content)
+        for text in lastTexts { sendWD(text) }
+    }
+
+    /// Same deck: only the texts and tempo that changed, once each (#458).
+    private func sendChangedTexts(_ content: JogDisplayContent) {
+        let texts = Self.texts(content)
+        defer { lastTexts = texts }
+        guard texts.count == lastTexts.count else { return texts.forEach(sendWD) }
+        for (text, last) in zip(texts, lastTexts) where text != last { sendWD(text) }
+    }
+
+    /// A deck's text and tempo messages (#458): title, artist and key (empty clears one), the untitled words (the big
+    /// line with no title, as the image says it; empty with a title), then the tempo.
+    static func texts(_ content: JogDisplayContent) -> [[UInt8]] {
+        typealias Message = DrawnDisplay.Message
+        let title = content.title ?? ""
+        let untitled = title.isEmpty ? JogDisplayWords.untitled(content.playerType).title : ""
+        let messages = [Message.text(.title, title), .text(.artist, content.artist ?? ""), .text(.key, content.key ?? ""),
+                        .text(.untitled, untitled), .tempo(content.bpm)]
+        return messages.map(\.bytes)
     }
 
     private func next() {

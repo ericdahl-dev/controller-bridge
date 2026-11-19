@@ -2,6 +2,8 @@
 // instead of uploaded images. Denon's frame on the WD port, one command byte for all of them and an op byte. The shared
 // vectors (tools/lc6000-display-fw/vectors/messages.json) hold examples both this and the firmware's C are tested on.
 
+import Foundation
+
 /// The jog display firmware DeckBridge found on the unit (#456).
 public enum DisplayFound: Equatable, Sendable {
     case denon
@@ -64,6 +66,41 @@ public enum DrawnDisplay {
         public static let stale = State(rawValue: 1 << 5)
     }
 
+    /// Which text a text message carries (#458). The untitled words are the big line with no title, as the image says
+    /// it (JogDisplayWords.untitled): "No track", "OSC clip" or the player type's own name; empty with a title.
+    public enum TextField: UInt8, Sendable {
+        case title = 0, artist, key, untitled
+    }
+
+    /// A text as the wire carries it (#458): Windows-1252, a code 0x80-0xFF as 7F then code − 0x80. Control codes and
+    /// DEL aren't text and are dropped; a character with no cp1252 code goes as 0x81, which the chip draws as a box.
+    /// Cut at a character boundary to `textCap` bytes, never splitting a 7F pair; the chip adds the ellipsis.
+    static func escaped(_ text: String) -> [UInt8] {
+        var out: [UInt8] = []
+        for character in text.precomposedStringWithCanonicalMapping {
+            let code = cp1252(character)
+            if code < 0x20 || code == 0x7F { continue }
+            let bytes: [UInt8] = code < 0x80 ? [code] : [0x7F, code - 0x80]
+            guard out.count + bytes.count <= textCap else { break }
+            out += bytes
+        }
+        return out
+    }
+
+    /// The most escaped text bytes in one text message (#458): agent3's 96, so the whole message is at most 108 bytes,
+    /// inside the 128 agent2 found keeps stock's SysEx handling short. Longer messages are dropped with no error.
+    static let textCap = 96
+
+    /// The character's cp1252 code; 0x81 (the box) for one with none. C1 controls have no glyph: cp1252's undefined
+    /// slots must not pass as themselves.
+    private static func cp1252(_ character: Character) -> UInt8 {
+        let scalars = character.unicodeScalars
+        if scalars.count == 1, let scalar = scalars.first, scalar.value < 0x80 { return UInt8(scalar.value) }
+        if scalars.contains(where: { (0x80...0x9F).contains($0.value) }) { return 0x81 }
+        guard let data = String(character).data(using: .windowsCP1252), data.count == 1 else { return 0x81 }
+        return data[data.startIndex]
+    }
+
     public enum Message: Equatable, Sendable {
         /// "Can you draw?", with the newest version the host speaks.
         case capability(version: Int)
@@ -76,6 +113,17 @@ public enum DrawnDisplay {
         case beat(Int)
         /// The deck's place in its bar, 0-16383 for a turn clockwise from 12 o'clock: the pitch-bend needle's scale.
         case needle(Int)
+        /// One of the deck's texts (#458); empty clears that field.
+        case text(TextField, String)
+        /// The deck's tempo in tenths of a BPM, 1-16383; 0 is none, drawn as "—" (#458).
+        case tempo(tenths: Int)
+
+        /// The tempo message for a BPM: rounded once to tenths, clamped to 16383; 0 for none, NaN, zero or below.
+        public static func tempo(_ bpm: Double?) -> Message {
+            guard let bpm, bpm > 0 else { return .tempo(tenths: 0) }
+            let tenths = (bpm * 10).rounded()
+            return .tempo(tenths: tenths >= 16383 ? 16383 : Int(tenths))
+        }
 
         /// The SysEx frame for the WD port.
         public var bytes: [UInt8] {
@@ -93,6 +141,9 @@ public enum DrawnDisplay {
             case .beat(let beat): DrawnDisplay.frame(0x08, [UInt8(min(max(beat, 0), 4))])
             case .needle(let angle):
                 DrawnDisplay.frame(0x09, [UInt8(angle >> 7 & 0x7F), UInt8(angle & 0x7F)])
+            case .text(let field, let text): DrawnDisplay.frame(0x04, [field.rawValue] + DrawnDisplay.escaped(text))
+            case .tempo(let tenths):
+                DrawnDisplay.frame(0x05, [UInt8(tenths >> 7 & 0x7F), UInt8(tenths & 0x7F)])
             }
         }
     }
