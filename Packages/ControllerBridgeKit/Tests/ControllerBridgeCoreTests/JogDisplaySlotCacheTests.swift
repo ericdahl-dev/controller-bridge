@@ -147,4 +147,16 @@ struct JogDisplaySlotCacheTests {
         let since = JogDisplayRingHoldTests.ring(rig).dropFirst(before)
         #expect(!since.isEmpty && !since.contains(0))
     }
+
+    @Test("Settings' display firmware through the pipe: with Custom, the layers' images fill all 16 slots")
+    func firmwareSettingThroughThePipe() async throws {
+        let (rig, port, slots) = try Self.layered()
+        #expect(slots == Array(1...15))
+        port.wd.removeAll()
+        let pipe = EventPipe()
+        pipe.producer.send(.setDisplayFirmware(.custom))
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        #expect(Self.uploadSlots(port) == [16])
+    }
 }

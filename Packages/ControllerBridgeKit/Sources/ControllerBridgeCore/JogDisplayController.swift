@@ -36,6 +36,13 @@ final class JogDisplayController {
         }
     }
 
+    /// The unit's display firmware (#425), kept for a driver attached later.
+    private var displayFirmware = DisplayFirmware.denon
+    func setDisplayFirmware(_ firmware: DisplayFirmware) {
+        displayFirmware = firmware
+        driver?.displayFirmware = firmware
+    }
+
     /// Says goodbye, so the next refresh says hello again (#429).
     func disconnect() {
         driver?.disconnect()
@@ -50,6 +57,7 @@ final class JogDisplayController {
     /// Drives the display from now on.
     func attach(_ driver: JogDisplayDriver) {
         self.driver = driver
+        driver.displayFirmware = displayFirmware
     }
 
     func setEnabled(_ enabled: Bool) {

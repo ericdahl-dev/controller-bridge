@@ -170,6 +170,12 @@ public final class Coordinator {
         updateJogDisplay()
     }
 
+    /// Settings' display firmware (#425): how many image slots the unit's display will show.
+    public func setDisplayFirmware(_ firmware: DisplayFirmware) {
+        jogController.setDisplayFirmware(firmware)
+        holdRing()
+    }
+
     /// Picks the deck the jog display preview follows while no controller is connected; nil, the first loaded deck.
     public func setJogPreviewDeck(_ deck: Int?) {
         jogController.setPreviewDeck(deck)
