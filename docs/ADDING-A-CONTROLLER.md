@@ -8,8 +8,9 @@ How a new controller gets a bundled profile, from an owner's capture to a releas
 The owner records what their controller sends. There are two ways, and both write the same file (`ControllerBridgeCapture`,
 format 1):
 
-- **In the app.** When DeckBridge sees a controller it has no profile for, the panel says so under the controller's
-  NO PROFILE row and offers **Help add it…**. The capture window walks the owner through about 27 steps: hands off
+- **In the app.** When DeckBridge sees a controller it has no profile for, the panel says so and offers
+  **Help add it…**, also while a supported controller is connected (#329). The capture window opens with that device
+  chosen and walks the owner through about 27 steps: hands off
   for 5 seconds (which records the noise, such as heartbeats), then Play, Cue, Sync, pads 1–8, the pitch fader, the
   jog (touched and spun on the edge), the needle strip, the loop buttons, the browse knob, Shift, three steps repeated
   with Shift held, a switch to deck 2, and deck 2's Play. A step can be skipped. At the end the owner saves the file or
