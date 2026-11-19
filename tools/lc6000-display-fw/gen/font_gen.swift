@@ -60,6 +60,10 @@ let faces = [
     // The deck number: Geist-Bold 18 in the ground color on the chip, centered at y 37.
     Face(name: "number", file: "Geist-Bold.ttf", postScriptName: "Geist-Bold", size: 18, ink: 0x0B0B0B, ground: 0xFFFFFF,
          middle: 37, tracking: 0, glyphs: "1234", lines: ["1", "2", "3", "4"]),
+    // The same number in the text white on a dark deck color (#542 follow-up, DeckNumberInk): light text is drawn
+    // heavier, so it has its own coverage. Rasterized on the ground: on purple or navy it comes out the same.
+    Face(name: "number_white", file: "Geist-Bold.ttf", postScriptName: "Geist-Bold", size: 18, ink: 0xEDEDEA,
+         ground: 0x0B0B0B, middle: 37, tracking: 0, glyphs: "1234", lines: ["1", "2", "3", "4"]),
     // The player badge: GeistMono-SemiBold 14 in 0xEDEDEA on the ground, tracked 0.04 em, centered at y 37.5.
     Face(name: "badge", file: "GeistMono-SemiBold.ttf", postScriptName: "GeistMono-SemiBold", size: 14, ink: 0xEDEDEA,
          ground: 0x0B0B0B, middle: 37.5, tracking: 0.04, glyphs: "CDEIKMOQRST", lines: ["TRK", "OSC", "MIDI", "SEQ"]),
