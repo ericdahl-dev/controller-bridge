@@ -7,6 +7,7 @@ extension Bridge {
     static let clockTimeout = 2.0
 
     func timingTick() {
+        colorTick()
         playLED()
         ringLED()
     }

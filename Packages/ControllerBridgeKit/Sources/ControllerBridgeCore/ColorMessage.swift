@@ -45,3 +45,38 @@ public struct LEDColorEncoder: Sendable {
         return LEDColorMessage(note: UInt8(note), red: seven[0], green: seven[1], blue: seven[2])
     }
 }
+
+/// Paces color messages (#531): at most one per `gap` seconds. A message that can't go yet waits; a newer one for the
+/// same LED replaces it in place. With a gap of 0 (the bridge's, until a burst test on the unit says otherwise) every
+/// message goes out at once.
+public struct ColorPacer: Sendable {
+    public let gap: Double
+    private var waiting: [LEDColorMessage] = []
+    private var last: Double?
+
+    public init(gap: Double) { self.gap = gap }
+
+    /// What goes out now for `message`: itself, or nothing while it waits.
+    public mutating func send(_ message: LEDColorMessage, at now: Double) -> [LEDColorMessage] {
+        if gap <= 0 { return [message] }
+        if let index = waiting.firstIndex(where: { $0.note == message.note }) {
+            waiting[index] = message
+            return []
+        }
+        guard waiting.isEmpty, ready(now) else {
+            waiting.append(message)
+            return []
+        }
+        last = now
+        return [message]
+    }
+
+    /// What goes out on a tick: the oldest waiting message, once its gap has passed.
+    public mutating func tick(at now: Double) -> [LEDColorMessage] {
+        guard !waiting.isEmpty, ready(now) else { return [] }
+        last = now
+        return [waiting.removeFirst()]
+    }
+
+    private func ready(_ now: Double) -> Bool { last.map { now - $0 >= gap - 1e-9 } ?? true }
+}

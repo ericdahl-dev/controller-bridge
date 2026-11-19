@@ -167,6 +167,9 @@ final class Bridge {
     private var ledCache = LEDCache()
     /// What each color-message LED shows (#530), as last sent: only a change goes out, as with the velocity cache.
     private var colorCache: [UInt8: [UInt8]] = [:]
+    /// The gap between color messages (#531): 0 until a burst test on the unit says one is needed.
+    static let colorMessageGap = 0.0
+    private var colorPacer = ColorPacer(gap: Bridge.colorMessageGap)
     /// Whether the color-message LEDs take it (#530); off, they take the 64-color table like any other.
     var colorMessages = false
 
@@ -503,8 +506,20 @@ final class Bridge {
         let rgb = [message.red, message.green, message.blue]
         guard !ledsHeld, !ledsCaptured, ledsEnabled, layerShown, colorCache[message.note] != rgb else { return }
         colorCache[message.note] = rgb
+        sendColors(colorPacer.send(message, at: clock.now))
+    }
+
+    /// Color messages the pacer lets go (#531).
+    func sendColors(_ messages: [LEDColorMessage]) {
         guard let output else { return }
-        do { try output.send(color: message) } catch { outputFailed = true }
+        for message in messages {
+            do { try output.send(color: message) } catch { outputFailed = true }
+        }
+    }
+
+    /// Lets the pacer's waiting color messages out, on the timing tick (#531).
+    func colorTick() {
+        sendColors(colorPacer.tick(at: clock.now))
     }
 
     /// An LED driven by a CC, such as a VU meter (#207): straight out, as the caller limits how often. False when held,
