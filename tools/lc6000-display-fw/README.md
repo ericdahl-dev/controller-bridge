@@ -50,7 +50,7 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
   meter until a meter message has come since begin. Over the meter and under the marker, the track time (#460,
   Swift's `drawTime`): the progress ring (r 96-98, a dark track and the deck color's fill clockwise from 12 o'clock)
   and the time left, "-m:ss" in GeistMono-SemiBold 14 at (99, 169). None until a time message has come since begin or
-  the deck changed, and none for an unknown length. In the last minute while playing it is steady red, and from 30 s
+  the deck changed, and none for an unknown length. In the last minute while playing and not looping (a loop holds it) it is steady red, and from 30 s
   left it blinks at 1 Hz: red for the first 500 ms from when the time last changed, then white, text and fill, for
   every deck (#524). The tick
   works the look out from `now_ms`, so the flip draws a frame; with no new time it keeps alternating off the last one.

@@ -704,6 +704,45 @@ static void the_warning_is_steady_red_from_60_to_31_seconds(void) {
     CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
 }
 
+/// Loaded, playing and loop on (state bit 4).
+#define LOOPING 0x13
+
+/// A loop holds the warning (#524): with loop on, the normal look at 45 s left and at 20 s, and nothing blinks.
+static void a_loop_holds_the_warning(void) {
+    static const uint16_t elapsed[] = { 120, 145 };
+    for (size_t n = 0; n < 2; n++) {
+        begin_with_time(DECK_4_BLUE_EMPTY, LOOPING, elapsed[n], 165, 0);
+        CHECK(rec.last[3 * DFW_SIZE + 115] == 0x0080FFu);
+        dfw_tick(&live, 500);
+        dfw_tick(&live, 1000);
+        CHECK(rec.presents == 1);
+    }
+    CHECK(load_reference("test/ref/deck4-blue-empty-time135-165-white.ppm"));
+    begin_with_time(DECK_4_BLUE_EMPTY, LOOPING, 135, 165, 0);
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(time_text_matches("deck4-blue-empty-time135-165-white.ppm (looping)", TIME_CLOSE, TIME_BUDGET, TIME_CAP));
+}
+
+/// The state that clears the loop brings the warning back on that same tick's frame: red, steady at 45 s left, and
+/// at 20 s the blink from the time's last change.
+static void releasing_the_loop_redraws_the_warning_at_once(void) {
+    begin_with_time(DECK_4_BLUE_EMPTY, LOOPING, 120, 165, 0);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 07 03 F7");
+    dfw_tick(&live, 600);
+    CHECK(rec.presents == 2);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+    begin_with_time(DECK_4_BLUE_EMPTY, LOOPING, 145, 165, 0);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 07 03 F7");
+    dfw_tick(&live, 100);
+    CHECK(rec.presents == 2);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+    // And a loop set again drops it at once.
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 07 13 F7");
+    dfw_tick(&live, 200);
+    CHECK(rec.presents == 3);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0x0080FFu);
+}
+
 /// The stages' edges: 61 s left is normal; 60 s and 31 s are steady red; 30 s blinks; past the end (elapsed over the
 /// length) blinks.
 static void the_warning_stages_start_at_60_and_30_seconds(void) {
@@ -823,6 +862,8 @@ const test_case draw_live_tests[] = {
     { "paused in the last minute draws the normal colors", paused_in_the_last_minute_draws_the_normal_colors },
     { "the warning is steady red from 60 to 31 seconds", the_warning_is_steady_red_from_60_to_31_seconds },
     { "the warning stages start at 60 and 30 seconds", the_warning_stages_start_at_60_and_30_seconds },
+    { "a loop holds the warning", a_loop_holds_the_warning },
+    { "releasing the loop redraws the warning at once", releasing_the_loop_redraws_the_warning_at_once },
     { "the blink survives the clock wrapping", the_blink_survives_the_clock_wrapping },
     { "every deck's white half is white", every_decks_white_half_is_white },
     { "the marker is drawn over the progress ring", the_marker_is_drawn_over_the_progress_ring },
