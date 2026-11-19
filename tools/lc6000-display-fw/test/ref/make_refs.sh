@@ -14,6 +14,10 @@ bin=$(swift build --package-path "$kit" --show-bin-path)/jog-reference
 "$bin" 3 0 200 80 - "$here/deck3-green-other.ppm"
 "$bin" 1 255 128 0 osc "$here/deck1-orange-osc.ppm"
 "$bin" 3 180 0 255 sequencer "$here/deck3-purple-seq.ppm"
+# The waiting look (#464): our logo, whatever the deck.
+"$bin" 2 255 0 0 track "$here/stale.ppm" stale
+# A PNG of the waiting look, for people to look at (the PR, the README); the tests read the PPM.
+sips -s format png -Z 396 "$here/stale.ppm" --out "$here/stale-preview.png" >/dev/null
 # The live elements (#459): the lit master beat and the marker, as the Diagnostics simulator draws them, from the
 # live-reference tool beside this script (the Kit's JogDisplayRenderer.simulatorImage). Deck 4, empty: its header is
 # the chip alone, and nothing else is drawn near the ring.
