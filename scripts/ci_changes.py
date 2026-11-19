@@ -4,12 +4,15 @@ Reads the changed paths, one per line, on stdin; prints mac=true or mac=false fo
 Tested by scripts/test_ci_changes.py."""
 import fnmatch, sys
 
-# Changes only the Linux jobs check (Site check, spelling): the website, its scripts, Markdown docs and their check.
+# Changes only the Linux jobs check (Site check, spelling): the website, its scripts, Markdown docs and their check,
+# and the LC6000 firmware tool.
 # Anything else, including .github/ and the release scripts the Kit job tests, runs the Mac jobs too.
 SITE_ONLY = ["website/*", "scripts/check_site.py", "scripts/test_check_site.py", "scripts/site-preview.sh",
              "scripts/test_*.mjs", "*.md",
              # the domain docs' check (GLOSSARY.md, docs/adr), which the Site check job runs
-             "scripts/check_domain_docs.py", "scripts/test_check_domain_docs.py"]
+             "scripts/check_domain_docs.py", "scripts/test_check_domain_docs.py",
+             # the LC6000 firmware patch tool (#430) and its tests, which the Site check job runs
+             "tools/lc6000-firmware/*"]
 
 
 def site_only(path):
