@@ -138,6 +138,38 @@ class FreshFlashTests(DrawnPlanTests):
 
 
 
+
+class RewriteTests(DrawnPlanTests):
+    # #501's first B: version 2, the 20-byte header, CRC from Python's zlib (as test_drawn_flash): an older good B.
+    OLD_B = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
+
+    def test_a_b_only_rewrite_writes_b_behind_rewrite_and_leaves_the_app_area_alone(self):
+        # The chip runs the owner's image already, so it's both "runs now" and "the owner's image" (#560).
+        self.current = self.owner
+        upper = self.OLD_B + b"\xff" * (UPPER_SIZE - len(self.OLD_B))
+        unit = FakeUnit(self.dir.name, self.owner_element, upper=upper)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        kinds = self.kinds(unit)
+        self.assertEqual(kinds[kinds.index("read upper"):], [
+            "read upper", "type word_upper", "write upper", "read upper", "skip app_step",
+            "power-cycle", "ask stock_look", "done"])
+        self.assertEqual([(a[1], a[2]) for a in unit.log if a[0] == "type"], [("word_upper", "REWRITE")])
+        self.assertEqual(unit.writes, ["upper"])
+        self.assertEqual(bytes(unit.app), self.owner_element)
+        block = good_block()
+        self.assertEqual(bytes(unit.upper[:len(block)]), block)
+        self.assertEqual(set(unit.upper[len(block):]), {0xFF})
+
+    def test_b_already_there_and_the_image_too_writes_nothing(self):
+        self.current = self.owner
+        block = good_block()
+        unit = FakeUnit(self.dir.name, self.owner_element, upper=block + b"\xff" * (UPPER_SIZE - len(block)))
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertEqual(unit.writes, [])
+        self.assertIn("skip upper_step", self.kinds(unit))
+        self.assertIn("skip app_step", self.kinds(unit))
+
+
 class FreshnessTests(DrawnPlanTests):
     """A plan file never lets stale facts authorize a write (#567): each write rests on its own read, made in this run
     after update mode was entered."""
