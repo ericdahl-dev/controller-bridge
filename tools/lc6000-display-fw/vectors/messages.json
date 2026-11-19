@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "The drawn jog display's messages (#455): each state and the exact bytes on the WD port. The Swift encoder (Kit tests) and the C decoder (firmware tests) both walk this file. Host to unit: F0 00 02 0B 7F 10 <cmd> <len hi> <len lo> <op> <args> F7, len counting op and args (14 bits). Unit to host: the reply header F0 00 02 0B 01 10 instead. cmd 0x20: Denon's display firmware (wd 00.50) drops it silently, with no reply (#466). Ops: 00 capability, 01 begin, 02 end, 03 deck, 07 state, 08 beat, 09 needle; 04-06, 0A and 0B are reserved for text, tempo, time, meter, phase. Beat is one byte, the master clock's beat 1-4, or 0 with no master clock (no section lit). Needle is the deck's place in its bar as a 14-bit angle, high then low 7 bits, 0-16383 for one turn clockwise from 12 o'clock (the scale of the unit's own pitch-bend needle). State is one flags byte: bit 0 loaded, 1 playing, 2 play pending, 3 cue held, 4 loop on, 5 feedback stale; bit 6 is reserved and makes the message malformed. Colors go as two 7-bit bytes per channel, high then low. Player: 0 empty, 1 track, 2 OSC clip, 3 MIDI clip, 4 sequencer, 5 other. Each op has one exact length (capability 2, begin 2, end 2, deck 9, state 2, beat 2, needle 3, counting the op); any other is ignored, as is version 0. Entries with \"direction\": \"unit\" go from the unit to the host; the rest from the host. Sequence rules (#464): after begin the host sends the full state, the deck then the state; every deck message is followed by its state, and a deck message clears flags 0-4 until it arrives. While drawing, the host sends begin, the deck and the state again once a second (the heartbeat); image mode sends none. On the chip: begin while drawing is a no-op; begin with no frame (after a chip reset) allocates it once, as the capability question does, and if that fails the chip stays in stock mode and draws nothing; no drawn-display message for 3 s draws the stale look, and any message clears it; only end or a reboot leaves drawn mode. The host sets loaded, playing, play pending (#459) and stale; cue held and loop on come with #463. The chip shows play state only through the needle, as the unit does today: it moves while playing and holds while paused; nothing else is drawn for it (#459). In drawn mode the host sends no pitch-bend needle (E0) and no play light (note 1); on end or a fallback to images it sends both again, current, just before.",
+  "about": "The drawn jog display's messages (#455): each state and the exact bytes on the WD port. The Swift encoder (Kit tests) and the C decoder (firmware tests) both walk this file. Host to unit: F0 00 02 0B 7F 10 <cmd> <len hi> <len lo> <op> <args> F7, len counting op and args (14 bits). Unit to host: the reply header F0 00 02 0B 01 10 instead. cmd 0x20: Denon's display firmware (wd 00.50) drops it silently, with no reply (#466). Ops: 00 capability, 01 begin, 02 end, 03 deck, 07 state, 08 beat, 09 needle, 0A meter; 04-06 and 0B are reserved for text, tempo, time, phase. Meter is the deck in front's mixer channel: its level, then the peak being held, each 0-127 (#461); 0 and 0 with no mixer feedback. Beat is one byte, the master clock's beat 1-4, or 0 with no master clock (no section lit). Needle is the deck's place in its bar as a 14-bit angle, high then low 7 bits, 0-16383 for one turn clockwise from 12 o'clock (the scale of the unit's own pitch-bend needle). State is one flags byte: bit 0 loaded, 1 playing, 2 play pending, 3 cue held, 4 loop on, 5 feedback stale; bit 6 is reserved and makes the message malformed. Colors go as two 7-bit bytes per channel, high then low. Player: 0 empty, 1 track, 2 OSC clip, 3 MIDI clip, 4 sequencer, 5 other. Each op has one exact length (capability 2, begin 2, end 2, deck 9, state 2, beat 2, needle 3, meter 3, counting the op); any other is ignored, as is version 0. Entries with \"direction\": \"unit\" go from the unit to the host; the rest from the host. Sequence rules (#464): after begin the host sends the full state, the deck then the state; every deck message is followed by its state, and a deck message clears flags 0-4 until it arrives. While drawing, the host sends begin, the deck and the state again once a second (the heartbeat); image mode sends none. On the chip: begin while drawing is a no-op; begin with no frame (after a chip reset) allocates it once, as the capability question does, and if that fails the chip stays in stock mode and draws nothing; no drawn-display message for 3 s draws the stale look, and any message clears it; only end or a reboot leaves drawn mode. The host sets loaded, playing, play pending (#459) and stale; cue held and loop on come with #463. The chip shows play state only through the needle, as the unit does today: it moves while playing and holds while paused; nothing else is drawn for it (#459). In drawn mode the host sends no pitch-bend needle (E0) and no play light (note 1); on end or a fallback to images it sends both again, current, just before.",
   "messages": [
     {
       "name": "capability ask, host speaks v1",
@@ -186,6 +186,33 @@
         "angle": 16383
       },
       "bytes": "F0 00 02 0B 7F 10 20 00 03 09 7F 7F F7"
+    },
+    {
+      "name": "meter, silence",
+      "kind": "meter",
+      "fields": {
+        "level": 0,
+        "peak": 0
+      },
+      "bytes": "F0 00 02 0B 7F 10 20 00 03 0A 00 00 F7"
+    },
+    {
+      "name": "meter, mid level holding a higher peak",
+      "kind": "meter",
+      "fields": {
+        "level": 64,
+        "peak": 100
+      },
+      "bytes": "F0 00 02 0B 7F 10 20 00 03 0A 40 64 F7"
+    },
+    {
+      "name": "meter at clip",
+      "kind": "meter",
+      "fields": {
+        "level": 127,
+        "peak": 127
+      },
+      "bytes": "F0 00 02 0B 7F 10 20 00 03 0A 7F 7F F7"
     }
   ],
   "invalid": [
@@ -310,6 +337,18 @@
     {
       "name": "needle with a top-bit byte",
       "bytes": "F0 00 02 0B 7F 10 20 00 03 09 80 00 F7"
+    },
+    {
+      "name": "meter with one byte (len 2)",
+      "bytes": "F0 00 02 0B 7F 10 20 00 02 0A 40 F7"
+    },
+    {
+      "name": "meter with a byte too many (len 4)",
+      "bytes": "F0 00 02 0B 7F 10 20 00 04 0A 40 40 00 F7"
+    },
+    {
+      "name": "meter with a top-bit level",
+      "bytes": "F0 00 02 0B 7F 10 20 00 03 0A 80 00 F7"
     }
   ]
 }

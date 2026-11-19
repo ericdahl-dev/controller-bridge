@@ -76,6 +76,8 @@ public enum DrawnDisplay {
         case beat(Int)
         /// The deck's place in its bar, 0-16383 for a turn clockwise from 12 o'clock: the pitch-bend needle's scale.
         case needle(Int)
+        /// The deck in front's mixer channel (#461): its level and the peak being held, each 0-127.
+        case meter(level: Int, peak: Int)
 
         /// The SysEx frame for the WD port.
         public var bytes: [UInt8] {
@@ -93,6 +95,8 @@ public enum DrawnDisplay {
             case .beat(let beat): DrawnDisplay.frame(0x08, [UInt8(min(max(beat, 0), 4))])
             case .needle(let angle):
                 DrawnDisplay.frame(0x09, [UInt8(angle >> 7 & 0x7F), UInt8(angle & 0x7F)])
+            case .meter(let level, let peak):
+                DrawnDisplay.frame(0x0A, [UInt8(min(max(level, 0), 127)), UInt8(min(max(peak, 0), 127))])
             }
         }
     }
