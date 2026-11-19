@@ -327,13 +327,36 @@ class CommittedPatchTests(unittest.TestCase):
         with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):
             dfupatch.patch(dfuse_file(wd_element(size=0x4000)), self.patch_text("wd-00.50-vos-scale-1.patch"))
 
+    def test_no_deck_select_is_one_edit_that_starts_the_deck_byte_at_deck_1(self):
+        # tp 00.31, 0x08015CDB: one token of the compressed start-up data (control 0a, count 14, the literal, offset
+        # 64). The literal is the first value of the deck byte at 0x20000703: ff (no deck) becomes 00 (deck 1). #439.
+        edits = dfupatch.parse_patch(self.patch_text("tp-00.31-no-deck-select-on-hello.patch"))
+        self.assertEqual(edits, [(0x08015CDB, bytes.fromhex("0a14ff64"), bytes.fromhex("0a140064"))])
+
+    def test_no_deck_select_changes_one_byte_and_the_suffix_crc_of_a_tp_image_that_has_the_old_bytes(self):
+        element = bytearray(tp_element(size=0x10000))
+        element[0xDCDB:0xDCDF] = bytes.fromhex("0a14ff64")
+        data = dfuse_file(bytes(element))
+        start = len(data) - 16 - len(element)
+        out = dfupatch.patch(data, self.patch_text("tp-00.31-no-deck-select-on-hello.patch"))
+        changed = set(changed_offsets(data, out))
+        self.assertEqual(changed - set(range(len(out) - 4, len(out))), {start + 0xDCDD})
+        self.assertEqual(out[start + 0xDCDD], 0x00)
+        self.assertEqual(out[start + len(element) - 32:start + len(element)], bytes(element[-32:]))
+
+    def test_no_deck_select_is_refused_on_an_image_without_the_old_bytes(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):
+            dfupatch.patch(dfuse_file(tp_element(size=0x10000)),
+                           self.patch_text("tp-00.31-no-deck-select-on-hello.patch"))
+
 
 class IgnoreRuleTests(unittest.TestCase):
     def test_patch_descriptions_are_not_ignored_by_git(self):
         here = os.path.dirname(os.path.abspath(__file__))
         if not shutil.which("git") or subprocess.run(["git", "-C", here, "rev-parse"], capture_output=True).returncode:
             self.skipTest("not in a git checkout")
-        for name in ["wd-00.50-show-slot-16.patch", "wd-00.50-vos-scale-1.patch"]:
+        for name in ["wd-00.50-show-slot-16.patch", "wd-00.50-vos-scale-1.patch",
+                     "tp-00.31-no-deck-select-on-hello.patch"]:
             path = os.path.join(here, "patches", name)
             result = subprocess.run(["git", "-C", here, "check-ignore", "-q", "--no-index", path])
             self.assertEqual(result.returncode, 1, f"{name} is ignored")
