@@ -113,6 +113,42 @@ struct DrawnDisplayTimeFlowTests {
         #expect(Self.times(port) == [DrawnDisplay.Message.time(elapsedSeconds: 12, lengthSeconds: 428).bytes])
     }
 
+    @Test("A deck switch: the new deck's time follows its deck message in the same tick, not held by the rate limit")
+    func deckSwitch() throws {
+        let (rig, port) = try Handshake.drawnLayers()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2, title: "Night Drive"))
+        rig.coordinator.feedback(Self.position(10.2))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Position", [.float(50.7)]))
+        rig.coordinator.tick()
+        #expect(Handshake.drawn(port).filter { $0[9] == 0x06 }.last == DrawnDisplay.Message.time(elapsedSeconds: 10, lengthSeconds: 428).bytes)
+        port.wd.removeAll()
+        let unit = JogDisplayRingHoldTests.lc6000.id
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: unit)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: unit)
+        rig.coordinator.tick()   // same instant
+        let ops = Handshake.drawn(port).map { $0[9] }
+        #expect(Handshake.drawn(port).filter { $0[9] == 0x06 } == [DrawnDisplay.Message.time(elapsedSeconds: 50, lengthSeconds: 428).bytes])
+        #expect(ops.firstIndex(of: 0x03).map { deck in ops.firstIndex(of: 0x06).map { $0 > deck } ?? false } ?? false)
+    }
+
+    @Test("A deck switch to a deck at the same time still sends it: the deck message cleared the chip's")
+    func deckSwitchSameTime() throws {
+        let (rig, port) = try Handshake.drawnLayers()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2, title: "Night Drive"))
+        rig.coordinator.feedback(Self.position(10.2))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Position", [.float(10.6)]))
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        let unit = JogDisplayRingHoldTests.lc6000.id
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: unit)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: unit)
+        rig.clock.now += 1
+        rig.coordinator.tick()
+        #expect(Handshake.drawn(port).filter { $0[9] == 0x06 } == [DrawnDisplay.Message.time(elapsedSeconds: 10, lengthSeconds: 428).bytes])
+    }
+
     @Test("Image mode sends no time")
     func notInImages() throws {
         let (rig, port, clock) = try Handshake.rig(.custom)
