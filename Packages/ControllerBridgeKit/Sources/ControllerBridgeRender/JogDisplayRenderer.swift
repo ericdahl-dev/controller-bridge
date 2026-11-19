@@ -138,9 +138,14 @@ public enum JogDisplayRenderer {
         context.setFillColor(background)
         context.fill(CGRect(x: 0, y: 0, width: 198, height: 198))
         if content.stale {
-            // The waiting look (#464): nothing of the deck, the beat ring dark, our logo in the middle.
+            // The waiting look (#464): the beat ring dark, our logo in the middle.
             ring(litBeat: nil, allDark: true, in: context)
-            JogLogo.draw(in: context, center: CGPoint(x: center, y: center), scale: JogLogo.scale)
+            // #524, the user's pick: the deck in the logo's hub, in its color with its number in black. The deck layer
+            // is the controller's own and can change while Syndicate is silent.
+            JogLogo.draw(in: context, center: CGPoint(x: center, y: center), scale: JogLogo.scale, hub: color(content.color))
+            let number = CTFontCreateWithName("Geist-Bold" as CFString, 18, nil)
+            draw(makeLine("\(content.deck)", font: number, color: background), font: number, centerX: center,
+                 centerY: center, in: context)
             return
         }
         ring(litBeat: litBeat, in: context)

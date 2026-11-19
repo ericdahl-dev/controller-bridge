@@ -25,7 +25,9 @@ enum JogLogo {
     static let hole = (radius: CGFloat(26), color: 0x141415)
 
     /// Draws it centered on `center`, in a context with y down.
-    static func draw(in context: CGContext, center: CGPoint, scale: CGFloat) {
+    /// `hub`, when given, fills the hub in that color with no hole (#524: the stale look's deck); the icon's own
+    /// numbers stay as they are.
+    static func draw(in context: CGContext, center: CGPoint, scale: CGFloat, hub hubFill: CGColor? = nil) {
         context.saveGState()
         defer { context.restoreGState() }
         context.translateBy(x: center.x, y: center.y)
@@ -53,8 +55,9 @@ enum JogLogo {
         context.setFillColor(rgb(needle.color))
         context.fillPath()
         context.restoreGState()
-        context.setFillColor(rgb(hub.color))
+        context.setFillColor(hubFill ?? rgb(hub.color))
         context.fillEllipse(in: circle(hub.radius))
+        guard hubFill == nil else { return }
         context.setFillColor(rgb(hole.color))
         context.fillEllipse(in: circle(hole.radius))
     }
