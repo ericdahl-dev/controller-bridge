@@ -105,5 +105,59 @@ class TrailerTests(unittest.TestCase):
             dfupatch.patch(dfuse_file(bytes(element)), "")
 
 
+def changed_offsets(a, b):
+    return [i for i in range(len(a)) if a[i] != b[i]]
+
+
+class PatchTests(unittest.TestCase):
+    def setUp(self):
+        self.element = wd_element()
+        self.data = dfuse_file(self.element)
+        self.element_start = len(self.data) - 16 - len(self.element)
+
+    def test_a_one_byte_patch_changes_only_that_byte_the_trailer_crc_and_the_suffix_crc(self):
+        old = self.element[0x40]
+        out = dfupatch.patch(self.data, f"# one byte\n0x{BASE + 0x40:08X} {old:02x} {old ^ 0xFF:02x}\n")
+        self.assertEqual(len(out), len(self.data))
+        crc_at = self.element_start + len(self.element) - 20
+        allowed = {self.element_start + 0x40, *range(crc_at, crc_at + 4), *range(len(out) - 4, len(out))}
+        self.assertTrue(set(changed_offsets(self.data, out)) <= allowed)
+        self.assertIn(self.element_start + 0x40, changed_offsets(self.data, out))
+        self.assertEqual(dfupatch.patch(out, ""), out)  # its trailer and suffix now check out
+
+    def test_old_bytes_that_dont_match_are_refused(self):
+        wrong = self.element[0x40] ^ 0x01
+        with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):
+            dfupatch.patch(self.data, f"0x{BASE + 0x40:08X} {wrong:02x} 00")
+
+    def test_a_patch_that_touches_the_trailer_is_refused(self):
+        at = len(self.element) - 32
+        old = self.element[at:at + 4].hex()
+        with self.assertRaisesRegex(dfupatch.Refused, "trailer"):
+            dfupatch.patch(self.data, f"0x{BASE + at:08X} {old} 00000000")
+        at = len(self.element) - 40
+        old = self.element[at:at + 12].hex()
+        with self.assertRaisesRegex(dfupatch.Refused, "trailer"):
+            dfupatch.patch(self.data, f"0x{BASE + at:08X} {old} {'00' * 12}")
+
+    def test_a_patch_outside_the_image_is_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "outside"):
+            dfupatch.patch(self.data, f"0x{BASE - 4:08X} 00 00")
+
+    def test_old_and_new_bytes_of_different_lengths_are_refused(self):
+        old = self.element[0x40:0x42].hex()
+        with self.assertRaisesRegex(dfupatch.Refused, "length"):
+            dfupatch.patch(self.data, f"0x{BASE + 0x40:08X} {old} 00")
+
+    def test_overlapping_patch_lines_are_refused(self):
+        a, b = self.element[0x40:0x42].hex(), self.element[0x41:0x43].hex()
+        with self.assertRaisesRegex(dfupatch.Refused, "overlap"):
+            dfupatch.patch(self.data, f"0x{BASE + 0x40:08X} {a} 0000\n0x{BASE + 0x41:08X} {b} 0000")
+
+    def test_a_malformed_line_is_refused_with_its_line_number(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "line 2"):
+            dfupatch.patch(self.data, "# fine\nnot a patch line")
+
+
 if __name__ == "__main__":
     unittest.main()

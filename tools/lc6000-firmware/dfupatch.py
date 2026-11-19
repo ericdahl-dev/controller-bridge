@@ -65,11 +65,51 @@ def build(image, element):
     return data + struct.pack("<I", suffix_crc(data))
 
 
+def parse_patch(patch_text):
+    """A patch description: one `ADDRESS OLD-HEX NEW-HEX` per line, `#` starts a comment.
+    Returns (address, old bytes, new bytes) tuples."""
+    edits = []
+    for number, line in enumerate(patch_text.splitlines(), 1):
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        try:
+            address, old, new = line.split()
+            edit = (int(address, 16), bytes.fromhex(old), bytes.fromhex(new))
+        except ValueError:
+            raise Refused(f"patch line {number} isn't `ADDRESS OLD-HEX NEW-HEX`: {line!r}") from None
+        if not edit[1] or len(edit[1]) != len(edit[2]):
+            raise Refused(f"patch line {number}: old and new bytes must have the same, non-zero length")
+        edits.append(edit)
+    return edits
+
+
+def apply_edits(element, address, edits):
+    """Writes each edit into the element after checking its old bytes. Never touches the trailer."""
+    trailer_start = address + len(element) - TRAILER_SIZE
+    taken = []
+    for at, old, new in edits:
+        end = at + len(old)
+        if at < address or end > address + len(element):
+            raise Refused(f"patch at 0x{at:08X} is outside the image (0x{address:08X}-0x{address + len(element):08X})")
+        if end > trailer_start:
+            raise Refused(f"patch at 0x{at:08X} reaches into the trailer at 0x{trailer_start:08X}; the tool writes it")
+        if any(at < other_end and other_at < end for other_at, other_end in taken):
+            raise Refused(f"patch at 0x{at:08X} overlaps another patch line")
+        taken.append((at, end))
+        offset = at - address
+        if element[offset:offset + len(old)] != old:
+            found = element[offset:offset + len(old)].hex()
+            raise Refused(f"old bytes at 0x{at:08X} are {found}, not {old.hex()}: wrong image or wrong patch")
+        element[offset:offset + len(new)] = new
+
+
 def patch(data, patch_text):
     """Applies a patch description to a wd DfuSe file and returns the new file, both CRCs recomputed."""
     image = parse(data)
     covered = covered_length(image.element)
     element = bytearray(image.element)
+    apply_edits(element, image.address, parse_patch(patch_text))
     struct.pack_into("<I", element, covered, stm32_crc(bytes(element[:covered])))
     return build(image, bytes(element))
 
