@@ -1,4 +1,5 @@
 #include "hook.h"
+#include "upper.h"
 
 /// The ops that may need the frame (#456): the capability ask and begin.
 enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01 };
@@ -52,6 +53,15 @@ static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
     if (stock->witness) *stock->witness = HOOK_WITNESS;
 }
 
+/// B's drawing, once its header checks out: the unit draws through B's entry from then on (#501).
+static void ensure_drawing(hook_state *state, const hook_stock *stock) {
+    if (!stock->upper || state->unit.drawing) return;
+    uint32_t entry = upper_check(stock->upper);
+    if (!entry) return;
+    state->upper_drawing.draw = (void (*)(dfw_pixel *, const struct dfw_unit *))(uintptr_t)entry;
+    state->unit.drawing = &state->upper_drawing;
+}
+
 /// The one stock malloc, ever, per boot: a frame for the capability ask or begin. Never freed.
 static void ensure_frame(hook_state *state, const hook_stock *stock) {
     if (state->unit.frame || state->malloc_tried) return;
@@ -69,7 +79,10 @@ void hook_command(hook_state *state, const hook_stock *stock, uint8_t cmd, const
     advance(state, now);
     state->stock = stock;
     uint8_t op = msg[9];
-    if (op == OP_CAPABILITY || op == OP_BEGIN) ensure_frame(state, stock);
+    if (op == OP_CAPABILITY || op == OP_BEGIN) {
+        ensure_drawing(state, stock);
+        ensure_frame(state, stock);
+    }
     // A begin with no frame is still passed on: dfw then presents nothing, so the screen stays stock's.
     dfw_message(&state->unit, msg, total);
 }

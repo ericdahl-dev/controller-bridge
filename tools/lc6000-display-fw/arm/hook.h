@@ -52,6 +52,8 @@ typedef struct {
     uint8_t shown;
     /// The stock side this state was started with: the port wrapper below reaches it through here.
     const hook_stock *stock;
+    /// B's table, filled from its checked header (#501); the unit points here once B checks out.
+    dfw_drawing upper_drawing;
     dfw_unit unit;
 } hook_state;
 

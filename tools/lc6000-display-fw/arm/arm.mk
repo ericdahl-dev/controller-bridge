@@ -11,7 +11,7 @@ ARM_CFLAGS := -std=c99 -Wall -Wextra -Werror -pedantic -Os $(ARM_CPU) -ffreestan
 	-DHOOK_STUB_DRAWING=$(if $(filter stub,$(ARM_DRAW)),1,0)
 # ARM_DRAW=1: hook, protocol and drawing. 0: the hook path alone, inert. stub (test builds only): hook and protocol
 # with an empty drawing, so the block tests run while the real drawing doesn't fit the padding (#501).
-ARM_SRC_DRAW := $(if $(filter stub,$(ARM_DRAW)),arm/hook.c src/dfw.c arm/test/draw_stub.c,arm/hook.c $(SRC))
+ARM_SRC_DRAW := arm/hook.c arm/upper.c $(if $(filter stub,$(ARM_DRAW)),src/dfw.c arm/test/draw_stub.c,$(SRC))
 ARM_C := arm/adapter.c arm/libc_min.c $(if $(filter 0,$(ARM_DRAW)),,$(ARM_SRC_DRAW))
 # For the size tests only: one extra C file (absolute path) and extra link flags, to grow a build past its limit.
 ARM_EXTRA_C ?=
@@ -21,7 +21,7 @@ ARM_OBJ := $(ARM_BUILD)/entry.o $(patsubst %.c,$(ARM_BUILD)/%.o,$(notdir $(ARM_C
 .PHONY: arm
 arm: $(ARM_BUILD)/block.bin
 
-$(ARM_BUILD)/block.elf: $(ARM_C) arm/entry.S arm/block.ld arm/hook.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
+$(ARM_BUILD)/block.elf: $(ARM_C) arm/entry.S arm/block.ld arm/hook.h arm/upper.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
 	@mkdir -p $(ARM_BUILD)
 	cd $(ARM_BUILD) && $(ARM_PREFIX)gcc $(ARM_CFLAGS) -I$(CURDIR)/arm/include -I$(CURDIR)/src -I$(CURDIR)/arm -c $(addprefix $(CURDIR)/,$(ARM_C)) $(ARM_EXTRA_C)
 	$(ARM_PREFIX)gcc $(ARM_CPU) -c arm/entry.S -o $(ARM_BUILD)/entry.o

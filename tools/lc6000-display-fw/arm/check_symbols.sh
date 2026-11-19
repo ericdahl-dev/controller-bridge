@@ -6,13 +6,13 @@ set -eu
 out=${1:-build/freestanding-arm}
 mkdir -p "$out"
 bad=""
-for source in arm/hook.c; do
+for source in arm/hook.c arm/upper.c; do
     object="$out/$(basename "$source" .c).o"
     ${CC:-cc} -std=c99 -Wall -Wextra -Werror -pedantic -O2 -ffreestanding -fno-stack-protector -Isrc -Iarm \
         -c "$source" -o "$object"
     for symbol in $(nm -u "$object" | awk '{print $NF}' | sed 's/^_//'); do
         case "$symbol" in
-            memcpy|memmove|memset|memcmp|bzero|dfw_*) ;;
+            memcpy|memmove|memset|memcmp|bzero|dfw_*|upper_*) ;;
             *) bad="$bad $symbol($source)" ;;
         esac
     done
@@ -21,4 +21,4 @@ if [ -n "$bad" ]; then
     echo "not allowed in the hook:$bad" >&2
     exit 1
 fi
-echo "hook: no allocator, only memcpy, memmove, memset, memcmp and dfw_*"
+echo "hook: no allocator, only memcpy, memmove, memset, memcmp, dfw_* and upper_*"

@@ -432,6 +432,17 @@ void with_an_erased_upper_block_the_capability_ask_gets_no_answer(void) {
     CHECK(rec.sends == 0);
 }
 
+void with_a_good_upper_block_the_capability_ask_is_answered(void) {
+    // Only the capability ask: on the Mac, B's entry is a chip address and is never called.
+    cold_boot();
+    good_upper();
+    stock.upper = upper;
+    stock.drawing = NULL;
+    deliver(0, CAPABILITY_V1);
+    tick();
+    CHECK(rec.sends == 1);
+}
+
 const test_case all_tests[] = {
     { "with no drawing from stock the capability ask gets no answer",
       with_no_drawing_from_stock_the_capability_ask_gets_no_answer },
@@ -464,6 +475,7 @@ const test_case all_tests[] = {
     { "an entry that isn't Thumb code inside the block is refused", an_entry_that_isnt_Thumb_code_inside_the_block_is_refused },
     { "a block past sector 8 is checked whole", a_block_past_sector_8_is_checked_whole },
     { "with an erased upper block the capability ask gets no answer", with_an_erased_upper_block_the_capability_ask_gets_no_answer },
+    { "with a good upper block the capability ask is answered", with_a_good_upper_block_the_capability_ask_is_answered },
     { 0, 0 },
 };
 
