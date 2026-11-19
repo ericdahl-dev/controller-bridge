@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "about": "The drawn jog display's messages (#455): each state and the exact bytes on the WD port. The Swift encoder (Kit tests) and the C decoder (firmware tests) both walk this file. Host to unit: F0 00 02 0B 7F 10 <cmd> <len hi> <len lo> <op> <args> F7, len counting op and args (14 bits). Unit to host: the reply header F0 00 02 0B 01 10 instead. cmd 0x20 is a placeholder until #466 finds a number the stock dispatcher leaves free. Ops: 00 capability, 01 begin, 02 end, 03 deck; 04-0B are reserved for text, tempo, time, state, beat, needle, meter, phase. Colors go as two 7-bit bytes per channel, high then low. Player: 0 empty, 1 track, 2 OSC clip, 3 MIDI clip, 4 sequencer, 5 other.",
+  "messages": [
+    {"name": "capability ask, host speaks v1", "kind": "capability", "fields": {"version": 1},
+     "bytes": "F0 00 02 0B 7F 10 20 00 02 00 01 F7"},
+    {"name": "capability answer, unit speaks v1", "kind": "capability_answer", "direction": "unit", "fields": {"version": 1},
+     "bytes": "F0 00 02 0B 01 10 20 00 02 00 01 F7"},
+    {"name": "begin v1", "kind": "begin", "fields": {"version": 1},
+     "bytes": "F0 00 02 0B 7F 10 20 00 02 01 01 F7"},
+    {"name": "end v1", "kind": "end", "fields": {"version": 1},
+     "bytes": "F0 00 02 0B 7F 10 20 00 02 02 01 F7"},
+    {"name": "deck 2, red, track", "kind": "deck", "fields": {"number": 2, "color": [255, 0, 0], "player": 1},
+     "bytes": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7"},
+    {"name": "deck 4, 0/128/255, empty", "kind": "deck", "fields": {"number": 4, "color": [0, 128, 255], "player": 0},
+     "bytes": "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7"},
+    {"name": "deck 1, white, MIDI clip", "kind": "deck", "fields": {"number": 1, "color": [255, 255, 255], "player": 3},
+     "bytes": "F0 00 02 0B 7F 10 20 00 09 03 01 01 7F 01 7F 01 7F 03 F7"},
+    {"name": "deck 3, 7/64/127, other", "kind": "deck", "fields": {"number": 3, "color": [7, 64, 127], "player": 5},
+     "bytes": "F0 00 02 0B 7F 10 20 00 09 03 03 00 07 00 40 00 7F 05 F7"}
+  ],
+  "invalid": [
+    {"name": "deck cut short (len says 9, 4 bytes follow)", "bytes": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F F7"},
+    {"name": "deck with a byte too many (len says 9, 10 follow)", "bytes": "F0 00 02 0B 7F 10 20 00 0A 03 02 01 7F 00 00 00 00 01 00 F7"},
+    {"name": "deck 0", "bytes": "F0 00 02 0B 7F 10 20 00 09 03 00 01 7F 00 00 00 00 01 F7"},
+    {"name": "deck 5", "bytes": "F0 00 02 0B 7F 10 20 00 09 03 05 01 7F 00 00 00 00 01 F7"},
+    {"name": "player 6", "bytes": "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 06 F7"},
+    {"name": "color channel 256 (high byte 02)", "bytes": "F0 00 02 0B 7F 10 20 00 09 03 02 02 00 00 00 00 00 01 F7"},
+    {"name": "a data byte with its top bit set", "bytes": "F0 00 02 0B 7F 10 20 00 09 03 02 81 7F 00 00 00 00 01 F7"},
+    {"name": "unknown op 7F", "bytes": "F0 00 02 0B 7F 10 20 00 02 7F 01 F7"},
+    {"name": "no op at all (len 0)", "bytes": "F0 00 02 0B 7F 10 20 00 00 F7"},
+    {"name": "begin with no version", "bytes": "F0 00 02 0B 7F 10 20 00 01 01 F7"},
+    {"name": "no F7", "bytes": "F0 00 02 0B 7F 10 20 00 02 01 01"},
+    {"name": "another maker's header", "bytes": "F0 00 20 7F 10 20 00 02 01 01 F7"}
+  ]
+}
