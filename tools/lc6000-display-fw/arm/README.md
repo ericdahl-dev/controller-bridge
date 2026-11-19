@@ -10,7 +10,10 @@ Nothing here is flashed. Nothing here holds vendor bytes: the stock addresses co
 make -C tools/lc6000-display-fw arm              # build/arm/block.bin, 9,184 bytes, with the marker last
 make -C tools/lc6000-display-fw arm-test PYTHON=<python with unicorn>
 make -C tools/lc6000-display-fw arm ARM_DRAW=0   # the hook path alone, inert (if drawing ever doesn't fit)
+make -C tools/lc6000-display-fw arm-size         # sizes on this toolchain: drawing (information only), hook and protocol, hook only
 ```
+
+**The drawing no longer fits the padding,** so `make arm` with drawing fails the link on purpose. Drawing moves to its own block at `0x08080000` (#501). Until that lands, there is no flashable drawn-display block. The block tests build with an empty drawing (`ARM_DRAW=stub`, test builds only).
 
 - The build prints how much of the padding is used. If the code doesn't fit below the marker, the link fails with "our code doesn't fit in the wd padding". Nothing is ever placed above `0x08080000`.
 - **Toolchain, pinned:** `arm-none-eabi-gcc` 16.2.0 with GNU Binutils 2.47 (Homebrew, macOS). CI builds with Ubuntu's `gcc-arm-none-eabi` package.
