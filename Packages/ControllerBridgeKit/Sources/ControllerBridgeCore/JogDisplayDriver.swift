@@ -555,7 +555,7 @@ public final class JogDisplayDriver {
         sendWD(DrawnDisplay.Message.beat(lastMasterBeat ?? 0).bytes)
         if let lastMarker { sendWD(DrawnDisplay.Message.needle(lastMarker).bytes) }
         // The deck's time (#460), once known.
-        if let lastTime { sendWD(lastTime) }
+        if let lastTime { sendWD(lastTime); timeCleared = false }
         // The level meter (#461): empty until the deck's channel reports.
         sendWD(DrawnDisplay.Message.meter(level: lastMeter.level, peak: lastMeter.peak).bytes)
         // The phase (#462), once known: the chip's own is unknown until it comes.
@@ -612,13 +612,14 @@ public final class JogDisplayDriver {
 
     /// The deck in front's time for drawn mode (#460): sent only while drawing, and only when it changes (the shown
     /// second, or the length); whether it went out.
-    private var lastTime: [UInt8]?
+    private var lastTime: [UInt8]?, timeCleared = false
     @discardableResult
     public func time(_ message: DrawnDisplay.Message) -> Bool {
         let bytes = message.bytes
-        guard bytes != lastTime else { return false }
+        guard bytes != lastTime || timeCleared else { return false }
         lastTime = bytes
         guard connected, drawing else { return false }
+        timeCleared = false
         sendWD(bytes)
         return true
     }
@@ -667,6 +668,8 @@ public final class JogDisplayDriver {
         sendState()
         lastTexts = Self.texts(content)
         for text in lastTexts { sendWD(text) }
+        // It clears the chip's time too (#460): the next time goes, even the same.
+        timeCleared = true
     }
 
     /// Same deck: only the texts and tempo that changed, once each (#458).

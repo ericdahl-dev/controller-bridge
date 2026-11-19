@@ -100,6 +100,10 @@ void the_phase_is_unknown_until_the_decks_own_phase_comes(void);
 void an_unchanged_phase_presents_nothing(void);
 void a_new_decks_words_wait_for_its_text(void);
 
+void the_first_time_presents_and_an_unchanged_one_does_not(void);
+void a_deck_change_clears_the_time(void);
+void end_forgets_the_time(void);
+void a_time_before_begin_is_dropped(void);
 void three_seconds_of_silence_is_stale(void);
 void any_message_clears_the_silence(void);
 void garbage_doesnt_count_as_a_message(void);
@@ -146,6 +150,10 @@ const test_case all_tests[] = {
     { "the phase is unknown until the deck's own phase comes", the_phase_is_unknown_until_the_decks_own_phase_comes },
     { "an unchanged phase presents nothing", an_unchanged_phase_presents_nothing },
     { "a new deck's words wait for its text", a_new_decks_words_wait_for_its_text },
+    { "the first time presents and an unchanged one does not", the_first_time_presents_and_an_unchanged_one_does_not },
+    { "a deck change clears the time", a_deck_change_clears_the_time },
+    { "end forgets the time", end_forgets_the_time },
+    { "a time before begin is dropped", a_time_before_begin_is_dropped },
     { "three seconds of silence is stale", three_seconds_of_silence_is_stale },
     { "any message clears the silence", any_message_clears_the_silence },
     { "garbage doesn't count as a message", garbage_doesnt_count_as_a_message },

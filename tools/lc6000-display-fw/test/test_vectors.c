@@ -4,7 +4,7 @@
 #include <string.h>
 
 enum { KIND_CAPABILITY, KIND_CAPABILITY_ANSWER, KIND_BEGIN, KIND_END, KIND_DECK, KIND_STATE, KIND_BEAT, KIND_NEEDLE,
-       KIND_TEXT, KIND_TEMPO, KIND_METER, KIND_PHASE };
+       KIND_TEXT, KIND_TEMPO, KIND_METER, KIND_TIME, KIND_PHASE };
 typedef struct {
     const char *name;
     int kind, from_unit, version, number;
@@ -17,6 +17,8 @@ typedef struct {
     int tenths;
     /// Phase: 1/16384 beats from the master's beat, negative behind (#462).
     int offset;
+    /// Time: elapsed and the track's length, whole seconds.
+    int elapsed, track_length;
     size_t length;
     uint8_t bytes[DFW_MESSAGE_MAX];
 } vector;
@@ -32,6 +34,7 @@ typedef struct {
 #define COUNT(a) (sizeof(a) / sizeof((a)[0]))
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
 #define STATE_LOADED_PLAYING "F0 00 02 0B 7F 10 20 00 02 07 03 F7"
+#define TIME_65_OF_293 "F0 00 02 0B 7F 10 20 00 05 06 00 41 02 25 F7"
 #define DECK_3_GREEN_SEQ "F0 00 02 0B 7F 10 20 00 09 03 03 00 00 01 7F 00 00 04 F7"
 
 static dfw_unit unit;
@@ -103,6 +106,13 @@ void every_vector_decodes(void) {
             dfw_tick(&unit, 0);
             check(unit.level == v->level && unit.peak == v->peak, v->name);
             break;
+        case KIND_TIME:
+            feed(&unit, BEGIN_V1);
+            feed(&unit, DECK_3_GREEN_SEQ);
+            dfw_message(&unit, v->bytes, v->length);
+            dfw_tick(&unit, 0);
+            check(unit.time_heard && unit.elapsed == v->elapsed && unit.track_length == v->track_length, v->name);
+            break;
         case KIND_TEXT:
             feed(&unit, BEGIN_V1);
             feed(&unit, DECK_3_GREEN_SEQ);
@@ -139,6 +149,8 @@ void every_invalid_vector_is_ignored(void) {
         feed(&unit, BEGIN_V1);
         feed(&unit, DECK_3_GREEN_SEQ);
         feed(&unit, STATE_LOADED_PLAYING);
+        // A time held, so a malformed one can't pass by leaving a fresh unit's zeros alone.
+        feed(&unit, TIME_65_OF_293);
         dfw_tick(&unit, 0);
         dfw_deck_state before = unit.deck;
         uint8_t flags = unit.flags, beat = unit.beat;
@@ -146,11 +158,14 @@ void every_invalid_vector_is_ignored(void) {
         int16_t phase = unit.phase;
         uint8_t text_length = unit.text_length[0];
         uint8_t level = unit.level, peak = unit.peak;
+        uint16_t elapsed = unit.elapsed, track_length = unit.track_length;
+        uint8_t time_heard = unit.time_heard;
         dfw_message(&unit, v->bytes, v->length);
         dfw_tick(&unit, 0);
         check(unit.drawn && rec.presents == 1 && rec.sends == 0 && memcmp(&unit.deck, &before, sizeof before) == 0 &&
               unit.flags == flags && unit.beat == beat && unit.needle == needle && unit.tempo == tempo &&
                   unit.text_length[0] == text_length && unit.level == level && unit.peak == peak &&
+                  unit.elapsed == elapsed && unit.track_length == track_length && unit.time_heard == time_heard &&
                   unit.phase == phase,
               v->name);
     }

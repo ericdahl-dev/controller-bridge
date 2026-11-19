@@ -155,11 +155,13 @@ final class JogDisplayController {
     /// The deck in front's meter to the drawn display, at most 30 times a second; the peak falls to the level once
     /// it has held. Nothing until its channel has reported.
     /// The time message (#460): at most 4 a second, so a scrub doesn't flood the wire; a change held back goes
-    /// once the quarter second is up. Steady play changes it once a second, so a seek goes at once.
+    /// once the quarter second is up. Steady play changes it once a second, so a seek goes at once. A new deck in
+    /// front isn't held: its time lands with its deck message.
     static let timeRate = 4.0
-    private var lastTimeSent: Double?
+    private var lastTimeSent: Double?, lastTimeDeck: Int?
     private func timeTick(_ facts: DeckFacts, driver: JogDisplayDriver) {
-        if let sent = lastTimeSent, clock.now - sent < 1 / Self.timeRate - 1e-9 { return }
+        if facts.deck == lastTimeDeck, let sent = lastTimeSent, clock.now - sent < 1 / Self.timeRate - 1e-9 { return }
+        lastTimeDeck = facts.deck
         if driver.time(.time(elapsed: facts.position, length: facts.duration)) { lastTimeSent = clock.now }
     }
 

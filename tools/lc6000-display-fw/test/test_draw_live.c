@@ -318,6 +318,26 @@ static void the_play_flags_change_no_pixels(void) {
 /// over each case's count, and nothing past 16 in any: a quarter pixel off is 60 levels on every edge pixel of the fill.
 #define METER_CLOSE 6
 #define METER_CAP 16
+/// The progress ring (#460), r 96-98, is all edge as the meter is, and its circles land the same way. Measured: the dark
+/// track alone within 2 everywhere; the blue fill at 83/165, worst 7 with 30 pixels over 6, every one on a circle,
+/// none on the fill's two radial edges. So 6 with a budget a little over the count, nothing past 16.
+#define PROGRESS_CLOSE 6
+#define PROGRESS_CAP 16
+#define PROGRESS_BUDGET_START 0
+#define PROGRESS_BUDGET_FILL 35
+/// The time left (#460), GeistMono-SemiBold 14 from CoreText's own glyphs at their own baseline and x phases, as the
+/// header's badge. Measured: within 1 everywhere, so 2 and no budget; a 1 px shift or a wrong glyph is hundreds off.
+#define TIME_CLOSE 2
+#define TIME_BUDGET 0
+#define TIME_CAP 2
+/// The fill at 135/165 (294.5°) has more circle under it: measured worst 10, with 65 pixels over 6 in blue and in the
+/// warning red, 55 in white, all on the circles again. So 70 for all three.
+#define PROGRESS_BUDGET_LONG 70
+/// The warning's red text has its own glyphs (light text is drawn heavier): measured within 1 as the white's, so the same
+/// limits. With the white's glyphs drawn red it was 47 off.
+#define TIME_RED_CLOSE TIME_CLOSE
+#define TIME_RED_BUDGET TIME_BUDGET
+#define TIME_RED_CAP TIME_CAP
 
 typedef struct { const char *file; uint8_t level, peak; int budget; } meter_case;
 static const meter_case meters[] = {
@@ -459,7 +479,330 @@ static void the_phase_rule_is_drawn(void) {
     }
 }
 
+/// Track time (#460): the progress ring (r 96-98, just outside the beat ring) and the time left under key/BPM, against
+/// test/ref/*-time*.ppm. The ring is compared from PROGRESS_FROM out: only the ring there for these decks.
+#define PROGRESS_FROM 95.5f
+
+/// Everything from PROGRESS_FROM out against `reference`: at most `budget` pixels more than `close` off, none past `cap`.
+static int progress_matches(const char *name, int close, int budget, int cap) {
+    int worst = 0, loose = 0, over = 0;
+    for (int y = 0; y < DFW_SIZE; y++)
+        for (int x = 0; x < DFW_SIZE; x++) {
+            if (radius2(x, y) < PROGRESS_FROM * PROGRESS_FROM) continue;
+            int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
+            if (d > worst) worst = d;
+            if (d > close) loose++;
+            if (d > cap) over++;
+        }
+    fprintf(stderr, "    %s ring from %.1f out: worst %d, %d over %d (budget %d)\n", name, (double)PROGRESS_FROM, worst,
+            loose, close, budget);
+    return over == 0 && loose <= budget;
+}
+
+#define PLAYING 0x03
+#define PAUSED 0x01
+
+/// Begin, the deck, the state, then a time message, then a tick at `now`.
+static void begin_with_time(const char *deck, uint8_t flags, uint16_t elapsed, uint16_t length, uint32_t now) {
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, deck);
+    char message[64];
+    snprintf(message, sizeof message, "F0 00 02 0B 7F 10 20 00 02 07 %02X F7", flags);
+    feed(&live, message);
+    snprintf(message, sizeof message, "F0 00 02 0B 7F 10 20 00 05 06 %02X %02X %02X %02X F7", elapsed >> 7,
+             elapsed & 0x7F, length >> 7, length & 0x7F);
+    feed(&live, message);
+    dfw_tick(&live, now);
+}
+
+#define DECK_4_BLUE_EMPTY "F0 00 02 0B 7F 10 20 00 09 03 04 00 00 01 00 01 7F 00 F7"
+#define DECK_2_RED_EMPTY "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 00 F7"
+
+typedef struct { const char *file; uint16_t elapsed, length; int budget; } time_case;
+static const time_case times[] = {
+    // The start: the dark track all round, no fill.
+    { "test/ref/deck4-blue-empty-time0-165.ppm", 0, 165, PROGRESS_BUDGET_START },
+    // Just past half: the fill past 180°.
+    { "test/ref/deck4-blue-empty-time83-165.ppm", 83, 165, PROGRESS_BUDGET_FILL },
+    { "test/ref/deck4-blue-empty-time0-5999.ppm", 0, 5999, PROGRESS_BUDGET_START },
+};
+#define TIMES (sizeof times / sizeof times[0])
+
+/// The time left, centered at (99, 169): compared over a box around its line that holds nothing else for these decks.
+#define TIME_LEFT 60
+#define TIME_RIGHT 140
+#define TIME_TOP 156
+#define TIME_BOTTOM 182
+
+static int time_text_matches(const char *name, int close, int budget, int cap) {
+    int worst = 0, loose = 0, over = 0;
+    for (int y = TIME_TOP; y < TIME_BOTTOM; y++)
+        for (int x = TIME_LEFT; x < TIME_RIGHT; x++) {
+            int d = channel_diff(frame[y * DFW_SIZE + x], reference[y * DFW_SIZE + x]);
+            if (d > worst) worst = d;
+            if (d > close) loose++;
+            if (d > cap) over++;
+        }
+    fprintf(stderr, "    %s time: worst %d, %d over %d (budget %d)\n", name, worst, loose, close, budget);
+    return over == 0 && loose <= budget;
+}
+
+static void the_time_left_is_drawn(void) {
+    for (size_t n = 0; n < TIMES; n++) {
+        CHECK(load_reference(times[n].file));
+        begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, times[n].elapsed, times[n].length, 0);
+        memcpy(frame, rec.last, sizeof frame);
+        CHECK(time_text_matches(times[n].file + 9, TIME_CLOSE, TIME_BUDGET, TIME_CAP));
+    }
+}
+
+/// The wire's longest, 16383 s, is "-273:03": minutes never wrap to hours, and its seventh character is drawn, wider
+/// than "-99:59" (from x 73.8) on the left.
+static void the_longest_time_has_three_digit_minutes(void) {
+    begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, 0, 16383, 0);
+    int ink = 0;
+    for (int y = TIME_TOP; y < TIME_BOTTOM; y++)
+        for (int x = 69; x < 73; x++) ink += rec.last[y * DFW_SIZE + x] != 0x0B0B0Bu;
+    CHECK(ink > 10);
+}
+
+/// The needle crosses the ring on top: the marker at 3 o'clock over the fill at 83/165, compared from MARKER_IN out.
+static void the_marker_is_drawn_over_the_progress_ring(void) {
+    CHECK(load_reference("test/ref/deck4-blue-empty-time83-165-needle4096.ppm"));
+    begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 03 09 20 00 F7");   // 4096
+    dfw_tick(&live, 10);
+    CHECK(rec.presents == 2);
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(band_from_matches("deck4-blue-empty-time83-165-needle4096.ppm", PROGRESS_CLOSE, PROGRESS_BUDGET_FILL,
+                            PROGRESS_CAP));
+}
+
+/// The last minute's warning (#460, JogTrackTime): while playing with 60 s or less left, red (text and fill) for the
+/// first 500 ms after the time changes, then the normal half. 135 of 165 is 30 s left.
+
+/// The red half: the frame the time message lands on.
+static void the_warning_starts_red(void) {
+    CHECK(load_reference("test/ref/deck4-blue-empty-time135-165-red.ppm"));
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 135, 165, 0);
+    CHECK(rec.presents == 1);
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(progress_matches("deck4-blue-empty-time135-165-red.ppm", PROGRESS_CLOSE, PROGRESS_BUDGET_LONG, PROGRESS_CAP));
+    CHECK(time_text_matches("deck4-blue-empty-time135-165-red.ppm", TIME_RED_CLOSE, TIME_RED_BUDGET, TIME_RED_CAP));
+}
+
+/// 500 ms after the time came, the normal half, with a frame of its own; none before.
+static void the_warning_turns_normal_at_500_ms(void) {
+    CHECK(load_reference("test/ref/deck4-blue-empty-time135-165-normal.ppm"));
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 135, 165, 1000);
+    dfw_tick(&live, 1499);
+    CHECK(rec.presents == 1);
+    dfw_tick(&live, 1500);
+    CHECK(rec.presents == 2);
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(progress_matches("deck4-blue-empty-time135-165-normal.ppm", PROGRESS_CLOSE, PROGRESS_BUDGET_LONG,
+                           PROGRESS_CAP));
+    CHECK(time_text_matches("deck4-blue-empty-time135-165-normal.ppm", TIME_CLOSE, TIME_BUDGET, TIME_CAP));
+}
+
+/// A red deck's normal half fills the ring white, so the blink still shows.
+static void a_red_decks_normal_half_is_white(void) {
+    CHECK(load_reference("test/ref/deck2-red-empty-time135-165-normal.ppm"));
+    begin_with_time(DECK_2_RED_EMPTY, PLAYING, 135, 165, 0);
+    dfw_tick(&live, 500);
+    CHECK(rec.presents == 2);
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(progress_matches("deck2-red-empty-time135-165-normal.ppm", PROGRESS_CLOSE, PROGRESS_BUDGET_LONG,
+                           PROGRESS_CAP));
+    CHECK(time_text_matches("deck2-red-empty-time135-165-normal.ppm", TIME_CLOSE, TIME_BUDGET, TIME_CAP));
+}
+
+/// Not vacuous: red and normal halves differ, in the ring and in the text, and the red deck's ring isn't the blue's.
+static void the_warning_references_differ(void) {
+    static dfw_pixel red[DFW_SIZE * DFW_SIZE];
+    CHECK(load_reference("test/ref/deck4-blue-empty-time135-165-red.ppm"));
+    memcpy(red, reference, sizeof red);
+    CHECK(load_reference("test/ref/deck4-blue-empty-time135-165-normal.ppm"));
+    int ring = 0, text = 0;
+    for (int y = 0; y < DFW_SIZE; y++)
+        for (int x = 0; x < DFW_SIZE; x++) {
+            int differs = red[y * DFW_SIZE + x] != reference[y * DFW_SIZE + x];
+            ring += differs && radius2(x, y) >= PROGRESS_FROM * PROGRESS_FROM;
+            text += differs && x >= TIME_LEFT && x < TIME_RIGHT && y >= TIME_TOP && y < TIME_BOTTOM;
+        }
+    CHECK(ring > 1000 && text > 100);
+    // Mid-band at 10 degrees, inside the fill: blue, red, white.
+    CHECK(reference[3 * DFW_SIZE + 115] == 0x0080FFu);
+    CHECK(red[3 * DFW_SIZE + 115] == 0xFF3B30u);
+    CHECK(load_reference("test/ref/deck2-red-empty-time135-165-normal.ppm"));
+    CHECK(reference[3 * DFW_SIZE + 115] == 0xEDEDEAu);
+}
+
+/// The blink keeps going off the last change when no new second comes (a dropped message): red again at 1 s, normal
+/// at 1.5 s, never frozen in either half.
+static void the_warning_keeps_blinking_without_a_new_second(void) {
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 135, 165, 0);
+    dfw_tick(&live, 500);
+    CHECK(rec.presents == 2);
+    dfw_tick(&live, 1000);
+    CHECK(rec.presents == 3);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+    dfw_tick(&live, 1500);
+    CHECK(rec.presents == 4);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0x0080FFu);
+}
+
+/// Each new second starts red again, on the frame the digit changes; the heartbeat's same time doesn't restart it.
+static void a_new_second_restarts_the_red(void) {
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 135, 165, 0);
+    dfw_tick(&live, 700);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0x0080FFu);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 05 06 01 07 01 25 F7");   // 135 of 165 again
+    dfw_tick(&live, 800);
+    CHECK(rec.presents == 2);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 05 06 01 08 01 25 F7");   // 136 of 165
+    dfw_tick(&live, 900);
+    CHECK(rec.presents == 3);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+    dfw_tick(&live, 1399);
+    CHECK(rec.presents == 3);
+    dfw_tick(&live, 1400);
+    CHECK(rec.presents == 4);
+}
+
+/// Paused inside the last minute: no warning, the normal colors (for blue, the normal half's), and nothing blinks.
+static void paused_in_the_last_minute_draws_the_normal_colors(void) {
+    CHECK(load_reference("test/ref/deck4-blue-empty-time135-165-normal.ppm"));
+    begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, 135, 165, 0);
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(progress_matches("deck4-blue-empty-time135-165-normal.ppm (paused)", PROGRESS_CLOSE, PROGRESS_BUDGET_LONG,
+                           PROGRESS_CAP));
+    CHECK(time_text_matches("deck4-blue-empty-time135-165-normal.ppm (paused)", TIME_CLOSE, TIME_BUDGET, TIME_CAP));
+    dfw_tick(&live, 500);
+    dfw_tick(&live, 1000);
+    CHECK(rec.presents == 1);
+    // A red deck paused keeps its own color: the white is the warning's alone.
+    begin_with_time(DECK_2_RED_EMPTY, PAUSED, 135, 165, 0);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF0000u);
+}
+
+/// The warning's edge: 61 s left doesn't blink, 60 does; past the end (elapsed over the length) does.
+static void the_warning_covers_the_last_60_seconds(void) {
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 104, 165, 0);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0x0080FFu);
+    dfw_tick(&live, 500);
+    CHECK(rec.presents == 1);
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 105, 165, 0);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 200, 165, 0);
+    CHECK(rec.last[3 * DFW_SIZE + 115] == 0xFF3B30u);
+}
+
+/// The clock wrapping mid-blink is 500 ms like any other.
+static void the_blink_survives_the_clock_wrapping(void) {
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 135, 165, 0xFFFFFF00u);
+    dfw_tick(&live, 0xFFFFFF00u + 499u);
+    CHECK(rec.presents == 1);
+    dfw_tick(&live, 0xFFFFFF00u + 500u);   // wrapped past 0
+    CHECK(rec.presents == 2);
+}
+
+/// Near red (JogTrackTime.warningNormalFill): spread at least half the brightest and the hue within 25 degrees of
+/// 3.5. Orange (hue 30) keeps its color; a red-orange (hue 14) and a magenta-red (hue 340) go white; a pale red
+/// (255 140 140: spread 115, under half of 255) keeps its color.
+static void only_a_deck_near_red_goes_white(void) {
+    static const struct { const char *deck; dfw_pixel fill; } decks[] = {
+        { "F0 00 02 0B 7F 10 20 00 09 03 01 01 7F 01 00 00 00 00 F7", 0xFF8000u },   // 255 128 0
+        { "F0 00 02 0B 7F 10 20 00 09 03 01 01 7F 00 3C 00 00 00 F7", 0xEDEDEAu },   // 255 60 0
+        { "F0 00 02 0B 7F 10 20 00 09 03 01 01 7F 00 00 00 55 00 F7", 0xEDEDEAu },   // 255 0 85
+        { "F0 00 02 0B 7F 10 20 00 09 03 01 01 7F 01 0C 01 0C 00 F7", 0xFF8C8Cu },   // 255 140 140
+    };
+    for (size_t n = 0; n < sizeof decks / sizeof decks[0]; n++) {
+        begin_with_time(decks[n].deck, PLAYING, 135, 165, 0);
+        dfw_tick(&live, 500);
+        CHECK(rec.last[3 * DFW_SIZE + 115] == decks[n].fill);
+    }
+}
+
+static void the_progress_ring_is_drawn(void) {
+    for (size_t n = 0; n < TIMES; n++) {
+        CHECK(load_reference(times[n].file));
+        begin_with_time(DECK_4_BLUE_EMPTY, PAUSED, times[n].elapsed, times[n].length, 0);
+        CHECK(rec.presents == 1);
+        memcpy(frame, rec.last, sizeof frame);
+        CHECK(progress_matches(times[n].file + 9, PROGRESS_CLOSE, times[n].budget, PROGRESS_CAP));
+    }
+}
+
+/// Not vacuous: each time reference has the ring the plain one doesn't.
+static void each_time_reference_differs_from_the_plain_one(void) {
+    static dfw_pixel plain[DFW_SIZE * DFW_SIZE];
+    CHECK(load_reference(UNLIT));
+    memcpy(plain, reference, sizeof plain);
+    for (size_t n = 0; n < TIMES; n++) {
+        CHECK(load_reference(times[n].file));
+        int changed = 0;
+        for (int y = 0; y < DFW_SIZE; y++)
+            for (int x = 0; x < DFW_SIZE; x++)
+                changed += radius2(x, y) >= PROGRESS_FROM * PROGRESS_FROM && reference[y * DFW_SIZE + x] != plain[y * DFW_SIZE + x];
+        CHECK(changed > 1000);
+        changed = 0;
+        for (int y = TIME_TOP; y < TIME_BOTTOM; y++)
+            for (int x = TIME_LEFT; x < TIME_RIGHT; x++) changed += reference[y * DFW_SIZE + x] != plain[y * DFW_SIZE + x];
+        CHECK(changed > 150);
+    }
+}
+
+/// An unknown length (0) draws no time and no ring: the whole frame is the plain one's, as Swift's
+/// deck4-blue-empty-time42-0 is, and as a fresh unit with no time draws.
+static void an_unknown_length_draws_nothing(void) {
+    static dfw_pixel without[DFW_SIZE * DFW_SIZE];
+    fresh(&live, &rec);
+    feed(&live, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");
+    feed(&live, DECK_4_BLUE_EMPTY);
+    dfw_tick(&live, 0);
+    memcpy(without, rec.last, sizeof without);
+    begin_with_time(DECK_4_BLUE_EMPTY, PLAYING, 42, 0, 0);
+    CHECK(rec.presents == 1);
+    CHECK(memcmp(rec.last, without, sizeof without) == 0);
+    CHECK(load_reference("test/ref/deck4-blue-empty-time42-0.ppm"));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(progress_matches("deck4-blue-empty-time42-0.ppm", RING_CLOSE, 0, RING_CLOSE));
+}
+
+/// The waiting look is agent3's; whatever it is, the time changes none of it.
+static void stale_draws_no_time(void) {
+    static dfw_pixel without[DFW_SIZE * DFW_SIZE];
+    memset(&unit, 0, sizeof unit);
+    unit.flags = 0x20;
+    draw_beat(0);
+    memcpy(without, frame, sizeof without);
+    unit.time_heard = 1;
+    unit.elapsed = 83;
+    unit.track_length = 165;
+    draw_beat(0);
+    CHECK(memcmp(frame, without, sizeof frame) == 0);
+}
+
 const test_case draw_live_tests[] = {
+    { "the progress ring is drawn", the_progress_ring_is_drawn },
+    { "the time left is drawn", the_time_left_is_drawn },
+    { "the warning starts red", the_warning_starts_red },
+    { "the warning turns normal at 500 ms", the_warning_turns_normal_at_500_ms },
+    { "a red deck's normal half is white", a_red_decks_normal_half_is_white },
+    { "the warning references differ", the_warning_references_differ },
+    { "the warning keeps blinking without a new second", the_warning_keeps_blinking_without_a_new_second },
+    { "a new second restarts the red", a_new_second_restarts_the_red },
+    { "paused in the last minute draws the normal colors", paused_in_the_last_minute_draws_the_normal_colors },
+    { "the warning covers the last 60 seconds", the_warning_covers_the_last_60_seconds },
+    { "the blink survives the clock wrapping", the_blink_survives_the_clock_wrapping },
+    { "only a deck near red goes white", only_a_deck_near_red_goes_white },
+    { "the marker is drawn over the progress ring", the_marker_is_drawn_over_the_progress_ring },
+    { "the longest time has three digit minutes", the_longest_time_has_three_digit_minutes },
+    { "each time reference differs from the plain one", each_time_reference_differs_from_the_plain_one },
+    { "an unknown length draws nothing", an_unknown_length_draws_nothing },
+    { "stale draws no time", stale_draws_no_time },
     { "the phase rule is drawn", the_phase_rule_is_drawn },
     { "the meter is drawn", the_meter_is_drawn },
     { "each meter reference differs from the unlit one", each_meter_reference_differs_from_the_unlit_one },

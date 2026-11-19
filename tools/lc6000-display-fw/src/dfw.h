@@ -73,6 +73,14 @@ typedef struct dfw_unit {
     uint16_t tempo;
     /// Whether a text message has come since the deck last changed: until one has, no words are drawn (#458).
     uint8_t text_heard;
+    /// The deck's track time (#460): elapsed and the track's length in whole seconds, 0-16383; a length of 0 is
+    /// unknown. Whether a time message has come since the deck last changed: until one has, none is drawn.
+    uint16_t elapsed, track_length;
+    uint8_t time_heard;
+    /// When the time last changed, on the tick's clock: the last minute's warning blinks from it.
+    uint32_t time_at;
+    /// How the time looks now (dfw_time_look), worked out at each tick so a flip of the blink draws a frame.
+    uint8_t time_look;
     /// How far the deck is from the master clock's beat (#462), in 1/16384 beats, -8191 to 8191; negative is behind,
     /// 0 in phase, DFW_PHASE_UNKNOWN not measured.
     int16_t phase;
@@ -86,6 +94,9 @@ typedef struct dfw_unit {
     dfw_pixel *frame;
 } dfw_unit;
 
+/// The track time's look (#460, JogTrackTime): no warning; the last minute's warning in its red half (the first
+/// 500 ms of each second, from when the time last changed); its normal half.
+enum { DFW_TIME_NORMAL = 0, DFW_TIME_RED = 1, DFW_TIME_WARNING_NORMAL = 2 };
 /// dfw_unit's layout as one word (#516): block B, the drawing, reads A's dfw_unit, so B's header carries the layout
 /// it was built for and block A calls B only when it matches A's own. Each field's offset has its own odd multiplier,
 /// so a moved, resized or swapped field changes the word. A new field in dfw_unit or dfw_deck_state goes in here too.
@@ -99,6 +110,9 @@ typedef struct dfw_unit {
     79u * offsetof(dfw_unit, needle_heard) + 83u * offsetof(dfw_unit, meter_heard) + \
     89u * offsetof(dfw_unit, text) + 97u * offsetof(dfw_unit, text_length) + 101u * offsetof(dfw_unit, tempo) + \
     103u * offsetof(dfw_unit, text_heard) + 163u * offsetof(dfw_unit, phase) + 107u * offsetof(dfw_unit, heard) + \
+    167u * offsetof(dfw_unit, elapsed) + 173u * offsetof(dfw_unit, track_length) + \
+    179u * offsetof(dfw_unit, time_heard) + 181u * offsetof(dfw_unit, time_at) + \
+    191u * offsetof(dfw_unit, time_look) + \
     109u * offsetof(dfw_unit, now_ms) + 113u * offsetof(dfw_unit, silent) + 127u * offsetof(dfw_unit, dirty) + \
     131u * offsetof(dfw_unit, frame) + 137u * offsetof(dfw_deck_state, number) + \
     139u * offsetof(dfw_deck_state, r) + 149u * offsetof(dfw_deck_state, g) + \

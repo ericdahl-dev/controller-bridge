@@ -313,10 +313,105 @@ static void draw_meter(dfw_pixel *frame, uint8_t level, uint8_t peak) {
     meter(frame, sectors, count);
 }
 
+/// The progress ring (#460), Swift's drawTime: the band 96-98, just outside the beat ring, a dark track all round and
+/// the fill clockwise from 12 o'clock.
+#define PROGRESS_INNER 96.0f
+#define PROGRESS_OUTER 98.0f
+/// The time's text, the renderer's text white.
+#define TIME_TEXT 0xEDEDEAu
+/// The last minute's warning (#460): its red, the red's hue, and how near a deck's hue counts as red.
+#define WARNING_RED 0xFF3B30u
+#define WARNING_HUE 3.5f
+#define NEAR_RED_DEGREES 25.0f
+
+/// sin and cos of `turns` (0-1) of a turn clockwise from 12 o'clock, folded to the nearest quarter turn as the needle's.
+static void turn_sin_cos(float turns, float *sin_out, float *cos_out) {
+    int quarter = (int)(turns * 4.0f + 0.5f);
+    float s, c;
+    series_sin_cos((turns - (float)quarter / 4.0f) * 6.2831853f, &s, &c);
+    switch (quarter & 3) {
+    case 0: *sin_out = s; *cos_out = c; break;
+    case 1: *sin_out = c; *cos_out = -s; break;
+    case 2: *sin_out = -s; *cos_out = -c; break;
+    default: *sin_out = -c; *cos_out = s; break;
+    }
+}
+
+/// The track, then the fill to `turns` of the way round in `fill`. The fill is the part of the band on the clockwise
+/// side of the 12 o'clock ray and before the end's ray: up to half a turn both half-planes (their covers' sum less one),
+/// past it either (their sum), as the meter's sectors. Swift draws no fill at 0 and the whole band, with no edge, at 1.
+static void progress(dfw_pixel *frame, float turns, dfw_pixel fill) {
+    float sn, cs;
+    turn_sin_cos(turns, &sn, &cs);
+    // Into the fill across the end's ray: counterclockwise of it.
+    const float end_nx = -cs, end_ny = -sn;
+    for (int y = 0; y < DFW_SIZE; y++) {
+        float dy = (float)y + 0.5f - CENTER;
+        for (int x = 0; x < DFW_SIZE; x++) {
+            float dx = (float)x + 0.5f - CENTER;
+            float d2 = dx * dx + dy * dy;
+            if (d2 > (PROGRESS_OUTER + 1.0f) * (PROGRESS_OUTER + 1.0f) ||
+                d2 < (PROGRESS_INNER - 1.0f) * (PROGRESS_INNER - 1.0f)) continue;
+            float r = root(d2), nx = dx / r, ny = dy / r;
+            float band = edge_cover(PROGRESS_OUTER - r, nx, ny) + edge_cover(r - PROGRESS_INNER, nx, ny) - 1.0f;
+            if (band <= 0.0f) continue;
+            dfw_pixel *p = &frame[y * DFW_SIZE + x];
+            *p = blend(*p, METER_TRACK, band);
+            if (turns <= 0.0f) continue;
+            float cover = 1.0f;
+            if (turns < 1.0f) {
+                float start = edge_cover(dx, 1.0f, 0.0f), end = edge_cover(dx * end_nx + dy * end_ny, end_nx, end_ny);
+                cover = clamp01(turns <= 0.5f ? start + end - 1.0f : start + end);
+            }
+            *p = blend(*p, fill, band * cover);
+        }
+    }
+}
+
+/// Whether a deck color is near the warning's red, so its normal half fills white instead (JogTrackTime's
+/// warningNormalFill): the channels' spread at least half the brightest, and the hue within 25° of the red's 3.5°.
+static int near_red(const dfw_deck_state *deck) {
+    float r = deck->r, g = deck->g, b = deck->b;
+    float high = r > g ? (r > b ? r : b) : (g > b ? g : b), low = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    float spread = high - low;
+    if (high <= 0.0f || spread < high / 2.0f) return 0;
+    float hue = high == r ? 60.0f * (g - b) / spread : high == g ? 60.0f * (2.0f + (b - r) / spread)
+                                                                 : 60.0f * (4.0f + (r - g) / spread);
+    if (hue < 0.0f) hue += 360.0f;
+    float distance = hue > WARNING_HUE ? hue - WARNING_HUE : WARNING_HUE - hue;
+    if (360.0f - distance < distance) distance = 360.0f - distance;
+    return distance <= NEAR_RED_DEGREES;
+}
+
+/// The track time: nothing until a time message has come, or while the length is unknown (0).
+static void draw_time(dfw_pixel *frame, const dfw_unit *unit) {
+    if (!unit->time_heard || unit->track_length == 0) return;
+    uint16_t elapsed = unit->elapsed < unit->track_length ? unit->elapsed : unit->track_length;
+    dfw_pixel deck = (dfw_pixel)unit->deck.r << 16 | (dfw_pixel)unit->deck.g << 8 | unit->deck.b;
+    dfw_pixel fill = deck;
+    if (unit->time_look == DFW_TIME_RED) fill = WARNING_RED;
+    else if (unit->time_look == DFW_TIME_WARNING_NORMAL && near_red(&unit->deck)) fill = TIME_TEXT;
+    progress(frame, (float)elapsed / (float)unit->track_length, fill);
+    // What's left as "-m:ss", minutes not wrapped to hours: up to "-273:03" from the wire's 16383 s.
+    unsigned left = (unsigned)(unit->track_length - elapsed), minutes = left / 60u, seconds = left % 60u;
+    char text[8], *p = text;
+    *p++ = '-';
+    if (minutes >= 100u) *p++ = (char)('0' + minutes / 100u);
+    if (minutes >= 10u) *p++ = (char)('0' + minutes / 10u % 10u);
+    *p++ = (char)('0' + minutes % 10u);
+    *p++ = ':';
+    *p++ = (char)('0' + seconds / 10u);
+    *p++ = (char)('0' + seconds % 10u);
+    *p = 0;
+    dfw_draw_time_text(frame, text, unit->time_look == DFW_TIME_RED);
+}
+
 void dfw_draw_live(dfw_pixel *frame, const dfw_unit *unit) {
     if (dfw_stale(unit)) return;
     if (unit->beat >= 1 && unit->beat <= 4) lit_section(frame, unit->beat);
     if (unit->meter_heard) draw_meter(frame, unit->level, unit->peak);
+    // Under the marker, so the needle crosses the ring on top (#460).
+    draw_time(frame, unit);
     // Over everything, as Swift draws it last.
     if (unit->needle_heard) marker(frame, unit->needle);
 }
