@@ -7,7 +7,9 @@ import Testing
 struct DrawnDisplayPhaseFlowTests {
     typealias Handshake = DrawnDisplayHandshakeTests
 
-    static func phases(_ port: Handshake.Port) -> [[UInt8]] { Handshake.drawn(port).filter { $0[9] == 0x0B } }
+    static func phases(_ port: Handshake.Port) -> [[UInt8]] { phases(port.wd) }
+    static func phases(_ port: JogDisplayDriverTests.FakePort) -> [[UInt8]] { phases(port.wd) }
+    static func phases(_ wd: [[UInt8]]) -> [[UInt8]] { Handshake.drawn(wd).filter { $0[9] == 0x0B } }
     static func offset(_ beats: Float, deck: Int = 1) -> OSCMessage {
         OSCMessage("/Syndicate/Deck/\(deck)/PhaseOffset", [.float(beats)])
     }
@@ -102,5 +104,24 @@ struct DrawnDisplayPhaseFlowTests {
         rig.clock.now = 1
         rig.coordinator.tick()
         #expect(Self.phases(port).isEmpty)
+    }
+
+    @Test("A deck switch: the new deck's phase goes on the next tick, even one equal to the old deck's (the chip forgot it)")
+    func deckSwitch() throws {
+        let (rig, port) = try Handshake.drawnLayers()
+        for deck in 1...2 {
+            rig.coordinator.feedback(Self.playing(true, deck: deck))
+            rig.coordinator.feedback(Self.offset(0.01, deck: deck))
+        }
+        rig.clock.now = 1
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: JogDisplayRingHoldTests.lc6000.id)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: JogDisplayRingHoldTests.lc6000.id)
+        rig.clock.now = 1.01
+        rig.coordinator.tick()
+        let drawn = Handshake.drawn(port)
+        #expect(drawn.first?[9] == 0x03 && drawn.first?[10] == 2)
+        #expect(Self.phases(port) == [DrawnDisplay.Message.phase(164).bytes])
     }
 }
