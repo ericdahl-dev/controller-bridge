@@ -4,7 +4,7 @@ Usage: vectors_to_c.py messages.json > vectors.h. Fails on an empty file, or an 
 import json, sys
 
 KINDS = {"capability": 0, "capability_answer": 1, "begin": 2, "end": 3, "deck": 4, "state": 5, "beat": 6, "needle": 7, "text": 8,
-         "tempo": 9}
+         "tempo": 9, "meter": 10}
 
 
 def c_bytes(hex_text):
@@ -33,6 +33,7 @@ def main():
         rows.append(f'    {{ {json.dumps(m["name"], ensure_ascii=True)}, {KINDS[kind]}, {int(m.get("direction", "host") == "unit")}, '
                     f'{f.get("version", 0)}, {f.get("number", 0)}, {{ {color[0]}, {color[1]}, {color[2]} }}, '
                     f'{f.get("player", 0)}, {f.get("flags", 0)}, {f.get("beat", 0)}, {f.get("angle", 0)}, '
+                    f'{f.get("level", 0)}, {f.get("peak", 0)}, '
                     f'{f.get("field", 0)}, {len(codes)}, {text}, {f.get("tenths", 0)}, {n}, {body} }},')
     out += ["static const vector valid_vectors[] = {", *rows, "};", ""]
     rows = []

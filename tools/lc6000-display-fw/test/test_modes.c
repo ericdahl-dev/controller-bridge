@@ -90,6 +90,10 @@ void a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored(void);
 void begin_while_drawing_changes_nothing(void);
 void a_deck_clears_the_deck_flags_but_not_stale(void);
 void an_unchanged_heartbeat_presents_nothing(void);
+void the_first_meter_at_silence_presents(void);
+void a_changed_meter_presents(void);
+void the_same_meter_does_not_present_again(void);
+void end_forgets_the_meter(void);
 void an_unchanged_text_or_tempo_presents_nothing(void);
 void a_deck_change_clears_the_text_and_tempo(void);
 void a_new_decks_words_wait_for_its_text(void);
@@ -131,6 +135,10 @@ const test_case all_tests[] = {
     { "begin while drawing changes nothing", begin_while_drawing_changes_nothing },
     { "a deck clears the deck flags but not stale", a_deck_clears_the_deck_flags_but_not_stale },
     { "an unchanged heartbeat presents nothing", an_unchanged_heartbeat_presents_nothing },
+    { "the first meter at silence presents", the_first_meter_at_silence_presents },
+    { "a changed meter presents", a_changed_meter_presents },
+    { "the same meter does not present again", the_same_meter_does_not_present_again },
+    { "end forgets the meter", end_forgets_the_meter },
     { "an unchanged text or tempo presents nothing", an_unchanged_text_or_tempo_presents_nothing },
     { "a deck change clears the text and tempo", a_deck_change_clears_the_text_and_tempo },
     { "a new deck's words wait for its text", a_new_decks_words_wait_for_its_text },

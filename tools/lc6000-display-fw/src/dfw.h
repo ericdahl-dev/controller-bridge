@@ -58,8 +58,12 @@ typedef struct dfw_unit {
     /// The master clock's beat, 1-4, or 0 with none (#459); the deck's needle, 0-16383 for a turn from 12 o'clock.
     uint8_t beat;
     uint16_t needle;
+    /// The deck's mixer channel (#461): its level and the peak being held, 0-127.
+    uint8_t level, peak;
     /// Whether a needle message has come since begin: until one does, no marker is drawn.
     uint8_t needle_heard;
+    /// Whether a meter message has come since begin: until one does, no meter is drawn.
+    uint8_t meter_heard;
     /// The texts as Windows-1252 codes (0x81 the box), and the tempo in tenths of a BPM, 0 for none (#458).
     uint8_t text[DFW_TEXT_FIELDS][DFW_TEXT_MAX];
     uint8_t text_length[DFW_TEXT_FIELDS];
