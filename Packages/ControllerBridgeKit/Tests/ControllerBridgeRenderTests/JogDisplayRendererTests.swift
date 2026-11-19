@@ -135,4 +135,21 @@ struct JogDisplayRendererTests {
             #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0B0B0B, by: 4), "(\(x), \(y))")
         }
     }
+
+    /// Off phase the rule dims to 35% of the deck color over the ground: 0x0080FF dims to 0x073460.
+    static let dimBlue: UInt32 = 0x073460
+
+    @Test("Behind: a 4 px bar grows left from the center, 17 px at a hundredth of a beat; the rest of the rule dims; no tick")
+    func phaseBehind() {
+        let image = Self.phaseImage(-164)
+        for (x, y) in [(82, 126), (98, 129), (90, 127)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0080FF, by: 4), "bar (\(x), \(y))")
+        }
+        for (x, y) in [(81, 127), (50, 128), (99, 127), (147, 127)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), Self.dimBlue, by: 4), "dim (\(x), \(y))")
+        }
+        for (x, y) in [(90, 125), (90, 130), (98, 125), (99, 126)] {
+            #expect(Self.near(Self.pixel(image, x: x, y: y), 0x0B0B0B, by: 4), "ground (\(x), \(y))")
+        }
+    }
 }
