@@ -66,7 +66,7 @@ static void small_sin_cos(float a, float *s, float *c) {
 /// The four beat sections, clockwise from 12 o'clock, beat 1 a step brighter. Angles run from 12 o'clock clockwise,
 /// which on screen (y down) is the direction (sin a, −cos a), and clockwise from it is (cos a, sin a). Each section is
 /// under half a turn, so it is the band between the two radii cut by two half-planes through the center.
-static void ring(dfw_pixel *frame) {
+static void ring(dfw_pixel *frame, int all_dark) {
     float s, c;
     small_sin_cos(RING_GAP / ((RING_OUTER + RING_INNER) / 2.0f) / 2.0f, &s, &c);
     // Beat 1's edges, at half and π/2 − half, as normals pointing into the section.
@@ -88,7 +88,7 @@ static void ring(dfw_pixel *frame) {
                 float cover = band * edge_cover(px * start_nx + py * start_ny, start_nx, start_ny)
                     * edge_cover(px * end_nx + py * end_ny, end_nx, end_ny);
                 dfw_pixel *p = &frame[y * DFW_SIZE + x];
-                *p = blend(*p, beat == 0 ? DOWNBEAT_OFF : BEAT_OFF, cover);
+                *p = blend(*p, beat == 0 && !all_dark ? DOWNBEAT_OFF : BEAT_OFF, cover);
                 float t = px;
                 px = py;
                 py = -t;
@@ -241,8 +241,79 @@ static void header(dfw_pixel *frame, const dfw_deck_state *deck) {
     draw_line(frame, &badge_face, label, x + badge / 2.0f - text / 2.0f, HEADER_MIDDLE + 0.5f);
 }
 
-void dfw_draw(dfw_pixel *frame, const dfw_deck_state *deck) {
+/* Our logo, the waiting look (#464): the app icon's deck ring (design/icon/icon-1-deck-ring.svg, without its tile),
+ * from the SVG's own numbers in its 1024-unit space, centered at 0.24 scale as JogLogo draws it. A Kit test checks
+ * JogLogo's numbers against the SVG; the reference image checks these against JogLogo. */
+#define LOGO_SCALE 0.24f
+#define LOGO_MIDDLE 512.0f
+
+/// One of the logo's arcs: a band from radius 224 to 300 (262 ± 38) between two radial butt ends, swept clockwise
+/// from `from` to `to` (SVG points, under half a turn apart).
+static void logo_arc(dfw_pixel *frame, float fx, float fy, float tx, float ty, dfw_pixel color) {
+    const float inner = (262.0f - 38.0f) * LOGO_SCALE, outer = (262.0f + 38.0f) * LOGO_SCALE;
+    float ux = fx - LOGO_MIDDLE, uy = fy - LOGO_MIDDLE, vx = tx - LOGO_MIDDLE, vy = ty - LOGO_MIDDLE;
+    float ul = root(ux * ux + uy * uy), vl = root(vx * vx + vy * vy);
+    // Normals into the sweep: the start's direction turned a quarter clockwise (y down), the end's counterclockwise.
+    const float n0x = -uy / ul, n0y = ux / ul, n1x = vy / vl, n1y = -vx / vl;
+    for (int y = 0; y < DFW_SIZE; y++) {
+        float dy = (float)y + 0.5f - CENTER;
+        for (int x = 0; x < DFW_SIZE; x++) {
+            float dx = (float)x + 0.5f - CENTER;
+            float d2 = dx * dx + dy * dy;
+            if (d2 > (outer + 1.0f) * (outer + 1.0f) || d2 < (inner - 1.0f) * (inner - 1.0f)) continue;
+            float r = root(d2);
+            float nx = dx / r, ny = dy / r;
+            float band = edge_cover(outer - r, nx, ny) + edge_cover(r - inner, nx, ny) - 1.0f;
+            if (band <= 0.0f) continue;
+            float cover = band * edge_cover(dx * n0x + dy * n0y, n0x, n0y) * edge_cover(dx * n1x + dy * n1y, n1x, n1y);
+            dfw_pixel *p = &frame[y * DFW_SIZE + x];
+            *p = blend(*p, color, cover);
+        }
+    }
+}
+
+/// A capsule: every point within `radius` of the segment from (ax, ay) to (bx, by), anti-aliased.
+static void capsule(dfw_pixel *frame, float ax, float ay, float bx, float by, float radius, dfw_pixel color) {
+    float ex = bx - ax, ey = by - ay, length2 = ex * ex + ey * ey;
+    int left = floor_int((ax < bx ? ax : bx) - radius - 1.0f), right = floor_int((ax > bx ? ax : bx) + radius + 1.0f);
+    int top = floor_int((ay < by ? ay : by) - radius - 1.0f), bottom = floor_int((ay > by ? ay : by) + radius + 1.0f);
+    for (int y = top; y <= bottom; y++) {
+        if (y < 0 || y >= DFW_SIZE) continue;
+        for (int x = left; x <= right; x++) {
+            if (x < 0 || x >= DFW_SIZE) continue;
+            float px = (float)x + 0.5f - ax, py = (float)y + 0.5f - ay;
+            float t = clamp01((px * ex + py * ey) / length2);
+            float qx = px - t * ex, qy = py - t * ey, d = root(qx * qx + qy * qy);
+            float cover = d > 0.0f ? edge_cover(radius - d, qx / d, qy / d) : 1.0f;
+            dfw_pixel *p = &frame[y * DFW_SIZE + x];
+            *p = blend(*p, color, cover);
+        }
+    }
+}
+
+static void logo(dfw_pixel *frame) {
+    disc(frame, CENTER, CENTER, 206.0f * LOGO_SCALE, 0x1D1D1Eu);
+    logo_arc(frame, 543.9f, 252.0f, 772.0f, 480.1f, 0x6C7277u);
+    logo_arc(frame, 772.0f, 543.9f, 543.9f, 772.0f, 0xECCF65u);
+    logo_arc(frame, 480.1f, 772.0f, 252.0f, 543.9f, 0xC5754Eu);
+    logo_arc(frame, 252.0f, 480.1f, 480.1f, 252.0f, 0x62929Eu);
+    // The needle: the rectangle x 497-527, y 202-368 with 15-unit corners is a capsule from y 217 to 353 on the
+    // vertical through the middle, turned 40° clockwise about it (sin and cos of 40°, as constants: no libm).
+    const float sin40 = 0.64278761f, cos40 = 0.76604444f, k = LOGO_SCALE;
+    capsule(frame, CENTER + 295.0f * sin40 * k, CENTER - 295.0f * cos40 * k, CENTER + 159.0f * sin40 * k,
+            CENTER - 159.0f * cos40 * k, 15.0f * k, 0xD5D5D5u);
+    disc(frame, CENTER, CENTER, 74.0f * LOGO_SCALE, 0xD5D5D5u);
+    disc(frame, CENTER, CENTER, 26.0f * LOGO_SCALE, 0x141415u);
+}
+
+void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
     for (int i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = GROUND;
-    ring(frame);
-    header(frame, deck);
+    if (dfw_stale(unit)) {
+        // The waiting look (#464): nothing of the deck, the beat ring dark, our logo in the middle.
+        ring(frame, 1);
+        logo(frame);
+        return;
+    }
+    ring(frame, 0);
+    header(frame, &unit->deck);
 }

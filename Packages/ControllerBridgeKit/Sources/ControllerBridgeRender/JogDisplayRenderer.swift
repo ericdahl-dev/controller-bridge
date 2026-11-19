@@ -94,6 +94,12 @@ public enum JogDisplayRenderer {
     private static func draw(_ content: JogDisplayContent, litBeat: Int?, in context: CGContext) {
         context.setFillColor(background)
         context.fill(CGRect(x: 0, y: 0, width: 198, height: 198))
+        if content.stale {
+            // The waiting look (#464): nothing of the deck, the beat ring dark, our logo in the middle.
+            ring(litBeat: nil, allDark: true, in: context)
+            JogLogo.draw(in: context, center: CGPoint(x: center, y: center), scale: JogLogo.scale)
+            return
+        }
         ring(litBeat: litBeat, in: context)
         let deckColor = color(content.color)
         header(deck: content.deck, color: deckColor, badge: badge(content.playerType), in: context)
@@ -136,7 +142,7 @@ public enum JogDisplayRenderer {
     }
 
     /// The four beat sections, clockwise from 12 o'clock; beat 1 a step brighter when unlit.
-    private static func ring(litBeat: Int?, in context: CGContext) {
+    private static func ring(litBeat: Int?, allDark: Bool = false, in context: CGContext) {
         let half = (ringGap / ((ringOuter + ringInner) / 2)) / 2
         for beat in 0..<4 {
             let start = CGFloat(beat) * .pi / 2 + half, end = CGFloat(beat + 1) * .pi / 2 - half
@@ -148,7 +154,7 @@ public enum JogDisplayRenderer {
                         endAngle: start - .pi / 2, clockwise: true)
             path.closeSubpath()
             context.addPath(path)
-            context.setFillColor(litBeat == beat + 1 ? live : beat == 0 ? downbeatOff : beatOff)
+            context.setFillColor(litBeat == beat + 1 ? live : beat == 0 && !allDark ? downbeatOff : beatOff)
             context.fillPath()
         }
     }

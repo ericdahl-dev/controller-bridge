@@ -12,7 +12,7 @@ static int flags_after(const char *state) {
     feed(&unit, BEGIN_V1);
     feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 03 F7");   // loaded and playing
     feed(&unit, state);
-    dfw_tick(&unit);
+    dfw_tick(&unit, 0);
     return unit.flags;
 }
 
