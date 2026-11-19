@@ -313,6 +313,39 @@ class RefusalTests(DrawnPlanTests):
         self.refused("couldn't be read", writes=["upper"], failing_reads=("upper_back",))
 
 
+
+class DevicesCommandTests(unittest.TestCase):
+    """`drawn_plan.py devices LISTING`, for the stock wizard's look() (#567): the same judgment the drawn plan makes,
+    so the shell no longer counts devices itself."""
+
+    def judge(self, *devices):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "listing.txt")
+            with open(path, "w") as f:
+                f.write(listing(*devices))
+            import contextlib, io
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = drawn_plan.main(["devices", path])
+            return code, out.getvalue().rstrip("\n").split("\t")
+
+    def test_one_display_chip_gives_its_path(self):
+        self.assertEqual(self.judge(("2-1.2", DISPLAY_LAYOUT)), (0, ["one", "2-1.2"]))
+
+    def test_two_devices_or_none_stop(self):
+        self.assertEqual(self.judge()[1][0], "stop")
+        self.assertEqual(self.judge(("2-1.2", DISPLAY_LAYOUT), ("2-1.3", DISPLAY_LAYOUT))[1][0], "stop")
+
+    def test_the_top_panel_chip_stops(self):
+        code, (kind, why) = self.judge(("2-1.2", TOP_PANEL_LAYOUT))
+        self.assertEqual(kind, "stop")
+        self.assertIn("top panel chip", why)
+
+    def test_another_layout_asks(self):
+        code, fields = self.judge(("2-1.2", "@Internal Flash  /0x08000000/12*016Kg"))
+        self.assertEqual(fields[:2], ["ask", "2-1.2"])
+
+
 class FreshnessTests(DrawnPlanTests):
     """A plan file never lets stale facts authorize a write (#567): each write rests on its own read, made in this run
     after update mode was entered."""

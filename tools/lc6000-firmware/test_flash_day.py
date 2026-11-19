@@ -89,6 +89,13 @@ class WizardTests(unittest.TestCase):
         self.assertIn("refuses a unit that's running and current", way_back)
         self.assertIn("BACK + FWD + VINYL", way_back)
 
+    def test_look_asks_the_plan_about_the_devices_and_counts_nothing_itself(self):
+        # One judgment for both wizards (#567): exactly one device, and the display chip, not the top panel chip.
+        look = self.body("look")
+        self.assertIn('plan devices "$listing"', look)
+        self.assertNotIn("grep -c", look)
+        self.assertNotIn("0x08000000", look)
+
     def test_the_update_mode_message_needs_a_confirmation_first(self):
         send = self.stages.index("send --yes-enter-update-mode")
         ask = self.stages.index('confirm "Send the update-mode message to the display chip now?" || way_back')

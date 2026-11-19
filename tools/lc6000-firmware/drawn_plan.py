@@ -5,6 +5,7 @@ step out; the shell only does what it's told (dfu-util, the keyboard) and record
   python3 -I drawn_plan.py begin PLAN.json CURRENT.dfu UPPER.dfu OWNER.dfu WORK
   python3 -I drawn_plan.py next PLAN.json         one action, its fields separated by tabs
   python3 -I drawn_plan.py record PLAN.json KEY VALUE
+  python3 -I drawn_plan.py devices LISTING        the stock wizard's look: one PATH, ask PATH QUESTION, or stop WHY
 
 Actions:
   ask KEY QUESTION                 a y/N question; record y or n
@@ -228,24 +229,36 @@ def unreadable(plan, key):
                     f"written.")
 
 
+def judge_devices(listing):
+    """What dfu-util -l saw (#567): ("one", path) for exactly one device that is the display chip; ("ask", path,
+    question) for one device whose layout isn't the display chip's (the owner may go on); ("stop", why) for none, two,
+    or the top panel chip. Both wizards' look uses it."""
+    found = devices(listing)
+    if len(found) != 1:
+        return ("stop", f"{len(found)} update-mode devices found; exactly one, the display chip, is needed. Two "
+                        f"means the top panel chip is in update mode too.")
+    (dfu_path, names), = found.items()
+    if any(TOP_PANEL_LAYOUT in name for name in names):
+        return ("stop", "That's the top panel chip (256 KB), not the display chip. It's in update mode from "
+                        "BACK + FWD + VINYL: power the LC6000 off and on to leave it. Nothing was read or written.")
+    if not any(DISPLAY_LAYOUT in name for name in names):
+        return ("ask", dfu_path, "Its memory layout isn't the display chip's 1 MB one. Go on anyway?")
+    return ("one", dfu_path)
+
+
 def one_display_chip(plan, key):
     """(the DFU path, None), or (None, an action): exactly one device, and it's the display chip."""
     listing = fact(plan, key)
     if listing is None:
         return None, ("list", out(plan, f"dfu-{key}"), key)
-    found = devices(listing)
-    if len(found) != 1:
-        return None, ("stop", f"{len(found)} update-mode devices found; exactly one, the display chip, is needed. Two "
-                              f"means the top panel chip is in update mode too.")
-    (dfu_path, names), = found.items()
-    if any(TOP_PANEL_LAYOUT in name for name in names):
-        return None, ("stop", "That's the top panel chip (256 KB), not the display chip. It's in update mode from "
-                              "BACK + FWD + VINYL: power the LC6000 off and on to leave it. Nothing was read or written.")
-    if not any(DISPLAY_LAYOUT in name for name in names):
+    judged_devices = judge_devices(listing)
+    if judged_devices[0] == "stop":
+        return None, judged_devices
+    dfu_path = judged_devices[1]
+    if judged_devices[0] == "ask":
         go_on = fact(plan, f"{key}_layout_go_on")
         if go_on is None:
-            return None, ("ask", f"{key}_layout_go_on", "Its memory layout isn't the display chip's 1 MB one. Go on "
-                                                        "anyway?")
+            return None, ("ask", f"{key}_layout_go_on", judged_devices[2])
         if go_on != "y":
             return None, ("stop", "Its memory layout isn't the display chip's. Nothing was read or written.")
     return dfu_path, None
@@ -332,6 +345,8 @@ def main(argv=None):
     elif command == "next" and len(argv) == 2:
         # One line, fields separated by tabs; a field's own line breaks as \\n (the shell prints them with %b).
         print("\t".join(field.replace("\\", "\\\\").replace("\n", "\\n") for field in next_action(argv[1])))
+    elif command == "devices" and len(argv) == 2:
+        print("\t".join(judge_devices(argv[1])))
     elif command == "record" and len(argv) == 4:
         record(argv[1], argv[2], argv[3])
     else:

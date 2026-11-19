@@ -257,23 +257,20 @@ enter_update_mode() {
   printf '  %s✓%s a DFU device is there\n' "$GREEN" "$RESET"
 }
 
-# look lists the DFU devices, insists on exactly one, and remembers its path.
+# look lists the DFU devices and remembers the display chip's path: drawn_plan.py judges the list (#567), exactly one
+# device and the display chip (not the top panel chip), the same judgment as the drawn wizard's.
 look() {
-  local listing="$WORK/dfu-list-$STAMP-$1.txt" count
+  local listing="$WORK/dfu-list-$STAMP-$1.txt" kind="" path="" why=""
   dfu-util -l > "$listing" 2>&1 || true
   grep -i 'Found DFU' "$listing" | sed 's/^/    /' || true
-  count=$(dfu_paths | grep -c . || true)
-  if [[ "$count" != "1" ]]; then
-    warn "$count update-mode devices found; exactly one (the display chip) is needed."
-    note "Two means the top panel chip is in update mode too. Flashing the display image into it is the main hazard."
-    way_back
-  fi
-  DFU_PATH="$(dfu_paths)"
+  IFS=$'\t' read -r kind path why < <(plan devices "$listing") || true
+  case "$kind" in
+    one) ;;
+    ask) warn "$why"; confirm "Go on anyway?" || way_back ;;
+    *) [[ -n "$path" ]] && warn "$path" || warn "The device list could not be judged."; way_back ;;
+  esac
+  DFU_PATH="$path"
   printf '  %s✓%s one device, at USB path %s (saved to %s)\n' "$GREEN" "$RESET" "$DFU_PATH" "$listing"
-  if ! grep -q '0x08000000' "$listing"; then
-    warn "Its memory layout doesn't name internal flash at 0x08000000. That's not what the runbook expects."
-    confirm "Go on anyway?" || way_back
-  fi
 }
 
 # read_app FILE reads the app area back from the chip (read-only).
