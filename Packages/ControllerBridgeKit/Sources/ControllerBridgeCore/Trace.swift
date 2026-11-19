@@ -13,6 +13,33 @@ public enum TraceCategory: String, CaseIterable, Sendable {
     case quantize
     case subscriptions
     case error
+    case heartbeat
+}
+
+/// A trace line every `interval` from a timer of its own (#595), never the engine's: when the trace goes silent, beats
+/// that go on say the engine stalled; beats that stop too say the whole process did.
+public final class TraceHeartbeat: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "dev.ericdahl.ControllerBridge.heartbeat")
+    private let timer: DispatchSourceTimer
+    private var count = 0   // touched only on `queue`
+
+    public init(every interval: Double, sink: @escaping TraceSink) {
+        timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [unowned self] in
+            count += 1
+            sink(.heartbeat, "beat \(count)")
+        }
+        timer.resume()
+    }
+
+    /// No beat after this returns: a beat already running is waited out.
+    public func stop() {
+        timer.cancel()
+        queue.sync {}
+    }
+
+    deinit { timer.cancel() }
 }
 
 /// Where trace lines go: `(category, text)`. Nil (Release, tests that don't look) costs nothing.

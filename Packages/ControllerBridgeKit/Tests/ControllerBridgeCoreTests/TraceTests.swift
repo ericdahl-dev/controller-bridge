@@ -19,8 +19,23 @@ struct TraceTests {
     func categoryNames() {
         #expect(TraceCategory.allCases.map(\.rawValue) == [
             "midi-in", "midi-out", "osc-in", "osc-out", "jog-display", "coordinator", "capture", "quantize",
-            "subscriptions", "error",
+            "subscriptions", "error", "heartbeat",
         ])
+    }
+
+    @Test("The heartbeat (#595) keeps beating while the caller is stalled: it runs on no one's thread but its own")
+    func heartbeatWhileStalled() {
+        let beats = Beats()
+        let heartbeat = TraceHeartbeat(every: 0.02) { category, text in beats.add(category, text) }
+        Thread.sleep(forTimeInterval: 0.3)   // the engine, stalled in a call that doesn't return
+        heartbeat.stop()
+        let lines = beats.lines
+        #expect(lines.count >= 5)
+        #expect(lines.allSatisfy { $0.0 == .heartbeat })
+        #expect(lines.first?.1 == "beat 1")
+        let stopped = beats.lines.count
+        Thread.sleep(forTimeInterval: 0.1)
+        #expect(beats.lines.count == stopped, "no beat after stop")
     }
 
     @Test("Streaming OSC (Position, BarRamp, Meter, …) at most 5 a second per address; the next kept one counts what was skipped")
@@ -173,4 +188,12 @@ struct TraceJogDisplayTests {
         rig.driver.marker(4096)
         #expect(lines.list == ["WD out E0 00 20"])
     }
+}
+
+/// What a heartbeat sent, from its own thread.
+private final class Beats: @unchecked Sendable {
+    private let lock = NSLock()
+    private var kept: [(TraceCategory, String)] = []
+    func add(_ category: TraceCategory, _ text: String) { lock.withLock { kept.append((category, text)) } }
+    var lines: [(TraceCategory, String)] { lock.withLock { kept } }
 }
