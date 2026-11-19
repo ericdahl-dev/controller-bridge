@@ -27,7 +27,7 @@ class FakeUnit:
     """The display chip in update mode, and the owner at the keyboard: runs each action the plan asks for."""
 
     def __init__(self, folder, app, upper=None, options=OPTIONS_OK, devices=(("2-1.2", DISPLAY_LAYOUT),),
-                 answers=None, words=None, cut_upper_write_at=None):
+                 answers=None, words=None, cut_upper_write_at=None, cut_reports_ok=False):
         self.folder = folder
         self.app = bytearray(app)
         self.upper = bytearray(upper if upper is not None else b"\xff" * UPPER_SIZE)
@@ -36,6 +36,7 @@ class FakeUnit:
         self.answers = {"both_true": "y", "all_true": "y", "probe": "y", "stock_look": "y", **(answers or {})}
         self.words = words or {}
         self.cut_upper_write_at = cut_upper_write_at
+        self.cut_reports_ok = cut_reports_ok
         self.log = []
         self.writes = []
 
@@ -81,7 +82,8 @@ class FakeUnit:
                 self.upper[:len(element)] = element
             else:
                 self.app[:len(element)] = element
-            record(action[4], "0" if self.cut_upper_write_at is None or area != "upper" else "1")
+            failed = area == "upper" and self.cut_upper_write_at is not None and not self.cut_reports_ok
+            record(action[4], "1" if failed else "0")
         elif kind == "power-cycle":
             record("power_cycle", "ok")
         elif kind == "skip":
@@ -168,6 +170,37 @@ class RewriteTests(DrawnPlanTests):
         self.assertEqual(unit.writes, [])
         self.assertIn("skip upper_step", self.kinds(unit))
         self.assertIn("skip app_step", self.kinds(unit))
+
+
+
+class CutOffTests(DrawnPlanTests):
+    """A write of B cut off part way (#567): the run stops before the owner's image, and a new run rewrites B."""
+
+    def cut_run(self, reports_ok):
+        unit = FakeUnit(self.dir.name, self.current_element, cut_upper_write_at=20, cut_reports_ok=reports_ok)   # B is 37 bytes: part of it
+        end = unit.run(self.plan())
+        self.assertEqual(end[0], "stop")
+        self.assertEqual(unit.writes, ["upper"], "the owner's image is never written after a bad B")
+        return unit, end
+
+    def test_dfu_util_reporting_the_error_stops_with_the_way_back(self):
+        _, end = self.cut_run(reports_ok=False)
+        self.assertIn("dfu-util reported an error writing block B", end[1])
+
+    def test_a_cut_write_dfu_util_called_good_is_caught_by_the_read_back(self):
+        unit, end = self.cut_run(reports_ok=True)
+        self.assertIn("isn't exactly block B after the write", end[1])
+        self.assertEqual(self.kinds(unit)[-2:], ["read upper", "stop"])
+
+    def test_a_new_run_sees_part_of_b_and_rewrites_it(self):
+        unit, _ = self.cut_run(reports_ok=False)
+        again = FakeUnit(self.dir.name, self.current_element, upper=bytes(unit.upper))
+        self.assertEqual(again.run(self.plan()), ("done",))
+        self.assertEqual([(a[1], a[2]) for a in again.log if a[0] == "type"],
+                         [("word_upper", "REWRITE"), ("word_app", "FLASH")])
+        block = good_block()
+        self.assertEqual(bytes(again.upper[:len(block)]), block)
+        self.assertEqual(bytes(again.app), self.owner_element)
 
 
 class FreshnessTests(DrawnPlanTests):
