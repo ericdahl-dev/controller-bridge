@@ -3,11 +3,14 @@
 # inert, for when the drawing code doesn't fit.
 ARM_BUILD ?= $(BUILD)/arm
 ARM_DRAW ?= 1
+# 1 only once the owner's read-only read shows the upper flash exists and is erased (#501, the firmware README's
+# "Read-only checks"). Until then block A never reads 0x08080000, so the capability ask gets no answer.
+ARM_UPPER_PROVEN ?= 0
 ARM_PREFIX ?= arm-none-eabi-
 ARM_CPU := -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
 ARM_CFLAGS := -std=c99 -Wall -Wextra -Werror -pedantic -Os $(ARM_CPU) -ffreestanding -fno-builtin -fno-common \
 	-fno-pic -fno-stack-protector -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections \
-	-fstack-usage -DHOOK_DRAWING=$(if $(filter 0,$(ARM_DRAW)),0,1) \
+	-fstack-usage -DHOOK_DRAWING=$(if $(filter 0,$(ARM_DRAW)),0,1) -DHOOK_UPPER_PROVEN=$(ARM_UPPER_PROVEN) \
 	-DHOOK_STUB_DRAWING=$(if $(filter stub,$(ARM_DRAW)),1,0)
 # ARM_DRAW=1: hook, protocol and drawing. 0: the hook path alone, inert. stub (test builds only): hook and protocol
 # with an empty drawing, so the block tests run while the real drawing doesn't fit the padding (#501).

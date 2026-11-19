@@ -25,6 +25,7 @@ UPTIME, RX_COUNT, RX, WITNESS = 0x20001BA0, 0x2000189A, 0x20001DE0, 0xE000E400
 LAYER2_SURFACE_PIXELS = 0x20001DC0
 FRAME_AT, LAYER_AT = 0xD0100000, 0xD0180000
 RETURN = 0x08000100  # where a shim returns to: the test stops there
+UPPER, UPPER_SIZE = 0x08080000, 0x80000  # block B's home (#501): sectors 8-11
 
 
 def block():
@@ -143,15 +144,24 @@ class SizeTests(unittest.TestCase):
 class Chip:
     """A synthetic display chip: flash with our block in the padding and stubs where stock's functions are."""
 
-    def __init__(self, marker=True):
+    def __init__(self, marker=True, data=None, upper=None):
         self.uc = uc = unicorn.Uc(unicorn.UC_ARCH_ARM, unicorn.UC_MODE_THUMB | unicorn.UC_MODE_MCLASS)
         for base, size in ((0x08000000, 0x100000), (0x10000000, 0x10000), (0x20000000, 0x30000),
                            (0x40016000, 0x1000), (0xD0000000, 0x200000), (0xE000E000, 0x1000)):
             uc.mem_map(base, size)
-        data = bytearray(block())
+        data = bytearray(data if data is not None else block())
         if not marker:
             data[-4:] = b"\xff\xff\xff\xff"
         uc.mem_write(PAD_START, bytes(data))
+        # The upper flash, 0x08080000-0x080FFFFF: erased, unless a test puts a block B there.
+        uc.mem_write(UPPER, b"\xff" * UPPER_SIZE)
+        if upper is not None:
+            uc.mem_write(UPPER, upper)
+        self.upper_reads = 0
+
+        def on_upper_read(uc, access, address, size, value, _):
+            self.upper_reads += 1
+        uc.hook_add(unicorn.UC_HOOK_MEM_READ, on_upper_read, begin=UPPER, end=UPPER + UPPER_SIZE - 1)
         bx_lr = b"\x70\x47"
         uc.mem_write(STOCK_RENDER, b"\x55\x20" + bx_lr)  # movs r0, #0x55 ; bx lr
         uc.mem_write(STOCK_MALLOC, b"\x00\x48" + bx_lr + struct.pack("<I", FRAME_AT))  # ldr r0, =FRAME_AT ; bx lr
@@ -246,6 +256,41 @@ class RenderEntryTests(unittest.TestCase):
         self.assertEqual(chip.word(STATE_AT), 0xA5A5A5A5)
         self.assertEqual(chip.calls["malloc"], 0)
         self.assertEqual(chip.sent, [])
+
+
+def good_upper():
+    """A literal block B (the C header tests' own): CRC 0x22B5DF72 is zlib's, worked out apart. Its entry is never
+    called by a capability ask."""
+    return struct.pack("<IIIII", 0x42574644, 1, 29, 0x22B5DF72, 0x08080015) + b"123456789"
+
+
+class UpperSwitchTests(unittest.TestCase):
+    """Block A reads B only when built with the "upper flash proven" switch (#501)."""
+
+    def ask(self, chip):
+        message = chip.receive(CAPABILITY)
+        chip.call(dfupatch.HOOK_COMMAND_ENTRY, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8], r8=0)
+        chip.call(dfupatch.HOOK_RENDER_ENTRY)
+
+    def test_without_the_switch_block_a_never_reads_the_upper_flash(self):
+        chip = Chip(upper=good_upper())
+        for _ in range(3):
+            chip.call(dfupatch.HOOK_RENDER_ENTRY)
+        self.ask(chip)
+        self.assertEqual(chip.upper_reads, 0)
+
+    def test_with_the_switch_only_a_good_block_b_gets_the_ask_answered(self):
+        with tempfile.TemporaryDirectory() as out:
+            subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", "ARM_UPPER_PROVEN=1"], check=True,
+                           capture_output=True)
+            with open(os.path.join(out, "block.bin"), "rb") as f:
+                proven = f.read()
+        answer = bytes.fromhex("F000020B01102000020001F7")
+        for upper, sent in ((None, []), (good_upper(), [answer])):
+            with self.subTest(upper=upper is not None):
+                chip = Chip(data=proven, upper=upper)
+                self.ask(chip)
+                self.assertEqual(chip.sent, sent)
 
 
 if __name__ == "__main__":
