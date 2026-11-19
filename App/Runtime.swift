@@ -113,8 +113,9 @@ final class Ticker: Sendable {
 
     private nonisolated static func makeTimer(_ producer: EventPipe.Producer) -> any DispatchSourceTimer {
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "dev.ericdahl.ControllerBridge.tick"))
-        // Leeway lets the system batch wakeups.
-        timer.schedule(deadline: .now(), repeating: .milliseconds(10), leeway: .milliseconds(5))
+        // A tight leeway (#582): up to 5 ms of it made the needle's steps uneven (they go every other tick, 20 ms). 1 ms
+        // still lets the system batch wakeups a little.
+        timer.schedule(deadline: .now(), repeating: .milliseconds(10), leeway: .milliseconds(1))
         timer.setEventHandler { producer.tick() }
         return timer
     }
