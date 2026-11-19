@@ -94,4 +94,38 @@ struct DrawnDisplayLiveTests {
         step("Playing", 1)
         #expect(Self.ops(port, 0x07).map { $0[10] } == [0x03, 0x01, 0x05, 0x01, 0x03])
     }
+
+    @Test("Drawing, no play light (note 1) goes out; neither does a pitch bend")
+    func noStockMessagesWhileDrawing() throws {
+        let (rig, port) = try Self.playing()
+        for step in 1...60 {
+            rig.clock.now = Double(step) * 0.01
+            rig.coordinator.tick()
+        }
+        #expect(!port.wd.contains { $0.first == 0x90 && $0.count > 1 && $0[1] == 0x01 })
+        #expect(!port.wd.contains { $0.first == 0xE0 })
+    }
+
+    @Test("Hand-back: drawing, a deck change, then Firmware set to Denon: the current needle as pitch bend, end, then deck 2's images go up")
+    func handBack() throws {
+        let (rig, port) = try Handshake.drawnLayers()
+        let unit = JogDisplayRingHoldTests.lc6000.id
+        for (path, value) in [("Playing", OSCArgument.int(1)), ("BPM", .float(120)), ("BarRamp", .float(0))] {
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/" + path, [value]))
+        }
+        rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: unit)
+        rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: unit)
+        rig.clock.now = 0.25
+        rig.coordinator.tick()
+        let needle = try #require(Handshake.drawn(port).last { $0[9] == 0x09 }).suffix(3).prefix(2)
+        let angle = Int(needle.first!) << 7 | Int(needle.last!)
+        port.wd.removeAll()
+        rig.coordinator.setDisplayFirmware(.denon)
+        let bend = try #require(port.wd.firstIndex { $0.first == 0xE0 })
+        let end = try #require(port.wd.firstIndex(of: DrawnDisplay.Message.end(version: 1).bytes))
+        let upload = try #require(port.wd.firstIndex { $0.count > 6 && $0[0] == 0xF0 && $0[6] == 0x0C })
+        #expect(bend < end && end < upload)
+        #expect(port.wd[bend] == [0xE0, UInt8(angle & 0x7F), UInt8(angle >> 7)])
+        #expect(JogDisplaySlotCacheTests.uploadSlots(port).first.map { (5...8).contains($0) } == true)
+    }
 }

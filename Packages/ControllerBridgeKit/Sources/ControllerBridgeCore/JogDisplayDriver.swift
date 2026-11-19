@@ -261,7 +261,7 @@ public final class JogDisplayDriver {
     public func disconnect() {
         guard connected else { return }
         // Drawn mode ends first, so the unit's own screen comes back (#456).
-        if case .drawn(let version) = mode { sendWD(DrawnDisplay.Message.end(version: version).bytes) }
+        if case .drawn(let version) = mode { endDrawing(version) }
         mode = .images
         connected = false
         upload = nil
@@ -358,7 +358,8 @@ public final class JogDisplayDriver {
     public func playLight(_ on: Bool) {
         guard on != lastPlayLight else { return }
         lastPlayLight = on
-        if connected { sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
+        // Drawing, stock's play light does nothing (#459, agent2's #466 reading): it isn't sent.
+        if connected, !drawing { sendWD([0x90, 0x01, on ? 0x7F : 0x00]) }
         onEvent?(.playLight(on))
     }
 
@@ -455,7 +456,7 @@ public final class JogDisplayDriver {
     /// in front goes up as images.
     private func handshakeAgain() {
         if case .drawn(let version) = mode {
-            sendWD(DrawnDisplay.Message.end(version: version).bytes)
+            endDrawing(version)
             if wanted == nil { wanted = current }
             current = nil
         }
@@ -507,6 +508,16 @@ public final class JogDisplayDriver {
         sendWD(state)
         sendLive()
         lastFullState = clock.now
+    }
+
+    private var drawing: Bool { if case .drawn = mode { true } else { false } }
+
+    /// The hand-back (#459): stock's needle is stale after drawing, and it redraws only on a change, so the current
+    /// one goes as pitch bend just before end; the play light is sent again on the next tick.
+    private func endDrawing(_ version: Int) {
+        if let lastMarker { sendWD([0xE0, UInt8(lastMarker & 0x7F), UInt8(lastMarker >> 7 & 0x7F)]) }
+        sendWD(DrawnDisplay.Message.end(version: version).bytes)
+        lastPlayLight = nil
     }
 
     /// The deck in front's play state for drawn mode (#459): loaded, playing, a quantized start waiting.
