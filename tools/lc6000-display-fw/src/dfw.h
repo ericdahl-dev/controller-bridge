@@ -80,6 +80,24 @@ typedef struct dfw_unit {
     dfw_pixel *frame;
 } dfw_unit;
 
+/// dfw_unit's layout as one word (#516): block B, the drawing, reads A's dfw_unit, so B's header carries the layout
+/// it was built for and block A calls B only when it matches A's own. Each field's offset has its own odd multiplier,
+/// so a moved, resized or swapped field changes the word. A new field in dfw_unit or dfw_deck_state goes in here too.
+#define DFW_LAYOUT ((uint32_t)( \
+    1u * sizeof(dfw_unit) + 3u * sizeof(dfw_deck_state) + 5u * sizeof(dfw_slot) + 7u * sizeof(dfw_port) + \
+    11u * sizeof(dfw_pixel) + 13u * DFW_SIZE + 17u * DFW_TEXT_MAX + 19u * DFW_TEXT_FIELDS + 23u * DFW_INBOX + \
+    29u * offsetof(dfw_unit, port) + 31u * offsetof(dfw_unit, drawing) + 37u * offsetof(dfw_unit, head) + \
+    41u * offsetof(dfw_unit, tail) + 43u * offsetof(dfw_unit, inbox) + 47u * offsetof(dfw_unit, drawn) + \
+    53u * offsetof(dfw_unit, deck) + 59u * offsetof(dfw_unit, flags) + 61u * offsetof(dfw_unit, beat) + \
+    67u * offsetof(dfw_unit, needle) + 71u * offsetof(dfw_unit, level) + 73u * offsetof(dfw_unit, peak) + \
+    79u * offsetof(dfw_unit, needle_heard) + 83u * offsetof(dfw_unit, meter_heard) + \
+    89u * offsetof(dfw_unit, text) + 97u * offsetof(dfw_unit, text_length) + 101u * offsetof(dfw_unit, tempo) + \
+    103u * offsetof(dfw_unit, text_heard) + 107u * offsetof(dfw_unit, heard) + \
+    109u * offsetof(dfw_unit, now_ms) + 113u * offsetof(dfw_unit, silent) + 127u * offsetof(dfw_unit, dirty) + \
+    131u * offsetof(dfw_unit, frame) + 137u * offsetof(dfw_deck_state, number) + \
+    139u * offsetof(dfw_deck_state, r) + 149u * offsetof(dfw_deck_state, g) + \
+    151u * offsetof(dfw_deck_state, b) + 157u * offsetof(dfw_deck_state, player)))
+
 /// Starts the unit. `frame` may be NULL until the hook has one (see dfw_set_frame); `drawing` is NULL when there is
 /// none to call.
 void dfw_init(dfw_unit *unit, const dfw_port *port, dfw_pixel *frame, const dfw_drawing *drawing);

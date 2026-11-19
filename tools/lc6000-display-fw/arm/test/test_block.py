@@ -266,10 +266,20 @@ class RenderEntryTests(unittest.TestCase):
         self.assertEqual(chip.sent, [])
 
 
+def built_layout():
+    """The layout word (#516) the built B carries: the chip's DFW_LAYOUT, which the Mac can't work out."""
+    return struct.unpack_from("<I", upper_block(), 16)[0]
+
+
+def sealed_upper(layout, entry, body):
+    """A block B with its header's length and CRC (zlib's, from +16) worked out here."""
+    rest = struct.pack("<II", layout, entry) + body
+    return struct.pack("<IIII", 0x42574644, 2, 16 + len(rest), zlib.crc32(rest)) + rest
+
+
 def good_upper():
-    """A literal block B (the C header tests' own): CRC 0x22B5DF72 is zlib's, worked out apart. Its entry is never
-    called by a capability ask."""
-    return struct.pack("<IIIII", 0x42574644, 1, 29, 0x22B5DF72, 0x08080015) + b"123456789"
+    """A small block B for the chip's layout. Its entry is never called by a capability ask."""
+    return sealed_upper(built_layout(), 0x08080019, b"123456789")
 
 
 def proven_block():
@@ -282,8 +292,7 @@ def proven_block():
 
 def full_upper():
     """A good B filling all 512 KB, so the check is as long as it can ever be."""
-    body = struct.pack("<I", 0x08080015) + bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 20))
-    return struct.pack("<IIII", 0x42574644, 1, UPPER_SIZE, zlib.crc32(body)) + body
+    return sealed_upper(built_layout(), 0x08080019, bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 24)))
 
 
 class UpperSwitchTests(unittest.TestCase):
@@ -354,9 +363,9 @@ class UpperBlockTests(unittest.TestCase):
 
     def test_b_starts_with_a_header_block_a_will_accept(self):
         data = upper_block()
-        marker, version, length, crc, draw = struct.unpack_from("<IIIII", data)
+        marker, version, length, crc, layout, draw = struct.unpack_from("<IIIIII", data)
         self.assertEqual(marker, 0x42574644)
-        self.assertEqual(version, 1)
+        self.assertEqual(version, 2)
         self.assertEqual(length, len(data))
         self.assertLessEqual(length, UPPER_SIZE)
         self.assertEqual(crc, zlib.crc32(data[16:]))
@@ -366,7 +375,7 @@ class UpperBlockTests(unittest.TestCase):
                                                               if line.count(" ") == 2)}
         self.assertEqual(draw & ~1, names["dfw_draw"])  # nm prints a Thumb function's address without bit 0
         self.assertEqual(draw & 1, 1, "Thumb")
-        self.assertTrue(UPPER + 20 <= draw < UPPER + length)
+        self.assertTrue(UPPER + 24 <= draw < UPPER + length)
 
     def test_block_a_draws_through_a_good_b_and_stays_silent_for_a_corrupted_one(self):
         proven = proven_block()
