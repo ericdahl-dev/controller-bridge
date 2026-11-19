@@ -115,6 +115,19 @@ struct RingColorMessageTests {
         #expect(try Self.colors(rig).last == lit)
     }
 
+    @Test("The way back (#530): with the table the ring takes its vivid note-on again; back to exact, its color message goes out again")
+    func wayBack() throws {
+        let rig = try Self.exact(deck: 2)
+        Self.palette(rig, slot: 3, 255, 0, 0)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(1)]))
+        let output = try Self.output(rig)
+        rig.coordinator.apply(.setColorMessages(false))
+        #expect(rig.leds[40] == 48)   // red on rgb222, as before #530
+        output.colors.removeAll()
+        rig.coordinator.apply(.setColorMessages(true))
+        #expect(try Self.colors(rig) == [[127, 0, 0]])
+    }
+
     @Test("With no track the ring is off, as a color message of 0, 0, 0")
     func noTrack() throws {
         let rig = try Self.exact(deck: 2)

@@ -45,7 +45,8 @@ extension Bridge {
     /// Settings (#530): the color message on or off; the ring and pads repaint.
     func setColorMessages(_ on: Bool) {
         colorMessages = on
-        refreshLEDs()
+        // From scratch: on the unit, a color message and a note-on each replace what the other showed.
+        repaintLEDs()
     }
 
     /// Vivid or exact (#151): the ring and pads repaint.
