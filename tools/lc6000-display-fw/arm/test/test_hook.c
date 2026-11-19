@@ -365,6 +365,12 @@ void a_block_for_another_version_is_refused(void) {
     CHECK(upper_check(upper) == 0);
 }
 
+void a_block_whose_CRC_doesnt_match_is_refused(void) {
+    good_upper();
+    upper[24] ^= 1;
+    CHECK(upper_check(upper) == 0);
+}
+
 const test_case all_tests[] = {
     { "end hands the screen back once", end_hands_the_screen_back_once },
     { "nothing is hidden that was never shown", nothing_is_hidden_that_was_never_shown },
@@ -390,6 +396,7 @@ const test_case all_tests[] = {
     { "a good upper block gives its draw entry", a_good_upper_block_gives_its_draw_entry },
     { "erased upper flash has no block", erased_upper_flash_has_no_block },
     { "a block for another version is refused", a_block_for_another_version_is_refused },
+    { "a block whose CRC doesn't match is refused", a_block_whose_CRC_doesnt_match_is_refused },
     { 0, 0 },
 };
 
