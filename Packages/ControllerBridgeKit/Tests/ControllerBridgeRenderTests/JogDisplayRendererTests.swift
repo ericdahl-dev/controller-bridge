@@ -72,4 +72,49 @@ struct JogDisplayRendererTests {
     /// One pixel of a 198×198 RGBA image, upright: [r, g, b, a].
     static func pixel(_ rgba: [UInt8], x: Int, y: Int) -> [UInt8] { Array(rgba[(y * 198 + x) * 4..<(y * 198 + x) * 4 + 4]) }
 
+    /// The level meter (#461), the user's pick: a thin arc just inside the beat ring on the left, r 80–83, from 240° to
+    /// 300° clockwise from 12 o'clock, filling bottom-up. Points sit mid-band (r 81.5): (24, 132) at a tenth of the
+    /// arc, (17, 98) at half, (24, 65) at nine tenths, (19, 81) at peak 90's place (282.5°).
+    static func meterImage(level: Int, peak: Int, stale: Bool = false) -> [UInt8] {
+        JogDisplayRenderer.simulatorImage(JogDisplayContent(deck: 4, color: [0, 128, 255], stale: stale), litBeat: nil,
+                                          marker: nil, meter: (level: level, peak: peak))
+    }
+
+    static func near(_ pixel: [UInt8], _ rgb: UInt32, by tolerance: Int = 24) -> Bool {
+        let want = [Int(rgb >> 16 & 0xFF), Int(rgb >> 8 & 0xFF), Int(rgb & 0xFF)]
+        return zip(pixel.prefix(3), want).allSatisfy { abs(Int($0) - $1) <= tolerance }
+    }
+
+    @Test("Silence: the meter's track shows dark, nothing lit")
+    func meterAtSilence() {
+        let image = Self.meterImage(level: 0, peak: 0)
+        for (x, y) in [(24, 132), (17, 98), (24, 65)] { #expect(Self.near(Self.pixel(image, x: x, y: y), 0x2C2C2C)) }
+    }
+
+    @Test("Mid level fills green from the bottom; the held peak is a white tick above it")
+    func meterAtMid() {
+        let image = Self.meterImage(level: 64, peak: 90)
+        #expect(Self.near(Self.pixel(image, x: 24, y: 132), 0x00FF48))
+        #expect(Self.near(Self.pixel(image, x: 24, y: 65), 0x2C2C2C))
+        #expect(Self.near(Self.pixel(image, x: 19, y: 81), 0xFFFFFF, by: 60))
+    }
+
+    @Test("Near the top the fill turns yellow; the bottom stays green")
+    func meterNearTheTop() {
+        let image = Self.meterImage(level: 120, peak: 120)
+        #expect(Self.near(Self.pixel(image, x: 24, y: 132), 0x00FF48))
+        #expect(Self.near(Self.pixel(image, x: 24, y: 65), 0xFFD400))
+    }
+
+    @Test("At clip the whole fill is red")
+    func meterAtClip() {
+        let image = Self.meterImage(level: 127, peak: 127)
+        for (x, y) in [(24, 132), (17, 98), (24, 65)] { #expect(Self.near(Self.pixel(image, x: x, y: y), 0xFF3B30)) }
+    }
+
+    @Test("Stale draws no meter")
+    func meterNotWhenStale() {
+        #expect(Self.near(Self.pixel(Self.meterImage(level: 64, peak: 90, stale: true), x: 17, y: 98), 0x0B0B0B))
+    }
+
 }

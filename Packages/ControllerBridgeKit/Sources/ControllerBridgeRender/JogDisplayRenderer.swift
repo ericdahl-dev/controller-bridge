@@ -17,9 +17,11 @@ public enum JogDisplayRenderer {
 
     /// RGBA bytes, row by row, top first, upright: what `JogImage.forUnit` turns and encodes. `litBeat` (1–4) lights
     /// that beat's section; `marker` draws the marker that many turns clockwise from 12 o'clock.
-    public static func render(_ content: JogDisplayContent, litBeat: Int? = nil, marker: Double? = nil) -> [UInt8] {
+    public static func render(_ content: JogDisplayContent, litBeat: Int? = nil, marker: Double? = nil,
+                              meter: (level: Int, peak: Int)? = nil) -> [UInt8] {
         drawing { context in
             draw(content, litBeat: litBeat, in: context)
+            if let meter, !content.stale { drawMeter(level: meter.level, peak: meter.peak, in: context) }
             if let marker { drawMarker(turns: marker, in: context) }
         }
     }
@@ -49,6 +51,13 @@ public enum JogDisplayRenderer {
 
     static let background = rgb(0x0B0B0B), text = rgb(0xEDEDEA), caption = rgb(0xBDBDBD), keyColor = rgb(0x9DC3EE)
     static let live = rgb(0x00FF48), beatOff = rgb(0x2C2C2C), downbeatOff = rgb(0x5A5A5A)
+    /// The level meter (#461): an arc just inside the ring on the left, from 240° (bottom) to 300° clockwise from
+    /// 12 o'clock. Green to `meterYellowFrom` of the arc, yellow above; the whole fill red at clip (127).
+    static let meterInner: CGFloat = 80, meterOuter: CGFloat = 83
+    static let meterFrom: CGFloat = 240, meterSpan: CGFloat = 60, meterYellowFrom: CGFloat = 0.75
+    /// The peak tick's width, in degrees.
+    static let meterTick: CGFloat = 2
+    static let meterYellow = rgb(0xFFD400), meterClip = rgb(0xFF3B30), meterPeak = rgb(0xFFFFFF)
 
     /// The badge for Syndicate's player type: TRK for a track, OSC, MIDI or SEQ for a clip of that kind (#209).
     static func badge(_ playerType: String?) -> String? {
@@ -78,8 +87,10 @@ public enum JogDisplayRenderer {
 
     /// The image the Diagnostics simulator shows (#221): the upload's, with the lit beat and the marker the unit would
     /// draw over it. With neither, it is the upload's exactly (a test pins it).
-    public static func simulatorImage(_ content: JogDisplayContent, litBeat: Int?, marker: Double?) -> [UInt8] {
-        render(content, litBeat: litBeat, marker: marker)
+    /// `meter` is the front deck's mixer level and held peak, 0–127 each (#461), as the drawn display shows them.
+    public static func simulatorImage(_ content: JogDisplayContent, litBeat: Int?, marker: Double?,
+                                      meter: (level: Int, peak: Int)? = nil) -> [UInt8] {
+        render(content, litBeat: litBeat, marker: marker, meter: meter)
     }
 
     /// The Geist faces the design uses, bundled with this target (#221) so the image is the same in the app and under
@@ -195,6 +206,38 @@ public enum JogDisplayRenderer {
         // Not cut to the safe circle, as in the design: a key and a BPM are short, and both must show whole.
         let height = lineBoxHeight(font, lineHeight: nil)
         draw(CTLineCreateWithAttributedString(string), font: font, centerX: center, centerY: 136 + height / 2, in: context)
+    }
+
+    /// The level meter (#461): the dark track, the fill from the bottom, the held peak as a tick. Levels 0–127.
+    private static func drawMeter(level: Int, peak: Int, in context: CGContext) {
+        let level = min(max(level, 0), 127), peak = min(max(peak, 0), 127)
+        meterArc(from: 0, to: 1, color: beatOff, in: context)
+        let fill = CGFloat(level) / 127
+        if level == 127 {
+            meterArc(from: 0, to: 1, color: meterClip, in: context)
+        } else if level > 0 {
+            meterArc(from: 0, to: min(fill, meterYellowFrom), color: live, in: context)
+            if fill > meterYellowFrom { meterArc(from: meterYellowFrom, to: fill, color: meterYellow, in: context) }
+        }
+        guard peak > 0 else { return }
+        // The tick's degrees, kept inside the arc.
+        let half = meterTick / 2 / meterSpan
+        let place = min(max(CGFloat(peak) / 127, half), 1 - half)
+        meterArc(from: place - half, to: place + half, color: peak == 127 ? meterClip : meterPeak, in: context)
+    }
+
+    /// The meter band between fractions `from` and `to` of the arc (0 its bottom), filled in `color`.
+    private static func meterArc(from: CGFloat, to: CGFloat, color: CGColor, in context: CGContext) {
+        guard to > from else { return }
+        // Degrees clockwise from 12 o'clock; on screen (y down) that's CoreGraphics angle − 90°, growing clockwise.
+        let start = (meterFrom + meterSpan * from - 90) * .pi / 180, end = (meterFrom + meterSpan * to - 90) * .pi / 180
+        let path = CGMutablePath()
+        path.addArc(center: CGPoint(x: center, y: center), radius: meterOuter, startAngle: start, endAngle: end, clockwise: false)
+        path.addArc(center: CGPoint(x: center, y: center), radius: meterInner, startAngle: end, endAngle: start, clockwise: true)
+        path.closeSubpath()
+        context.addPath(path)
+        context.setFillColor(color)
+        context.fillPath()
     }
 
     /// The marker: a white wedge with a black keyline riding the ring's edge, pointing in.
