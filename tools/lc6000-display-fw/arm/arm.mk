@@ -46,33 +46,36 @@ $(ARM_BUILD)/block.bin: $(ARM_BUILD)/block.elf
 # functions; --gc-sections drops the rest, so the protocol itself stays in A. Its header's length and CRC are filled
 # in after the link (upper_seal.py), and block A checks both before it calls B.
 UPPER_C := arm/upper_header.c arm/libc_min.c $(SRC)
-UPPER_OBJ := $(patsubst %.c,$(ARM_BUILD)/upper/%.o,$(notdir $(UPPER_C)))
+# For the size tests only: one extra C file (absolute path) and extra link flags, to grow B past its limit.
+UPPER_EXTRA_C ?=
+UPPER_EXTRA_LDFLAGS ?=
+UPPER_OBJ := $(patsubst %.c,$(ARM_BUILD)/upper/%.o,$(notdir $(UPPER_C) $(UPPER_EXTRA_C)))
 
 $(ARM_BUILD)/upper.elf: $(UPPER_C) arm/upper.ld arm/upper.h arm/include/string.h $(wildcard src/*.h) arm/arm.mk
 	@mkdir -p $(ARM_BUILD)/upper
 	cd $(ARM_BUILD)/upper && $(ARM_PREFIX)gcc $(ARM_CFLAGS) -I$(CURDIR)/arm/include -I$(CURDIR)/src -I$(CURDIR)/arm \
-		-c $(addprefix $(CURDIR)/,$(UPPER_C))
+		-c $(addprefix $(CURDIR)/,$(UPPER_C)) $(UPPER_EXTRA_C)
 	$(ARM_PREFIX)gcc $(ARM_CPU) -nostdlib -nostartfiles -Wl,--gc-sections -Wl,--build-id=none \
-		-Wl,-T,arm/upper.ld -Wl,-Map,$(ARM_BUILD)/upper.map -o $@ $(UPPER_OBJ) -lgcc
+		-Wl,-T,arm/upper.ld -Wl,-Map,$(ARM_BUILD)/upper.map $(UPPER_EXTRA_LDFLAGS) -o $@ $(UPPER_OBJ) -lgcc
 
 $(ARM_BUILD)/upper.bin: $(ARM_BUILD)/upper.elf arm/upper_seal.py
 	$(ARM_PREFIX)objcopy -O binary -j .upper_header -j .text -j .data $< $@
 	@$(PYTHON) -I arm/upper_seal.py $@
 
-# The 9,184-byte limit as a check on whichever toolchain runs it (the Mac's and CI's Ubuntu GCC differ in size). It
-# builds the hook-only block, which must fit, and the block with drawing, whose size is information only: drawing
-# moves to its own block at 0x08080000 (#501), so drawing PRs don't fail CI on the padding's size.
+# Each block's limit as a check on whichever toolchain runs it (the Mac's and CI's Ubuntu GCC differ in size, #501):
+# block A, hook and protocol, and the hook alone, against the 9,184-byte padding; block B, the drawing, against the
+# 512 KB upper flash. Any one over fails.
 ARM_SIZE_BUILD ?= $(BUILD)/arm-size
-ARM_SIZE_DRAW_EXTRA ?=
-ARM_SIZE_DRAW_LDFLAGS ?=
+ARM_SIZE_UPPER_EXTRA ?=
+ARM_SIZE_UPPER_LDFLAGS ?=
 .PHONY: arm-size
 arm-size:
 	@$(ARM_PREFIX)gcc --version | head -1
-	@if out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/draw ARM_DRAW=1 ARM_EXTRA_C="$(ARM_SIZE_DRAW_EXTRA)" \
-		ARM_EXTRA_LDFLAGS="$(ARM_SIZE_DRAW_LDFLAGS)" $(ARM_SIZE_BUILD)/draw/block.bin 2>&1); then \
-		echo "$$out" | sed 's/^block:/block (with drawing):/'; \
-	else echo "block (with drawing): over the 9184-byte padding; informational until #501"; fi
-	@out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/proto ARM_DRAW=stub $(ARM_SIZE_BUILD)/proto/block.bin) || exit 1; \
-		echo "$$out" | sed 's/^block:/block (hook and protocol):/'
+	@out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/a ARM_DRAW=1 $(ARM_SIZE_BUILD)/a/block.bin) || exit 1; \
+		echo "$$out" | sed 's/^block:/block A (hook and protocol):/'
 	@out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/hook ARM_DRAW=0 $(ARM_SIZE_BUILD)/hook/block.bin) || exit 1; \
-		echo "$$out" | sed 's/^block:/block (hook only):/'
+		echo "$$out" | sed 's/^block:/block A (hook only):/'
+	@if out=$$($(MAKE) -s ARM_BUILD=$(ARM_SIZE_BUILD)/b UPPER_EXTRA_C="$(ARM_SIZE_UPPER_EXTRA)" \
+		UPPER_EXTRA_LDFLAGS="$(ARM_SIZE_UPPER_LDFLAGS)" $(ARM_SIZE_BUILD)/b/upper.bin 2>&1); then \
+		echo "$$out" | sed 's/^block B:/block B (drawing):/'; \
+	else echo "$$out" >&2; echo "block B (drawing): over the 524288-byte upper flash"; exit 1; fi
