@@ -104,6 +104,21 @@ class SizeTests(unittest.TestCase):
             used = int(line.split(":")[1].split()[0])
             self.assertLessEqual(used, PAD_END - PAD_START, line)
 
+    def test_drawing_over_the_padding_is_reported_but_doesnt_fail_until_its_own_block_exists(self):
+        # #501: drawing moves to its own block at 0x08080000; until then its size in the padding is information only,
+        # so drawing PRs don't turn CI red. The hook-only block still must fit.
+        with tempfile.TemporaryDirectory() as out:
+            big = os.path.join(out, "big.c")
+            with open(big, "w") as f:
+                f.write("const unsigned char hook_too_big[9184] = {1};\n"
+                        "const unsigned char *hook_keep(void) { return hook_too_big; }\n")
+            done = subprocess.run(["make", "-s", "-C", FW, "arm-size", f"ARM_SIZE_BUILD={out}/b",
+                                   f"ARM_SIZE_DRAW_EXTRA={big}", "ARM_SIZE_DRAW_LDFLAGS=-Wl,-u,hook_keep"],
+                                  capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("block (with drawing): over the 9184-byte padding; informational until #501", done.stdout)
+        self.assertRegex(done.stdout, r"block \(hook only\): \d+ of 9184 bytes used")
+
     def test_a_block_too_big_for_the_padding_fails_the_link(self):
         with tempfile.TemporaryDirectory() as out:
             subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", "ARM_DRAW=0"], check=True,
