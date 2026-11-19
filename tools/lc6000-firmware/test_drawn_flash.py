@@ -208,5 +208,25 @@ class OptionsTests(DrawnFlashTests):
         self.assertRefused(self.options(option_bytes()[:15]), "16")
 
 
+
+class NoProbeTests(DrawnFlashTests):
+    """Flashing without an ST-Link (#468, the owner's decision): the wizard never asks the owner to confirm a probe
+    they don't have. Without one it says the risk in plain words and goes on only on a typed phrase."""
+
+    def test_the_risk_is_said_in_plain_words(self):
+        code, out, _ = run("no-probe-risk")
+        self.assertEqual(code, 0)
+        for words in ("update-mode message", "stays dark until a probe", "top panel", "only after our own first message",
+                      "NO PROBE"):
+            self.assertIn(words, out)
+
+    def test_only_the_whole_phrase_goes_on(self):
+        self.assertEqual(run("no-probe", "NO PROBE")[0], 0)
+        self.assertEqual(run("no-probe", "  NO PROBE  ")[0], 0)   # stray spaces around it
+        for typed in ("", "y", "yes", "FLASH", "no probe", "NO", "NOPROBE", "NO PROBE!"):
+            with self.subTest(typed=typed):
+                self.assertRefused(run("no-probe", typed), "NO PROBE")
+
+
 if __name__ == "__main__":
     unittest.main()

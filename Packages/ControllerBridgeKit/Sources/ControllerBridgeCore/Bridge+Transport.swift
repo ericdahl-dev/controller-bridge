@@ -91,6 +91,8 @@ extension Bridge {
     /// Censor reverses while held. Shift + Censor latches Reverse instead: each press toggles it (#114). A latched
     /// Reverse isn't a hold, but release-all still turns it off.
     func censor(_ pressed: Bool) {
+        // Its light shows reverse on, held or latched (#477).
+        defer { refreshLEDs() }
         if pressed, shift {
             if let address = latchedReverse {
                 send(address: address, [.int(0)])
@@ -129,6 +131,9 @@ extension Bridge {
     /// Sends every recorded release once, then forgets them. Quit, unplug, sleep, a deck or device change and a
     /// mapping import all come through here.
     func releaseAll() {
+        // Censor's light (#477) goes back to idle with the reverse it showed, held or latched.
+        let reversed = reverseOn
+        defer { if reversed { refreshLEDs() } }
         end(.releaseAll)
         for control in held.takeAll() { send(address: control.address, control.release) }
         if let address = latchedReverse {
@@ -164,5 +169,9 @@ extension Bridge {
         buttonLED("key_lock", on: keyLockOn)
         buttonLED("slip", on: slipOn)
         buttonLED("shift", on: shift)
+        buttonLED("censor", on: reverseOn)
     }
+
+    /// Reverse is on: Censor held, or latched with Shift + Censor (#477).
+    var reverseOn: Bool { held.contains(.censor) || latchedReverse != nil }
 }

@@ -2,9 +2,8 @@ import ControllerBridgeCore
 @testable import ControllerBridgeRender
 import Testing
 
-/// Track time on the drawn display (#460), the user's pick: the remaining time alone ("-2:45"), about 18 px, in the
-/// slot under key/BPM; a 2 px progress ring just outside the beat ring (r 96–98), filling clockwise from 12. An
-/// unknown length (0) draws neither.
+/// Track time's remaining text (#460) in the 198 frame. The progress ring moved out to the band (#524):
+/// JogDisplayProgressRingTests.
 @Suite("Jog display renderer: track time")
 struct JogDisplayRendererTimeTests {
     static let content = JogDisplayContent(deck: 2, color: [255, 0, 0], title: "Daybreak", artist: "Night Drive",
@@ -51,44 +50,16 @@ struct JogDisplayRendererTimeTests {
         #expect(Self.image((elapsed: 200, length: 165)) == Self.image((elapsed: 165, length: 165)))
     }
 
-    static func at(_ image: [UInt8], _ x: Int, _ y: Int) -> [UInt8] { JogDisplayRendererTests.pixel(image, x: x, y: y) }
-
-    /// The progress ring (r 96–98): filled in the deck color clockwise from 12, the rest a dark track. Points mid-band
-    /// (r ≈ 97): (115, 3) at 10°, (196, 98) at 90°, (98, 196) at 180°, (1, 98) at 270°.
-    @Test("Halfway: the ring is lit in the deck color to 6 o'clock, dark after")
-    func progressHalfway() {
-        let image = Self.image((elapsed: 60, length: 120))
-        #expect(JogDisplayRendererTests.near(Self.at(image, 115, 3), 0xFF0000))
-        #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0xFF0000))
-        #expect(JogDisplayRendererTests.near(Self.at(image, 1, 98), 0x2C2C2C))
-    }
-
-    @Test("At the start the whole ring is the dark track; at the end it is all lit")
-    func progressEnds() {
-        let start = Self.image((elapsed: 0, length: 120)), end = Self.image((elapsed: 120, length: 120))
-        for (x, y) in [(115, 3), (196, 98), (98, 196), (1, 98)] {
-            #expect(JogDisplayRendererTests.near(Self.at(start, x, y), 0x2C2C2C))
-            #expect(JogDisplayRendererTests.near(Self.at(end, x, y), 0xFF0000))
-        }
-    }
-
-    @Test("The ring stays in its band, clear of the beat ring (r 95) and inside the image's edge")
-    func progressBand() {
-        let ring = Self.changed(Self.image(nil), Self.image((elapsed: 60, length: 120))).filter { Self.radius($0) >= 90 }
-        #expect(!ring.isEmpty)
-        #expect(ring.allSatisfy { Self.radius($0) > 95 && Self.radius($0) < 99 })
-    }
-
     static func slot(_ image: [UInt8]) -> [[UInt8]] {
         (163...175).flatMap { y in (60...138).map { x in Self.at(image, x, y) } }
     }
+
+    static func at(_ image: [UInt8], _ x: Int, _ y: Int) -> [UInt8] { JogDisplayRendererTests.pixel(image, x: x, y: y) }
 
     @Test("The warning's red half: the remaining time and the ring's fill turn red (0xFF3B30); the track stays dark")
     func warningRed() {
         let image = JogDisplayRenderer.simulatorImage(Self.content, litBeat: nil, marker: nil,
                                                       time: (elapsed: 90, length: 120), look: .warningRed)
-        #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0xFF3B30, by: 8))
-        #expect(JogDisplayRendererTests.near(Self.at(image, 1, 98), 0x2C2C2C))
         #expect(Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xFF3B30, by: 8) })
         #expect(!Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xEDEDEA, by: 8) })
     }
@@ -106,16 +77,9 @@ struct JogDisplayRendererTimeTests {
         for content in [Self.content, blue] {
             let image = JogDisplayRenderer.simulatorImage(content, litBeat: nil, marker: nil,
                                                           time: (elapsed: 90, length: 120), look: .warningWhite)
-            #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0xEDEDEA, by: 8))
             #expect(Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xEDEDEA, by: 8) })
             #expect(!Self.slot(image).contains { JogDisplayRendererTests.near($0, 0xFF3B30, by: 8) })
         }
     }
 
-    @Test("The needle crosses the ring once a bar and draws on top of it")
-    func needleOnTop() {
-        let image = JogDisplayRenderer.simulatorImage(Self.content, litBeat: nil, marker: 0.25,
-                                                      time: (elapsed: 90, length: 120))
-        #expect(JogDisplayRendererTests.near(Self.at(image, 196, 98), 0xFFFFFF, by: 8))
-    }
 }
