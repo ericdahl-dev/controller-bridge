@@ -26,6 +26,7 @@ static void act(dfw_unit *unit, const uint8_t *bytes, size_t length) {
     if (length < header + 4 || memcmp(bytes, host_header, header) != 0 || bytes[header] != DFW_CMD) return;
     uint8_t op = bytes[header + 3];
     if (op == OP_BEGIN) unit->drawn = 1;
+    if (op == OP_END) unit->drawn = 0;
     if (op == OP_DECK && unit->drawn) unit->dirty = 1;
 }
 
