@@ -225,7 +225,46 @@ class CommandLineTests(unittest.TestCase):
         self.assertFalse(os.path.exists(output))
 
 
+class CommittedPatchTests(unittest.TestCase):
+    """The patch descriptions in patches/ are data the user flashes from, so their shape is pinned here."""
+
+    def patch_text(self, name):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, "patches", name)) as f:
+            return f.read()
+
+    def test_vos_scale_1_is_one_edit_that_sets_both_vos_bits(self):
+        # wd 00.50, 0x0800A69E: `orr r0, r0, #0x8000` (40 f4 00 40) becomes `orr r0, r0, #0xc000` (40 f4 40 40). See #438.
+        edits = dfupatch.parse_patch(self.patch_text("wd-00.50-vos-scale-1.patch"))
+        self.assertEqual(edits, [(0x0800A69E, bytes.fromhex("40f40040"), bytes.fromhex("40f44040"))])
+
+    def test_vos_scale_1_changes_one_byte_and_the_two_crcs_of_an_image_that_has_the_old_bytes(self):
+        element = bytearray(wd_element(size=0x4000))
+        element[0x269E:0x26A2] = bytes.fromhex("40f40040")
+        covered = len(element) - 20
+        struct.pack_into("<I", element, covered, dfupatch.stm32_crc(bytes(element[:covered])))
+        data = dfuse_file(bytes(element))
+        start = len(data) - 16 - len(element)
+        out = dfupatch.patch(data, self.patch_text("wd-00.50-vos-scale-1.patch"))
+        crcs = {*range(start + covered, start + covered + 4), *range(len(out) - 4, len(out))}
+        changed = set(changed_offsets(data, out))
+        self.assertEqual(changed - crcs, {start + 0x26A0})
+        self.assertEqual(out[start + 0x26A0], 0x40)
+
+    def test_vos_scale_1_is_refused_on_an_image_without_the_old_bytes(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):
+            dfupatch.patch(dfuse_file(wd_element(size=0x4000)), self.patch_text("wd-00.50-vos-scale-1.patch"))
+
+
 class IgnoreRuleTests(unittest.TestCase):
+    def test_the_vos_patch_description_is_not_ignored_by_git(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        if not shutil.which("git") or subprocess.run(["git", "-C", here, "rev-parse"], capture_output=True).returncode:
+            self.skipTest("not in a git checkout")
+        path = os.path.join(here, "patches", "wd-00.50-vos-scale-1.patch")
+        result = subprocess.run(["git", "-C", here, "check-ignore", "-q", "--no-index", path])
+        self.assertEqual(result.returncode, 1, "the patch description is ignored")
+
     def test_vendor_and_patched_images_in_this_folder_are_ignored_by_git(self):
         here = os.path.dirname(os.path.abspath(__file__))
         if not shutil.which("git") or subprocess.run(["git", "-C", here, "rev-parse"], capture_output=True).returncode:
