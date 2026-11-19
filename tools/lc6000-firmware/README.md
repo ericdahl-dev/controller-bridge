@@ -154,22 +154,22 @@ They answer what static analysis can't (#466): whether flash above the image exi
    - Run `~/lc6000/enter-update-mode check`. It sends nothing and must find exactly one WD port.
    - Then run `~/lc6000/enter-update-mode send --yes-enter-update-mode`. The jog screen goes dark.
    - If `check` fails, stop here and post what it printed on #467. The BACK + FWD + VINYL buttons enter update mode on the top panel chip, not the display chip.
-3. Run `dfu-util -l`. Expect one `0483:df11` device, `STM32  BOOTLOADER`, at the WD path (`0-1.2` on the owner's unit).
+3. Run `dfu-util -l`. Expect one `0483:df11` device, `STM32  BOOTLOADER`, at the WD path. Use the path `dfu-util -l` shows in the commands below as `PATH`: it depends on the USB port (`0-1.2` and `2-1.2` on the owner's unit).
    - Alt 0 should read `@Internal Flash  /0x08000000/04*016Kg,01*064Kg,07*128Kg`, which is 1 MB, single bank (#432).
    - If there is more than one device, or the layout differs, stop.
 4. Read the flash above the image, 512 KB:
-   `dfu-util -p 0-1.2 -a 0 -s 0x08080000:0x80000 -U ~/lc6000/wd-upper-512k.bin`
+   `dfu-util -p PATH -a 0 -s 0x08080000:0x80000 -U ~/lc6000/wd-upper-512k.bin`
    - Expect 524,288 bytes, all `0xFF`: `python3 -I -c "import sys; d=open(sys.argv[1],'rb').read(); print(len(d), set(d))" ~/lc6000/wd-upper-512k.bin`.
    - A read error here means that flash isn't there. Record it.
 5. Read the option bytes, both blocks the ROM lists (alt 1):
    - Nothing hangs on reading these by hand: `flash-day.sh drawn` reads bank 1 itself and checks it before it writes anything (#468). This read is for the record on #467.
-   - `dfu-util -p 0-1.2 -a 1 -s 0x1FFFC000:16 -U ~/lc6000/wd-option-bytes-1.bin`
-   - `dfu-util -p 0-1.2 -a 1 -s 0x1FFEC000:16 -U ~/lc6000/wd-option-bytes-2.bin`
+   - `dfu-util -p PATH -a 1 -s 0x1FFFC000:16 -U ~/lc6000/wd-option-bytes-1.bin`
+   - `dfu-util -p PATH -a 1 -s 0x1FFEC000:16 -U ~/lc6000/wd-option-bytes-2.bin`
    - What to read, per RM0090's option-byte table:
      - RDP is the byte at offset 1. `0xAA` means level 0, which matches the reads already done on #432.
      - nWRP is the low 12 bits of the half-word at offset 8, one bit per sector, 1 = not write-protected. Sectors 8-11 must read 1.
      - DB1M is bit 14 of that same half-word. 0 means single bank, matching the layout string.
-6. Try the flash-size word, `dfu-util -p 0-1.2 -a 0 -s 0x1FFF7A22:2 -U ~/lc6000/wd-flash-size.bin`. Expect `00 04` (0x0400, 1,024 KB).
+6. Try the flash-size word, `dfu-util -p PATH -a 0 -s 0x1FFF7A22:2 -U ~/lc6000/wd-flash-size.bin`. Expect `00 04` (0x0400, 1,024 KB).
    - It isn't inside any alt setting the ROM lists, so the ROM may refuse it. Then it is a read for SWD (#433). The layout string in step 3 already says 1 MB.
 7. **Leave update mode:** switch the unit off, wait 5 s, and switch it on with no buttons held. Update mode only reads, and nothing was written, so the display chip comes back in its own app with the stock picture. If the screen stays dark and `dfu-util -l` still lists the bootloader, do as the flash day kit does: open Denon's updater, which restores a chip that is in update mode (#434).
 8. Post the results on #467. Never write anything in this session.
