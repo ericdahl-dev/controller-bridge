@@ -354,6 +354,28 @@ class CommandLineTests(unittest.TestCase):
         self.assertFalse(os.path.exists(output))
 
 
+class ThumbBlTests(unittest.TestCase):
+    """The Thumb-2 BL encoder, against encodings read from the stock image and checked by disassembly (#466)."""
+
+    def test_forward_calls_from_the_hook_sites_to_the_padding(self):
+        self.assertEqual(dfupatch.thumb_bl(0x0800F464, 0x0807DC00), bytes.fromhex("6ef0ccfb"))
+        self.assertEqual(dfupatch.thumb_bl(0x08012456, 0x0807DC40), bytes.fromhex("6bf0f3fb"))
+        self.assertEqual(dfupatch.thumb_bl(0x08017720, 0x0807DC80), bytes.fromhex("66f0aefa"))
+
+    def test_backward_calls_as_the_stock_image_encodes_them(self):
+        self.assertEqual(dfupatch.thumb_bl(0x08012456, 0x0800BEA0), bytes.fromhex("f9f723fd"))
+        self.assertEqual(dfupatch.thumb_bl(0x0801244C, 0x0800F200), bytes.fromhex("fcf7d8fe"))
+        self.assertEqual(dfupatch.thumb_bl(0x0800F45A, 0x08014644), bytes.fromhex("05f0f3f8"))
+
+    def test_odd_addresses_and_targets_out_of_reach_are_refused(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "even"):
+            dfupatch.thumb_bl(0x0800F465, 0x0807DC00)
+        with self.assertRaisesRegex(dfupatch.Refused, "even"):
+            dfupatch.thumb_bl(0x0800F464, 0x0807DC01)
+        with self.assertRaisesRegex(dfupatch.Refused, "reach"):
+            dfupatch.thumb_bl(0x08000000, 0x09000004)
+
+
 class CommittedPatchTests(unittest.TestCase):
     """The patch descriptions in patches/ are data the user flashes from, so their shape is pinned here."""
 
@@ -379,6 +401,36 @@ class CommittedPatchTests(unittest.TestCase):
         changed = set(changed_offsets(data, out))
         self.assertEqual(changed - crcs, {start + 0x3DA4})
         self.assertEqual(out[start + 0x3DA4], 0x10)
+
+    def test_drawn_hook_calls_our_two_entries_from_the_two_hook_sites(self):
+        # 0x0800F464 `mov.w r8, #1` (the unknown-command fallthrough) and 0x08012456 `bl 0x0800BEA0` (the render
+        # step) each become a BL into our block's fixed entries at the start of the padding. See #466.
+        edits = dfupatch.parse_patch(self.patch_text("wd-00.50-drawn-hook.patch"))
+        self.assertEqual(edits, [
+            (0x0800F464, bytes.fromhex("4ff00108"), dfupatch.thumb_bl(0x0800F464, dfupatch.HOOK_COMMAND_ENTRY)),
+            (0x08012456, bytes.fromhex("f9f723fd"), dfupatch.thumb_bl(0x08012456, dfupatch.HOOK_RENDER_ENTRY)),
+        ])
+        self.assertTrue(PAD_START <= dfupatch.HOOK_COMMAND_ENTRY < dfupatch.HOOK_RENDER_ENTRY < PAD_END)
+
+    def test_drawn_hook_changes_only_its_8_bytes_and_the_two_crcs(self):
+        element = bytearray(full_wd_element())
+        element[0x0800F464 - BASE:0x0800F468 - BASE] = bytes.fromhex("4ff00108")
+        element[0x08012456 - BASE:0x0801245A - BASE] = bytes.fromhex("f9f723fd")
+        covered = len(element) - 20
+        struct.pack_into("<I", element, covered, dfupatch.stm32_crc(bytes(element[:covered])))
+        data = dfuse_file(bytes(element))
+        start = len(data) - 16 - len(element)
+        out = dfupatch.patch(data, self.patch_text("wd-00.50-drawn-hook.patch"))
+        crcs = {*range(start + covered, start + covered + 4), *range(len(out) - 4, len(out))}
+        hook = {*range(start + 0xF464 - 0x8000, start + 0xF468 - 0x8000),
+                *range(start + 0x12456 - 0x8000, start + 0x1245A - 0x8000)}
+        self.assertTrue(set(changed_offsets(data, out)) - crcs <= hook)  # f0 stays f0 at 0x0800F465
+        self.assertEqual(out[start + 0xF464 - 0x8000:start + 0xF468 - 0x8000], bytes.fromhex("6ef0ccfb"))
+        self.assertEqual(out[start + 0x12456 - 0x8000:start + 0x1245A - 0x8000], bytes.fromhex("6bf0f3fb"))
+
+    def test_drawn_hook_is_refused_on_an_image_without_the_old_bytes(self):
+        with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):
+            dfupatch.patch(dfuse_file(full_wd_element()), self.patch_text("wd-00.50-drawn-hook.patch"))
 
     def test_show_slot_16_is_refused_on_an_image_without_the_old_bytes(self):
         with self.assertRaisesRegex(dfupatch.Refused, "old bytes"):

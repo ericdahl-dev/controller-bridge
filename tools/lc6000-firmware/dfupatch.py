@@ -21,6 +21,23 @@ END_TOKEN = b"EndOfFlashToken\x00"
 # wd 00.50's own padding: 0xFF from the end of its data to the trailer, inside the CRC range (#466). Our block goes
 # here, so the hook's stubs are always present with the hook and are covered by the image's own CRC.
 PAD_START, PAD_END = 0x0807DC00, 0x0807FFE0
+# Our block's two fixed entries, which the drawn-display hook patch calls (#467). The linker script puts them here.
+HOOK_COMMAND_ENTRY, HOOK_RENDER_ENTRY = 0x0807DC00, 0x0807DC40
+
+
+def thumb_bl(at, target):
+    """The 4-byte Thumb-2 `bl target` placed at `at` (ARMv7-M encoding T1), little-endian halfwords."""
+    if at % 2 or target % 2:
+        raise Refused("a Thumb BL needs even addresses for both the call and its target")
+    offset = target - (at + 4)
+    if not -(1 << 24) <= offset < (1 << 24):
+        raise Refused(f"0x{target:08X} is out of a BL's reach from 0x{at:08X} (+/-16 MB)")
+    s = (offset >> 24) & 1
+    j1 = (1 - ((offset >> 23) & 1)) ^ s
+    j2 = (1 - ((offset >> 22) & 1)) ^ s
+    first = 0xF000 | (s << 10) | ((offset >> 12) & 0x3FF)
+    second = 0xD000 | (j1 << 13) | (j2 << 11) | ((offset >> 1) & 0x7FF)
+    return struct.pack("<HH", first, second)
 
 
 class Refused(Exception):
