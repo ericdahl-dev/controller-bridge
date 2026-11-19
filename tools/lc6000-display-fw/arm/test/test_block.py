@@ -416,6 +416,50 @@ class UpperBlockTests(unittest.TestCase):
         self.assertNotEqual(rows[0], rows[1], "the title changed the title rows")
 
 
+FRAME_DUMP = os.environ.get("FRAME_DUMP", os.path.join(FW, "build", "frame-dump"))
+SIZE = 198
+
+
+def native_frame(messages):
+    """The frame the native build (the Mac's compiler, the same src/) draws for these messages: 198x198 0x00RRGGBB."""
+    out = subprocess.run([FRAME_DUMP, *messages], check=True, capture_output=True).stdout
+    return struct.unpack(f"<{SIZE * SIZE}I", out)
+
+
+def chip_frame(messages):
+    """The frame emulated block A and B draw for the same messages: B's back buffer at FRAME_AT, before A turns it."""
+    chip = Chip(data=proven_block(), upper=upper_block())
+    for hexbytes in (CAPABILITY, *messages):
+        message = chip.receive(hexbytes)
+        chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8], r8=0)
+    chip.call(dfupatch.HOOK_RENDER_ENTRY, count=200_000_000)
+    return chip, struct.unpack(f"<{SIZE * SIZE}I", bytes(chip.uc.mem_read(FRAME_AT, SIZE * SIZE * 4)))
+
+
+def frame_difference(a, b):
+    """How many pixels differ, and the worst channel difference."""
+    count = worst = 0
+    for p, q in zip(a, b):
+        if p != q:
+            count += 1
+            worst = max(worst, *(abs((p >> s & 0xFF) - (q >> s & 0xFF)) for s in (0, 8, 16)))
+    return count, worst
+
+
+class NativeFrameTests(unittest.TestCase):
+    """#515: the emulated chip draws, pixel for pixel, what the native build draws for the same messages. Both come
+    from the same source, so any difference is the Arm's: its float math, its libc stand-ins, an uninitialized read."""
+
+    def assert_same_frame(self, name, messages):
+        native = native_frame(messages)
+        _, arm = chip_frame(messages)
+        count, worst = frame_difference(native, arm)
+        self.assertEqual((count, worst), (0, 0), f"{name}: {count} pixels differ, worst by {worst}")
+
+    def test_a_deck_alone(self):
+        self.assert_same_frame("deck 2, red, track", (BEGIN, DECK_2_RED_TRACK))
+
+
 def struct_fields(source, opening, closing):
     """The field names declared between `opening` and `closing` in a C header, comments dropped."""
     import re
