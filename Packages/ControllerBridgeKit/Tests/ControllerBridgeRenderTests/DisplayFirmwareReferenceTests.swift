@@ -22,6 +22,18 @@ struct DisplayFirmwareReferenceTests {
         ("deck1-orange-osc.ppm", JogDisplayContent(deck: 1, color: [255, 128, 0], playerType: "osc")),
         ("deck3-purple-seq.ppm", JogDisplayContent(deck: 3, color: [180, 0, 255], playerType: "sequencer")),
         ("stale.ppm", JogDisplayContent(deck: 2, color: [255, 0, 0], playerType: "track", stale: true)),
+        // The text (#458): a short title, one line at 20 px, two lines, cut lines with no key or BPM, and accents.
+        ("text-strobe.ppm", JogDisplayContent(deck: 2, color: [255, 0, 0], title: "Strobe", artist: "Deadmau5", key: "F#m",
+                                              bpm: 128, playerType: "track")),
+        ("text-night-drive.ppm", JogDisplayContent(deck: 2, color: [255, 0, 0], title: "Night Drive", artist: "Café del Mar",
+                                                   key: "11B", bpm: 90, playerType: "track")),
+        ("text-ten.ppm", JogDisplayContent(deck: 1, color: [255, 255, 255], title: "Ten (Original Club Mix)",
+                                           artist: "Mark Knight", key: "8A", bpm: 124.5, playerType: "track")),
+        ("text-cut.ppm", JogDisplayContent(deck: 3, color: [0, 200, 80],
+                                           title: "Mark Knight Underworld Sander Van Doorn Remix Edition",
+                                           artist: "Wolfgang Amadeus Mozart and the Vienna Philharmonic", playerType: "track")),
+        ("text-accents.ppm", JogDisplayContent(deck: 4, color: [0, 128, 255], title: "Tänzer aus Tübingen",
+                                               artist: "Léa Seydoux & “Don’t”", key: "Ebm", bpm: 174, playerType: "track")),
     ]
 
     /// A binary PPM's RGB bytes, or nil if it isn't a 198×198 one.
