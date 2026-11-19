@@ -93,6 +93,27 @@ struct TraceJogDisplayTests {
         var list: [String] = []
     }
 
+    @Test("The drawn-display handshake's outcome is in the trace (#456): one line for no answer, one for an answer")
+    func handshakeOutcome() {
+        let silent = JogDisplayDriverTests.DriverRig()
+        let lines = Lines()
+        silent.driver.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        silent.driver.displayFirmware = .custom
+        silent.driver.connect()
+        silent.clock.now = 0.5
+        silent.driver.tick()
+        silent.driver.tick()
+        #expect(lines.list.filter { $0 == "jog display: no drawn-display answer in 0.5 s, using images" }.count == 1)
+
+        let drawing = JogDisplayDriverTests.DriverRig()
+        lines.list.removeAll()
+        drawing.driver.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        drawing.driver.displayFirmware = .custom
+        drawing.driver.connect()
+        drawing.driver.reply(DrawnDisplayHandshakeTests.answer)
+        #expect(lines.list.contains("jog display: drawn display, protocol 1"))
+    }
+
     @Test("Hello on the controller port, the upload out on WD, each ack with its status and ms since the last send")
     func wdTraffic() {
         let rig = JogDisplayDriverTests.DriverRig()

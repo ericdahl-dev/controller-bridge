@@ -459,12 +459,15 @@ public final class JogDisplayDriver {
     private func showImages() {
         mode = .images
         log.log("The jog display didn't answer as custom firmware that draws; it shows images")
+        // The debug trace (deckbridge.log) gets it too: the log above goes to the unified log only.
+        trace?(.jogDisplay, "jog display: no drawn-display answer in 0.5 s, using images")
         next()
     }
 
     /// The unit draws (#456): begin, then the deck in front.
     private func draw(version: Int) {
         mode = .drawn(version: version)
+        trace?(.jogDisplay, "jog display: drawn display, protocol \(version)")
         sendWD(DrawnDisplay.Message.begin(version: version).bytes)
         if wanted == nil { wanted = current }
         current = nil
