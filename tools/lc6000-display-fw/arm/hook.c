@@ -29,6 +29,9 @@ static void present(void *ctx, const dfw_pixel *frame) {
     hook_state *state = ctx;
     state->shown = 1;
     state->stock->port.present(state->stock->port.ctx, frame);
+    // Only here, right after a real present, so the band and the frame never disagree (#524): no band on a tick that
+    // presented nothing, or after end. Set only for a B whose header, CRC and layout checked out.
+    if (state->upper_band && state->stock->layer) state->upper_band(state->stock->layer(), &state->unit);
 }
 
 static void send(void *ctx, const uint8_t *bytes, size_t length) {
@@ -55,6 +58,7 @@ static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
     state->now_ms = 0;
     state->sub_ms = 0;
     state->upper_checked = 0;
+    state->upper_band = 0;
     state->magic = HOOK_MAGIC;
     state->check = ~HOOK_MAGIC;
     if (stock->witness) *stock->witness = HOOK_WITNESS;
@@ -66,9 +70,10 @@ static void start(hook_state *state, const hook_stock *stock, uint32_t now) {
 static void check_upper(hook_state *state, const hook_stock *stock) {
     if (!stock->upper || state->upper_checked) return;
     state->upper_checked = 1;
-    uint32_t entry = upper_check(stock->upper, DFW_LAYOUT);
-    if (!entry) return;
-    state->upper_drawing.draw = (void (*)(dfw_pixel *, const struct dfw_unit *))(uintptr_t)entry;
+    upper_entries entries;
+    if (!upper_check(stock->upper, DFW_LAYOUT, &entries)) return;
+    state->upper_drawing.draw = (void (*)(dfw_pixel *, const struct dfw_unit *))(uintptr_t)entries.draw;
+    state->upper_band = (void (*)(uint16_t *, const dfw_unit *))(uintptr_t)entries.band;
     state->unit.drawing = &state->upper_drawing;
 }
 
