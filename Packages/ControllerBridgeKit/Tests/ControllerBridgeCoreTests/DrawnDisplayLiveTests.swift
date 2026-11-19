@@ -20,7 +20,7 @@ struct DrawnDisplayLiveTests {
 
     static func ops(_ port: Handshake.Port, _ op: UInt8) -> [[UInt8]] { Handshake.drawn(port).filter { $0[9] == op } }
 
-    @Test("Drawing: the needle goes out as op 09, at most 30 a second, and never as pitch bend")
+    @Test("Drawing: the needle goes out as op 09, at most 50 a second, and never as pitch bend")
     func needleAsMessage() throws {
         let (rig, port) = try Self.playing()
         for step in 1...100 {
@@ -30,9 +30,9 @@ struct DrawnDisplayLiveTests {
             rig.coordinator.tick()
         }
         let needles = Self.ops(port, 0x09)
-        #expect(needles.count >= 25 && needles.count <= 31)
+        #expect(needles.count >= 45 && needles.count <= 51)
         #expect(!port.wd.contains { $0.first == 0xE0 })
-        // Nearly a second on at 120 BPM: close to half a bar, 8192 (the last send may be up to 1/30 s earlier).
+        // Nearly a second on at 120 BPM: close to half a bar, 8192 (the last send may be up to 1/50 s earlier).
         let last = needles.last.map { Int($0[10]) << 7 | Int($0[11]) } ?? 0
         #expect((7600...8192).contains(last))
     }

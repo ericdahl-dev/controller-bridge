@@ -18,11 +18,14 @@ final class JogDisplayController {
     private(set) var enabled = false
     /// The deck the preview follows with no controller connected (#221): the user's pick, 1-4; nil, the first loaded.
     private(set) var previewDeck: Int?
-    /// When the next needle is due: a schedule 1/`markerRate` apart (#558), so a send that lands late on a tick doesn't
+    /// When the next needle is due: a schedule 1/`needleRate` apart (#558), so a send that lands late on a tick doesn't
     /// push the next one back. After a stall it restarts from now, with no burst to catch up.
     private var nextMarkerDue: Double?
-    /// At most this many marker updates a second.
+    /// At most this many meter and phase updates a second (the needle has its own, `needleRate`).
     static let markerRate = 30.0
+    /// The needle's own rate (#582): 50 a second, 20 ms, two of the app's 10 ms ticks, so every step is the same
+    /// (1/30 s beat against the tick: steps of 30 and 40 ms, which read as judder). The chip draws a step in ~14 ms.
+    static let needleRate = 50.0
     /// Each mixer channel's meter (#461), through its ballistics (#582): what the drawn meter and the preview show.
     private var meters: [Int: MeterBallistics] = [:]
     /// When the next meter is due: a schedule 1/`markerRate` apart (#582), as the needle's (#561).
@@ -146,7 +149,7 @@ final class JogDisplayController {
                 driver.deckMarker(deck: entries[index].facts.deck, needle)
                 if index == front { driver.marker(needle) }
             }
-            let period = 1 / Self.markerRate
+            let period = 1 / Self.needleRate
             let next = (nextMarkerDue ?? clock.now) + period
             nextMarkerDue = next > clock.now ? next : clock.now + period
         }
