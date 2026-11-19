@@ -61,5 +61,10 @@ class BuildUpperDfuTests(unittest.TestCase):
         self.assertRefused((code, out, err, output), "--proof")
 
 
+    def test_a_proof_that_isnt_the_whole_512k_read_is_refused(self):
+        self.assertRefused(self.build(proof=b"\xff" * (PROOF_SIZE - 1)), "524288")
+        self.assertRefused(self.build(proof=b""), "524288")
+
+
 if __name__ == "__main__":
     unittest.main()

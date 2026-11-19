@@ -9,6 +9,8 @@ import argparse, struct, sys
 import dfupatch
 
 UPPER_BASE = 0x08080000
+# The owner's read covers sectors 8-11, 0x08080000-0x080FFFFF.
+PROOF_SIZE = 512 * 1024
 # The ST ROM bootloader's USB IDs, which the owner's unit shows in update mode (README, "Read-only checks"). Any
 # bcdDevice (0xFFFF).
 VID, PID = 0x0483, 0xDF11
@@ -28,6 +30,10 @@ def check_proof(path):
     if path is None:
         raise dfupatch.Refused("--proof is required: the owner's read-only read of the upper flash "
                                "(README, \"Read-only checks\"); B is never flashed before it")
+    proof = dfupatch.read(path)
+    if len(proof) != PROOF_SIZE:
+        raise dfupatch.Refused(f"the proof is {len(proof)} bytes, not the {PROOF_SIZE} of a whole read of "
+                               "0x08080000-0x080FFFFF: the upper flash isn't shown to exist")
 
 
 def main(argv=None):
