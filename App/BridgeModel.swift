@@ -323,9 +323,14 @@ final class BridgeModel {
         // Every MIDI send leaves the engine's task through one queue (#552): a port that stops taking data (#428) no
         // longer stalls OSC, the ticks or the trace. A port stuck past the bound is said once, and dropped until it
         // reconnects.
-        let sendQueue = MIDISendQueue(label: "dev.ericdahl.ControllerBridge.midi-send") { name in
-            log.log("MIDI port \(name) stopped taking data: sends to it are dropped until it reconnects")
-        }
+        let recoveryProducer = pipe.producer
+        let sendQueue = MIDISendQueue(label: "dev.ericdahl.ControllerBridge.midi-send", onStuck: { name in
+            log.log("MIDI port \(name) stopped taking data: sends to it are dropped until it takes data again")
+        }, onRecovered: { name in
+            // What was dropped meanwhile is lost: every light is painted again.
+            log.log("MIDI port \(name) takes data again: repainting its lights")
+            recoveryProducer.send(.portRecovered)
+        })
         let midi = midi!
         let queuedMIDI = QueuedMIDISystem(inner: midi, queue: sendQueue)
         let jogDisplay = (try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)).map { sendQueue.jogDisplayPort($0) }

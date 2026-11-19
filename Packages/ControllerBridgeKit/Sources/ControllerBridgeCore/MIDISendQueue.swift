@@ -21,15 +21,20 @@ public final class MIDISendQueue: @unchecked Sendable {
     private let stuckAfter: Double
     private let backlog: Int
     private let onStuck: @Sendable (String) -> Void
+    private let onRecovered: @Sendable (String) -> Void
+    private var names: [Int: String] = [:]
     private var items: [Item] = []
     private var running = false
     private var inFlight: (port: Int, since: Double)?
     private var stuck: Set<Int> = []
     private var nextPort = 0
 
-    /// `onStuck` gets the port's name, once, when it goes stuck.
+    /// `onStuck` gets the port's name, once, when it goes stuck; `onRecovered`, when its send returns after that, so
+    /// what was dropped meanwhile can be sent again.
     public init(label: String, stuckAfter: Double = 0.5, backlog: Int = 512,
-                onStuck: @escaping @Sendable (String) -> Void = { _ in }) {
+                onStuck: @escaping @Sendable (String) -> Void = { _ in },
+                onRecovered: @escaping @Sendable (String) -> Void = { _ in }) {
+        self.onRecovered = onRecovered
         worker = DispatchQueue(label: label)
         self.stuckAfter = stuckAfter
         self.backlog = backlog
@@ -53,6 +58,7 @@ public final class MIDISendQueue: @unchecked Sendable {
             if stuck.contains(port) { return false }
             if let flight = inFlight, flight.port == port, Self.now - flight.since >= stuckAfter {
                 stuck.insert(port)
+                names[port] = name
                 newlyStuck = true
                 items.removeAll { $0.port == port }
                 return false
@@ -82,7 +88,8 @@ public final class MIDISendQueue: @unchecked Sendable {
             guard let next else { return }
             next.work()
             // The send returned: the port takes data again (the jog display's ports are never reopened).
-            lock.withLock { _ = stuck.remove(next.port) }
+            let recovered: String? = lock.withLock { stuck.remove(next.port) != nil ? names[next.port] ?? "" : nil }
+            if let recovered { onRecovered(recovered) }
         }
     }
 

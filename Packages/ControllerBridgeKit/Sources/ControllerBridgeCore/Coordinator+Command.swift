@@ -28,6 +28,9 @@ extension Coordinator {
         /// Start the LED sweep, `delay` seconds per color; or stop it part-way (#26).
         case ledSweep(delay: Double)
         case stopLEDSweep
+        /// A MIDI port that had stopped taking data takes it again (#552): the LED writes dropped meanwhile are lost,
+        /// so every light is painted again.
+        case portRecovered
 
         /// Where a command goes while the demo (#64) has its own Coordinator.
         public enum Routing: Equatable, Sendable {
@@ -44,7 +47,7 @@ extension Coordinator {
         public var routing: Routing {
             switch self {
             // A real device is captured, so the real Coordinator pauses it, demo or not.
-            case .setCapture: .real
+            case .setCapture, .portRecovered: .real
             case .ledSweep, .stopLEDSweep: .active
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
@@ -74,6 +77,7 @@ extension Coordinator {
         case .setJogPreviewDeck(let deck): setJogPreviewDeck(deck)
         case .ledSweep(let delay): startLEDSweep(delay: delay)
         case .stopLEDSweep: stopLEDSweep()
+        case .portRecovered: repaintAfterRecovery()
         }
     }
 }
