@@ -208,6 +208,8 @@ public final class JogDisplayDriver {
         lastMarker = nil
         lastPlayLight = nil
         for message in JogDisplay.hello { sendController(message) }
+        // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
+        if displayFirmware == .custom { sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes) }
         onEvent?(.connected)
         next()
     }
