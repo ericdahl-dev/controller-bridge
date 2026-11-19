@@ -49,6 +49,9 @@ final class CoreMIDISystem: MIDISystem {
         }
     }
 
+    /// Calls `observer` on every change to CoreMIDI's setup, before the Coordinator hears of it.
+    func observeChanges(_ observer: @escaping @Sendable () -> Void) { relay.observe(observer) }
+
     var sources: [MIDIEndpoint] { (0..<MIDIGetNumberOfSources()).map { relay.remember(MIDIGetSource($0)) } }
     var destinations: [MIDIEndpoint] { (0..<MIDIGetNumberOfDestinations()).map { relay.remember(MIDIGetDestination($0)) } }
 
@@ -170,6 +173,10 @@ struct CoreMIDIOutput: MIDIOutput {
 /// time it was listed.
 final class ChangeRelay: Sendable {
     private let action = Mutex<(@Sendable (Set<MIDIUniqueID>) -> Void)?>(nil)
+    /// Others told of every change, such as the jog display's remembered ports (#552).
+    private let observers = Mutex<[@Sendable () -> Void]>([])
+
+    func observe(_ observer: @escaping @Sendable () -> Void) { observers.withLock { $0.append(observer) } }
     private let known = Mutex<[MIDIObjectRef: MIDIUniqueID]>([:])
     private let removedIDs = Mutex<Set<MIDIUniqueID>>([])
 
@@ -197,6 +204,7 @@ final class ChangeRelay: Sendable {
 
     func fire() {
         let removed = removedIDs.withLock { ids in defer { ids = [] }; return ids }
+        for observer in observers.withLock({ $0 }) { observer() }
         action.withLock { $0 }?(removed)
     }
 }

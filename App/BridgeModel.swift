@@ -334,7 +334,10 @@ final class BridgeModel {
         })
         let midi = midi!
         let queuedMIDI = QueuedMIDISystem(inner: midi, queue: sendQueue)
-        let jogDisplay = (try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)).map { sendQueue.jogDisplayPort($0) }
+        let coreJogDisplay = try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)
+        // Its ports are remembered until a device comes or goes (#552).
+        if let coreJogDisplay { midi.observeChanges { coreJogDisplay.forgetEndpoints() } }
+        let jogDisplay = coreJogDisplay.map { sendQueue.jogDisplayPort($0) }
         // The entries the Coordinator starts with: the saved ones, a controller following its layers as one per layer
         // (#79). It starts straight on them (#105), so nothing is sent after start to correct it.
         let running = ControllerSettings.expanded(settings.controllers, layers: layers)
