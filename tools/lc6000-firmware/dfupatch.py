@@ -63,7 +63,7 @@ def covered_length(element):
 
 
 def build(image, element):
-    """Serialises the DfuSe file around a new element of the same size, with a fresh suffix CRC."""
+    """Serializes the DfuSe file around a new element of the same size, with a fresh suffix CRC."""
     data = image.head + element + image.suffix_head
     return data + struct.pack("<I", suffix_crc(data))
 
