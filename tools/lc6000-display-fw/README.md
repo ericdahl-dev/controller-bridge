@@ -40,7 +40,8 @@ CI runs the same command in the Display firmware job, on Linux with gcc.
     to images.
 - `src/draw.h`, `src/draw.c`: `dfw_draw` draws design B for the deck in front. For now that is the ground, the
   unlit ring, the deck chip and the player badge. When stale it draws the waiting look instead: our logo (the app
-  icon's deck ring) with the beat ring dark. The logo is drawn from the icon SVG's own numbers, not stored as an
+  icon's deck ring) with the beat ring dark, its hub in the deck's color with the deck's number in black and no hole
+  (#524), so a deck change while stale still shows. The logo is drawn from the icon SVG's own numbers, not stored as an
   image. It uses `float` only, with no `double` and no libm (Cortex-M4F).
 - `src/draw_live.h`, `src/draw_live.c`: `dfw_draw_live`, called last by `dfw_draw`, draws the live elements over
   design B (#459): the master beat's section lit in the live green, and the marker (Swift's `drawMarker`: a white

@@ -301,7 +301,8 @@ static void capsule(dfw_pixel *frame, float ax, float ay, float bx, float by, fl
     }
 }
 
-static void logo(dfw_pixel *frame) {
+/// The logo, its hub filled in the deck's color with no hole (#524: the stale look's deck, as JogLogo's hub fill).
+static void logo(dfw_pixel *frame, dfw_pixel hub) {
     disc(frame, CENTER, CENTER, 206.0f * LOGO_SCALE, 0x1D1D1Eu);
     logo_arc(frame, 543.9f, 252.0f, 772.0f, 480.1f, 0x6C7277u);
     logo_arc(frame, 772.0f, 543.9f, 543.9f, 772.0f, 0xECCF65u);
@@ -312,8 +313,7 @@ static void logo(dfw_pixel *frame) {
     const float sin40 = 0.64278761f, cos40 = 0.76604444f, k = LOGO_SCALE;
     capsule(frame, CENTER + 295.0f * sin40 * k, CENTER - 295.0f * cos40 * k, CENTER + 159.0f * sin40 * k,
             CENTER - 159.0f * cos40 * k, 15.0f * k, 0xD5D5D5u);
-    disc(frame, CENTER, CENTER, 74.0f * LOGO_SCALE, 0xD5D5D5u);
-    disc(frame, CENTER, CENTER, 26.0f * LOGO_SCALE, 0x141415u);
+    disc(frame, CENTER, CENTER, 74.0f * LOGO_SCALE, hub);
 }
 
 /// A whole-pixel rectangle in one color.
@@ -361,9 +361,16 @@ static void rule(dfw_pixel *frame, const dfw_unit *unit) {
 void dfw_draw(dfw_pixel *frame, const dfw_unit *unit) {
     for (int i = 0; i < DFW_SIZE * DFW_SIZE; i++) frame[i] = GROUND;
     if (dfw_stale(unit)) {
-        // The waiting look (#464): nothing of the deck, the beat ring dark, our logo in the middle.
+        // The waiting look (#464): the beat ring dark, our logo in the middle, and (#524, the user's pick) the deck in
+        // its hub: the hub in the deck's color, its number in the ground's (Geist-Bold 18, as the header's chip),
+        // centered on the frame's center. The deck layer is the controller's own and can change while Syndicate is
+        // silent, so the hub follows the deck messages. A number outside 1-4 has no glyph: the hub alone.
         ring(frame, 1);
-        logo(frame);
+        const dfw_deck_state *d = &unit->deck;
+        logo(frame, (dfw_pixel)d->r << 16 | (dfw_pixel)d->g << 8 | d->b);
+        const dfw_glyph *number = glyph(&number_face, (char)('0' + (d->number <= 9 ? d->number : 0)));
+        if (number && d->number >= 1 && d->number <= 4)
+            draw_glyph(frame, &number_face, number, CENTER - number->advance / 2.0f, baseline_row(&number_face, CENTER));
         return;
     }
     ring(frame, 0);
