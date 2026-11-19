@@ -538,9 +538,11 @@ public final class JogDisplayDriver {
         lastPlayLight = nil
     }
 
-    /// The deck in front's play state for drawn mode (#459): loaded, playing, a quantized start waiting.
-    public func deckState(loaded: Bool, playing: Bool, pending: Bool) {
-        let flags: [(DrawnDisplay.State, Bool)] = [(.loaded, loaded), (.playing, playing), (.playPending, pending)]
+    /// The deck in front's play state for drawn mode (#459): loaded, playing, a quantized start waiting; and (#463)
+    /// a loop on and the CUE button held.
+    public func deckState(loaded: Bool, playing: Bool, pending: Bool, loop: Bool = false, cue: Bool = false) {
+        let flags: [(DrawnDisplay.State, Bool)] = [(.loaded, loaded), (.playing, playing), (.playPending, pending),
+                                                   (.loopOn, loop), (.cueHeld, cue)]
         for (flag, on) in flags { if on { drawnState.insert(flag) } else { drawnState.remove(flag) } }
         sendState()
     }

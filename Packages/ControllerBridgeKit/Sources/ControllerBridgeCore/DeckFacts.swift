@@ -21,6 +21,10 @@ struct DeckFacts: Equatable, Sendable {
     var loaded = false
     /// A quantized start is waiting (#459).
     var playPending = false
+    /// Syndicate's Loop: a loop is on (#463).
+    var looping = false
+    /// The deck's CUE button is held (#463).
+    var cueHeld = false
     /// The live tempo, from the deck's BPM.
     var bpm: Double?
     var track: Track?
@@ -34,7 +38,8 @@ struct DeckFacts: Equatable, Sendable {
 extension Bridge {
     var facts: DeckFacts {
         DeckFacts(
-            deck: mapping.deck.number, playing: playing, loaded: loaded, playPending: playPending, bpm: bpm,
+            deck: mapping.deck.number, playing: playing, loaded: loaded, playPending: playPending, looping: looping,
+            cueHeld: cueDown, bpm: bpm,
             track: track.map { DeckFacts.Track(title: $0.title, artist: $0.artist, key: $0.key, bpm: $0.bpm, playerType: $0.playerType) },
             duration: duration, position: cueMemory.position, barRamp: barRamp
         )

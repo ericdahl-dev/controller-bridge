@@ -126,7 +126,8 @@ final class JogDisplayController {
         for entry in entries { driver.deckPlaying(deck: entry.facts.deck, entry.facts.playing) }
         guard let front else { return }
         let facts = entries[front].facts
-        driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending)
+        driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending, loop: facts.looping,
+                         cue: facts.cueHeld)
         driver.playLight(facts.playing || (facts.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
     }
 
