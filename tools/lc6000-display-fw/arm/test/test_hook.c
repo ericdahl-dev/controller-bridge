@@ -5,6 +5,7 @@
 #include "harness.h"
 #include "hook.h"
 #include "draw.h"
+#include "upper.h"
 
 #define CAPABILITY_V1 "F0 00 02 0B 7F 10 20 00 02 00 01 F7"
 #define BEGIN_V1 "F0 00 02 0B 7F 10 20 00 02 01 01 F7"
@@ -332,6 +333,87 @@ void nothing_is_hidden_that_was_never_shown(void) {
     CHECK(chip.hides == 0);
 }
 
+/// Block B as the upper flash holds it (#501): erased, unless a test writes one. The good one's CRC, 0x22B5DF72, is
+/// zlib's CRC-32 of its bytes from +16 to its end (worked out with Python's zlib, not this code).
+static uint8_t upper[0x80000]; /* the upper flash: sectors 8-11 */
+
+static void put_word(uint8_t *at, uint32_t word) {
+    for (int i = 0; i < 4; i++) at[i] = (uint8_t)(word >> (8 * i));
+}
+
+static void good_upper(void) {
+    memset(upper, 0xFF, sizeof upper);
+    put_word(upper + 0, UPPER_MARKER);
+    put_word(upper + 4, UPPER_VERSION);
+    put_word(upper + 8, 29);
+    put_word(upper + 12, 0x22B5DF72u);
+    put_word(upper + 16, 0x08080015u);
+    memcpy(upper + 20, "123456789", 9);
+}
+
+void a_good_upper_block_gives_its_draw_entry(void) {
+    good_upper();
+    CHECK(upper_check(upper) == 0x08080015u);
+}
+
+void erased_upper_flash_has_no_block(void) {
+    memset(upper, 0xFF, sizeof upper);
+    CHECK(upper_check(upper) == 0);
+}
+
+void a_block_for_another_version_is_refused(void) {
+    good_upper();
+    put_word(upper + 4, UPPER_VERSION + 1);
+    CHECK(upper_check(upper) == 0);
+}
+
+void a_block_whose_CRC_doesnt_match_is_refused(void) {
+    good_upper();
+    upper[24] ^= 1;
+    CHECK(upper_check(upper) == 0);
+}
+
+void a_length_past_the_sector_or_inside_the_header_is_refused(void) {
+    good_upper();
+    put_word(upper + 8, UPPER_LIMIT + 4);
+    CHECK(upper_check(upper) == 0);
+    put_word(upper + 8, UPPER_HEADER - 1);
+    CHECK(upper_check(upper) == 0);
+    put_word(upper + 8, 0);
+    CHECK(upper_check(upper) == 0);
+}
+
+void an_entry_that_isnt_Thumb_code_inside_the_block_is_refused(void) {
+    // Each entry with its own good CRC (Python's zlib), so only the entry check can refuse it.
+    static const struct { uint32_t entry, crc; } bad[] = {
+        { 0x08080014u, 0xFF2306F7u }, /* no Thumb bit */
+        { 0x0808001Fu, 0x18EAB954u }, /* past the end of B */
+        { 0x08080011u, 0xE20CB5E4u }, /* inside the header */
+        { 0x00000015u, 0x8BA17EC3u }, /* nowhere near B */
+    };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        good_upper();
+        put_word(upper + 16, bad[i].entry);
+        put_word(upper + 12, bad[i].crc);
+        CHECK(upper_check(upper) == 0);
+    }
+}
+
+/// A good B of 0x20020 bytes, past sector 8 into sector 9: zeros after the good B's bytes. CRC from Python's zlib.
+static void long_upper(void) {
+    good_upper();
+    memset(upper + 29, 0, 0x20020 - 29);
+    put_word(upper + 8, 0x20020);
+    put_word(upper + 12, 0x40575571u);
+}
+
+void a_block_past_sector_8_is_checked_whole(void) {
+    long_upper();
+    CHECK(upper_check(upper) == 0x08080015u);
+    upper[0x2001F] = 1;
+    CHECK(upper_check(upper) == 0);
+}
+
 /// The hook block draws only with the table stock hands it (#501): with none (the drawing block not yet checked), the
 /// capability ask gets no answer and nothing is drawn, so the app falls back to images.
 void with_no_drawing_from_stock_the_capability_ask_gets_no_answer(void) {
@@ -342,6 +424,86 @@ void with_no_drawing_from_stock_the_capability_ask_gets_no_answer(void) {
     deliver(0, DECK_2_RED_TRACK);
     tick();
     CHECK(rec.sends == 0 && rec.presents == 0);
+}
+
+void with_an_erased_upper_block_the_capability_ask_gets_no_answer(void) {
+    // B's absence alone decides, even with a drawing on offer from stock.
+    cold_boot();
+    memset(upper, 0xFF, sizeof upper);
+    stock.upper = upper;
+    deliver(0, CAPABILITY_V1);
+    tick();
+    CHECK(rec.sends == 0);
+}
+
+void with_a_good_upper_block_the_capability_ask_is_answered(void) {
+    // Only the capability ask: on the Mac, B's entry is a chip address and is never called.
+    cold_boot();
+    good_upper();
+    stock.upper = upper;
+    stock.drawing = NULL;
+    deliver(0, CAPABILITY_V1);
+    tick();
+    CHECK(rec.sends == 1);
+}
+
+void an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer(void) {
+    for (int bad = 0; bad < 2; bad++) {
+        cold_boot();
+        good_upper();
+        if (bad == 0) upper[24] ^= 1;
+        else put_word(upper + 4, UPPER_VERSION + 1);
+        stock.upper = upper;
+        stock.drawing = NULL;
+        deliver(0, CAPABILITY_V1);
+        tick();
+        CHECK(rec.sends == 0);
+    }
+}
+
+void a_long_upper_block_is_checked_whole_at_the_first_ask(void) {
+    // The app waits 0.5 s for the answer and doesn't ask again until it reconnects: the ask checks all of B first
+    // (45 ms for 512 KB at most), never answering for an unchecked B and never staying silent for a good one.
+    for (int corrupt = 0; corrupt < 2; corrupt++) {
+        cold_boot();
+        long_upper();
+        if (corrupt) upper[0x2001F] = 1;  // B's last byte: only a whole check sees it
+        stock.upper = upper;
+        stock.drawing = NULL;
+        deliver(0, CAPABILITY_V1);
+        tick();
+        CHECK(rec.sends == (corrupt ? 0 : 1));
+    }
+}
+
+void before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block(void) {
+    // Our code runs only after our first message, so a power cycle clears any crash of ours (#501): B is
+    // checked at the first ask, never at boot.
+    cold_boot();
+    long_upper();
+    stock.upper = upper;
+    stock.drawing = NULL;
+    for (int i = 0; i < 100; i++) tick();
+    const uint8_t *bytes = (const uint8_t *)&state;
+    size_t touched = 0;
+    for (size_t i = 0; i < sizeof state; i++) touched += bytes[i] != 0xA5;
+    CHECK(touched == 0);
+    CHECK(chip.witness == 0);
+}
+
+void without_a_drawing_the_ask_takes_no_malloc(void) {
+    // A without B behaves exactly like stock (#501): no answer, and none of stock's heap.
+    for (int with_upper = 0; with_upper < 2; with_upper++) {
+        cold_boot();
+        memset(upper, 0xFF, sizeof upper);
+        stock.upper = with_upper ? upper : NULL;
+        stock.drawing = NULL;
+        deliver(0, CAPABILITY_V1);
+        deliver(0, BEGIN_V1);
+        tick();
+        CHECK(chip.mallocs == 0);
+        CHECK(rec.sends == 0);
+    }
 }
 
 const test_case all_tests[] = {
@@ -368,6 +530,19 @@ const test_case all_tests[] = {
     { "garbage with the magic but a bad check word is fresh state", garbage_with_the_magic_but_a_bad_check_word_is_fresh_state },
     { "three seconds of silence turn the screen stale", three_seconds_of_silence_turn_the_screen_stale },
     { "the millisecond clock runs on across a counter wrap", the_millisecond_clock_runs_on_across_a_counter_wrap },
+    { "a good upper block gives its draw entry", a_good_upper_block_gives_its_draw_entry },
+    { "erased upper flash has no block", erased_upper_flash_has_no_block },
+    { "a block for another version is refused", a_block_for_another_version_is_refused },
+    { "a block whose CRC doesn't match is refused", a_block_whose_CRC_doesnt_match_is_refused },
+    { "a length past the sector or inside the header is refused", a_length_past_the_sector_or_inside_the_header_is_refused },
+    { "an entry that isn't Thumb code inside the block is refused", an_entry_that_isnt_Thumb_code_inside_the_block_is_refused },
+    { "a block past sector 8 is checked whole", a_block_past_sector_8_is_checked_whole },
+    { "with an erased upper block the capability ask gets no answer", with_an_erased_upper_block_the_capability_ask_gets_no_answer },
+    { "with a good upper block the capability ask is answered", with_a_good_upper_block_the_capability_ask_is_answered },
+    { "an upper block with a bad CRC or another version gets no answer", an_upper_block_with_a_bad_CRC_or_another_version_gets_no_answer },
+    { "a long upper block is checked whole at the first ask", a_long_upper_block_is_checked_whole_at_the_first_ask },
+    { "before our first message the tick touches nothing even with an upper block", before_our_first_message_the_tick_touches_nothing_even_with_an_upper_block },
+    { "without a drawing the ask takes no malloc", without_a_drawing_the_ask_takes_no_malloc },
     { 0, 0 },
 };
 

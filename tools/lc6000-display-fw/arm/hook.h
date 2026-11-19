@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "dfw.h"
+#include "upper.h"
 
 /// The last word of the padding, 0x0807FFDC on the unit: our block is present only if it holds this.
 #define HOOK_MARKER 0x31574644u /* "DFW1" */
@@ -31,8 +32,11 @@ typedef struct {
     void (*hide)(void);
     dfw_port port;
     /// The drawing's table, or NULL while there is none we trust: then the capability ask gets no answer (#501).
-    /// On the unit, NULL until the drawing block at 0x08080000 checks out.
+    /// Used only when `upper` is NULL: the stub test build's empty drawing, and the Mac tests.
     const dfw_drawing *drawing;
+    /// Block B, the drawing block (upper.h): 0x08080000 on a unit built with HOOK_UPPER_PROVEN=1, else NULL. When
+    /// set, the drawing comes from B alone, once its header checks out.
+    const uint8_t *upper;
 } hook_stock;
 
 /// Our state, in SRAM stock never uses (0x2002AE94 on the unit), which no boot zeroes.
@@ -49,6 +53,9 @@ typedef struct {
     uint8_t shown;
     /// The stock side this state was started with: the port wrapper below reaches it through here.
     const hook_stock *stock;
+    /// B was checked this boot (#501), and B's table once it checks out; the unit then points there.
+    uint8_t upper_checked;
+    dfw_drawing upper_drawing;
     dfw_unit unit;
 } hook_state;
 

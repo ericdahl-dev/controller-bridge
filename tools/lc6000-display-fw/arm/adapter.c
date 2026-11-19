@@ -97,6 +97,9 @@ static const hook_stock stock = {
     .drawing = &dfw_drawn,
 #else
     .drawing = 0,
+#endif    // Block B at 0x08080000 (#501), read only when built with ARM_UPPER_PROVEN=1, after the owner's read-only proof.
+#if HOOK_UPPER_PROVEN
+    .upper = (const uint8_t *)0x08080000u,
 #endif
 };
 

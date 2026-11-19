@@ -80,7 +80,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/fw"
           "$RUNNER_TEMP/fw/bin/pip" install unicorn
       # The 9,184-byte padding limit on this runner's GCC: prints the size with drawing and hook-only, fails if over.
-      - name: Block size (9,184-byte limit)
+      - name: Block sizes (A 9,184 bytes, B 512 KB)
         run: make -s -C tools/lc6000-display-fw arm-size
       - name: Hook and block tests
         run: make -C tools/lc6000-display-fw arm-test PYTHON="$RUNNER_TEMP/fw/bin/python"

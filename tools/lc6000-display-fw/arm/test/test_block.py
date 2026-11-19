@@ -3,7 +3,7 @@ in an emulator (unicorn) against a synthetic flash. The stock functions the shim
 
 Run from tools/lc6000-display-fw after `make arm`:  python3 -I arm/test/test_block.py [BUILD_DIR]
 Needs arm-none-eabi binutils and the `unicorn` Python package (pip install unicorn)."""
-import os, shutil, struct, subprocess, sys, tempfile, unittest
+import os, shutil, struct, subprocess, sys, tempfile, unittest, zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FW = os.path.dirname(os.path.dirname(HERE))
@@ -25,6 +25,7 @@ UPTIME, RX_COUNT, RX, WITNESS = 0x20001BA0, 0x2000189A, 0x20001DE0, 0xE000E400
 LAYER2_SURFACE_PIXELS = 0x20001DC0
 FRAME_AT, LAYER_AT = 0xD0100000, 0xD0180000
 RETURN = 0x08000100  # where a shim returns to: the test stops there
+UPPER, UPPER_SIZE = 0x08080000, 0x80000  # block B's home (#501): sectors 8-11
 
 
 def block():
@@ -92,35 +93,33 @@ class ReproducibleTests(unittest.TestCase):
 
 
 class SizeTests(unittest.TestCase):
-    """The 9,184-byte limit is a check on every toolchain that builds the block, Mac and CI's Ubuntu GCC alike."""
+    """Each block's limit is a check on every toolchain that builds it, Mac and CI's Ubuntu GCC alike (#501): block A
+    the 9,184-byte padding, block B the 512 KB upper flash."""
 
-    def test_arm_size_reports_both_builds_within_the_padding(self):
+    def test_arm_size_reports_a_and_b_within_their_limits(self):
         with tempfile.TemporaryDirectory() as out:
             done = subprocess.run(["make", "-s", "-C", FW, "arm-size", f"ARM_SIZE_BUILD={out}"], capture_output=True,
                                   text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
         lines = [line for line in done.stdout.splitlines() if line.startswith("block ")]
         self.assertEqual([line.split(":")[0] for line in lines],
-                         ["block (with drawing)", "block (hook and protocol)", "block (hook only)"])
-        # The drawing build is information only (#501); the other two must fit and print their size.
-        for line in lines[1:]:
-            used = int(line.split(":")[1].split()[0])
-            self.assertLessEqual(used, PAD_END - PAD_START, line)
+                         ["block A (hook and protocol)", "block A (hook only)", "block B (drawing)"])
+        for line, limit in zip(lines, (PAD_END - PAD_START, PAD_END - PAD_START, UPPER_SIZE)):
+            used, of = (int(word) for word in line.split(":")[1].split()[0:3:2])
+            self.assertEqual(of, limit, line)
+            self.assertLessEqual(used, limit, line)
 
-    def test_drawing_over_the_padding_is_reported_but_doesnt_fail_until_its_own_block_exists(self):
-        # #501: drawing moves to its own block at 0x08080000; until then its size in the padding is information only,
-        # so drawing PRs don't turn CI red. The hook-only block still must fit.
+    def test_a_block_b_over_the_upper_flash_fails_arm_size(self):
         with tempfile.TemporaryDirectory() as out:
             big = os.path.join(out, "big.c")
             with open(big, "w") as f:
-                f.write("const unsigned char hook_too_big[9184] = {1};\n"
-                        "const unsigned char *hook_keep(void) { return hook_too_big; }\n")
+                f.write("const unsigned char upper_too_big[0x80000] = {1};\n"
+                        "const unsigned char *upper_keep(void) { return upper_too_big; }\n")
             done = subprocess.run(["make", "-s", "-C", FW, "arm-size", f"ARM_SIZE_BUILD={out}/b",
-                                   f"ARM_SIZE_DRAW_EXTRA={big}", "ARM_SIZE_DRAW_LDFLAGS=-Wl,-u,hook_keep"],
+                                   f"ARM_SIZE_UPPER_EXTRA={big}", "ARM_SIZE_UPPER_LDFLAGS=-Wl,-u,upper_keep"],
                                   capture_output=True, text=True)
-        self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertIn("block (with drawing): over the 9184-byte padding; informational until #501", done.stdout)
-        self.assertRegex(done.stdout, r"block \(hook only\): \d+ of 9184 bytes used")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertRegex(done.stdout + done.stderr, r"block B \(drawing\): over|overflow")
 
     def test_a_block_too_big_for_the_padding_fails_the_link(self):
         with tempfile.TemporaryDirectory() as out:
@@ -143,15 +142,24 @@ class SizeTests(unittest.TestCase):
 class Chip:
     """A synthetic display chip: flash with our block in the padding and stubs where stock's functions are."""
 
-    def __init__(self, marker=True):
+    def __init__(self, marker=True, data=None, upper=None):
         self.uc = uc = unicorn.Uc(unicorn.UC_ARCH_ARM, unicorn.UC_MODE_THUMB | unicorn.UC_MODE_MCLASS)
         for base, size in ((0x08000000, 0x100000), (0x10000000, 0x10000), (0x20000000, 0x30000),
                            (0x40016000, 0x1000), (0xD0000000, 0x200000), (0xE000E000, 0x1000)):
             uc.mem_map(base, size)
-        data = bytearray(block())
+        data = bytearray(data if data is not None else block())
         if not marker:
             data[-4:] = b"\xff\xff\xff\xff"
         uc.mem_write(PAD_START, bytes(data))
+        # The upper flash, 0x08080000-0x080FFFFF: erased, unless a test puts a block B there.
+        uc.mem_write(UPPER, b"\xff" * UPPER_SIZE)
+        if upper is not None:
+            uc.mem_write(UPPER, upper)
+        self.upper_reads = 0
+
+        def on_upper_read(uc, access, address, size, value, _):
+            self.upper_reads += 1
+        uc.hook_add(unicorn.UC_HOOK_MEM_READ, on_upper_read, begin=UPPER, end=UPPER + UPPER_SIZE - 1)
         bx_lr = b"\x70\x47"
         uc.mem_write(STOCK_RENDER, b"\x55\x20" + bx_lr)  # movs r0, #0x55 ; bx lr
         uc.mem_write(STOCK_MALLOC, b"\x00\x48" + bx_lr + struct.pack("<I", FRAME_AT))  # ldr r0, =FRAME_AT ; bx lr
@@ -173,15 +181,21 @@ class Chip:
                 self.sent.append(bytes(uc.mem_read(uc.reg_read(A.UC_ARM_REG_R1), length)))
         uc.hook_add(unicorn.UC_HOOK_CODE, on_code)
 
-    def call(self, entry, **regs):
+    def call(self, entry, count=2_000_000, **regs):
         uc = self.uc
         uc.reg_write(A.UC_ARM_REG_SP, 0x10010000 - 0x100)
         uc.reg_write(A.UC_ARM_REG_LR, RETURN | 1)
         for name, value in regs.items():
             uc.reg_write(getattr(A, f"UC_ARM_REG_{name.upper()}"), value)
-        uc.emu_start(entry | 1, RETURN, count=2_000_000)
+        self.instructions = 0
+        counting = uc.hook_add(unicorn.UC_HOOK_CODE, self.count_instruction)
+        uc.emu_start(entry | 1, RETURN, count=count)
+        uc.hook_del(counting)
         return {name: uc.reg_read(getattr(A, f"UC_ARM_REG_{name.upper()}"))
                 for name in ("r0", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "sp")}
+
+    def count_instruction(self, uc, address, size, _):
+        self.instructions += 1
 
     def receive(self, hexbytes):
         message = bytes.fromhex(hexbytes)
@@ -195,6 +209,10 @@ class Chip:
 
 CALLEE_SAVED = dict(r4=0x44444444, r6=0x66666666, r9=0x99999999, r11=0xBBBBBBBB)
 CAPABILITY = "F000020B7F1020000200 01F7".replace(" ", "")
+BEGIN = "F000020B7F102000020101F7"
+DECK_2_RED_TRACK = "F000020B7F10200009030201 7F0000000001F7".replace(" ", "")
+TITLE_STROBE = "F000020B7F102000080400 5374726F6265F7".replace(" ", "")  # title "Strobe", as test/test_sequence.c
+TEMPO_128 = "F000020B7F10200003050A00F7"
 
 
 class CommandEntryTests(unittest.TestCase):
@@ -247,6 +265,142 @@ class RenderEntryTests(unittest.TestCase):
         self.assertEqual(chip.calls["malloc"], 0)
         self.assertEqual(chip.sent, [])
 
+
+def good_upper():
+    """A literal block B (the C header tests' own): CRC 0x22B5DF72 is zlib's, worked out apart. Its entry is never
+    called by a capability ask."""
+    return struct.pack("<IIIII", 0x42574644, 1, 29, 0x22B5DF72, 0x08080015) + b"123456789"
+
+
+def proven_block():
+    with tempfile.TemporaryDirectory() as out:
+        subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", "ARM_UPPER_PROVEN=1"], check=True,
+                       capture_output=True)
+        with open(os.path.join(out, "block.bin"), "rb") as f:
+            return f.read()
+
+
+def full_upper():
+    """A good B filling all 512 KB, so the check is as long as it can ever be."""
+    body = struct.pack("<I", 0x08080015) + bytes((i * 7 + 3) & 0xFF for i in range(UPPER_SIZE - 20))
+    return struct.pack("<IIII", 0x42574644, 1, UPPER_SIZE, zlib.crc32(body)) + body
+
+
+class UpperSwitchTests(unittest.TestCase):
+    """Block A reads B only when built with the "upper flash proven" switch (#501)."""
+
+    def test_checking_all_512_kb_at_the_ask_stays_well_under_the_apps_half_second(self):
+        # Measured at 6.1M instructions for all 512 KB: at 180 MHz and about 1.3 cycles an instruction (flash wait
+        # states), about 45 ms, once per boot. Today's B (about 10 KB) is about 1 ms. The app waits 0.5 s.
+        chip = Chip(data=proven_block(), upper=full_upper())
+        message = chip.receive(CAPABILITY)
+        chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8],
+                  r8=0)
+        self.assertLess(chip.instructions, 7_500_000)
+        chip.call(dfupatch.HOOK_RENDER_ENTRY)
+        self.assertEqual(chip.sent, [bytes.fromhex("F000020B01102000020001F7")])
+
+    def ask(self, chip):
+        message = chip.receive(CAPABILITY)
+        chip.call(dfupatch.HOOK_COMMAND_ENTRY, r10=0x20, r7=RX, r5=(message[7] << 7) | message[8], r8=0)
+        chip.call(dfupatch.HOOK_RENDER_ENTRY)
+
+    def test_flipping_the_switch_rebuilds_block_a_in_the_same_build_dir(self):
+        # The README's own order: make arm, then, after the read-only checks, make arm ARM_UPPER_PROVEN=1.
+        with tempfile.TemporaryDirectory() as out:
+            built = []
+            for proven in ("0", "1", "0"):
+                subprocess.run(["make", "-s", "-C", FW, "arm", f"ARM_BUILD={out}", f"ARM_UPPER_PROVEN={proven}"],
+                               check=True, capture_output=True)
+                with open(os.path.join(out, "block.bin"), "rb") as f:
+                    built.append(f.read())
+        self.assertNotEqual(built[0], built[1], "the switch on must give a new block A")
+        self.assertEqual(built[0], built[2], "and off again the old one")
+
+    def test_with_the_switch_the_tick_touches_nothing_before_our_first_message(self):
+        # A power cycle clears any crash of ours only if our code runs after our first message (#501).
+        chip = Chip(data=proven_block(), upper=upper_block())
+        for _ in range(3):
+            chip.call(dfupatch.HOOK_RENDER_ENTRY)
+        self.assertEqual(chip.upper_reads, 0)
+        self.assertEqual(chip.word(STATE_AT), 0xA5A5A5A5)
+        self.assertEqual(chip.uc.mem_read(WITNESS, 1), b"\x00")
+
+    def test_without_the_switch_block_a_never_reads_the_upper_flash(self):
+        chip = Chip(upper=good_upper())
+        for _ in range(3):
+            chip.call(dfupatch.HOOK_RENDER_ENTRY)
+        self.ask(chip)
+        self.assertEqual(chip.upper_reads, 0)
+
+    def test_with_the_switch_only_a_good_block_b_gets_the_ask_answered(self):
+        proven = proven_block()
+        answer = bytes.fromhex("F000020B01102000020001F7")
+        for upper, sent in ((None, []), (good_upper(), [answer])):
+            with self.subTest(upper=upper is not None):
+                chip = Chip(data=proven, upper=upper)
+                self.ask(chip)
+                self.assertEqual(chip.sent, sent)
+
+
+
+def upper_block():
+    with open(os.path.join(BUILD, "upper.bin"), "rb") as f:
+        return f.read()
+
+
+class UpperBlockTests(unittest.TestCase):
+    """Block B, the drawing, built for 0x08080000 (#501): the header block A checks, worked out here apart."""
+
+    def test_b_starts_with_a_header_block_a_will_accept(self):
+        data = upper_block()
+        marker, version, length, crc, draw = struct.unpack_from("<IIIII", data)
+        self.assertEqual(marker, 0x42574644)
+        self.assertEqual(version, 1)
+        self.assertEqual(length, len(data))
+        self.assertLessEqual(length, UPPER_SIZE)
+        self.assertEqual(crc, zlib.crc32(data[16:]))
+        out = subprocess.run(["arm-none-eabi-nm", os.path.join(BUILD, "upper.elf")], capture_output=True, text=True,
+                             check=True).stdout
+        names = {name: int(value, 16) for value, _, name in (line.split() for line in out.splitlines()
+                                                              if line.count(" ") == 2)}
+        self.assertEqual(draw & ~1, names["dfw_draw"])  # nm prints a Thumb function's address without bit 0
+        self.assertEqual(draw & 1, 1, "Thumb")
+        self.assertTrue(UPPER + 20 <= draw < UPPER + length)
+
+    def test_block_a_draws_through_a_good_b_and_stays_silent_for_a_corrupted_one(self):
+        proven = proven_block()
+        answer = bytes.fromhex("F000020B01102000020001F7")
+        corrupted = bytearray(upper_block())
+        corrupted[len(corrupted) // 2] ^= 0x01
+        for upper, drawn in ((upper_block(), True), (bytes(corrupted), False)):
+            with self.subTest(drawn=drawn):
+                chip = Chip(data=proven, upper=upper)
+                for hexbytes in (CAPABILITY, BEGIN, DECK_2_RED_TRACK):
+                    message = chip.receive(hexbytes)
+                    chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX,
+                              r5=(message[7] << 7) | message[8], r8=0)
+                chip.call(dfupatch.HOOK_RENDER_ENTRY, count=50_000_000)
+                self.assertEqual(chip.sent, [answer] if drawn else [])
+                layer = bytes(chip.uc.mem_read(LAYER_AT, 320 * 240 * 2))
+                self.assertEqual(any(layer), drawn, "B's drawing reached the screen" if drawn else "nothing drawn")
+
+    def test_block_b_draws_a_title_on_the_chip(self):
+        # The text path off the Mac for the first time (#458, #501): layout's soft-double math (__aeabi_d*), the kern
+        # search and the 4-bit glyph blits. Frame rows 60-90 hold the title; the layer shows the frame turned 180
+        # degrees at (61, 21), so they are layer rows 21 + 197 - 90 to 21 + 197 - 60.
+        proven = proven_block()
+        rows = []
+        for extra in ((), (TITLE_STROBE, TEMPO_128)):
+            chip = Chip(data=proven, upper=upper_block())
+            for hexbytes in (CAPABILITY, BEGIN, DECK_2_RED_TRACK, *extra):
+                message = chip.receive(hexbytes)
+                chip.call(dfupatch.HOOK_COMMAND_ENTRY, count=20_000_000, r10=0x20, r7=RX,
+                          r5=(message[7] << 7) | message[8], r8=0)
+            chip.call(dfupatch.HOOK_RENDER_ENTRY, count=200_000_000)
+            top, bottom = 21 + 197 - 90, 21 + 197 - 60
+            rows.append(bytes(chip.uc.mem_read(LAYER_AT + top * 320 * 2, (bottom - top + 1) * 320 * 2)))
+        self.assertNotEqual(rows[0], rows[1], "the title changed the title rows")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
