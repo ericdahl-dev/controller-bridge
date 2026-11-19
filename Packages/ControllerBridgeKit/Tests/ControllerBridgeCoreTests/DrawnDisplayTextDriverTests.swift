@@ -69,14 +69,14 @@ struct DrawnDisplayTextDriverTests {
     @Test("A deck switch: deck, state, then the new deck's texts and tempo")
     func deckSwitch() throws {
         let (rig, port) = try Handshake.drawnLayers()
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2, title: "Night Drive", key: "8A", bpm: 122.5))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2, title: "Night Drive", key: "Am", bpm: 122.5))
         port.wd.removeAll()
         rig.coordinator.midi(.noteOn(channel: 0, note: 51, velocity: 0), source: JogDisplayRingHoldTests.lc6000.id)
         rig.coordinator.midi(.noteOn(channel: 1, note: 51, velocity: 127), source: JogDisplayRingHoldTests.lc6000.id)
         #expect(Handshake.drawn(port).map { $0[9] } == [0x03, 0x07, 0x04, 0x04, 0x04, 0x04, 0x05])
         #expect(Handshake.drawn(port).filter { $0[9] == 0x04 || $0[9] == 0x05 } == [Message.text(.title, "Night Drive").bytes,
                                             Message.text(.artist, "Bill Hamel, Jeremus").bytes,
-                                            Message.text(.key, "8A").bytes, Message.text(.untitled, "").bytes, Message.tempo(122.5).bytes])
+                                            Message.text(.key, "Am").bytes, Message.text(.untitled, "").bytes, Message.tempo(122.5).bytes])
     }
 
     @Test("Same deck, a new title or tempo: only the changed message goes, once")

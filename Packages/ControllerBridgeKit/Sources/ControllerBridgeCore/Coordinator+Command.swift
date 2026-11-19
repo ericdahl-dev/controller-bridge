@@ -25,6 +25,8 @@ extension Coordinator {
         case setJogDisplay(enabled: Bool)
         /// Settings' display firmware (#425): Denon's or custom.
         case setDisplayFirmware(DisplayFirmware)
+        /// Settings' Key display (#590): the key as Syndicate sends it, or as Camelot codes.
+        case setKeyDisplay(KeyNotation)
         /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
         case setJogPreviewDeck(Int?)
         /// Start the LED sweep, `delay` seconds per color; or stop it part-way (#26).
@@ -57,7 +59,7 @@ extension Coordinator {
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
             case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setColorMessages, .setLightBrightness, .resync, .setControllers, .setProfiles,
-                 .setProfileChoices, .setJogDisplay, .setDisplayFirmware:
+                 .setProfileChoices, .setJogDisplay, .setDisplayFirmware, .setKeyDisplay:
                 .waitsForDemo
             }
         }
@@ -80,6 +82,7 @@ extension Coordinator {
         case .setProfileChoices(let choices): setProfileChoices(choices)
         case .setJogDisplay(let enabled): setJogDisplay(enabled: enabled)
         case .setDisplayFirmware(let firmware): setDisplayFirmware(firmware)
+        case .setKeyDisplay(let notation): setKeyDisplay(notation)
         case .setJogPreviewDeck(let deck): setJogPreviewDeck(deck)
         case .ledSweep(let delay): startLEDSweep(delay: delay)
         case .stopLEDSweep: stopLEDSweep()

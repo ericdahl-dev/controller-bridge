@@ -89,6 +89,12 @@ final class JogDisplayController {
         self.enabled = enabled
     }
 
+    /// How the key is written (#590): every content, so the images, the drawn display's key text and the preview.
+    private var keyDisplay = KeyNotation.traditional
+    func setKeyDisplay(_ notation: KeyNotation) {
+        keyDisplay = notation
+    }
+
     func setPreviewDeck(_ deck: Int?) {
         previewDeck = deck
     }
@@ -106,7 +112,8 @@ final class JogDisplayController {
         func content(_ index: Int) -> JogDisplayContent {
             let facts = entries[index].facts, track = facts.track
             return JogDisplayContent(deck: facts.deck, color: color(facts.deck) ?? [255, 255, 255], title: track?.title,
-                                     artist: track?.artist, key: track?.key, bpm: track?.bpm, playerType: track?.playerType)
+                                     artist: track?.artist, key: track.map { keyDisplay.shown($0.key) }, bpm: track?.bpm,
+                                     playerType: track?.playerType)
         }
         for index in entries.indices { driver.preview(content(index)) }
         guard let first = entries.indices.first(where: { entries[$0].connected }) else {
