@@ -228,6 +228,28 @@ static void the_band_lands_on_the_layer_turned_and_in_rgb565(void) {
     CHECK(off == 0);
 }
 
+/// The present copies the frame, the ring's corners with it, and the band follows: its clear must leave the square
+/// alone as its draw does (agent2's review). At 1:30, r 105, frame (173, 25), panel (85, 193): still the frame's color.
+static void the_bands_clear_leaves_the_frames_corners(void) {
+    with_time(DECK_4_BLUE_EMPTY, PAUSED, 83, 165, 0);
+    for (int i = 0; i < DFW_LAYER_W * DFW_LAYER_H; i++) layer[i] = 0;
+    for (int y = 0; y < DFW_SIZE; y++)
+        for (int x = 0; x < DFW_SIZE; x++)
+            layer[(DFW_FRAME_Y + y) * DFW_LAYER_W + DFW_FRAME_X + x] =
+                rgb565(rec.last[(DFW_SIZE - 1 - y) * DFW_SIZE + (DFW_SIZE - 1 - x)]);
+    uint16_t corner = layer[193 * DFW_LAYER_W + 85];
+    CHECK(corner == rgb565(0x0080FFu));   // the fill, past 1:30 at 83/165
+    dfw_draw_band(layer, &unit);
+    CHECK(layer[193 * DFW_LAYER_W + 85] == corner);
+    // And every pixel of the square is the frame's still.
+    int off = 0;
+    for (int y = 0; y < DFW_SIZE; y++)
+        for (int x = 0; x < DFW_SIZE; x++)
+            off += layer[(DFW_FRAME_Y + y) * DFW_LAYER_W + DFW_FRAME_X + x] !=
+                   rgb565(rec.last[(DFW_SIZE - 1 - y) * DFW_SIZE + (DFW_SIZE - 1 - x)]);
+    CHECK(off == 0);
+}
+
 /// The frame draws the ring's corners itself: the band at r 103-107 crosses the 198 square at its diagonals, and the
 /// layer's band leaves the square to the frame.
 static void the_frame_draws_the_rings_corners(void) {
@@ -242,5 +264,6 @@ const test_case draw_band_tests[] = {
     { "no ring puts nothing", no_ring_puts_nothing },
     { "the band lands on the layer turned and in rgb565", the_band_lands_on_the_layer_turned_and_in_rgb565 },
     { "the frame draws the ring's corners", the_frame_draws_the_rings_corners },
+    { "the band's clear leaves the frame's corners", the_bands_clear_leaves_the_frames_corners },
     { 0, 0 },
 };
