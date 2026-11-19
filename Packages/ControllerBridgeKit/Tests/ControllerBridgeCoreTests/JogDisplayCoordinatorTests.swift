@@ -170,18 +170,17 @@ struct JogMarkerCoordinatorTests {
         #expect(Self.bends(port) == [[0xE0, 0x00, 0x00]])
     }
 
-    /// The needle keeps a send schedule (#558), 1/50 s apart since #582's judder: 1/30 s beat against the 10 ms tick,
-    /// so the steps alternated 30 and 40 ms. 20 ms is two ticks, so every step is the same. At 120 BPM the needle is
-    /// t × 8192: sends at 0, 0.02, 0.04, 0.06 and 0.08 s are 0, 163, 327, 491 and 655.
-    @Test("At most 50 a second, on a schedule: ticks every 10 ms send at 0, 0.02, 0.04, 0.06 and 0.08 s")
+    /// The needle keeps a send schedule (#558) on the shared live cadence, 40 ms since #592 (50 a second stalled the unit's
+    /// USB): four 10 ms ticks, so every step is the same (30 a second beat against the tick into 30 and 40 ms steps). At
+    /// 120 BPM the needle is t × 8192: sends at 0, 0.04 and 0.08 s are 0, 327 and 655.
+    @Test("At most 25 a second, on a schedule: ticks every 10 ms send at 0, 0.04 and 0.08 s")
     func rateLimit() throws {
         let (rig, port) = try Self.playingAt120()
         for step in 0...9 { Self.tick(rig, at: Double(step) * 0.01) }
-        #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x23, 0x01], [0xE0, 0x47, 0x02], [0xE0, 0x6B, 0x03],
-                                     [0xE0, 0x0F, 0x05]])
+        #expect(Self.bends(port) == [[0xE0, 0x00, 0x00], [0xE0, 0x47, 0x02], [0xE0, 0x0F, 0x05]])
     }
 
-    @Test("An even cadence: over a second of 10 ms ticks, every gap between needle sends is exactly 20 ms")
+    @Test("An even cadence: over a second of 10 ms ticks, every gap between needle sends is exactly 40 ms")
     func evenGaps() throws {
         let (rig, port) = try Self.playingAt120()
         var sentAt: [Int] = []
@@ -190,8 +189,8 @@ struct JogMarkerCoordinatorTests {
             Self.tickRamped(rig, at: Double(step) * 0.01)
             if Self.bends(port).count > before { sentAt.append(step) }
         }
-        #expect(sentAt.count == 50)
-        #expect(zip(sentAt, sentAt.dropFirst()).allSatisfy { $1 - $0 == 2 })
+        #expect(sentAt.count == 25)
+        #expect(zip(sentAt, sentAt.dropFirst()).allSatisfy { $1 - $0 == 4 })
     }
 
     /// A tick at `time` with Syndicate's BarRamp at the deck's true phase then (a bar is 2 s at 120 BPM), so the needle
@@ -210,29 +209,29 @@ struct JogMarkerCoordinatorTests {
         return (rig, port)
     }
 
-    @Test("A second of 10 ms ticks sends the needle 50 times, the cap")
+    @Test("A second of 10 ms ticks sends the needle 25 times, the cap")
     func fullRate() throws {
         let (rig, port) = try Self.playingAt120()
         for step in 0..<100 { Self.tickRamped(rig, at: Double(step) * 0.01) }
-        #expect(Self.bends(port).count == 50)
+        #expect(Self.bends(port).count == 25)
     }
 
-    @Test("Late ticks (the timer's leeway): ticks 5 ms late every other time still send 50 a second")
+    @Test("Late ticks (the timer's leeway): ticks 5 ms late every other time still send 25 a second")
     func lateTicks() throws {
         let (rig, port) = try Self.playingAt120()
         for step in 0..<100 { Self.tickRamped(rig, at: Double(step) * 0.01 + (step % 2 == 1 ? 0.005 : 0)) }
-        #expect((49...50).contains(Self.bends(port).count))
+        #expect((24...25).contains(Self.bends(port).count))
     }
 
-    @Test("After a stall the schedule restarts: no burst to catch up, the next send is 1/50 s on")
+    @Test("After a stall the schedule restarts: no burst to catch up, the next send is 40 ms on")
     func noBurstAfterStall() throws {
         let (rig, port) = try Self.playingAt120()
         Self.tickRamped(rig, at: 0)
         Self.tickRamped(rig, at: 1)
         let before = Self.bends(port).count
-        Self.tickRamped(rig, at: 1.01)
+        for time in [1.01, 1.02, 1.03] { Self.tickRamped(rig, at: time) }
         #expect(Self.bends(port).count == before)
-        Self.tickRamped(rig, at: 1.02)
+        Self.tickRamped(rig, at: 1.04)
         #expect(Self.bends(port).count == before + 1)
     }
 

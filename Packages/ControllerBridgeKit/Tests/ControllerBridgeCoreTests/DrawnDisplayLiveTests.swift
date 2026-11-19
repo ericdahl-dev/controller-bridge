@@ -20,7 +20,7 @@ struct DrawnDisplayLiveTests {
 
     static func ops(_ port: Handshake.Port, _ op: UInt8) -> [[UInt8]] { Handshake.drawn(port).filter { $0[9] == op } }
 
-    @Test("Drawing: the needle goes out as op 09, at most 50 a second, and never as pitch bend")
+    @Test("Drawing: the needle goes out as op 09, at most 25 a second, and never as pitch bend")
     func needleAsMessage() throws {
         let (rig, port) = try Self.playing()
         for step in 1...100 {
@@ -30,9 +30,9 @@ struct DrawnDisplayLiveTests {
             rig.coordinator.tick()
         }
         let needles = Self.ops(port, 0x09)
-        #expect(needles.count >= 45 && needles.count <= 51)
+        #expect(needles.count >= 23 && needles.count <= 26)
         #expect(!port.wd.contains { $0.first == 0xE0 })
-        // Nearly a second on at 120 BPM: close to half a bar, 8192 (the last send may be up to 1/50 s earlier).
+        // Nearly a second on at 120 BPM: close to half a bar, 8192 (the last send may be up to 40 ms earlier).
         let last = needles.last.map { Int($0[10]) << 7 | Int($0[11]) } ?? 0
         #expect((7600...8192).contains(last))
     }
@@ -127,5 +127,39 @@ struct DrawnDisplayLiveTests {
         #expect(bend < end && end < upload)
         #expect(port.wd[bend] == [0xE0, UInt8(angle & 0x7F), UInt8(angle >> 7)])
         #expect(JogDisplaySlotCacheTests.uploadSlots(port).first.map { (5...8).contains($0) } == true)
+    }
+
+    /// #592's stall: at ~97 drawn messages a second the unit's USB dropped. Every needle, meter, phase, beat or time
+    /// message makes the chip redraw (~14 ms a step, #563); messages that arrive together cost one redraw (dfw_tick
+    /// parses what's waiting, then draws once). So the needle, the meter and the phase share one 40 ms cadence, and the
+    /// windows with any redraw message stay within `JogDisplayController.redrawBudget`.
+    @Test("Everything moving at once (needle, meter every tick, a nudge, beats at 180 BPM, the time): at most redrawBudget redraw windows a second")
+    func redrawBudget() throws {
+        #expect(JogDisplayController.redrawBudget == 32)
+        let (rig, port) = try Self.playing()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        port.wd.removeAll()
+        var windows = 0
+        for step in 0..<100 {
+            let time = 1 + Double(step) * 0.01
+            rig.clock.now = time
+            let before = Self.redraws(port)
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH1/Meter", [.float(step % 2 == 0 ? 0.3 : 0.9)]))
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/PhaseOffset", [.float(-0.01 - Float(step) * 0.001)]))
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Position", [.float(Float(time) * 10)]))
+            if step % 33 == 0 {
+                rig.coordinator.feedback(OSCMessage("/Syndicate/Header/BPM", [.float(180)]))
+                rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(Int32(step / 33 % 4 + 1))]))
+            }
+            rig.coordinator.tick()
+            if Self.redraws(port) > before { windows += 1 }
+        }
+        #expect(windows <= JogDisplayController.redrawBudget)
+        #expect(windows >= 25)
+    }
+
+    /// The drawn messages that make the chip redraw: time, beat, needle, meter and phase.
+    static func redraws(_ port: Handshake.Port) -> Int {
+        Handshake.drawn(port).filter { [0x06, 0x08, 0x09, 0x0A, 0x0B].contains($0[9]) }.count
     }
 }
