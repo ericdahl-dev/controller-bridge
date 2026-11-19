@@ -1,9 +1,10 @@
 """Tests for build_owner_image.py (#467): the drawn-display image for the owner's unit, built from a synthetic stock
 image and a synthetic block. No vendor data.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import contextlib, io, os, struct, tempfile, unittest
+import contextlib, io, json, os, struct, tempfile, unittest
 
 import build_owner_image
+import build_record
 import dfupatch
 from test_dfupatch import BASE, PAD_END, PAD_START, changed_offsets, dfuse_file, full_wd_element
 
@@ -132,6 +133,34 @@ class BuildOwnerImageTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("outside the repository", err)
         self.assertFalse(os.path.exists(inside))
+
+
+    def test_the_build_record_beside_the_block_travels_with_the_image(self):
+        # make arm writes build.json beside block.bin; the wizard finds it beside the owner's image (#593).
+        from test_build_upper_dfu import good_block
+        record = build_record.record_of(synthetic_block(), good_block(), "1", "1")
+        with open(self.path("build.json"), "w") as f:
+            json.dump(record, f)
+        code, out, err, output = self.build_plain()
+        self.assertEqual(code, 0, err)
+        with open(self.path("owner.build.json")) as f:
+            self.assertEqual(json.load(f), record)
+        self.assertIn("owner.build.json", out)
+
+    def test_a_record_for_another_a_or_none_doesnt_travel(self):
+        from test_build_upper_dfu import good_block
+        other = build_record.record_of(synthetic_block(marker=False), good_block(), "1", "1")
+        for record in (other, None):
+            with self.subTest(record=record is not None):
+                self.setUp()
+                if record:
+                    with open(self.path("build.json"), "w") as f:
+                        json.dump(record, f)
+                code, out, err, output = self.build_plain()
+                self.assertEqual(code, 0, err)
+                self.assertTrue(os.path.exists(output))
+                self.assertFalse(os.path.exists(self.path("owner.build.json")))
+                self.assertIn("no build record", out)
 
 
 if __name__ == "__main__":

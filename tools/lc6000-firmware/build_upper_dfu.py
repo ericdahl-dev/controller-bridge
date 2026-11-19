@@ -89,6 +89,8 @@ def main(argv=None):
         print(f"refused: {error}", file=sys.stderr)
         return 1
     print(f"wrote {args.output}: block B, {len(out)} bytes, at 0x{UPPER_BASE:08X}")
+    import build_record  # here, not above: build_record reads B through drawn_flash, which imports this file
+    print(build_record.carry(args.block, args.output, "block_b"))
     return 0
 
 

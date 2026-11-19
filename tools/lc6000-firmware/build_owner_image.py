@@ -10,6 +10,7 @@ repository. Nothing here talks to the unit. Standard library only."""
 import argparse, os, struct, sys
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))  # -I leaves this folder off sys.path (#468)
+import build_record  # noqa: E402
 import dfupatch  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -67,6 +68,7 @@ def main(argv=None):
         extra += ", with slot 16"
     print(f"wrote {args.output}: hook patch{extra}, block at 0x{dfupatch.PAD_START:08X}, "
           f"new trailer CRC 0x{crc:08X}, DfuSe suffix CRC 0x{dfupatch.suffix_crc(out[:-4]):08X}")
+    print(build_record.carry(args.block, args.output, "block_a"))
     return 0
 
 
