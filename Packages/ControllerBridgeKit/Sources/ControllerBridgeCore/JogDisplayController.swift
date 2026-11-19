@@ -18,7 +18,9 @@ final class JogDisplayController {
     private(set) var enabled = false
     /// The deck the preview follows with no controller connected (#221): the user's pick, 1-4; nil, the first loaded.
     private(set) var previewDeck: Int?
-    private var lastMarkerSent: Double?
+    /// When the next needle is due: a schedule 1/`markerRate` apart (#558), so a send that lands late on a tick doesn't
+    /// push the next one back. After a stall it restarts from now, with no burst to catch up.
+    private var nextMarkerDue: Double?
     /// At most this many marker updates a second.
     static let markerRate = 30.0
     /// Each mixer channel's meter from Syndicate (#461): the latest level, 0...1, and the peak held since `peakAt`.
@@ -130,14 +132,16 @@ final class JogDisplayController {
         guard let driver else { return }
         driver.tick()
         let front = Self.front(entries, previewDeck: previewDeck)
-        let due = lastMarkerSent.map { clock.now - $0 >= 1 / Self.markerRate - 1e-9 } ?? true
+        let due = nextMarkerDue.map { clock.now >= $0 - 1e-9 } ?? true
         if due {
             for index in entries.indices where entries[index].facts.playing {
                 let needle = needle(index, at: clock.now)
                 driver.deckMarker(deck: entries[index].facts.deck, needle)
                 if index == front { driver.marker(needle) }
             }
-            lastMarkerSent = clock.now
+            let period = 1 / Self.markerRate
+            let next = (nextMarkerDue ?? clock.now) + period
+            nextMarkerDue = next > clock.now ? next : clock.now + period
         }
         // Every deck's play state for the simulator, from Syndicate's Playing (#317), not the blinking light below.
         for entry in entries { driver.deckPlaying(deck: entry.facts.deck, entry.facts.playing) }
