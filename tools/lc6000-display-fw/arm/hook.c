@@ -1,4 +1,5 @@
 #include "hook.h"
+#include "protocol.h"
 #include "upper.h"
 
 /// Our state lives in the SRAM stock never uses, 0x2002AE94-0x2002FFFF (#466; block.ld's STATE). Caught here on the Mac
@@ -7,8 +8,8 @@
 /// C99 has no _Static_assert: an array of size -1 fails the build when it doesn't fit.
 typedef char hook_state_fits_stock_sram[sizeof(hook_state) <= HOOK_STATE_ROOM ? 1 : -1];
 
-/// The ops that may need the frame (#456): the capability ask and begin.
-enum { OP_CAPABILITY = 0x00, OP_BEGIN = 0x01 };
+/// The ops that may need the frame (#456): the capability ask and begin, from the protocol's one description (#569).
+enum { OP_CAPABILITY = DFW_OP_CAPABILITY, OP_BEGIN = DFW_OP_BEGIN };
 
 static int marker_present(const hook_stock *stock) { return *stock->marker == HOOK_MARKER; }
 
