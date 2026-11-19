@@ -96,7 +96,7 @@ extension Coordinator {
         case .stopLEDSweep: stopLEDSweep()
         case .startMeterCapture(let seconds): startMeterCapture(seconds: seconds)
         case .portRecovered: repaintAfterRecovery()
-        case .jogDisplayRecovered: repaintAfterRecovery()
+        case .jogDisplayRecovered: jogDisplayRecovered()
         }
     }
 }
