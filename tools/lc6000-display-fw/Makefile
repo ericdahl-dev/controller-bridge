@@ -70,9 +70,9 @@ arm-test: $(BUILD)/hook-tests $(BUILD)/frame-dump
 # `make arm-test PYTHON=path/to/venv/python`. Without it the tests fail at the import; nothing is skipped.
 PYTHON ?= python3
 
-$(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
+$(BUILD)/hook-tests: $(SRC) arm/hook.c arm/hook.h arm/upper.c arm/upper.h arm/upper_build.c arm/upper_build.h arm/upper_crc.h $(ARM_TESTS) test/harness.c test/harness.h $(wildcard src/*.h)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c $(ARM_TESTS) test/harness.c
+	$(CC) $(CFLAGS) $(SAN) -Isrc -Itest -Iarm -o $@ $(SRC) arm/hook.c arm/upper.c arm/upper_build.c $(ARM_TESTS) test/harness.c
 
 include arm/arm.mk
 

@@ -96,16 +96,14 @@ OWNERS = {"lc6000-display-fw/arm/upper.h", "lc6000-display-fw/arm/upper_header.p
           "lc6000-display-fw/arm/test/test_upper_header.py"}
 # Files that still carry their own copy, each removed as it moves onto the modules (#572).
 NOT_YET = {
-    "lc6000-display-fw/arm/test/test_block.py",
-    "lc6000-display-fw/arm/test/test_hook.c",
     "lc6000-firmware/build_upper_dfu.py",
     "lc6000-firmware/drawn_flash.py",
     "lc6000-firmware/test_build_upper_dfu.py",
     "lc6000-firmware/test_drawn_flash.py",
 }
-# What a copy looks like: B's marker as a number, a CRC table, a CRC-32 in a file about block B, or a header word
-# written by hand.
-COPY = [re.compile(r"0x42574644"), re.compile(r"nibbles\["), re.compile(r"put_word\(upper \+ (4|12)\b")]
+# What a copy looks like: B's marker as a number, a CRC table, a CRC-32 in a file about block B, or a CRC written
+# into B by hand.
+COPY = [re.compile(r"0x42574644"), re.compile(r"nibbles\["), re.compile(r"put_word\(upper \+ 12\b")]
 CRC = re.compile(r"zlib\.crc32\(")
 ABOUT_B = re.compile(r"upper", re.I)
 
