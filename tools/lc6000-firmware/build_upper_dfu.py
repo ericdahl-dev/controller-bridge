@@ -34,6 +34,11 @@ def check_proof(path):
     if len(proof) != PROOF_SIZE:
         raise dfupatch.Refused(f"the proof is {len(proof)} bytes, not the {PROOF_SIZE} of a whole read of "
                                "0x08080000-0x080FFFFF: the upper flash isn't shown to exist")
+    if proof.count(0xFF) != PROOF_SIZE:
+        first = next(i for i, byte in enumerate(proof) if byte != 0xFF)
+        raise dfupatch.Refused(f"the upper flash isn't all erased (0xFF): the first other byte is at "
+                               f"0x{UPPER_BASE + first:08X}. Stop and post this; nothing goes there until it's "
+                               "understood")
 
 
 def main(argv=None):

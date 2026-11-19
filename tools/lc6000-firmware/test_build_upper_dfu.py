@@ -66,5 +66,11 @@ class BuildUpperDfuTests(unittest.TestCase):
         self.assertRefused(self.build(proof=b""), "524288")
 
 
+    def test_a_proof_with_anything_but_erased_flash_is_refused(self):
+        proof = bytearray(b"\xff" * PROOF_SIZE)
+        proof[0x1234] = 0x00
+        self.assertRefused(self.build(proof=bytes(proof)), "erased")
+
+
 if __name__ == "__main__":
     unittest.main()
