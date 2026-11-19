@@ -9,7 +9,8 @@ tools/lc6000-display-fw/build/arm/block.bin (`make -C tools/lc6000-display-fw ar
 repository. Nothing here talks to the unit. Standard library only."""
 import argparse, os, struct, sys
 
-import dfupatch
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))  # -I leaves this folder off sys.path (#468)
+import dfupatch  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOOK_PATCH = os.path.join(HERE, "patches", "wd-00.50-drawn-hook.patch")
