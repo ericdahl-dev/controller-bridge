@@ -23,14 +23,12 @@ final class JogDisplayController {
     private var nextMarkerDue: Double?
     /// At most this many marker updates a second.
     static let markerRate = 30.0
-    /// Each mixer channel's meter from Syndicate (#461): the latest level, 0...1, and the peak held since `peakAt`.
-    private var meters: [Int: (level: Double, peak: Double, peakAt: Double)] = [:]
+    /// Each mixer channel's meter (#461), through its ballistics (#582): what the drawn meter and the preview show.
+    private var meters: [Int: MeterBallistics] = [:]
     /// When the next meter is due: a schedule 1/`markerRate` apart (#582), as the needle's (#561).
     private var nextMeterDue: Double?
     /// The deck whose meter went out last: a switch sends the new one's at once.
     private var lastMeterDeck: Int?
-    /// How long a peak holds above the level: the mixer LEDs' default (mixer.meter.hold_ms), as the LC6000 has none.
-    static let peakHold = Double(ProfileKeys.fallback("mixer.meter.hold_ms") as Int) / 1000
 
     init(clock: any Clock) {
         self.clock = clock
@@ -42,9 +40,7 @@ final class JogDisplayController {
         // A mixer channel's meter (#461), for the drawn display's level meter.
         if let channel = (1...4).first(where: { address.hasSuffix("/mixer/ch\($0)/meter") }),
            let level = message.arguments.first?.number {
-            let now = clock.now, old = meters[channel]
-            let fresh = old.map { level >= $0.peak || now - $0.peakAt > Self.peakHold } ?? true
-            meters[channel] = (level, fresh ? level : old!.peak, fresh ? now : old!.peakAt)
+            meters[channel, default: MeterBallistics()].sample(level, at: clock.now)
         }
         if address.hasSuffix("/header/bpm"), let bpm = message.arguments.first?.number, bpm > 0 { masterBPM = bpm }
         // The master clock is the lit ring segment, the same on every deck (the user's pick).
@@ -132,6 +128,8 @@ final class JogDisplayController {
     func tick(_ entries: [Entry]) {
         guard let driver else { return }
         driver.tick()
+        // Every channel's ballistics move on each tick (#582); the front deck's go to the unit, all to the preview.
+        for channel in meters.keys { meters[channel]?.step(at: clock.now) }
         let front = Self.front(entries, previewDeck: previewDeck)
         let due = nextMarkerDue.map { clock.now >= $0 - 1e-9 } ?? true
         if due {
@@ -210,18 +208,13 @@ final class JogDisplayController {
 
     private func meterTick(deck: Int, driver: JogDisplayDriver) {
         // A channel that hasn't reported shows an empty meter, not the last deck's (#461).
-        guard var meter = meters[deck] else {
+        guard let meter = meters[deck] else {
             lastMeterDeck = deck
             driver.meter(level: 0, peak: 0)
             return
         }
         if deck == lastMeterDeck, let due = nextMeterDue, clock.now < due - 1e-9 { return }
         lastMeterDeck = deck
-        if clock.now - meter.peakAt > Self.peakHold {
-            meter.peak = meter.level
-            meter.peakAt = clock.now
-            meters[deck] = meter
-        }
         func scaled(_ value: Double) -> Int { Int((min(max(value, 0), 1) * 127).rounded()) }
         if driver.meter(level: scaled(meter.level), peak: scaled(meter.peak)) {
             let next = (nextMeterDue ?? clock.now) + 1 / Self.markerRate
