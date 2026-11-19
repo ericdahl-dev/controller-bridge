@@ -273,6 +273,14 @@ struct MIDISendQueueRecoveryTests {
         #expect(names.lock.withLock { names.said } == ["stuck jog display (WD)", "back jog display (WD)"])
     }
 
+    @Test("A recovered port's name picks the command: the jog display's two ports restart the display, any other repaints")
+    func commandForRecovery() {
+        #expect(Coordinator.Command.afterRecovery(of: "jog display (WD)") == .jogDisplayRecovered)
+        #expect(Coordinator.Command.afterRecovery(of: "jog display (Controller)") == .jogDisplayRecovered)
+        #expect(Coordinator.Command.afterRecovery(of: "LC6000 PRIME Controller") == .portRecovered)
+        #expect(Coordinator.Command.jogDisplayRecovered.routing == .real)
+    }
+
     @Test("The Coordinator's port-recovered command repaints every light of the layer in front")
     func repaints() throws {
         let rig = try Rig()

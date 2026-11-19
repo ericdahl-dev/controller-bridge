@@ -37,6 +37,14 @@ extension Coordinator {
         /// A MIDI port that had stopped taking data takes it again (#552): the LED writes dropped meanwhile are lost,
         /// so every light is painted again.
         case portRecovered
+        /// One of the jog display's ports takes data again (#595): what was dropped meanwhile (needle steps, an
+        /// upload's chunks) is worthless, so the display starts over: goodbye, hello, and the full state.
+        case jogDisplayRecovered
+
+        /// The command for a port the send queue names as taking data again.
+        public static func afterRecovery(of name: String) -> Command {
+            MIDISendQueue.jogDisplayPortNames.contains(name) ? .jogDisplayRecovered : .portRecovered
+        }
 
         /// Where a command goes while the demo (#64) has its own Coordinator.
         public enum Routing: Equatable, Sendable {
@@ -54,7 +62,7 @@ extension Coordinator {
             switch self {
             // A real device is captured, so the real Coordinator pauses it, demo or not.
             // The meter capture (#582) records what Syndicate sends the real controller.
-            case .setCapture, .portRecovered, .startMeterCapture: .real
+            case .setCapture, .portRecovered, .jogDisplayRecovered, .startMeterCapture: .real
             case .ledSweep, .stopLEDSweep: .active
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
@@ -88,6 +96,7 @@ extension Coordinator {
         case .stopLEDSweep: stopLEDSweep()
         case .startMeterCapture(let seconds): startMeterCapture(seconds: seconds)
         case .portRecovered: repaintAfterRecovery()
+        case .jogDisplayRecovered: repaintAfterRecovery()
         }
     }
 }
