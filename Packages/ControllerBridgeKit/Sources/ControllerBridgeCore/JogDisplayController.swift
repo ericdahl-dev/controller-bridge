@@ -116,6 +116,10 @@ final class JogDisplayController {
         previewDeck = deck
     }
 
+    /// The top panel answered the hello (#606); whether a re-sent one was answered.
+    @discardableResult
+    func helloAnswered() -> Bool { driver?.helloAnswered() ?? false }
+
     /// A message from the display's WD port: the unit's answers to an upload.
     func reply(_ bytes: [UInt8]) {
         driver?.reply(bytes)

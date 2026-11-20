@@ -102,4 +102,50 @@ struct JogDisplayPowerCycleTests {
         _ = Self.run(rig, from: 0.1, until: 60)
         #expect(lines.list.isEmpty)
     }
+
+    // MARK: Through the Coordinator: the answer is the top panel's ch16 note 55 on, on the display owner's port.
+
+    typealias Port = JogDisplayDriverTests.FakePort
+    typealias CoordinatorRig = ProfileMatchingTests.ProfileRig
+
+    /// The LC6000 owning the display, its driver on a clock the test moves; the display on.
+    static func owned() throws -> (CoordinatorRig, Port, Rig.FakeClock) {
+        let rig = ProfileMatchingTests.ProfileRig(profiles: try ControllerProfile.bundled(),
+                                                  sources: [JogDisplayRingHoldTests.lc6000, JogDisplayRingHoldTests.wd])
+        let port = Port(), clock = Rig.FakeClock()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: clock, log: rig.log, size: 1,
+                                                          renderBeat: { _, beat in [UInt8(beat), 0, 0, 255] }) { _ in [0, 0, 0, 255] })
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.setJogDisplay(enabled: true)
+        return (rig, port, clock)
+    }
+
+    /// Hello pairs sent from `start` to `end`, ticking the Coordinator every 0.1 s.
+    static func hellos(_ rig: CoordinatorRig, _ port: Port, _ clock: Rig.FakeClock, from start: Double, until end: Double) -> Int {
+        port.controller.removeAll()
+        var t = start
+        while t <= end + 1e-9 {
+            clock.now = t
+            rig.clock.now = t
+            rig.coordinator.tick()
+            t += 0.1
+        }
+        return port.controller.filter { $0 == JogDisplay.hello[1] }.count
+    }
+
+    @Test("The LC6000's ch16 note 55 on at 127 stops the re-sends; on another channel, at 0, or from another port it doesn't")
+    func answerThroughCoordinator() throws {
+        let lc6000 = JogDisplayRingHoldTests.lc6000.id, iac = MIDIEndpoint.ID(1000)
+        for (event, source, stops) in [(MIDIEvent.noteOn(channel: 15, note: 55, velocity: 127), lc6000, true),
+                                       (.noteOn(channel: 0, note: 55, velocity: 127), lc6000, false),
+                                       (.noteOn(channel: 15, note: 55, velocity: 0), lc6000, false),
+                                       (.noteOn(channel: 15, note: 55, velocity: 127), iac, false)] {
+            let (rig, port, clock) = try Self.owned()
+            #expect(port.controller.contains(JogDisplay.hello[1]))
+            clock.now = 0.2
+            rig.coordinator.midi(event, source: source)
+            #expect(Self.hellos(rig, port, clock, from: 0.3, until: 40) == (stops ? 0 : 5), "\(event) from \(source)")
+        }
+    }
 }
