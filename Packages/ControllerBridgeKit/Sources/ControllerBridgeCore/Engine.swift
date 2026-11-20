@@ -98,9 +98,10 @@ public struct Engine {
                     coordinator.start()
                 }
             case .stop:
-                // Releases are sent synchronously, so they have all gone out once run() returns.
+                // Releases are sent synchronously, so they have all gone out once run() returns. Quit, not stop: a
+                // drawing jog display keeps our logo (#600).
                 demo?.stop()
-                coordinator.stop()
+                coordinator.quit()
                 return
             }
         }
