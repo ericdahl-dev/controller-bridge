@@ -109,6 +109,13 @@ bool parse(const uint8_t* bytes, size_t length, Message& out) {
     }
 }
 
+/// A row that takes any value: stores it.
+template <typename T, typename V>
+bool set(T& field, V value) {
+    field = static_cast<T>(value);
+    return true;
+}
+
 /// The feed's addresses: one row each, its OSC type and what it sets (ADR 0011).
 struct Row {
     const char* name;
@@ -139,6 +146,27 @@ const Row kRows[] = {
          shorten(m.s, kArtistMax, v.artist);
          return true;
      }},
+    // #617's fields.
+    {"loaded", 'i', [](DeckView& v, const Message& m) { return set(v.loaded, m.i != 0); }},
+    {"key", 's',
+     [](DeckView& v, const Message& m) {
+         shorten(m.s, kKeyMax, v.key);
+         return true;
+     }},
+    {"bpm", 'f', [](DeckView& v, const Message& m) { return set(v.bpm, m.f); }},
+    {"tempo", 'f', [](DeckView& v, const Message& m) { return set(v.tempo, m.f); }},
+    {"playing", 'i', [](DeckView& v, const Message& m) { return set(v.playing, m.i != 0); }},
+    {"cue", 'i', [](DeckView& v, const Message& m) { return set(v.cue, m.i != 0); }},
+    {"sync", 'i', [](DeckView& v, const Message& m) { return set(v.sync, m.i != 0); }},
+    {"master", 'i', [](DeckView& v, const Message& m) { return set(v.master, m.i != 0); }},
+    {"loop", 'i', [](DeckView& v, const Message& m) { return set(v.loop, m.i != 0); }},
+    {"loopLength", 'f', [](DeckView& v, const Message& m) { return set(v.loop_length, m.f); }},
+    {"beat", 'i', [](DeckView& v, const Message& m) { return set(v.beat, static_cast<int>(m.i)); }},
+    {"elapsed", 'i', [](DeckView& v, const Message& m) { return set(v.elapsed, m.i); }},
+    {"remaining", 'i', [](DeckView& v, const Message& m) { return set(v.remaining, m.i); }},
+    {"progress", 'f', [](DeckView& v, const Message& m) { return set(v.progress, m.f); }},
+    {"phase", 'f', [](DeckView& v, const Message& m) { return set(v.phase, m.f); }},
+    {"level", 'f', [](DeckView& v, const Message& m) { return set(v.level, m.f); }},
 };
 
 }  // namespace

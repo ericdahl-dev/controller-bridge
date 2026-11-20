@@ -14,6 +14,8 @@ constexpr size_t kTitleMax = 40;
 constexpr size_t kArtistMax = 40;
 /// Room for 40 characters of up to 4 bytes each, and the NUL. No text is kept on the heap: the board's small
 /// allocations come from the internal RAM LVGL and Wi-Fi use.
+/// A key, such as "11B" or "F#m", fits in this many characters.
+constexpr size_t kKeyMax = 4;
 constexpr size_t kTextBytes = 40 * 4 + 1;
 static_assert(kTitleMax <= 40 && kArtistMax <= 40, "kTextBytes holds 40 characters");
 
@@ -23,11 +25,26 @@ struct DeckView {
     uint32_t color = 0;  ///< 0xRRGGBB
     char title[kTextBytes] = "";  ///< UTF-8, shortened
     char artist[kTextBytes] = "";
+    bool loaded = true;  ///< until the feed says 0
+    char key[kKeyMax * 4 + 1] = "";  ///< shortened like the title
+    float bpm = 0;
+    float tempo = 0;  ///< percent
+    bool playing = false, cue = false, sync = false, master = false, loop = false;
+    float loop_length = 0;  ///< beats
+    int beat = 0;  ///< 1-4; 0 none
+    int32_t elapsed = 0, remaining = 0;  ///< whole seconds
+    float progress = 0;  ///< 0-1
+    float phase = -1;  ///< 0-1, 0.5 in phase; -1 unknown
+    float level = 0;  ///< 0-1
 
-    /// Every field: one #617 adds goes here too, or a change to it won't redraw.
-    bool operator==(const DeckView& other) const {
-        return deck == other.deck && color == other.color && std::strcmp(title, other.title) == 0 &&
-               std::strcmp(artist, other.artist) == 0;
+    /// Every field: one added later goes here too, or a change to it won't redraw.
+    bool operator==(const DeckView& o) const {
+        return deck == o.deck && color == o.color && std::strcmp(title, o.title) == 0 &&
+               std::strcmp(artist, o.artist) == 0 && loaded == o.loaded && std::strcmp(key, o.key) == 0 &&
+               bpm == o.bpm && tempo == o.tempo && playing == o.playing && cue == o.cue && sync == o.sync &&
+               master == o.master && loop == o.loop && loop_length == o.loop_length && beat == o.beat &&
+               elapsed == o.elapsed && remaining == o.remaining && progress == o.progress && phase == o.phase &&
+               level == o.level;
     }
 };
 

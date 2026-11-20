@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "deck_core.h"
+#include "deck_face.h"
 #include "json_mini.h"
 #include "osc_bytes.h"
 #include "screen_stub.h"
@@ -329,6 +330,36 @@ void test_each_shared_example_shows_its_deck_state() {
         std::string artist = state.has("artist") ? state["artist"].string : "";
         TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), screen.last().title.c_str(), name);
         TEST_ASSERT_EQUAL_STRING_MESSAGE(artist.c_str(), screen.last().artist.c_str(), name);
+        // #617's fields. A state leaves out what's off or 0; phase left out is -1, unknown.
+        const deck_core::DeckView& v = screen.last().view;
+        auto flag = [&](const char* key) { return state.has(key) && state[key].boolean; };
+        auto number = [&](const char* key, double otherwise) { return state.has(key) ? state[key].number : otherwise; };
+        TEST_ASSERT_EQUAL_MESSAGE(!state.has("loaded") || state["loaded"].boolean, v.loaded, name);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(state.has("key") ? state["key"].string.c_str() : "", v.key, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("bpm", 0)), v.bpm, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("tempo", 0)), v.tempo, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("playing"), v.playing, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("cue"), v.cue, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("sync"), v.sync, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("master"), v.master, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("loop"), v.loop, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("loopLength", 0)), v.loop_length, name);
+        TEST_ASSERT_EQUAL_MESSAGE(static_cast<int>(number("beat", 0)), v.beat, name);
+        TEST_ASSERT_EQUAL_MESSAGE(static_cast<int32_t>(number("elapsed", 0)), v.elapsed, name);
+        TEST_ASSERT_EQUAL_MESSAGE(static_cast<int32_t>(number("remaining", 0)), v.remaining, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("progress", 0)), v.progress, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("phase", -1)), v.phase, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("level", 0)), v.level, name);
+        // The screen: an empty case shows "No track loaded" and nothing else; a loaded one its title.
+        const deck_core::Face f = deck_core::face(v);
+        if (!v.loaded) {
+            TEST_ASSERT_EQUAL_STRING_MESSAGE(deck_core::kNoTrack, f.title, name);
+            TEST_ASSERT_EQUAL_STRING_MESSAGE("", f.elapsed, name);
+            TEST_ASSERT_EQUAL_STRING_MESSAGE("", f.bpm, name);
+            TEST_ASSERT_FALSE_MESSAGE(f.phase_shown, name);
+        } else {
+            TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), f.title, name);
+        }
     }
     TEST_ASSERT_EQUAL(file["cases"].array.size(), walked);
     TEST_ASSERT_TRUE(walked >= 3);
@@ -402,6 +433,74 @@ void test_losing_wifi_is_the_waiting_screen_at_once() {
     TEST_ASSERT_EQUAL(2, screen.last().deck);
 }
 
+// #617's fields (ADR 0011): one address-table row each.
+static const deck_core::DeckView& after(std::initializer_list<Bytes> messages) {
+    static deck_core::DeckCore core;
+    static ScreenStub screen;
+    core = deck_core::DeckCore();
+    for (const Bytes& m : messages) feed(core, m, 100);
+    core.render(screen, 100);
+    return screen.last().view;
+}
+
+void test_every_field_of_the_feed_has_its_row() {
+    const deck_core::DeckView& v = after({
+        int_message(prefix + "loaded", 1), string_message(prefix + "key", "11B"),
+        float_message(prefix + "bpm", 174.25f), float_message(prefix + "tempo", -2.5f),
+        int_message(prefix + "playing", 1), int_message(prefix + "cue", 1), int_message(prefix + "sync", 1),
+        int_message(prefix + "master", 1), int_message(prefix + "loop", 1), float_message(prefix + "loopLength", 0.25f),
+        int_message(prefix + "beat", 3), int_message(prefix + "elapsed", 95), int_message(prefix + "remaining", 212),
+        float_message(prefix + "progress", 0.3125f), float_message(prefix + "phase", 0.75f),
+        float_message(prefix + "level", 0.5f),
+    });
+    TEST_ASSERT_TRUE(v.loaded);
+    TEST_ASSERT_EQUAL_STRING("11B", v.key);
+    TEST_ASSERT_EQUAL_FLOAT(174.25f, v.bpm);
+    TEST_ASSERT_EQUAL_FLOAT(-2.5f, v.tempo);
+    TEST_ASSERT_TRUE(v.playing && v.cue && v.sync && v.master && v.loop);
+    TEST_ASSERT_EQUAL_FLOAT(0.25f, v.loop_length);
+    TEST_ASSERT_EQUAL(3, v.beat);
+    TEST_ASSERT_EQUAL(95, v.elapsed);
+    TEST_ASSERT_EQUAL(212, v.remaining);
+    TEST_ASSERT_EQUAL_FLOAT(0.3125f, v.progress);
+    TEST_ASSERT_EQUAL_FLOAT(0.75f, v.phase);
+    TEST_ASSERT_EQUAL_FLOAT(0.5f, v.level);
+}
+
+void test_flags_go_off_with_0_and_phase_takes_minus_1() {
+    const deck_core::DeckView& v = after({
+        int_message(prefix + "playing", 1), int_message(prefix + "playing", 0),
+        float_message(prefix + "phase", 0.5f), float_message(prefix + "phase", -1.0f),
+    });
+    TEST_ASSERT_FALSE(v.playing);
+    TEST_ASSERT_EQUAL_FLOAT(-1.0f, v.phase);
+}
+
+// Fast fields (phase, level, progress) come at up to 30 a second: each change is one show_deck, the same value again
+// none.
+void test_a_fast_field_change_is_one_redraw_and_the_same_value_none() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 1), 100);
+    core.render(screen, 100);
+    const size_t before = screen.shown.size();
+    const char* fields[] = {"phase", "level", "progress", "bpm", "tempo", "loopLength"};
+    for (const char* field : fields) {
+        feed(core, float_message(prefix + field, 0.25f), 110);
+        core.render(screen, 110);
+        feed(core, float_message(prefix + field, 0.25f), 120);
+        core.render(screen, 120);
+    }
+    const char* ints[] = {"loaded", "playing", "cue", "sync", "master", "loop", "beat", "elapsed", "remaining"};
+    for (const char* field : ints) {
+        feed(core, int_message(prefix + field, field == std::string("loaded") ? 0 : 2), 130);
+        core.render(screen, 130);
+    }
+    feed(core, string_message(prefix + "key", "11B"), 140);
+    core.render(screen, 140);
+    TEST_ASSERT_EQUAL(before + 6 + 9 + 1, screen.shown.size());
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -459,6 +558,9 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_every_field_of_the_feed_has_its_row);
+    RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
+    RUN_TEST(test_a_fast_field_change_is_one_redraw_and_the_same_value_none);
     RUN_TEST(test_the_waiting_screen_says_why);
     RUN_TEST(test_losing_wifi_is_the_waiting_screen_at_once);
     RUN_TEST(test_control_characters_show_as_spaces);
