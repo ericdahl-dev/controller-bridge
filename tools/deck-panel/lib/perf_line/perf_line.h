@@ -5,13 +5,14 @@
 #include <cstdint>
 #include <string>
 
-#include "frame_stats.h"
 
 namespace perf_line {
 
 struct Window {
     uint32_t ms = 0;                // how long the window was
-    frame_stats::Report frames;     // LVGL's refreshes in it
+    uint32_t frames = 0;            // LVGL refreshes in it that drew something
+    uint64_t frame_us = 0;          // their time, start to end, the swap wait included
+    uint32_t frame_max_us = 0;
     uint32_t vsyncs = 0;            // the panel's (39 a second at 16 MHz, drawing or not)
     uint32_t swaps = 0;             // frames handed to the panel
     uint32_t swap_timeouts = 0;     // swaps the panel never released within 60 ms

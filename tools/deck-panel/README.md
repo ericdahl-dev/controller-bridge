@@ -150,11 +150,11 @@ pio device monitor -d tools/deck-panel -e crowpanel-perf -p /dev/cu.wchusbserial
 ```
 
 ```text
-perf: 30.0 frames/s, render avg 4.2 ms max 9.5 ms, swap wait 18.0 ms/frame, draw_bitmap 0.02 ms/frame, 39.0 vsyncs/s, 0 swap timeouts, feed 900 datagrams 1 too big, internal free 123456
+perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, 39.0 vsyncs/s, 0 swap timeouts, feed 900 datagrams 1 too big, internal free 123456
 ```
 
 - **frames/s:** LVGL's refreshes that drew something, at most 39. With the deck playing it should be about 30.
-- **render:** from a refresh's start to its end, the swap wait included.
+- **frame:** a refresh that drew something, from its start to its end, the swap wait (in brackets) included. Frames are counted over the same 5 s as the rest of the line.
 - **swap wait:** how long LVGL waited, per frame, for the panel to take the last one. Up to one frame (25.6 ms) is normal.
 - **vsyncs/s:** the panel's own rate, 39.0 at 16 MHz, drawing or not.
 - **swap timeouts:** waits that hit 60 ms. Anything but 0 is a fault.
