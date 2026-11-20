@@ -220,7 +220,8 @@ final class DisplayFeed {
             changes.append(message)
             sent[message.address] = message.arguments
         }
-        // One datagram for the update (#636): a panel takes a few at a time, so a snapshot spread over 20 lost most.
+        // One datagram for the update (#636): a panel drains a few a frame, and one per address was about 111 a second
+        // with a deck playing, each snapshot a burst of 20.
         if fastSent { fastDue = (fastDue.map { max($0, now - Self.fastInterval) } ?? now) + Self.fastInterval }
         let bundles = Self.bundles(changes)
         for bundle in bundles { sender.send(bundle: bundle) }

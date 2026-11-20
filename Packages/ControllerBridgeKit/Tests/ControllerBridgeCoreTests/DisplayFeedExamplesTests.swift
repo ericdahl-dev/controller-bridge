@@ -50,6 +50,17 @@ struct DisplayFeedExamplesTests {
             > (($0["state"] as! [String: Any])["title"] as? String ?? "").count })
     }
 
+    @Test("A case with bundle_hex gives the exact bytes of its snapshot's bundle, for the panel core's parser to read the same (#636)")
+    func bundleBytes() {
+        let withHex = Self.cases.filter { $0["bundle_hex"] != nil }
+        #expect(!withHex.isEmpty)
+        for example in withHex {
+            let messages = (example["messages"] as! [[String: Any]]).compactMap(Self.message)
+            let hex = OSCPacket.bundle(messages).map { String(format: "%02x", $0) }.joined()
+            #expect(hex == example["bundle_hex"] as? String, "\(example["name"] as! String)")
+        }
+    }
+
     @Test("Each case: turned on with that deck in front, the feed sends exactly its messages, in order, each with one value under the prefix")
     func everyCaseSends() {
         for example in Self.cases {
