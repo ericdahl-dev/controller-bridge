@@ -336,11 +336,19 @@ final class BridgeModel {
             recoveryProducer.send(.afterRecovery(of: name))
         })
         let midi = midi!
-        let queuedMIDI = QueuedMIDISystem(inner: midi, queue: sendQueue)
+        // The engine's loop reads endpoints from snapshots, refreshed on CoreMIDI's setup queue before the Coordinator
+        // hears of a change (#595): a hung unit can hold the MIDI server for seconds, and the loop no longer waits.
+        let snapshot = SnapshotMIDISystem(inner: midi)
+        let queuedMIDI = QueuedMIDISystem(inner: snapshot, queue: sendQueue)
         let coreJogDisplay = try? CoreMIDIJogDisplay(client: midi.client, producer: pipe.producer)
-        // Its ports are remembered until a device comes or goes (#552).
-        if let coreJogDisplay { midi.observeChanges { coreJogDisplay.forgetEndpoints() } }
-        let jogDisplay = coreJogDisplay.map { sendQueue.jogDisplayPort($0) }
+        let snapshotJog = coreJogDisplay.map { SnapshotJogDisplayPort(inner: $0) }
+        // Its ports are remembered until a device comes or goes (#552), then asked again.
+        midi.observeChanges {
+            coreJogDisplay?.forgetEndpoints()
+            snapshotJog?.refresh()
+            snapshot.refresh()
+        }
+        let jogDisplay = snapshotJog.map { sendQueue.jogDisplayPort($0) }
         // The entries the Coordinator starts with: the saved ones, a controller following its layers as one per layer
         // (#79). It starts straight on them (#105), so nothing is sent after start to correct it.
         let running = ControllerSettings.expanded(settings.controllers, layers: layers)

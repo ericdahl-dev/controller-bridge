@@ -56,7 +56,7 @@ final class CoreMIDISystem: MIDISystem {
     var destinations: [MIDIEndpoint] { (0..<MIDIGetNumberOfDestinations()).map { relay.remember(MIDIGetDestination($0)) } }
 
     func connect(source: MIDIEndpoint) throws {
-        let ref = try Self.find(source)
+        let ref = try ref(source)
         // The unique id rides along as the connection refCon, so each event knows its source.
         try check("MIDIPortConnectSource", MIDIPortConnectSource(input, ref, UnsafeMutableRawPointer(bitPattern: Int(source.id))))
         let names = connected.withLock { $0[source.id] = source.name; return Array($0.values) }
@@ -64,13 +64,13 @@ final class CoreMIDISystem: MIDISystem {
     }
 
     func disconnect(source: MIDIEndpoint) {
-        if let ref = try? Self.find(source) { MIDIPortDisconnectSource(input, ref) }
+        if let ref = try? ref(source) { MIDIPortDisconnectSource(input, ref) }
         let names = connected.withLock { $0[source.id] = nil; return Array($0.values) }
         onChange(names)
     }
 
     func openOutput(destination: MIDIEndpoint) throws -> any MIDIOutput {
-        CoreMIDIOutput(port: output, destination: try Self.find(destination))
+        CoreMIDIOutput(port: output, destination: try ref(destination))
     }
 
     private func pruneRemovedSources() {
@@ -113,6 +113,13 @@ final class CoreMIDISystem: MIDISystem {
         var name: Unmanaged<CFString>?
         MIDIObjectGetStringProperty(ref, kMIDIPropertyDisplayName, &name)
         return MIDIEndpoint(id: id, name: (name?.takeRetainedValue() as String?) ?? "MIDI \(id)")
+    }
+
+    /// The endpoint's ref as last listed (#595), so connecting and opening on the engine's loop don't look it up in
+    /// CoreMIDI; one never listed is looked up.
+    private func ref(_ endpoint: MIDIEndpoint) throws -> MIDIEndpointRef {
+        if let known = relay.ref(for: endpoint.id) { return known }
+        return try Self.find(endpoint)
     }
 
     private static func find(_ endpoint: MIDIEndpoint) throws -> MIDIEndpointRef {
@@ -178,7 +185,14 @@ final class ChangeRelay: Sendable {
 
     func observe(_ observer: @escaping @Sendable () -> Void) { observers.withLock { $0.append(observer) } }
     private let known = Mutex<[MIDIObjectRef: MIDIUniqueID]>([:])
+    /// The other way round: each listed endpoint's ref by id, until it's removed (#595).
+    private let refs = Mutex<[MIDIUniqueID: MIDIEndpointRef]>([:])
     private let removedIDs = Mutex<Set<MIDIUniqueID>>([])
+    /// Where a change is handled (#595): not the main thread, where CoreMIDI's notifications arrive and the UI runs,
+    /// and not the engine's loop. Observers (the snapshots' refreshes) run before the Coordinator hears of it.
+    private let setup = DispatchQueue(label: "dev.ericdahl.ControllerBridge.midi-setup")
+
+    func ref(for id: MIDIUniqueID) -> MIDIEndpointRef? { refs.withLock { $0[id] } }
 
     func set(_ action: @escaping @Sendable (Set<MIDIUniqueID>) -> Void) { self.action.withLock { $0 = action } }
 
@@ -189,6 +203,7 @@ final class ChangeRelay: Sendable {
         var name: Unmanaged<CFString>?
         MIDIObjectGetStringProperty(ref, kMIDIPropertyDisplayName, &name)
         known.withLock { $0[ref] = id }
+        refs.withLock { $0[id] = ref }
         return MIDIEndpoint(id: id, name: (name?.takeRetainedValue() as String?) ?? "MIDI \(id)")
     }
 
@@ -199,13 +214,16 @@ final class ChangeRelay: Sendable {
         var id: MIDIUniqueID = 0
         let read = MIDIObjectGetIntegerProperty(object, kMIDIPropertyUniqueID, &id) == noErr
         guard let removed = known.withLock({ $0[object] }) ?? (read ? id : nil) else { return }
+        refs.withLock { if $0[removed] == object { $0[removed] = nil } }
         removedIDs.withLock { _ = $0.insert(removed) }
     }
 
     func fire() {
         let removed = removedIDs.withLock { ids in defer { ids = [] }; return ids }
-        for observer in observers.withLock({ $0 }) { observer() }
-        action.withLock { $0 }?(removed)
+        setup.async { [self] in
+            for observer in observers.withLock({ $0 }) { observer() }
+            action.withLock { $0 }?(removed)
+        }
     }
 }
 
