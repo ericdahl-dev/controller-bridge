@@ -216,7 +216,13 @@ public final class Coordinator {
     private func jogHelloAnswered(source: MIDIEndpoint.ID) {
         let entries = jogEntries
         guard entries.indices.contains(where: { entries[$0].ownsDisplay && controllers[$0].source?.id == source }) else { return }
-        jogController.helloAnswered()
+        // A re-sent hello that landed: the unit came back with its LEDs cleared, so they're painted again, as after the
+        // first hello (#426). Once per connect: the driver reports it only for the first answer.
+        guard jogController.helloAnswered() else { return }
+        trace?(.jogDisplay, "jog display: a re-sent hello was answered: the LEDs painted again")
+        for (index, entry) in entries.enumerated() where entry.ownsDisplay && controllers[index].bridge.layerShown {
+            controllers[index].bridge.repaintLEDs()
+        }
     }
 
     /// A message from the jog display's WD port: the unit's answers to an upload.

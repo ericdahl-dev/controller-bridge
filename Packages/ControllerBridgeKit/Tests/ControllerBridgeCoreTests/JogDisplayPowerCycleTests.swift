@@ -287,4 +287,36 @@ struct JogDisplayPowerCycleTests {
         for t in stride(from: 1.0, through: 100, by: 1) { ready.clock.now = t; ready.driver.tick() }
         #expect(!readyLines.list.contains(Self.neverReady))
     }
+
+    // MARK: A re-sent hello answered: the LEDs painted again (#426), once per connect.
+
+    static let answer = MIDIEvent.noteOn(channel: 15, note: 55, velocity: 127)
+
+    @Test("A re-sent hello answered: every LED painted at start goes out again, once, and the trace says so")
+    func repaintAfterLateAnswer() throws {
+        let (rig, port, clock) = try Self.owned()
+        final class Box: @unchecked Sendable { var list: [String] = [] }
+        let lines = Box()
+        rig.coordinator.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        let painted = Set(JogDisplayHelloRepaintTests.sent(rig).map(\.note))
+        _ = Self.hellos(rig, port, clock, from: 0.1, until: 1.5)
+        let before = JogDisplayHelloRepaintTests.sent(rig).count
+        rig.coordinator.midi(Self.answer, source: JogDisplayRingHoldTests.lc6000.id)
+        let after = Array(JogDisplayHelloRepaintTests.sent(rig).dropFirst(before))
+        #expect(Set(after.map(\.note)).isSuperset(of: painted))
+        #expect(lines.list.contains("jog display: a re-sent hello was answered: the LEDs painted again"))
+        let again = JogDisplayHelloRepaintTests.sent(rig).count
+        rig.coordinator.midi(Self.answer, source: JogDisplayRingHoldTests.lc6000.id)
+        #expect(JogDisplayHelloRepaintTests.sent(rig).count - again < painted.count, "not a second repaint")
+    }
+
+    @Test("The first hello answered in time: no repaint beyond today's after-hello one")
+    func noRepaintInTime() throws {
+        let (rig, _, clock) = try Self.owned()
+        clock.now = 0.02
+        let before = JogDisplayHelloRepaintTests.sent(rig).count
+        rig.coordinator.midi(Self.answer, source: JogDisplayRingHoldTests.lc6000.id)
+        let painted = Set(JogDisplayHelloRepaintTests.sent(rig).prefix(before).map(\.note))
+        #expect(JogDisplayHelloRepaintTests.sent(rig).count - before < painted.count)
+    }
 }
