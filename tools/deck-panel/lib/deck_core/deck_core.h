@@ -38,6 +38,9 @@ struct Screen {
     virtual void show_deck(const DeckView& view) = 0;
 };
 
+/// Not thread-safe: feed() and render() must run on one task. On the board, the UDP task copies each payload into a
+/// fixed-size queue item (dropped if the queue is full) and the loop task drains the queue into feed(), then calls
+/// render() every frame. No heap, no exceptions, no RTTI.
 class DeckCore {
 public:
     /// No feed for this long and the panel shows the waiting screen (#490).
