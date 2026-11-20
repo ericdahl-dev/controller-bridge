@@ -175,6 +175,24 @@ struct DrawnDisplayHandshakeTests {
         #expect(port.both.last == JogDisplay.goodbye)
     }
 
+    @Test("Quitting the app in image mode (stock firmware, or no drawn answer) sends the goodbye alone, as today (#600)")
+    func quitInImagesAsToday() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.refused)
+        port.both.removeAll()
+        port.wd.removeAll()
+        rig.coordinator.quit()
+        #expect(Self.drawn(port).isEmpty)
+        #expect(port.both.last == JogDisplay.goodbye)
+
+        let (denon, denonPort, _) = try Self.rig(.denon)
+        denonPort.both.removeAll()
+        denonPort.wd.removeAll()
+        denon.coordinator.quit()
+        #expect(Self.drawn(denonPort).isEmpty)
+        #expect(denonPort.both.last == JogDisplay.goodbye)
+    }
+
     @Test("The status says which display firmware was found, for Settings: Denon, Custom (images), Custom (drawn display, protocol N)")
     func firmwareFound() throws {
         let (denon, _, _) = try Self.rig(.denon)
