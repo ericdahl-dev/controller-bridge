@@ -75,6 +75,8 @@ final class BridgeModel {
     private var engine: Task<Void, Never>?
     private var sleepObservers: [any NSObjectProtocol] = []
     private var osc: OSCDestination?
+    /// The display feed's destination (#616): the panel's host and port, by address or by name.
+    private var displayFeedDestination: OSCDestination?
     private let storage = UserDefaultsStorage()
     /// What Settings shows and changes (#19). Saved in user defaults.
     /// The running profile's deck layers (#79): empty for a controller without them.
@@ -182,6 +184,17 @@ final class BridgeModel {
         }
     }
 
+    /// Opens the display feed's host in the background (#616). A failure is logged; Settings shows it from #618.
+    private func connectDisplayFeed(_ feed: DisplayFeedSettings) {
+        guard let displayFeedDestination else { return }
+        let log = UnifiedLogSink()
+        Task { @MainActor in
+            if let problem = await displayFeedDestination.connect(host: feed.host.trimmingCharacters(in: .whitespaces), port: feed.port) {
+                log.log("Display feed: \(problem)")
+            }
+        }
+    }
+
     /// Release held controls before the Mac sleeps, and re-check the devices when it wakes.
     private func observeSleep(_ producer: EventPipe.Producer) {
         let center = NSWorkspace.shared.notificationCenter
@@ -190,7 +203,10 @@ final class BridgeModel {
             center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
                 producer.wake()
                 // A `.local` host may have a new address after sleep (#84).
-                Task { @MainActor in await self?.osc?.reresolve() }
+                Task { @MainActor in
+                    await self?.osc?.reresolve()
+                    await self?.displayFeedDestination?.reresolve()
+                }
             },
         ]
     }
@@ -246,6 +262,13 @@ final class BridgeModel {
         if new.displayFirmware != old.displayFirmware { producer.send(.setDisplayFirmware(new.displayFirmware)) }
         if new.keyDisplay != old.keyDisplay { producer.send(.setKeyDisplay(new.keyDisplay)) }
         if new.stripFader != old.stripFader { producer.send(.setStripFader(new.stripFader)) }
+        if new.displayFeed != old.displayFeed {
+            // A new host or port opens first; the Coordinator sends the full snapshot again once it's open.
+            if new.displayFeed.enabled, new.displayFeed.host != old.displayFeed.host || new.displayFeed.port != old.displayFeed.port || !old.displayFeed.enabled {
+                connectDisplayFeed(new.displayFeed)
+            }
+            producer.send(.setDisplayFeed(new.displayFeed))
+        }
         if new.feedbackPort != old.feedbackPort || new.feedbackListen != old.feedbackListen { listen(new) }
     }
 
@@ -317,6 +340,17 @@ final class BridgeModel {
         osc.onSendFailure = { [weak osc] in Task { await osc?.reresolve() } }
         self.osc = osc
         connectOSC(host: settings.syndicateHost, port: settings.syndicatePort)
+        // The display feed (#616): its own destination, behind a queue so the engine never waits on it, and dropping
+        // when it's behind. Opened only while the feed is on; the full snapshot goes again each time it opens.
+        let feedDestination = OSCDestination(
+            resolver: SystemHostResolver(), open: { ip, port in try UDPSink(ipv4: ip, port: port) }, clock: SystemClock()
+        )
+        let feedProducer = pipe.producer
+        feedDestination.onReady = { feedProducer.send(.displayFeedReady) }
+        feedDestination.onSendFailure = { [weak feedDestination] in Task { await feedDestination?.reresolve() } }
+        displayFeedDestination = feedDestination
+        let displayFeed = DisplayFeedQueue(feedDestination)
+        if settings.displayFeed.enabled { connectDisplayFeed(settings.displayFeed) }
         producer = pipe.producer
         applier = SettingsApplier(
             settings: settings, storage: storage, connect: { [osc] host, port in await osc.connect(host: host, port: port) }
@@ -356,7 +390,8 @@ final class BridgeModel {
         engine = Task.detached(name: "Bridge engine") {
             await BridgeHost.run(
                 profiles: profiles, midi: queuedMIDI, osc: osc, log: log, status: status, diagnostics: diagnostics,
-                jogSimulator: jogSimulator, controllers: running, ledsEnabled: settings.ledsEnabled, jogDisplay: jogDisplay, events: pipe.events
+                jogSimulator: jogSimulator, controllers: running, ledsEnabled: settings.ledsEnabled, jogDisplay: jogDisplay,
+                displayFeed: displayFeed, events: pipe.events
             )
         }
         // The saved deck colors (#123), queued behind the Coordinator's start.
@@ -373,6 +408,7 @@ final class BridgeModel {
         // How the key is written (#590), before the first content is shown.
         pipe.producer.send(.setKeyDisplay(settings.keyDisplay))
         pipe.producer.send(.setJogDisplay(enabled: settings.jogDisplay))
+        pipe.producer.send(.setDisplayFeed(settings.displayFeed))
 
     }
 

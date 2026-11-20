@@ -31,6 +31,11 @@ extension Coordinator {
         case setKeyDisplay(KeyNotation)
         /// The deck the jog display preview follows with no controller connected (#221); nil, the first loaded.
         case setJogPreviewDeck(Int?)
+        /// Settings' display feed (#616): on/off, host and port.
+        case setDisplayFeed(DisplayFeedSettings)
+        /// The display feed's destination opened (#616): what was sent before it was dropped, so the full snapshot
+        /// goes again.
+        case displayFeedReady
         /// Start the LED sweep, `delay` seconds per color; or stop it part-way (#26).
         case ledSweep(delay: Double)
         case stopLEDSweep
@@ -64,12 +69,13 @@ extension Coordinator {
             switch self {
             // A real device is captured, so the real Coordinator pauses it, demo or not.
             // The meter capture (#582) records what Syndicate sends the real controller.
-            case .setCapture, .portRecovered, .jogDisplayRecovered, .startMeterCapture: .real
+            // The display feed's destination belongs to the real Coordinator.
+            case .setCapture, .portRecovered, .jogDisplayRecovered, .startMeterCapture, .displayFeedReady: .real
             case .ledSweep, .stopLEDSweep: .active
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
             case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setColorMessages, .setStripFader, .setLightBrightness, .resync, .setControllers, .setProfiles,
-                 .setProfileChoices, .setJogDisplay, .setDisplayFirmware, .setKeyDisplay:
+                 .setProfileChoices, .setJogDisplay, .setDisplayFirmware, .setKeyDisplay, .setDisplayFeed:
                 .waitsForDemo
             }
         }
@@ -95,6 +101,8 @@ extension Coordinator {
         case .setDisplayFirmware(let firmware): setDisplayFirmware(firmware)
         case .setKeyDisplay(let notation): setKeyDisplay(notation)
         case .setJogPreviewDeck(let deck): setJogPreviewDeck(deck)
+        case .setDisplayFeed(let settings): setDisplayFeed(settings)
+        case .displayFeedReady: displayFeedReady()
         case .ledSweep(let delay): startLEDSweep(delay: delay)
         case .stopLEDSweep: stopLEDSweep()
         case .startMeterCapture(let seconds): startMeterCapture(seconds: seconds)

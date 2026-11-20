@@ -1,0 +1,36 @@
+{
+  "about": "The display feed's shared examples (#490, #616): for each deck state, the OSC messages DeckBridge sends when the feed turns on with that deck in front, in order. One value per message; type is the OSC type tag (i, f or s). Walked by DisplayFeedExamplesTests (Swift) and the panel core's test (#619). A display ignores addresses it doesn't know (ADR 0011).",
+  "prefix": "/DeckBridge/Display/",
+  "cases": [
+    {
+      "name": "deck 1 loaded, in red",
+      "state": { "deck": 1, "color": [255, 0, 0], "title": "Night Drive", "artist": "Example Artist" },
+      "messages": [
+        { "address": "/DeckBridge/Display/deck", "type": "i", "value": 1 },
+        { "address": "/DeckBridge/Display/color", "type": "i", "value": 16711680 },
+        { "address": "/DeckBridge/Display/title", "type": "s", "value": "Night Drive" },
+        { "address": "/DeckBridge/Display/artist", "type": "s", "value": "Example Artist" }
+      ]
+    },
+    {
+      "name": "deck 2 empty, in yellow",
+      "state": { "deck": 2, "color": [255, 255, 0], "title": "", "artist": "" },
+      "messages": [
+        { "address": "/DeckBridge/Display/deck", "type": "i", "value": 2 },
+        { "address": "/DeckBridge/Display/color", "type": "i", "value": 16776960 },
+        { "address": "/DeckBridge/Display/title", "type": "s", "value": "" },
+        { "address": "/DeckBridge/Display/artist", "type": "s", "value": "" }
+      ]
+    },
+    {
+      "name": "deck 4 in a custom color, with non-ASCII text",
+      "state": { "deck": 4, "color": [18, 52, 86], "title": "Café Ångström", "artist": "Señor Ünïcode" },
+      "messages": [
+        { "address": "/DeckBridge/Display/deck", "type": "i", "value": 4 },
+        { "address": "/DeckBridge/Display/color", "type": "i", "value": 1193046 },
+        { "address": "/DeckBridge/Display/title", "type": "s", "value": "Café Ångström" },
+        { "address": "/DeckBridge/Display/artist", "type": "s", "value": "Señor Ünïcode" }
+      ]
+    }
+  ]
+}

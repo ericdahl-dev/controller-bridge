@@ -36,11 +36,13 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     public var profileChoices: [String: String] = [:]
     /// Shift + Needle Drop's fader (#609): on or off, relative or jump; unset keeps the profile's.
     public var stripFader = StripFaderSetting()
+    /// The display feed (#490, #616): the deck in front, over OSC, to a display such as the panel. Off by default.
+    public var displayFeed = DisplayFeedSettings()
 
     enum CodingKeys: String, CodingKey {
         case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
         case followSyndicateDeckColors, customDeckColors, appearance, ringColors, jogDisplay, profileChoices
-        case displayFirmware, colorMessages, lightBrightness, keyDisplay, stripFader
+        case displayFirmware, colorMessages, lightBrightness, keyDisplay, stripFader, displayFeed
     }
 
     /// Settings saved before #123 have no deck colors: they load with the defaults.
@@ -64,6 +66,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         displayFirmware = try c.decodeIfPresent(DisplayFirmware.self, forKey: .displayFirmware) ?? .denon
         keyDisplay = try c.decodeIfPresent(KeyNotation.self, forKey: .keyDisplay) ?? .traditional
         stripFader = try c.decodeIfPresent(StripFaderSetting.self, forKey: .stripFader) ?? StripFaderSetting()
+        displayFeed = try c.decodeIfPresent(DisplayFeedSettings.self, forKey: .displayFeed) ?? DisplayFeedSettings()
     }
 
     public init(
@@ -116,6 +119,7 @@ extension BridgeSettings {
         out.keyDisplay = pick(\.keyDisplay)
         out.stripFader = pick(\.stripFader)
         out.profileChoices = pick(\.profileChoices)
+        out.displayFeed = pick(\.displayFeed)
         // Controllers: the draft's list (an add or remove is the DJ's edit), each field rebased where both had it.
         out.controllers = draft.controllers.indices.map { index in
             let edited = draft.controllers[index]
@@ -220,6 +224,7 @@ extension BridgeSettings {
         if syndicatePort == feedbackPort {
             out.append(SettingsProblem(field: .feedbackPort, message: "The OSC port and the Feedback port can't both be \(syndicatePort)"))
         }
+        out += displayFeed.problems
         return out
     }
 
@@ -325,6 +330,44 @@ public enum SettingsField: Hashable, Sendable {
     case oscPort
     case feedbackPort
     case deckColor(deck: Int)
+    case displayFeedHost
+    case displayFeedPort
+}
+
+/// The display feed's setting (#616): on/off, and the display's host and port. A bad host or port is a problem only
+/// while it's on.
+public struct DisplayFeedSettings: Codable, Equatable, Sendable {
+    public var enabled: Bool
+    /// The display's IPv4 address or name.
+    public var host: String
+    public var port: Int
+
+    /// The panel listens on 9100 unless told otherwise.
+    public static let defaultPort = 9100
+
+    public init(enabled: Bool = false, host: String = "", port: Int = DisplayFeedSettings.defaultPort) {
+        self.enabled = enabled
+        self.host = host
+        self.port = port
+    }
+
+    var problems: [SettingsProblem] {
+        guard enabled else { return [] }
+        var out: [SettingsProblem] = []
+        let host = host.trimmingCharacters(in: .whitespaces)
+        if host.isEmpty {
+            out.append(SettingsProblem(field: .displayFeedHost, message: "The display feed's host can't be empty while it's on"))
+        } else if !BridgeSettings.isIPv4(host) && !BridgeSettings.isHostName(host) {
+            out.append(SettingsProblem(
+                field: .displayFeedHost,
+                message: "\(host) isn't a host name or IP address. Use the display's name, like deck-panel.local, or its IP address, like 192.168.1.40."
+            ))
+        }
+        if !(1...65_535).contains(port) {
+            out.append(SettingsProblem(field: .displayFeedPort, message: "Display feed port \(port) is out of range, expected 1-65535"))
+        }
+        return out
+    }
 }
 
 /// The app's light or dark look (#127).
