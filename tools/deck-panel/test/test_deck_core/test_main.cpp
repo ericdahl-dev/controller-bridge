@@ -1,7 +1,9 @@
 // The deck panel's portable core (#619): display feed bytes in, the screen's decisions out. Built and run on the Mac.
 #include <unity.h>
 
+#include <cstdlib>
 #include <fstream>
+#include <new>
 #include <sstream>
 
 #include "deck_core.h"
@@ -10,6 +12,17 @@
 #include "screen_stub.h"
 
 using namespace osc_bytes;
+
+// Every heap allocation in this test binary is counted, so a test can say the core makes none (on the board, small
+// allocations come from the internal RAM LVGL and lwIP use, for hours).
+static size_t allocations = 0;
+void* operator new(size_t size) {
+    ++allocations;
+    if (void* p = std::malloc(size ? size : 1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete(void* p, size_t) noexcept { std::free(p); }
 
 void setUp() {}
 void tearDown() {}
@@ -321,6 +334,33 @@ void test_each_shared_example_shows_its_deck_state() {
     TEST_ASSERT_TRUE(walked >= 3);
 }
 
+// A screen that keeps nothing, so the count is the core's own.
+struct QuietScreen : deck_core::Screen {
+    int calls = 0;
+    void show_waiting() override { ++calls; }
+    void show_deck(const deck_core::DeckView&) override { ++calls; }
+};
+
+void test_reading_packets_and_rendering_use_no_heap() {
+    Bytes deck = int_message(prefix + "deck", 3);
+    Bytes title = string_message(prefix + "title", repeat("\xC3\xA9 long title ", 20));
+    Bytes artist = string_message(prefix + "artist", "Example Artist with a name past the inline size");
+    Bytes other_title = string_message(prefix + "title", "Night Drive, the extended mix of it");
+    deck_core::DeckCore core;
+    QuietScreen screen;
+    size_t before = allocations;
+    for (uint32_t t = 0; t < 50; ++t) {
+        core.feed(deck.data(), deck.size(), t * 100);
+        const Bytes& this_title = t % 2 ? title : other_title;
+        core.feed(this_title.data(), this_title.size(), t * 100);
+        core.feed(artist.data(), artist.size(), t * 100);
+        core.render(screen, t * 100);
+    }
+    core.render(screen, 50 * 100 + 5000);
+    TEST_ASSERT_EQUAL(0, allocations - before);
+    TEST_ASSERT_TRUE(screen.calls > 2);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -350,5 +390,6 @@ int main(int, char**) {
     RUN_TEST(test_spaces_before_the_ellipsis_are_dropped);
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
+    RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
     return UNITY_END();
 }

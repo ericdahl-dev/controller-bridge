@@ -8,24 +8,28 @@ namespace {
 
 const char kPrefix[] = "/DeckBridge/Display/";
 
-/// `text` (valid UTF-8) at most `limit` characters: a longer one is cut between characters, spaces before the cut
-/// dropped, and ends in "…".
-std::string shorten(const char* text, size_t limit) {
-    std::string out;
-    size_t characters = 0;
+/// `text` (valid UTF-8) into `out` at most `limit` characters: a longer one is cut between characters, spaces before
+/// the cut dropped, and ends in "…". `out` holds `limit` characters of 4 bytes and a NUL.
+void shorten(const char* text, size_t limit, char* out) {
+    size_t characters = 0, n = 0;
     for (const char* p = text; *p; ++p) {
         bool starts_character = (static_cast<uint8_t>(*p) & 0xC0) != 0x80;
         if (starts_character && ++characters == limit) {
             // The limit-th character: whole only if it is the last.
             size_t rest = 0;
             for (const char* q = p; *q; ++q) rest += (static_cast<uint8_t>(*q) & 0xC0) != 0x80;
-            if (rest == 1) return out + p;
-            while (!out.empty() && out.back() == ' ') out.pop_back();
-            return out + "\xE2\x80\xA6";
+            if (rest == 1) {
+                while (*p) out[n++] = *p++;
+            } else {
+                while (n > 0 && out[n - 1] == ' ') --n;
+                std::memcpy(out + n, "\xE2\x80\xA6", 3);
+                n += 3;
+            }
+            break;
         }
-        out += *p;
+        out[n++] = *p;
     }
-    return out;
+    out[n] = 0;
 }
 
 /// One OSC message with one value, as the feed sends (ADR 0011).
@@ -120,12 +124,12 @@ const Row kRows[] = {
      }},
     {"title", 's',
      [](DeckView& v, const Message& m) {
-         v.title = shorten(m.s, kTitleMax);
+         shorten(m.s, kTitleMax, v.title);
          return true;
      }},
     {"artist", 's',
      [](DeckView& v, const Message& m) {
-         v.artist = shorten(m.s, kArtistMax);
+         shorten(m.s, kArtistMax, v.artist);
          return true;
      }},
 };

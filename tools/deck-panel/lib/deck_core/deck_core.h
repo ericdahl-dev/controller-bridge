@@ -5,23 +5,29 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
+#include <cstring>
 
 namespace deck_core {
 
 /// The longest title and artist shown, in characters; longer ones are cut and end in "…" (#490).
 constexpr size_t kTitleMax = 40;
 constexpr size_t kArtistMax = 40;
+/// Room for 40 characters of up to 4 bytes each, and the NUL. No text is kept on the heap: the board's small
+/// allocations come from the internal RAM LVGL and Wi-Fi use.
+constexpr size_t kTextBytes = 40 * 4 + 1;
+static_assert(kTitleMax <= 40 && kArtistMax <= 40, "kTextBytes holds 40 characters");
 
 /// What the deck screen shows.
 struct DeckView {
     int deck = 0;  ///< 1-4; 0 until the feed says
     uint32_t color = 0;  ///< 0xRRGGBB
-    std::string title;
-    std::string artist;
+    char title[kTextBytes] = "";  ///< UTF-8, shortened
+    char artist[kTextBytes] = "";
 
+    /// Every field: one #617 adds goes here too, or a change to it won't redraw.
     bool operator==(const DeckView& other) const {
-        return deck == other.deck && color == other.color && title == other.title && artist == other.artist;
+        return deck == other.deck && color == other.color && std::strcmp(title, other.title) == 0 &&
+               std::strcmp(artist, other.artist) == 0;
     }
 };
 
