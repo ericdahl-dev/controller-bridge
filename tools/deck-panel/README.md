@@ -127,8 +127,12 @@ The driver is Espressif's `esp_lcd` RGB panel with bounce buffers: two buffers o
 |---|---|---|
 | `-DPANEL_PCLK_HZ=14000000` | 16 MHz | Pixel clock, 12.3 to 16 MHz (34 Hz at 14 MHz; the refresh period follows) |
 | `-DPANEL_PCLK_ACTIVE_NEG=0` | 1 | The clock edge the panel samples on |
-| `-DPANEL_BOUNCE_PX=0` | 8000 | Bounce buffers off: expected to show only every other frame on this core |
+| `-DPANEL_BOUNCE_PX=0` | 8000 | Bounce buffers off: expected to show only every other frame on this core. Any other size must divide 384,000 into an even number of chunks (the build refuses others) |
+| `-DPANEL_ISR_CORE=0` | 1 | The core that runs the panel's interrupts, the bounce copy among them (about 30 MB/s out of PSRAM). 1 is LVGL's; 0 is Wi-Fi's |
+| `-DARDUINO_RUNNING_CORE=0` | 1 | Arduino's own: the core loop() and so LVGL run on. Wi-Fi and lwIP stay on core 0 (fixed in the prebuilt sdkconfig) |
 | `-DPANEL_PCLK_IDLE_HIGH`, `-DPANEL_HSYNC_IDLE_LOW`, `-DPANEL_VSYNC_IDLE_LOW`, `-DPANEL_DE_IDLE_HIGH` | as LovyanGFX had them | Signal idle levels |
+
+Not a flag: running code and constants from PSRAM (XIP, `CONFIG_SPIRAM_FETCH_INSTRUCTIONS`/`RODATA`) is off in this prebuilt core and needs a custom sdkconfig rebuild. It matters because a flash write (NVS, Wi-Fi's first-boot calibration) stops the bounce interrupt for milliseconds, which can leave a band until the next disturbance.
 
 Stack them on any env: `PLATFORMIO_BUILD_FLAGS="-DPANEL_PCLK_ACTIVE_NEG=0" pio run -d tools/deck-panel -e crowpanel-perf -t upload --upload-port /dev/cu.wchusbserial210`.
 
@@ -138,7 +142,8 @@ Stack them on any env: `PLATFORMIO_BUILD_FLAGS="-DPANEL_PCLK_ACTIVE_NEG=0" pio r
 |---|---|---|
 | A fine shimmer or sparkle on edges and text, even on the still test screen; colors a little off or noisy | The wrong clock edge | `-DPANEL_PCLK_ACTIVE_NEG=0` |
 | Moving parts flicker between old and new values, or move in steps with the old picture flashing back; the perf line shows swap timeouts, or vsyncs/s well off 39 | The swap's timing | Read the perf line first. `-DPANEL_BOUNCE_PX=0` shows the core's restart problem on its own |
-| The whole picture jitters sideways or shifts, worse with Wi-Fi busy | Scan-out starved of PSRAM | `-DPANEL_PCLK_HZ=14000000` |
+| The whole picture jumps, jitters sideways or shifts, worse with Wi-Fi busy; the perf line shows resyncs, a wide scan lag, or vsyncs/s below 39 | The scan-out falling behind: the bounce copy late | `-DPANEL_PCLK_HZ=14000000`, then `-DPANEL_ISR_CORE=0` |
+| Horizontal bands that stay | The bounce buffers out of step (after a flash write) | A restart clears it; report when it started |
 | Black with the backlight on | No frame reached the panel | The serial log's `display:` lines |
 
 ## The perf build
@@ -150,7 +155,7 @@ pio device monitor -d tools/deck-panel -e crowpanel-perf -p /dev/cu.wchusbserial
 ```
 
 ```text
-perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, 39.0 vsyncs/s, 0 swap timeouts, feed 900 datagrams 1 too big, internal free 123456
+perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, 39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.0 ms, vsync 25.6-25.6 ms, 0 resyncs, feed 900 datagrams 0 too big, internal free 123456
 ```
 
 - **frames/s:** LVGL's refreshes that drew something, at most 39. With the deck playing it should be about 30.
@@ -158,6 +163,7 @@ perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap
 - **swap wait:** how long LVGL waited, per frame, for the panel to take the last one. Up to one frame (25.6 ms) is normal.
 - **vsyncs/s:** the panel's own rate, 39.0 at 16 MHz, drawing or not.
 - **swap timeouts:** waits that hit 60 ms. Anything but 0 is a fault.
+- **scan lag, vsync, resyncs:** the scan-out's steadiness. The bounce driver finishes copying each frame at a fixed time after its vsync, and vsyncs come every 25.6 ms (16 MHz). A healthy panel shows one value for each, give or take a few µs, and 0 resyncs. A resync is a frame whose copy ended more than 0.5 ms off the last one: the scan-out fell behind or was restarted out of step. A jumping picture should show up here. (Bounce mode only.)
 - **feed:** datagrams read in the window, and those dropped for being too big. lwIP's own drops, when its 6-deep receive queue is full, can't be seen from here.
 - **internal free:** free internal RAM, in bytes.
 - A still screen prints `perf: no frames (nothing changed)`: LVGL draws only what changes.

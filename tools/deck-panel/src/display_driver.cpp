@@ -21,6 +21,7 @@
 
 #include "frame_pacing.h"
 #include "panel_mcu.h"
+#include "scan_watch.h"
 #include "swap_gate.h"
 
 // Signal polarity, each overridable with -D to try on the panel without a commit. The defaults reproduce what
@@ -54,6 +55,15 @@
 #define PANEL_BOUNCE_PX 8000
 #endif
 static_assert(PANEL_BOUNCE_PX == 0 || (800 * 480) % PANEL_BOUNCE_PX == 0, "PANEL_BOUNCE_PX must divide 800 x 480");
+// And into an even number of chunks: the vsync restart always starts the DMA at the first bounce buffer, so an odd
+// count flips which buffer the interrupt refills every frame, and it refills the one going out (banding).
+static_assert(PANEL_BOUNCE_PX == 0 || ((800 * 480) / PANEL_BOUNCE_PX) % 2 == 0,
+              "PANEL_BOUNCE_PX must give an even number of chunks a frame");
+// Which core runs the panel's interrupts, the bounce copy among them (about 30 MB/s out of PSRAM): 1, LVGL's and the
+// loop's, by default; 0 is Wi-Fi's. The panel is created on that core, since its interrupt is allocated there.
+#ifndef PANEL_ISR_CORE
+#define PANEL_ISR_CORE 1
+#endif
 
 namespace {
 
@@ -75,6 +85,9 @@ lv_display_t* g_disp = nullptr;
 esp_lcd_panel_handle_t g_panel = nullptr;
 SemaphoreHandle_t g_vsync_sem = nullptr;
 swap_gate::Gate g_gate;
+// Fed by both panel interrupts (one core), read by the loop: the spinlock keeps a read whole.
+scan_watch::Watch g_scan;
+portMUX_TYPE g_scan_lock = portMUX_INITIALIZER_UNLOCKED;
 
 // Written only by the vsync interrupt; read without a reset, so no read-modify-write races it.
 volatile uint32_t g_vsyncs = 0;
@@ -99,12 +112,18 @@ bool IRAM_ATTR release_swap() {
 // Without bounce buffers the next frame reads the new buffer from this vsync on, so it releases the swap.
 bool IRAM_ATTR on_vsync(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void*) {
     g_vsyncs = g_vsyncs + 1;
+    portENTER_CRITICAL_ISR(&g_scan_lock);
+    g_scan.vsync(static_cast<uint32_t>(esp_timer_get_time()));
+    portEXIT_CRITICAL_ISR(&g_scan_lock);
     return PANEL_BOUNCE_PX == 0 && release_swap();
 }
 
 // With bounce buffers the driver picks the next frame's buffer here, when it has copied the last of this one, not at
 // the vsync: a swap between the two would be released while the old buffer still feeds a whole frame.
 bool IRAM_ATTR on_frame_buf_complete(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void*) {
+    portENTER_CRITICAL_ISR(&g_scan_lock);
+    g_scan.frame_complete(static_cast<uint32_t>(esp_timer_get_time()));
+    portEXIT_CRITICAL_ISR(&g_scan_lock);
     return release_swap();
 }
 
@@ -116,8 +135,9 @@ void flush_cb(lv_display_t* disp, const lv_area_t*, uint8_t* px_map) {
         lv_display_flush_ready(disp);
         return;
     }
-    // The whole frame, not the last area: draw_bitmap writes the cache back over the range it's given, and every
-    // area of this frame, plus what LVGL copied over from the last one, is still in the cache.
+    // The whole frame, not the last area. In bounce mode draw_bitmap only switches buffers: the bounce copy reads
+    // through the same cache LVGL wrote to. Without bounce buffers it also writes the cache back over the range given,
+    // and every area of this frame, plus what LVGL copied over from the last one, may still be in the cache.
     const int64_t start = esp_timer_get_time();
     // Only bad arguments fail it, and these are fixed; the frame is handed over either way.
     (void)esp_lcd_panel_draw_bitmap(g_panel, 0, 0, board::LCD_WIDTH, board::LCD_HEIGHT, px_map);
@@ -180,7 +200,7 @@ bool panel_init() {
     cfg.bits_per_pixel = 16;
     cfg.num_fbs = 2;
     cfg.bounce_buffer_size_px = PANEL_BOUNCE_PX;
-    cfg.dma_burst_size = 64;  // the largest burst out of PSRAM, as LovyanGFX's 64-byte alignment had
+    cfg.dma_burst_size = 64;  // the largest burst; it reads the bounce buffers in internal RAM, or PSRAM without them
     cfg.hsync_gpio_num = board::LCD_HSYNC;
     cfg.vsync_gpio_num = board::LCD_VSYNC;
     cfg.de_gpio_num = board::LCD_DE;
@@ -213,6 +233,31 @@ bool panel_init() {
     return true;
 }
 
+// panel_init() on PANEL_ISR_CORE: esp_lcd allocates the panel's interrupts on the core that creates it.
+struct CoreInit {
+    SemaphoreHandle_t done;
+    bool ok;
+};
+
+void panel_init_task(void* arg) {
+    CoreInit* init = static_cast<CoreInit*>(arg);
+    init->ok = panel_init();
+    xSemaphoreGive(init->done);
+    vTaskDelete(nullptr);
+}
+
+bool panel_init_on_core() {
+    if (xPortGetCoreID() == PANEL_ISR_CORE) return panel_init();
+    CoreInit init = {xSemaphoreCreateBinary(), false};
+    if (init.done == nullptr) return false;
+    const bool started =
+        xTaskCreatePinnedToCore(panel_init_task, "panel_init", 4096, &init, 5, nullptr, PANEL_ISR_CORE) == pdPASS;
+    if (started) xSemaphoreTake(init.done, portMAX_DELAY);
+    vSemaphoreDelete(init.done);
+    if (!started) Serial.println("display: couldn't start the panel on its core");
+    return started && init.ok;
+}
+
 }  // namespace
 
 bool display_init() {
@@ -222,7 +267,7 @@ bool display_init() {
         Serial.println("display: no memory for the vsync semaphore");
         return false;
     }
-    if (!panel_init()) return false;
+    if (!panel_init_on_core()) return false;
 
     void* fb0 = nullptr;
     void* fb1 = nullptr;
@@ -254,6 +299,8 @@ bool display_init() {
                   board::LCD_WIDTH, board::LCD_HEIGHT, static_cast<unsigned>(board::LCD_PCLK_HZ),
                   static_cast<unsigned>(frame_pacing::frames_per_second(TIMING)), static_cast<unsigned>(period_ms),
                   fb0, fb1, region(fb0));
+    Serial.printf("display: bounce buffers %d px, panel interrupts on core %d, loop on core %d, clock edge %s\n",
+                  PANEL_BOUNCE_PX, PANEL_ISR_CORE, xPortGetCoreID(), PANEL_PCLK_ACTIVE_NEG ? "falling" : "rising");
     if (esp_register_shutdown_handler(stopLcdOnRestart) != ESP_OK) {
         Serial.println("display: couldn't register the restart handler");
     }
@@ -261,6 +308,13 @@ bool display_init() {
 }
 
 lv_display_t* display_lvgl() { return g_disp; }
+
+scan_watch::Report display_take_scan() {
+    portENTER_CRITICAL(&g_scan_lock);
+    const scan_watch::Report r = g_scan.take();
+    portEXIT_CRITICAL(&g_scan_lock);
+    return r;
+}
 
 DisplayPerf display_take_perf() {
     const uint32_t vsyncs = g_vsyncs;

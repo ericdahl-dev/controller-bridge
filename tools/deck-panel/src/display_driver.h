@@ -15,6 +15,8 @@
 
 #include <lvgl.h>
 
+#include "scan_watch.h"
+
 #include "board_pins.h"
 
 // Initializes LVGL, brings up the panel and its two framebuffers and registers the LVGL display, with a
@@ -32,7 +34,11 @@ struct DisplayPerf {
     uint32_t vsyncs;          // frames the panel scanned out
     uint32_t swaps;           // frames LVGL finished and handed over
     uint32_t swap_timeouts;   // swaps whose vsync didn't come within 60 ms
-    uint32_t draw_bitmap_us;  // time in esp_lcd_panel_draw_bitmap (the cache write-back and the swap)
+    uint32_t draw_bitmap_us;  // time in esp_lcd_panel_draw_bitmap (the swap; and the cache write-back without bounce)
     uint32_t flush_wait_us;   // time LVGL waited for a swap's vsync
 };
 DisplayPerf display_take_perf();
+
+// The scan-out's steadiness since the last call (lib/scan_watch): vsync-to-frame-end lag, vsync spread, resyncs.
+// Bounce mode only: without bounce buffers the frame-end callback isn't registered.
+scan_watch::Report display_take_scan();

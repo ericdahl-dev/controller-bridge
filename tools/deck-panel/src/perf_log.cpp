@@ -60,6 +60,7 @@ void begin() {
     lv_display_add_event_cb(disp, on_event, LV_EVENT_FLUSH_START, nullptr);
     lv_display_add_event_cb(disp, on_event, LV_EVENT_REFR_READY, nullptr);
     display_take_perf();  // start the driver's counts from here
+    display_take_scan();
     g_window_start_ms = millis();
     Serial.println("perf: on, a line every 5 s");
 }
@@ -83,6 +84,7 @@ void tick(uint32_t now_ms, int datagrams, uint32_t too_big) {
     w.datagrams = g_datagrams;
     w.too_big = g_too_big - g_too_big_at_start;
     w.internal_free = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    w.scan = display_take_scan();
     Serial.println(perf_line::format(w).c_str());
 
     g_frames = 0;
