@@ -13,12 +13,25 @@ struct ScreenStub : deck_core::Screen {
         uint32_t color = 0;
         std::string title;
         std::string artist;
+        std::string headline;  ///< the waiting screen's
+        std::string detail;
     };
     std::vector<Shown> shown;
 
-    void show_waiting() override { shown.push_back(Shown{}); }
+    void show_waiting(const deck_core::WaitingView& view) override {
+        Shown s;
+        s.headline = view.headline;
+        s.detail = view.detail;
+        shown.push_back(s);
+    }
     void show_deck(const deck_core::DeckView& view) override {
-        shown.push_back(Shown{false, view.deck, view.color, view.title, view.artist});
+        Shown s;
+        s.waiting = false;
+        s.deck = view.deck;
+        s.color = view.color;
+        s.title = view.title;
+        s.artist = view.artist;
+        shown.push_back(s);
     }
     const Shown& last() const { return shown.back(); }
 };
