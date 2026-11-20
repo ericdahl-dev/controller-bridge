@@ -199,6 +199,7 @@ struct SettingsView: View {
                         .accessibilityElement(children: .contain).accessibilityLabel("Key display")
                 }
             }
+            stripFaderRows(settings)
             ForEach(settings.wrappedValue.warnings, id: \.self) { note($0, color: Theme.attention) }
             if settings.wrappedValue.controllers.count < 4 {
                 Button("Add controller") {
@@ -208,6 +209,35 @@ struct SettingsView: View {
             }
         }
         mappingSection
+    }
+
+    /// The strip of the controller in use, else the default profile's: what the fader rows show unless the DJ chose.
+    private var stripFaderNeedle: Mapping.Needle? {
+        let inUse = model.status.bridges.compactMap(\.profile).first
+        return (model.profiles.first { $0.name == inUse } ?? model.profiles.first)?.mapping.needle
+    }
+
+    /// Shift + Needle Drop on the deck's channel fader (#609): on or off, and relative or jump, each the profile's until
+    /// changed here. A strip without a touch note shows neither.
+    @ViewBuilder
+    private func stripFaderRows(_ settings: Binding<BridgeSettings>) -> some View {
+        if let shown = settings.wrappedValue.stripFader.shown(for: stripFaderNeedle) {
+            switchRow("Shift + Needle Drop moves the channel fader",
+                      hint: shown.enabled
+                          ? "Hold Shift and slide the strip to move the deck's fader in Syndicate's mixer"
+                          : "The strip always moves through the track",
+                      isOn: Binding(get: { shown.enabled }, set: { settings.wrappedValue.stripFader.enabled = $0 }))
+            if shown.enabled {
+                row("Fader movement", hint: shown.mode == .relative
+                    ? "From where the fader is, by how far you slide. Needs Syndicate's Volume feedback"
+                    : "The fader goes to where you touch the strip") {
+                    SegmentedPills(options: [Mapping.Needle.ShiftFaderMode.relative, .jump],
+                                   title: { $0 == .relative ? "Relative" : "Jump" },
+                                   selection: Binding(get: { shown.mode }, set: { settings.wrappedValue.stripFader.mode = $0 }))
+                        .accessibilityElement(children: .contain).accessibilityLabel("Fader movement")
+                }
+            }
+        }
     }
 
     @ViewBuilder
