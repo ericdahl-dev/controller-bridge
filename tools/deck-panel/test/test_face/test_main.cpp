@@ -145,6 +145,19 @@ void test_the_lamps_follow_play_cue_sync_master_and_loop() {
     TEST_ASSERT_TRUE(f.cue);
 }
 
+// Beats, as the LC6000's loop display shows them: whole, or a fraction of one beat.
+void test_the_loop_length_shows_whole_beats_or_fractions() {
+    DeckView v = loaded_deck();
+    const struct { float beats; const char* text; } cases[] = {
+        {0.5f, "1/2"}, {0.25f, "1/4"}, {0.125f, "1/8"}, {0.0625f, "1/16"}, {0.03125f, "1/32"},
+        {1, "1"}, {4, "4"}, {16, "16"}, {1.5f, "1.5"}, {0, ""},
+    };
+    for (const auto& c : cases) {
+        v.loop_length = c.beats;
+        TEST_ASSERT_EQUAL_STRING(c.text, deck_core::face(v).loop_length);
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_empty_deck_shows_no_track_loaded_and_nothing_else);
@@ -158,5 +171,6 @@ int main(int, char**) {
     RUN_TEST(test_the_bar_warns_in_the_last_30_seconds);
     RUN_TEST(test_the_beat_lights_its_block_and_none_outside_1_to_4);
     RUN_TEST(test_the_lamps_follow_play_cue_sync_master_and_loop);
+    RUN_TEST(test_the_loop_length_shows_whole_beats_or_fractions);
     return UNITY_END();
 }

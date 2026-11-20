@@ -1,5 +1,6 @@
 #include "deck_face.h"
 
+#include <cmath>
 #include <cstdio>
 
 namespace deck_core {
@@ -20,6 +21,24 @@ void time_text(char (&out)[N], const char* sign, int32_t seconds) {
     } else {
         std::snprintf(out, N, "%s%ld:%02ld", sign, s / 60, s % 60);
     }
+}
+
+/// A loop's length in beats: whole ("4"), a fraction of one beat ("1/2" … "1/32"), else as it is ("1.5").
+template <size_t N>
+void loop_text(char (&out)[N], float beats) {
+    if (beats <= 0) return;
+    const long whole = static_cast<long>(beats + 0.5f);
+    if (whole >= 1 && std::fabs(beats - static_cast<float>(whole)) < 0.001f) {
+        std::snprintf(out, N, "%ld", whole);
+        return;
+    }
+    for (long below = 2; below <= 64; below *= 2) {
+        if (std::fabs(beats - 1.0f / static_cast<float>(below)) < 0.0001f) {
+            std::snprintf(out, N, "1/%ld", below);
+            return;
+        }
+    }
+    std::snprintf(out, N, "%g", static_cast<double>(beats));
 }
 
 float clamp01(float x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
@@ -59,6 +78,7 @@ Face face(const DeckView& view) {
     f.sync = view.sync;
     f.master = view.master;
     f.loop = view.loop;
+    loop_text(f.loop_length, view.loop_length);
     return f;
 }
 
