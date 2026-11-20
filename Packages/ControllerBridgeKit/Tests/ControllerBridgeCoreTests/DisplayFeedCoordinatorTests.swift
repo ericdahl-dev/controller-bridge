@@ -124,4 +124,19 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.setJogPreviewDeck(2)
         #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00, title: "", artist: ""))
     }
+
+    @Test("A deck that's unloaded sends the empty state: \"\" for title and artist, never the last track")
+    func emptyDeck() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        rig.coordinator.setDisplayFeed(Self.on)
+        feed.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
+        #expect(feed.sent == [
+            OSCMessage("/DeckBridge/Display/title", [.string("")]),
+            OSCMessage("/DeckBridge/Display/artist", [.string("")]),
+        ])
+    }
 }
