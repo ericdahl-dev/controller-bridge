@@ -32,6 +32,8 @@ final class DisplayFeed {
     private var settings = DisplayFeedSettings()
     /// What each address carried last, as sent; empty means the next update is a full snapshot.
     private var sent: [String: [OSCArgument]] = [:]
+    /// The deck number the last update was for: another deck in front is a full snapshot.
+    private var sentDeck: Int?
 
     /// Where the feed's OSC goes. The app's sender is the display's own UDP destination, off the event path.
     func attach(_ sender: any OSCSender) {
@@ -45,9 +47,11 @@ final class DisplayFeed {
         settings = new
     }
 
-    /// Sends what changed about the deck in front.
+    /// Sends what changed about the deck in front: everything when it's another deck.
     func update(_ deck: Deck?) {
         guard settings.enabled, let sender, let deck else { return }
+        if deck.number != sentDeck { sent = [:] }
+        sentDeck = deck.number
         for message in deck.messages where sent[message.address] != message.arguments {
             sender.send(message)
             sent[message.address] = message.arguments

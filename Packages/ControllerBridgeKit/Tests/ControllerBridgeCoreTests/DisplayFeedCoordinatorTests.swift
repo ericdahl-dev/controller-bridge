@@ -50,4 +50,25 @@ struct DisplayFeedCoordinatorTests {
         for step in 1...10 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
         #expect(feed.sent == [])
     }
+
+    /// The LC6000 as one entry per layer, as the app runs it, on layer 1.
+    static func layered(_ rig: Rig) {
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
+        ))
+    }
+
+    @Test("Switching layers to deck 2 sends its full snapshot in yellow, even the fields deck 1 shared")
+    func deckChangeSnapshot() throws {
+        let (rig, feed) = try Self.rig()
+        Self.layered(rig)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2))
+        rig.coordinator.setDisplayFeed(Self.on)
+        #expect(feed.sent.first == OSCMessage("/DeckBridge/Display/deck", [.int(1)]))
+        feed.sent.removeAll()
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
+    }
 }
