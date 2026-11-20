@@ -44,6 +44,11 @@ case "$compliance" in true|false) ok "ITSAppUsesNonExemptEncryption = $complianc
 category=$(read_key LSApplicationCategoryType)
 [ -n "$category" ] && ok "LSApplicationCategoryType = $category" || bad "LSApplicationCategoryType is missing (the Mac App Store needs it)"
 
+# The Local Network prompt's words (#19, #618): macOS 15 and later ask before the feedback listener on all networks or
+# the display feed to a deck panel can reach the LAN; without them the sends are refused.
+[ -n "$(read_key NSLocalNetworkUsageDescription)" ] && ok "NSLocalNetworkUsageDescription is set" \
+  || bad "NSLocalNetworkUsageDescription is missing (macOS can't ask for local network access)"
+
 # A menu-bar app: no Dock icon.
 [ "$(read_key LSUIElement)" = true ] && ok "LSUIElement = true" || bad "LSUIElement is not true (the app would show in the Dock)"
 
