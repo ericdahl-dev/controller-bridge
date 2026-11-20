@@ -376,13 +376,16 @@ struct DisplayFeedCoordinatorTests {
         rig.clock.now = 0.5
         rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(2)]))
         #expect(feed.sent == [Self.message("beat", Int32(1)), Self.message("beat", Int32(2))])
+        // The 2 s keepalive's snapshot comes between; only the beat's own messages count here.
+        func beats() -> [OSCMessage] { feed.sent.filter { $0.address.hasSuffix("/beat") } }
         feed.sent.removeAll()
         rig.clock.now = 2.5
         rig.coordinator.tick()
-        #expect(feed.sent == [])
+        #expect(beats().allSatisfy { $0 == Self.message("beat", Int32(2)) })
+        feed.sent.removeAll()
         rig.clock.now = 2.51
         rig.coordinator.tick()
-        #expect(feed.sent == [Self.message("beat", Int32(0))])
+        #expect(beats() == [Self.message("beat", Int32(0))])
     }
 
     @Test("An empty deck sends beat 0 whatever the clock")
@@ -522,6 +525,73 @@ struct DisplayFeedCoordinatorTests {
         off.enabled = false
         rig.coordinator.setDisplayFeed(off)
         #expect(!rig.coordinator.status.requiredSubscriptions.contains(.phaseOffset))
+    }
+
+    /// Ticks every 10 ms from `from` to `to` seconds.
+    static func run(_ rig: Rig, from: Double, to: Double) {
+        var step = (from * 100).rounded()
+        while step <= (to * 100).rounded() {
+            rig.clock.now = step / 100
+            rig.coordinator.tick()
+            step += 1
+        }
+    }
+
+    @Test("Keepalive: a full snapshot every 2 s, with only changes between")
+    func keepalive() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        let daybreak = Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
+        feed.sent.removeAll()
+        Self.run(rig, from: 0.01, to: 1.99)
+        #expect(feed.sent == [])
+        Self.run(rig, from: 2, to: 2)
+        #expect(feed.sent == daybreak)
+        feed.sent.removeAll()
+        Self.run(rig, from: 2.01, to: 3.99)
+        #expect(feed.sent == [])
+        Self.run(rig, from: 4, to: 4)
+        #expect(feed.sent == daybreak)
+    }
+
+    @Test("A send the queue dropped (#616's gap) reaches the display with the next keepalive")
+    func keepaliveHealsADrop() throws {
+        let rig = try Rig()
+        let display = Rig.FakeOSC(), worker = DisplayFeedQueueTests.Worker()
+        // Room for one snapshot (20 messages) and one more.
+        let queue = DisplayFeedQueue(display, backlog: 21) { worker.jobs.append($0) }
+        rig.coordinator.attachDisplayFeed(queue)
+        rig.coordinator.start()
+        Self.load(rig)
+        // The worker stalls: the opening snapshot and Playing fill the backlog, and the title after them is dropped.
+        Self.turnOn(rig)
+        rig.clock.now = 0.5
+        MainCueTests.feed(rig, "Playing", 1)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        #expect(queue.dropped == 1)
+        worker.runAll()
+        #expect(!display.sent.contains(OSCMessage("/DeckBridge/Display/title", [.string("Nightfall")])))
+        Self.run(rig, from: 0.51, to: 2)
+        worker.runAll()
+        #expect(display.sent.contains(OSCMessage("/DeckBridge/Display/title", [.string("Nightfall")])))
+    }
+
+    @Test("The destination opening before the setting arrives (a race): nothing at once, then the keepalive's snapshot within 2 s")
+    func readyBeforeTheSetting() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(0), .int(0)]))
+        rig.coordinator.displayFeedReady()
+        rig.coordinator.setDisplayFeed(Self.on)
+        #expect(feed.sent == [])
+        Self.run(rig, from: 0.01, to: 2)
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
+        feed.sent.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        #expect(feed.sent == [OSCMessage("/DeckBridge/Display/title", [.string("Nightfall")])])
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")

@@ -288,7 +288,7 @@ public final class Coordinator {
 
     /// Settings' display feed: on sends the deck in front at once.
     public func setDisplayFeed(_ settings: DisplayFeedSettings) {
-        displayFeed.set(settings)
+        displayFeed.set(settings, at: clock.now)
         status.requiredSubscriptions = requiredSubscriptions
         updateDisplayFeed()
     }

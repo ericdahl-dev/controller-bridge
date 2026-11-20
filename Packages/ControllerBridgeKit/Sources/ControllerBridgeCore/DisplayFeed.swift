@@ -81,6 +81,10 @@ final class DisplayFeed {
     /// until this time, so a panel never flashes a default color or an empty deck at launch (#617).
     private var holdUntil: Double?
     static let holdSeconds = 1.0
+    /// A full snapshot goes out this long after the last (#617): it heals a send the queue dropped, and a destination
+    /// that opened before the setting came. It doesn't wait for the destination or for Syndicate.
+    static let keepaliveSeconds = 2.0
+    private var lastSnapshot = 0.0
     /// The fast fields go out at most once per `fastInterval` each (#617): a change inside it waits, and the next
     /// update after it sends the value then, so the latest wins and nothing queues. A snapshot sends them at once.
     static let fastAddresses: Set<String> = [prefix + "progress", prefix + "phase", prefix + "level"]
@@ -100,10 +104,11 @@ final class DisplayFeed {
     }
 
     /// The setting. Turning it on, or a new host or port, waits for the destination to open.
-    func set(_ new: DisplayFeedSettings) {
+    func set(_ new: DisplayFeedSettings, at now: Double = 0) {
         if new.enabled && (!settings.enabled || new.host != settings.host || new.port != settings.port) {
             sent = [:]
             open = false
+            lastSnapshot = now
         }
         settings = new
     }
@@ -124,7 +129,13 @@ final class DisplayFeed {
     /// Sends what changed about the deck in front: everything when it's another deck. `known`: Syndicate has
     /// answered for it (its color and its deck), which ends the hold on the first snapshot.
     func update(_ deck: Deck?, known: Bool = true, at now: Double = 0) {
-        guard settings.enabled, open, let sender, let deck else { return }
+        guard settings.enabled, let sender, let deck else { return }
+        if now - lastSnapshot >= Self.keepaliveSeconds - 1e-9 {
+            sent = [:]
+            open = true
+            holdUntil = nil
+        }
+        guard open else { return }
         if let until = holdUntil {
             guard known || now >= until else { return }
             holdUntil = nil
@@ -132,6 +143,7 @@ final class DisplayFeed {
         if deck.number != sentDeck { sent = [:] }
         sentDeck = deck.number
         let snapshot = sent.isEmpty
+        if snapshot { lastSnapshot = now }
         for message in deck.messages where sent[message.address] != message.arguments {
             if Self.fastAddresses.contains(message.address) {
                 let due = fastDue[message.address]
