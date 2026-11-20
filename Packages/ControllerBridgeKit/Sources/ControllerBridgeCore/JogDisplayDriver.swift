@@ -273,6 +273,8 @@ public final class JogDisplayDriver {
         for message in JogDisplay.hello { sendController(message) }
         hello = (at: clock.now, resent: 0, due: clock.now + Self.helloAgainFirst, said: false)
         awaitingReady = true
+        readyPending = false
+        lastShow = nil
         // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
         mode = .images
         lastDeck = nil
@@ -297,6 +299,8 @@ public final class JogDisplayDriver {
         reasks = nil
         if hello?.said == true { trace?(.jogDisplay, "jog display: hello re-sends stop: goodbye") }
         hello = nil
+        awaitingReady = false
+        readyPending = false
         connected = false
         upload = nil
         lastMarker = nil
@@ -357,6 +361,7 @@ public final class JogDisplayDriver {
         if connected {
             sendWD(JogDisplay.show(slot: slot))
             lastShow = (slot, JogDisplay.show(slot: slot))
+            showAfterReady(sent: true)
         }
         screenSlot = slot
         onEvent?(.shown(slot: slot))
@@ -565,18 +570,36 @@ public final class JogDisplayDriver {
     /// The last show sent for a stored slot: never an upload's lead.
     private var lastShow: (slot: UInt8, bytes: [UInt8])?
 
+    /// Ready came, and the show again waits for the upload in flight to end: a 0A between its chunks can spoil it.
+    private var readyPending = false
+    private static let readySaid = "jog display: the display said ready (its first 10 reply since the hello): "
+
     private func readyIfFirst(_ bytes: [UInt8]) {
         guard awaitingReady, connected, case .images = mode, JogDisplay.Reply(bytes) == .committed else { return }
         awaitingReady = false
-        guard let lastShow else { return }
+        readyPending = true
+    }
+
+    /// The show after ready: an upload's own, once stored, counts; with none in flight, the last show again.
+    private func showAfterReady(sent: Bool) {
+        guard readyPending else { return }
+        if sent {
+            readyPending = false
+            return trace?(.jogDisplay, Self.readySaid + "the upload's show went out, nothing sent again") ?? ()
+        }
+        guard upload == nil else { return }
+        readyPending = false
+        guard connected, case .images = mode else { return }
+        guard let lastShow else { return trace?(.jogDisplay, Self.readySaid + "nothing shown yet, nothing sent") ?? () }
         sendWD(lastShow.bytes)
-        trace?(.jogDisplay, "jog display: the display said ready (its first 10 reply since the hello): show slot \(lastShow.slot) sent again")
+        trace?(.jogDisplay, Self.readySaid + "show slot \(lastShow.slot) sent again")
     }
 
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
         traceReply(bytes)
-        if upload == nil { readyIfFirst(bytes) }
+        readyIfFirst(bytes)
+        defer { showAfterReady(sent: false) }
         if case .asking = mode, let version = DrawnDisplay.answer(bytes) {
             return draw(version: min(version, DrawnDisplay.version))
         }
@@ -632,6 +655,7 @@ public final class JogDisplayDriver {
     private func showSlot(_ running: Running) {
         sendWD(running.upload.show)
         lastShow = (running.slot, running.upload.show)
+        showAfterReady(sent: true)
         shownSlot = running.slot
         onEvent?(.shown(slot: running.slot))
     }
@@ -653,6 +677,7 @@ public final class JogDisplayDriver {
             fail(running)
             onEvent?(.failed(refusal: nil))
         }
+        showAfterReady(sent: false)
         if upload == nil { next() }
     }
 

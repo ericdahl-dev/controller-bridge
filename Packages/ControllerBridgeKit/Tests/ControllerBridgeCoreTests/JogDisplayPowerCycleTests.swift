@@ -181,4 +181,78 @@ struct JogDisplayPowerCycleTests {
         #expect(rig.port.wd == [upload.show])
         #expect(lines.list == ["jog display: the display said ready (its first 10 reply since the hello): show slot 1 sent again"])
     }
+
+    @Test("Ready in the middle of an upload: nothing between its chunks; its own show, once stored, is the one")
+    func readyMidUpload() {
+        let rig = DriverRig()
+        let lines = Self.traced(rig)
+        _ = Self.shownByGrace(rig)
+        rig.driver.show(JogDisplayContent(deck: 2, color: [255, 0, 0]))
+        let second = JogDisplayDriverTests.upload(deck: 2, slot: 2)
+        rig.port.wd.removeAll()
+        rig.driver.reply(Self.ready)
+        rig.driver.tick()
+        #expect(rig.port.wd.isEmpty)
+        JogDisplayDriverTests.complete(rig, acks: second.expectedAcks)
+        #expect(rig.port.wd == second.finish + [second.show])
+        #expect(lines.list == ["jog display: the display said ready (its first 10 reply since the hello): "
+                               + "the upload's show went out, nothing sent again"])
+    }
+
+    @Test("Ready mid-upload, and the upload then fails: the last show goes again once it's over")
+    func readyThenFail() {
+        let rig = DriverRig()
+        let lines = Self.traced(rig)
+        let first = Self.shownByGrace(rig)
+        rig.driver.show(JogDisplayContent(deck: 2, color: [255, 0, 0]))
+        rig.port.wd.removeAll()
+        rig.driver.reply(Self.ready)
+        rig.clock.now = 6
+        rig.driver.tick()
+        #expect(rig.port.wd == [first.show])
+        #expect(lines.list.last == "jog display: the display said ready (its first 10 reply since the hello): show slot 1 sent again")
+    }
+
+    @Test("The commit of an upload as the first 10 reply (a chip already booted): its show only, nothing more")
+    func readyIsTheCommit() {
+        let rig = DriverRig()
+        rig.driver.connect()
+        rig.driver.helloAnswered()
+        rig.driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        let upload = JogDisplayDriverTests.upload(deck: 1, slot: 1)
+        rig.port.wd.removeAll()
+        JogDisplayDriverTests.complete(rig, acks: upload.expectedAcks)
+        rig.driver.reply(Self.ready)
+        rig.driver.tick()
+        #expect(rig.port.wd == upload.finish + [upload.show])
+    }
+
+    @Test("Nothing shown since this hello (a reconnect forgets the last one): ready sends nothing, and says so")
+    func readyNothingShown() {
+        let rig = DriverRig()
+        let lines = Self.traced(rig)
+        _ = Self.shownByGrace(rig)
+        rig.driver.disconnect()
+        rig.driver.connect()
+        rig.driver.helloAnswered()
+        rig.clock.now = 10
+        rig.driver.tick()                    // the reconnect's upload times out
+        rig.port.wd.removeAll()
+        rig.driver.reply(Self.ready)
+        rig.driver.tick()
+        #expect(rig.port.wd.isEmpty)
+        #expect(lines.list.last == "jog display: the display said ready (its first 10 reply since the hello): nothing shown yet, nothing sent")
+    }
+
+    @Test("Drawn mode (Custom answered after an image was shown): a 10 reply sends no show")
+    func readyWhileDrawing() {
+        let rig = DriverRig()
+        _ = Self.shownByGrace(rig)
+        rig.driver.displayFirmware = .custom
+        rig.driver.reply(DrawnDisplayHandshakeTests.answer)
+        rig.port.wd.removeAll()
+        rig.driver.reply(Self.ready)
+        rig.driver.tick()
+        #expect(!rig.port.wd.contains { $0.count > 6 && $0[6] == 0x0A })
+    }
 }
