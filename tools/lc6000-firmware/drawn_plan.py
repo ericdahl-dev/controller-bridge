@@ -211,14 +211,7 @@ def decide(plan):
                       {"record": files["record"], "owner": files["owner"], "upper": files["upper"]})
     if not ok:
         return ("stop", f"The build record refuses: {why}. Nothing was sent.")
-    for key, question in (
-            ("all_true", "DeckBridge and every other DJ or MIDI app quit, Denon's updater not open, the LC6000 on a "
-                         "direct cable and running normally, no gig today. All of that true?"),):
-        answer = fact(plan, key)
-        if answer is None:
-            return ("ask", key, question)
-        if answer != "y":
-            return ("stop", "Not ready. Nothing was sent.")
+    # The apps that open the unit are watched by the shell before the plan begins (#603); nothing else is asked.
     probe = fact(plan, "probe")
     if probe is None:
         return ("ask", "probe", "Is an ST-Link probe connected, and can it read the chip (#433)?")

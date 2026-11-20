@@ -548,7 +548,14 @@ write_env OWNER_DFU "$OWNER_DFU"
 say "Building the update-mode tool…"
 swiftc -O -swift-version 5 "$HERE/enter-update-mode.swift" -o "$WORK/enter-update-mode"
 "$WORK/enter-update-mode" selftest
+# Every app that opens the LC6000's MIDI or USB is waited for, then refused (#603). Syndicate isn't one: DeckBridge
+# sits between it and the unit.
 wait_for_quit "DeckBridge" "ControllerBridge.app/Contents/MacOS" "it talks to the display"
+wait_for_quit "djay Pro" "djay Pro.app/Contents/MacOS/djay Pro" "it ships an LC6000 mapping and opens its MIDI ports"
+wait_for_quit "Engine DJ" "Engine DJ.app/Contents/MacOS/Engine DJ" "it knows the LC6000 as a controller"
+wait_for_quit "Denon's updater" "Firmware Updater.app/Contents/MacOS/FirmwareUpdater" \
+  "it flashes a chip in update mode by itself"
+note "Check: the LC6000 is on a direct cable to the Mac (not a hub), running normally, and there's no gig today."
 
 stage "The drawn flash"
 PLAN="$WORK/drawn-plan-$STAMP.json"

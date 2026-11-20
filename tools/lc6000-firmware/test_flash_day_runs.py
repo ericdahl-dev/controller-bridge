@@ -93,10 +93,11 @@ class FlashDayRunTests(unittest.TestCase):
         with open(update_mode, "w") as f:
             f.write(FAKE_UPDATE_MODE)
         self.stub("swiftc", f'#!/bin/sh\nwhile [ "$1" != "-o" ]; do shift; done\ncp "{update_mode}" "$2"\nchmod +x "$2"\n')
-        # pgrep: an app is running while $FAKE_UNIT/running holds a count above 0 (each look takes one) or "always".
+        # pgrep -f PATTERN: an app is running while $FAKE_UNIT/running-NAME holds a count above 0 (each look takes
+        # one) or "always", NAME being its executable, the pattern's last part.
         self.stub("pgrep", textwrap.dedent('''\
             #!/bin/sh
-            f="$FAKE_UNIT/running"
+            f="$FAKE_UNIT/running-$(basename "$2")"
             [ -e "$f" ] || exit 1
             n=$(cat "$f")
             [ "$n" = always ] && exit 0
@@ -195,7 +196,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.unit_holds(self.current_element)
         answers = ["", self.upper, self.owner,   # banner; the three paths
                    self.record,                                 # the build record
-                   "y", "y",                                    # all true, the probe
+                   "y",                                         # the probe
                    "UPDATE",                                    # send the update-mode message
                    "FLASH", "FLASH",                            # block B, then the owner's image
                    "",                                          # power cycle: back on
@@ -212,7 +213,7 @@ class FlashDayRunTests(unittest.TestCase):
         # A re-run after a stop that left the chip in update mode (#603): the display's MIDI port is gone, so the
         # port check would fail. The wizard sees the DFU device instead, says so, and sends nothing.
         self.unit_holds(self.current_element, in_update_mode=True)
-        answers = ["", self.upper, self.owner, self.record, "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+        answers = ["", self.upper, self.owner, self.record, "y", "FLASH", "FLASH", "", "y", "", ""]
         result = self.run_wizard(answers, sent=0)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("already in update mode", result.stdout)
@@ -221,7 +222,7 @@ class FlashDayRunTests(unittest.TestCase):
     def test_a_b_only_rewrite_leaves_the_app_area_alone(self):
         old_b = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
         self.unit_holds(self.owner_element, upper=old_b + b"\xff" * (0x80000 - len(old_b)))
-        answers = ["", self.upper, self.owner, self.record, "y", "y", "UPDATE", "REWRITE", "", "y", "",
+        answers = ["", self.upper, self.owner, self.record, "y", "UPDATE", "REWRITE", "", "y", "",
                    ""]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
@@ -231,9 +232,37 @@ class FlashDayRunTests(unittest.TestCase):
         block = good_block()
         self.assertEqual(self.memory("upper.bin")[:len(block)], block)
 
-    def app_running(self, looks):
-        with open(os.path.join(self.unit, "running"), "w") as f:
+    def app_running(self, looks, executable="MacOS"):
+        """DeckBridge's pattern ends in its MacOS folder; the others name their executable."""
+        with open(os.path.join(self.unit, f"running-{executable}"), "w") as f:
             f.write(str(looks))
+
+    def test_every_app_that_opens_the_unit_is_waited_for_and_refuses(self):
+        # #603: they replace the ready question's y/N. Syndicate isn't one: DeckBridge sits between it and the unit.
+        for executable, name in (("djay Pro", "djay Pro"), ("Engine DJ", "Engine DJ"),
+                                 ("FirmwareUpdater", "Denon's updater")):
+            with self.subTest(name):
+                self.unit_holds(self.current_element)
+                for f in os.listdir(self.unit):
+                    if f.startswith("running-"):
+                        os.remove(os.path.join(self.unit, f))
+                self.app_running("always", executable)
+                result = self.run_wizard(self.answers(), entered=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{name} is still running", result.stdout)
+                self.assertEqual(self.calls(), [])
+
+    def test_syndicate_open_is_no_stop(self):
+        self.unit_holds(self.current_element)
+        self.app_running("always", "Syndicate")
+        result = self.run_wizard(self.answers())
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+
+    def test_the_ready_checklist_is_printed_not_asked(self):
+        self.unit_holds(self.current_element)
+        result = self.run_wizard(self.answers())
+        self.assertNotIn("All of that true?", result.stdout)
+        self.assertIn("direct cable", result.stdout)
 
     def test_deckbridge_quit_while_the_wizard_waits_needs_no_key(self):
         # #603: the wizard waits for DeckBridge to quit, so no Enter is asked for.
@@ -258,7 +287,7 @@ class FlashDayRunTests(unittest.TestCase):
         for answer in ("y", "update", ""):
             with self.subTest(answer):
                 self.unit_holds(self.current_element)
-                result = self.run_wizard(["", self.upper, self.owner, self.record, "y", "y", answer],
+                result = self.run_wizard(["", self.upper, self.owner, self.record, "y", answer],
                                          entered=False)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Type UPDATE", result.stdout)
@@ -266,13 +295,13 @@ class FlashDayRunTests(unittest.TestCase):
 
     def test_a_wrong_word_writes_nothing(self):
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", self.upper, self.owner, self.record, "y", "y", "UPDATE", "flash"])
+        result = self.run_wizard(["", self.upper, self.owner, self.record, "y", "UPDATE", "flash"])
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.downloads(), [])
         self.assertEqual(self.memory("app.bin"), self.current_element)
 
 
-    FRESH = ["", "{upper}", "{owner}", "{record}", "y", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""]
+    FRESH = ["", "{upper}", "{owner}", "{record}", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""]
 
     def answers(self):
         return [a.format(current=self.current, upper=self.upper, owner=self.owner, record=self.record)
@@ -326,7 +355,7 @@ class FlashDayRunTests(unittest.TestCase):
                 self.assertEqual(tool.main(argv), 0)
         self.unit_holds(self.current_element)
         answers = ["", self.upper, self.owner,   # no record path: it's found
-                   "y", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""]
+                   "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Build record: " + os.path.join(kit, "wd-upper-drawing.build.json"), result.stdout)
@@ -348,7 +377,7 @@ class FlashDayRunTests(unittest.TestCase):
         # #603: only the image on the chip now is asked for; B, the owner's image and the record are found.
         self.upper, self.owner = self.kit_pair_in(self.work)
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", "y", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""])
+        result = self.run_wizard(["", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""])
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Block B: " + self.upper, result.stdout)
         self.assertIn("The owner's image: " + self.owner, result.stdout)
@@ -359,7 +388,7 @@ class FlashDayRunTests(unittest.TestCase):
         with open(os.path.join(self.work, "flash-day.env"), "w") as f:
             f.write(f"UPPER_DFU='{self.upper}'\nOWNER_DFU='{self.owner}'\n")
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", "y", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""])
+        result = self.run_wizard(["", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""])
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Block B: " + self.upper, result.stdout)
 
@@ -388,7 +417,7 @@ class FlashDayRunTests(unittest.TestCase):
 
     def refused_by_the_record(self, record, *reasons):
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", self.upper, self.owner, record, "y", "y", "y", "FLASH", "FLASH"],
+        result = self.run_wizard(["", self.upper, self.owner, record, "y", "UPDATE", "FLASH", "FLASH"],
                                  entered=False)
         self.assertNotEqual(result.returncode, 0)
         for reason in ("Nothing was sent", *reasons):

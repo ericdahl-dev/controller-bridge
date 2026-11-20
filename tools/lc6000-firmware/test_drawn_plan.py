@@ -44,7 +44,7 @@ class FakeUnit:
         self.upper = bytearray(upper if upper is not None else b"\xff" * UPPER_SIZE)
         self.options = options
         self.devices = devices
-        self.answers = {"all_true": "y", "probe": "y", "stock_look": "y", **(answers or {})}
+        self.answers = {"probe": "y", "stock_look": "y", **(answers or {})}
         self.words = words or {}
         self.cut_upper_write_at = cut_upper_write_at
         self.cut_reports_ok = cut_reports_ok
@@ -140,7 +140,7 @@ class FreshFlashTests(DrawnPlanTests):
         end = unit.run(self.plan())
         self.assertEqual(end, ("done",))
         self.assertEqual(self.kinds(unit), [
-            "ask all_true", "ask probe", "update-mode", "list",
+            "ask probe", "update-mode", "list",
             "read app", "read options", "read upper",
             "type word_upper", "write upper", "read upper",
             "list", "type word_app", "write app", "read app",
@@ -303,9 +303,11 @@ class RefusalTests(DrawnPlanTests):
         upper[0x40000] = 0
         self.refused("Nothing is written over it", upper=bytes(upper))
 
-    def test_not_ready_stops_before_anything_is_sent(self):
-        fake = self.refused("Not ready", answers={"all_true": "n"})
-        self.assertNotIn("update-mode", self.kinds(fake))
+    def test_the_ready_checklist_is_never_asked(self):
+        # #603: the apps are watched by the shell; the rest (direct cable, no gig) is printed, not asked.
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertNotIn("all_true", [a[1] for a in unit.log if a[0] == "ask"])
 
     def test_a_display_not_like_stock_after_the_power_cycle_stops(self):
         self.refused("doesn't look like stock", writes=["upper", "app"], answers={"stock_look": "n"})
@@ -327,7 +329,7 @@ class BuildRecordTests(DrawnPlanTests):
     def test_a_good_record_is_read_and_the_owner_is_never_asked(self):
         unit = FakeUnit(self.dir.name, self.current_element)
         self.assertEqual(unit.run(self.plan()), ("done",))
-        self.assertEqual(self.kinds(unit)[0], "ask all_true")
+        self.assertEqual(self.kinds(unit)[0], "ask probe")
         self.assertNotIn("both_true", [a[1] for a in unit.log if a[0] == "ask"])
 
     def test_no_record_stops_before_anything_is_sent(self):
@@ -541,7 +543,7 @@ class FreshnessTests(DrawnPlanTests):
         # The same file, begun again for a new run.
         drawn_plan.begin(path, current=self.current, upper=self.upper, owner=self.owner, record=self.record,
                          work=self.dir.name)
-        self.assertEqual(drawn_plan.next_action(path)[:2], ("ask", "all_true"))
+        self.assertEqual(drawn_plan.next_action(path)[:2], ("ask", "probe"))
 
     def test_facts_from_another_run_kept_in_the_file_authorize_nothing(self):
         # A completed run's facts left in the file under a new run id: the reads come again before any write.
@@ -555,12 +557,11 @@ class FreshnessTests(DrawnPlanTests):
         kinds = self.kinds(unit)
         self.assertLess(kinds.index("read upper"), kinds.index("write upper"))
         self.assertLess(kinds.index("read app"), kinds.index("write app"))
-        self.assertEqual(kinds[0], "ask all_true")
+        self.assertEqual(kinds[0], "ask probe")
 
     def test_a_read_made_before_update_mode_is_read_again(self):
         path = self.plan()
-        for key in ("all_true", "probe"):
-            drawn_plan.record(path, key, "y")
+        drawn_plan.record(path, "probe", "y")
         upper = self.write("old-upper.bin", b"\xff" * UPPER_SIZE)
         drawn_plan.record(path, "upper_read", upper)   # before update mode
         drawn_plan.record(path, "update_mode", "ok")
