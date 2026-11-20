@@ -1,5 +1,6 @@
-# PlatformIO pre-build script (#615): puts the repo's short commit on the test screen, so whoever looks at the glass
-# can tell which build is on it. "-dirty" when tools/deck-panel has uncommitted changes; "unknown" outside git.
+# PlatformIO pre-build script (#615): puts the repo's short commit in the build, on the test screen and serial, so
+# whoever looks at the panel can tell which build is on it. "-dirty" when tools/deck-panel has uncommitted changes;
+# "unknown" outside git.
 import subprocess
 
 

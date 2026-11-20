@@ -31,10 +31,27 @@ struct DeckView {
     }
 };
 
+/// The panel's network, as the board layer reports it (#620).
+enum class Network {
+    not_set,  ///< built without Wi-Fi credentials
+    joining,  ///< joining, or lost and rejoining
+    connected,
+};
+
+/// What the waiting screen says.
+struct WaitingView {
+    char headline[48] = "";
+    char detail[96] = "";
+
+    bool operator==(const WaitingView& other) const {
+        return std::strcmp(headline, other.headline) == 0 && std::strcmp(detail, other.detail) == 0;
+    }
+};
+
 /// The board layer draws what the core decides.
 struct Screen {
     virtual ~Screen() = default;
-    virtual void show_waiting() = 0;
+    virtual void show_waiting(const WaitingView& view) = 0;
     virtual void show_deck(const DeckView& view) = 0;
 };
 
@@ -45,20 +62,30 @@ class DeckCore {
 public:
     /// No feed for this long and the panel shows the waiting screen (#490).
     static constexpr uint32_t kWaitAfterMs = 3000;
+    /// The UDP port the panel listens on for the feed: DeckBridge's default (#616).
+    static constexpr uint16_t kFeedPort = 9100;
 
     /// One UDP payload, received at `now_ms` (any millisecond clock; it may wrap).
     void feed(const uint8_t* bytes, size_t length, uint32_t now_ms);
+    /// The network's state and the panel's IPv4 address ("" if none), from the board layer.
+    /// Until told, the core takes the network as up: on the Mac, and for any board without Wi-Fi of its own.
+    void set_network(Network state, const char* ip);
     /// Tells `screen` what to show at `now_ms`, only when that changed since the last call.
     void render(Screen& screen, uint32_t now_ms);
 
 private:
+    WaitingView waiting_view() const;
+
     DeckView view_;
     bool heard_ = false;
     uint32_t last_heard_ms_ = 0;
+    Network network_ = Network::connected;
+    char ip_[16] = "";
     // What the screen was last told.
     bool shown_ = false;
     bool shown_waiting_ = true;
     DeckView shown_view_;
+    WaitingView shown_waiting_view_;
 };
 
 }  // namespace deck_core

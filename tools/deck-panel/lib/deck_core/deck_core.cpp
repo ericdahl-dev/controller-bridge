@@ -1,5 +1,6 @@
 #include "deck_core.h"
 
+#include <cstdio>
 #include <cstring>
 
 namespace deck_core {
@@ -156,22 +157,51 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
     last_heard_ms_ = now_ms;
 }
 
+void DeckCore::set_network(Network state, const char* ip) {
+    network_ = state;
+    std::snprintf(ip_, sizeof ip_, "%s", ip);
+}
+
 void DeckCore::render(Screen& screen, uint32_t now_ms) {
     // The time since, signed: a clock that wraps round still counts it, and a render that read the clock a moment
     // before the packet's time sees a little under 0, not 49 days.
     const int32_t since = static_cast<int32_t>(now_ms - last_heard_ms_);
-    const bool waiting = !heard_ || since >= static_cast<int32_t>(kWaitAfterMs);
+    // Off Wi-Fi the feed can't be coming: waiting at once.
+    const bool waiting = !heard_ || since >= static_cast<int32_t>(kWaitAfterMs) || network_ != Network::connected;
     // Waiting holds until the next message: the old deck never comes back by itself, even when the clock comes round.
     if (waiting) heard_ = false;
-    if (shown_ && waiting == shown_waiting_ && (waiting || view_ == shown_view_)) return;
     if (waiting) {
-        screen.show_waiting();
+        const WaitingView view = waiting_view();
+        if (shown_ && shown_waiting_ && view == shown_waiting_view_) return;
+        screen.show_waiting(view);
+        shown_waiting_view_ = view;
     } else {
+        if (shown_ && !shown_waiting_ && view_ == shown_view_) return;
         screen.show_deck(view_);
         shown_view_ = view_;
     }
     shown_ = true;
     shown_waiting_ = waiting;
+}
+
+WaitingView DeckCore::waiting_view() const {
+    WaitingView view;
+    switch (network_) {
+        case Network::not_set:
+            std::snprintf(view.headline, sizeof view.headline, "Wi-Fi isn't set");
+            std::snprintf(view.detail, sizeof view.detail,
+                          "Build the panel with your Wi-Fi's name and password: see its README");
+            break;
+        case Network::joining:
+            std::snprintf(view.headline, sizeof view.headline, "Joining Wi-Fi\xE2\x80\xA6");
+            break;
+        case Network::connected:
+            // What to type into DeckBridge's Settings, Display feed: host and port.
+            std::snprintf(view.headline, sizeof view.headline, "Waiting for DeckBridge");
+            std::snprintf(view.detail, sizeof view.detail, "%s  port %u", ip_, unsigned(kFeedPort));
+            break;
+    }
+    return view;
 }
 
 }  // namespace deck_core
