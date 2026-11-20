@@ -151,8 +151,10 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
 }
 
 void DeckCore::render(Screen& screen, uint32_t now_ms) {
-    // Unsigned subtraction, so a clock that wraps round still counts the time since.
-    const bool waiting = !heard_ || now_ms - last_heard_ms_ >= kWaitAfterMs;
+    // The time since, signed: a clock that wraps round still counts it, and a render that read the clock a moment
+    // before the packet's time sees a little under 0, not 49 days.
+    const int32_t since = static_cast<int32_t>(now_ms - last_heard_ms_);
+    const bool waiting = !heard_ || since >= static_cast<int32_t>(kWaitAfterMs);
     if (shown_ && waiting == shown_waiting_ && (waiting || view_ == shown_view_)) return;
     if (waiting) {
         screen.show_waiting();

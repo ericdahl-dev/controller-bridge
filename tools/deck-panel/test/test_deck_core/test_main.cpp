@@ -334,6 +334,15 @@ void test_each_shared_example_shows_its_deck_state() {
     TEST_ASSERT_TRUE(walked >= 3);
 }
 
+// On the board the packet's time and the render's are read apart, so a render can read a moment before the packet.
+void test_a_render_a_moment_before_the_last_packet_still_shows_the_deck() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    core.render(screen, 990);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -391,5 +400,6 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_a_render_a_moment_before_the_last_packet_still_shows_the_deck);
     return UNITY_END();
 }
