@@ -56,5 +56,14 @@ struct DisplayFeedStatusTests {
         destination.send(OSCDestinationTests.play)
         #expect(DisplayFeedStatus(Self.on, destination) == .sending("192.168.1.40:9100"))
     }
+
+    @Test("Not sending and can't reach show as problems; off, connecting and sending don't")
+    func problems() {
+        #expect(DisplayFeedStatus.notSending("x").isProblem)
+        #expect(DisplayFeedStatus.unreachable("x").isProblem)
+        #expect(!DisplayFeedStatus.off.isProblem)
+        #expect(!DisplayFeedStatus.connecting("x").isProblem)
+        #expect(!DisplayFeedStatus.sending("x").isProblem)
+    }
 }
 

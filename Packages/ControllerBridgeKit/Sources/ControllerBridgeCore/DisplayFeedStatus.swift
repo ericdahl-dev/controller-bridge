@@ -31,6 +31,14 @@ public enum DisplayFeedStatus: Equatable, Sendable {
         }
     }
 
+    /// Shown in the error color.
+    public var isProblem: Bool {
+        switch self {
+        case .notSending, .unreachable: true
+        case .off, .connecting, .sending: false
+        }
+    }
+
     /// The line Settings shows.
     public var text: String {
         switch self {
