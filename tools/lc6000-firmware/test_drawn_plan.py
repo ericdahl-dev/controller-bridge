@@ -44,7 +44,7 @@ class FakeUnit:
         self.upper = bytearray(upper if upper is not None else b"\xff" * UPPER_SIZE)
         self.options = options
         self.devices = devices
-        self.answers = {"probe": "y", "stock_look": "y", **(answers or {})}
+        self.answers = {"probe": "y", **(answers or {})}
         self.words = words or {}
         self.cut_upper_write_at = cut_upper_write_at
         self.cut_reports_ok = cut_reports_ok
@@ -144,7 +144,7 @@ class FreshFlashTests(DrawnPlanTests):
             "read app", "read options", "read upper",
             "type word_upper", "write upper", "read upper",
             "list", "ask probe", "type word_app", "write app", "read app",
-            "power-cycle", "ask stock_look", "done"])
+            "power-cycle", "done"])
         words = [a for a in unit.log if a[0] == "type"]
         self.assertEqual([(w[1], w[2]) for w in words], [("word_upper", "FLASH"), ("word_app", "FLASH")])
         self.assertEqual(unit.writes, ["upper", "app"])
@@ -171,7 +171,7 @@ class RewriteTests(DrawnPlanTests):
         kinds = self.kinds(unit)
         self.assertEqual(kinds[kinds.index("read upper"):], [
             "read upper", "type word_upper", "write upper", "read upper", "skip app_step",
-            "power-cycle", "ask stock_look", "done"])
+            "power-cycle", "done"])
         self.assertEqual([(a[1], a[2]) for a in unit.log if a[0] == "type"], [("word_upper", "REWRITE")])
         self.assertEqual(unit.writes, ["upper"])
         self.assertEqual(bytes(unit.app), self.owner_element)
@@ -413,8 +413,11 @@ class RefusalTests(DrawnPlanTests):
         self.assertEqual(unit.run(self.plan()), ("done",))
         self.assertNotIn("all_true", [a[1] for a in unit.log if a[0] == "ask"])
 
-    def test_a_display_not_like_stock_after_the_power_cycle_stops(self):
-        self.refused("doesn't look like stock", writes=["upper", "app"], answers={"stock_look": "n"})
+    def test_the_stock_look_is_never_asked(self):
+        # #603: printed by the shell at the end; nothing is written after it.
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertNotIn("stock_look", [a[1] for a in unit.log if a[0] == "ask"])
 
 
     def test_a_read_dfu_util_refuses_stops_and_isnt_asked_forever(self):

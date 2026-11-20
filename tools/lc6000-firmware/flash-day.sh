@@ -528,7 +528,10 @@ TOTAL_STAGES=3
 mkdir -p "$WORK"
 ENV_FILE="$WORK/flash-day.env"
 
-banner "LC6000 display chip: the drawn flash"
+# The library's banner waits for Enter; the drawn wizard's doesn't (#603).
+_clear
+printf '\n%s%s  %s%s\n' "$BOLD" "$BLUE" "LC6000 display chip: the drawn flash" "$RESET"
+note "It stops only for what it can't find out itself: a typed word before each send or write. Ctrl-C stops it."
 
 stage "Ready check (drawn display)"
 say "Nothing is sent to the LC6000 in this stage."
@@ -665,10 +668,10 @@ while :; do
       ;;
   esac
 done
+say "Check: with no host talking to it, the display should look exactly like stock. If it doesn't, note it on #468."
 say "Open DeckBridge with drawn mode on: after its hello and begin, the deck chip is drawn by our code."
 say "Its end (quit DeckBridge) brings back stock images; a power cycle returns to the app."
 note "Whatever you see, write it on #468."
-pause
 
 stage "Way back, for the record"
 say "If anything looks wrong later:"
@@ -678,7 +681,6 @@ step "Denon's image has no slot 16 (#425). To get it back, use that wizard's las
 step "If the display chip never shows up in update mode: ST-Link (#433). Don't keep trying USB."
 note "Logs, reads and the plan from today: $WORK"
 say "Please note on #468 what happened at each stage."
-pause
 
 finish
 }

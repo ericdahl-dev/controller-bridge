@@ -265,17 +265,13 @@ def decide(plan):
     step = step_app(plan, dfu_path, app_state, current)
     if step:
         return step
-    # Power cycle, and the stock look.
+    # Power cycle.
     cycled = fact(plan, "power_cycle")
     if cycled is None:
         return ("power-cycle",)
     if cycled != "ok":
         return ("stop", "The display's MIDI port didn't come back after the power cycle.")
-    look = fact(plan, "stock_look")
-    if look is None:
-        return ("ask", "stock_look", "With no host talking to it, does the display look exactly like stock?")
-    if look != "y":
-        return ("stop", "The display doesn't look like stock with no host.")
+    # The stock look is the owner's to see, printed by the shell; nothing is written after it (#603).
     return ("done",)
 
 
