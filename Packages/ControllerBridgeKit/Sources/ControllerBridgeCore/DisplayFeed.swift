@@ -47,6 +47,11 @@ final class DisplayFeed {
         settings = new
     }
 
+    /// The next update is a full snapshot.
+    func resend() {
+        sent = [:]
+    }
+
     /// Sends what changed about the deck in front: everything when it's another deck.
     func update(_ deck: Deck?) {
         guard settings.enabled, let sender, let deck else { return }

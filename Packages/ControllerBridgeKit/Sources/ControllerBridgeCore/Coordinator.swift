@@ -286,6 +286,12 @@ public final class Coordinator {
         updateDisplayFeed()
     }
 
+    /// The display's destination opened: the full snapshot again, since what went before it was dropped.
+    public func displayFeedReady() {
+        displayFeed.resend()
+        updateDisplayFeed()
+    }
+
     /// The feed's deck: the jog display's deck in front (the active layer; with no controller, the preview's deck),
     /// whether or not the jog display is on.
     private func updateDisplayFeed() {

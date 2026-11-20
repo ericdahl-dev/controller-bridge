@@ -139,4 +139,18 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/artist", [.string("")]),
         ])
     }
+
+    @Test("From the app's pipe: the setting turns it on; the display's destination opening sends the full snapshot again")
+    func fromThePipe() async throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        let pipe = EventPipe()
+        pipe.producer.send(.setDisplayFeed(Self.on))
+        pipe.producer.send(.displayFeedReady)
+        pipe.producer.finish()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        let daybreak = Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
+        #expect(feed.sent == daybreak + daybreak)
+    }
 }
