@@ -580,6 +580,53 @@ void test_a_nested_bundle_is_skipped() {
     TEST_ASSERT_TRUE(screen.last().waiting);
 }
 
+// #636, the panel as it boots, not a fresh core: joining, joined with the waiting screen up, time passing, then a
+// clipped stream. Neither the network nor leaving the waiting screen resets the deck: "No track loaded" still comes
+// only from a received loaded 0.
+static std::string title_after_boot_then(std::initializer_list<Bytes> stream) {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 0);
+    core.render(screen, 2500);
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 3000);
+    core.render(screen, 20000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    for (const Bytes& m : stream) feed(core, m, 20500);
+    core.render(screen, 20500);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_TRUE(screen.last().view.loaded);
+    return deck_core::face(screen.last().view).title;
+}
+
+void test_a_booted_panel_given_a_clipped_stream_never_says_no_track_loaded() {
+    const Bytes level = float_message(prefix + "level", 0.6f), phase = float_message(prefix + "phase", 0.5f),
+                elapsed = int_message(prefix + "elapsed", 95);
+    const Bytes deck = int_message(prefix + "deck", 1), color = int_message(prefix + "color", 0xFF0000),
+                loaded = int_message(prefix + "loaded", 1);
+    TEST_ASSERT_EQUAL_STRING("", title_after_boot_then({level, phase, elapsed}).c_str());
+    TEST_ASSERT_EQUAL_STRING("", title_after_boot_then({deck, color, level, phase, elapsed}).c_str());
+    TEST_ASSERT_EQUAL_STRING("", title_after_boot_then({deck, color, loaded, level}).c_str());
+}
+
+// And a deck that went to the waiting screen comes back as it was, loaded included: waiting never empties it.
+void test_coming_back_from_waiting_keeps_the_deck_loaded() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, bundle({int_message(prefix + "deck", 1), int_message(prefix + "loaded", 1),
+                       string_message(prefix + "title", "Night Drive")}), 1000);
+    core.render(screen, 1000);
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 2000);
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 9000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    feed(core, float_message(prefix + "level", 0.5f), 9500);
+    core.render(screen, 9500);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", deck_core::face(screen.last().view).title);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -642,6 +689,8 @@ int main(int, char**) {
     RUN_TEST(test_a_bad_element_does_not_lose_the_good_ones);
     RUN_TEST(test_a_nested_bundle_is_skipped);
     RUN_TEST(test_a_clipped_stream_after_boot_never_says_no_track_loaded);
+    RUN_TEST(test_a_booted_panel_given_a_clipped_stream_never_says_no_track_loaded);
+    RUN_TEST(test_coming_back_from_waiting_keeps_the_deck_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
     RUN_TEST(test_a_fast_field_change_is_one_redraw_and_the_same_value_none);
