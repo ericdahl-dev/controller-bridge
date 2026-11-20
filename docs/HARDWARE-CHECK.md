@@ -115,5 +115,5 @@ check: do the action, then confirm the expected result. If any line fails, file 
 | 10.4 | Settings: Start at login on, log out and in | The app starts; turn it off after |
 | 10.5 | Diagnostics › MIDI Monitor, move every control | Each message shows a mapping name, not UNMAPPED |
 | 10.6 | Diagnostics › OSC Log | What goes to Syndicate and what comes back both show |
-| 10.7 | Panel: Demo controller on | A scripted controller drives a simulated Syndicate; nothing goes to the network; relaunch turns it off |
+| 10.7 | Panel: Demo controller on | A scripted controller drives a simulated Syndicate; nothing goes to the network but the display feed, if it's on (the deck panel follows the demo); relaunch turns it off |
 | 10.8 | Panel: Setup guide | The steps show the live status lights; the button reads "Done: feedback live" |

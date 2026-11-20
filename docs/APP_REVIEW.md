@@ -16,7 +16,7 @@ DeckBridge is a menu-bar app (no Dock icon) that bridges a Denon LC6000 PRIME DJ
 6. On the Controller tab, with the demo still on, open the "Controller" menu and choose "Controller not found?". The capture window opens with "Demo controller" chosen; click Start. Each step asks for one control; the demo controller answers about a second later, and the window shows what it detected (such as "CC 17 + 49 on ch 1, 14-bit, absolute"). Click Next for each step, or Redo or Skip. The first step listens for 5 seconds before Next is available. The last page lists what the file holds and offers Save… and "Email to DeckBridge"; email opens a new message in the reviewer's own mail app, and nothing is sent unless they send it.
 7. Click "Demo controller: On" to turn the demo off.
 
-The demo sends nothing to the network and is off at every launch. The app has no accounts and no sign-in, and collects no data. Start at login is off by default.
+The demo sends nothing to the network, unless the display feed to a deck panel is turned on in Settings (off by default), and is off at every launch. The app has no accounts and no sign-in, and collects no data. Start at login is off by default.
 
 Syndicate and the Denon LC6000 PRIME are named only to describe compatibility. DeckBridge isn't affiliated with or endorsed by Untitled Audio Syndicate Ltd. or Denon DJ.
 

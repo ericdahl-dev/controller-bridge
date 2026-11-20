@@ -256,4 +256,29 @@ struct OSCDestinationTests {
         #expect(sinks.sink("192.168.1.20:9090")?.sent.count == 1)
         #expect(sinks.sink("10.0.0.9:9090") == nil)
     }
+
+    /// For the display feed's status (#618): whether sends are failing now, apart from why a connect failed. Kept
+    /// apart from `lastError`, which the Syndicate link's problem reporting reads and which stays as it was.
+    @Test("A failing send marks sends failing, a good one clears it; lastError still keeps the send failure; a failed connect is the connect problem")
+    func sendsFailingAndConnectProblem() async {
+        let sinks = FakeSinks(), resolver = FakeResolver()
+        let destination = Self.destination(sinks, resolver)
+        _ = await destination.connect(host: "192.168.1.20", port: 9090)
+        #expect(!destination.sendsFailing)
+        sinks.sink("192.168.1.20:9090")?.fails = true
+        destination.send(Self.play)
+        #expect(destination.sendsFailing)
+        #expect(destination.connectProblem == nil)
+        sinks.sink("192.168.1.20:9090")?.fails = false
+        destination.send(Self.play)
+        #expect(!destination.sendsFailing)
+        #expect(destination.lastError == "Couldn't send OSC to 192.168.1.20:9090")  // unchanged: the Syndicate link's
+
+        _ = await destination.connect(host: "nowhere.local", port: 9090)
+        #expect(destination.connectProblem == "Can't find nowhere.local on the network")
+        resolver.answers["panel.local"] = "192.168.1.41"
+        _ = await destination.connect(host: "panel.local", port: 9090)
+        #expect(destination.connectProblem == nil)
+    }
 }
+

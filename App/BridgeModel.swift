@@ -184,6 +184,13 @@ final class BridgeModel {
         }
     }
 
+    /// What the display feed is doing (#618), for Settings' status line: from the applied setting and the feed's own
+    /// destination. Read again each second while it shows; "Sending" never means the panel is receiving.
+    var displayFeedStatus: DisplayFeedStatus {
+        guard let settings, let displayFeedDestination else { return .off }
+        return DisplayFeedStatus(settings.displayFeed, displayFeedDestination)
+    }
+
     /// Opens the display feed's host in the background (#616). A failure is logged; Settings shows it from #618.
     private func connectDisplayFeed(_ feed: DisplayFeedSettings) {
         guard let displayFeedDestination else { return }

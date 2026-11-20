@@ -60,8 +60,9 @@ targets:
         # Required for a Mac App Store upload (#28).
         LSApplicationCategoryType: public.app-category.music
         ITSAppUsesNonExemptEncryption: false
-        # Settings' "All networks" feedback listener, for Syndicate on another Mac (#19).
-        NSLocalNetworkUsageDescription: DeckBridge listens for OSC feedback from Syndicate running on another Mac on your network.
+        # Settings' "All networks" feedback listener, for Syndicate on another Mac (#19), and the display feed to a deck
+        # panel (#618): macOS 15 and later ask for Local Network access with these words. network.client covers the sends.
+        NSLocalNetworkUsageDescription: DeckBridge listens for OSC feedback from Syndicate on another Mac, and sends the display feed to a deck panel, on your network.
         # The capture file (#188): JSON, saved through the save panel or attached to the owner's own email.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: dev.ericdahl.deckbridge.capture
