@@ -101,6 +101,29 @@ void test_with_no_known_length_remaining_is_blank() {
     TEST_ASSERT_EQUAL_STRING("1:35", deck_core::face(v).elapsed);
 }
 
+void test_the_progress_bar_is_clamped_to_0_1() {
+    DeckView v = loaded_deck();
+    TEST_ASSERT_EQUAL_FLOAT(0.3125f, deck_core::face(v).progress);
+    v.progress = 1.5f;
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).progress);
+    v.progress = -0.2f;
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, deck_core::face(v).progress);
+}
+
+// The warning: the last 30 seconds, as DJ players flash it. Not with no known length (remaining 0).
+void test_the_bar_warns_in_the_last_30_seconds() {
+    TEST_ASSERT_EQUAL(30, deck_core::kEndWarningSeconds);
+    DeckView v = loaded_deck();
+    v.remaining = 31;
+    TEST_ASSERT_FALSE(deck_core::face(v).end_warning);
+    v.remaining = 30;
+    TEST_ASSERT_TRUE(deck_core::face(v).end_warning);
+    v.remaining = 1;
+    TEST_ASSERT_TRUE(deck_core::face(v).end_warning);
+    v.remaining = 0;
+    TEST_ASSERT_FALSE(deck_core::face(v).end_warning);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_empty_deck_shows_no_track_loaded_and_nothing_else);
@@ -110,5 +133,7 @@ int main(int, char**) {
     RUN_TEST(test_times_show_as_minutes_and_seconds_remaining_with_a_minus);
     RUN_TEST(test_past_an_hour_times_show_hours);
     RUN_TEST(test_with_no_known_length_remaining_is_blank);
+    RUN_TEST(test_the_progress_bar_is_clamped_to_0_1);
+    RUN_TEST(test_the_bar_warns_in_the_last_30_seconds);
     return UNITY_END();
 }

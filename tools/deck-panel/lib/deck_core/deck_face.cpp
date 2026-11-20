@@ -22,6 +22,8 @@ void time_text(char (&out)[N], const char* sign, int32_t seconds) {
     }
 }
 
+float clamp01(float x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+
 }  // namespace
 
 Face face(const DeckView& view) {
@@ -49,6 +51,8 @@ Face face(const DeckView& view) {
     time_text(f.elapsed, "", view.elapsed);
     // 0 is no known length.
     if (view.remaining > 0) time_text(f.remaining, "-", view.remaining);
+    f.progress = clamp01(view.progress);
+    f.end_warning = view.remaining > 0 && view.remaining <= kEndWarningSeconds;
     return f;
 }
 

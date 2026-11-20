@@ -30,6 +30,9 @@ struct Face {
     float level = 0;  ///< the meter's fill, 0-1
 };
 
+/// The progress bar warns for the track's last this many seconds.
+constexpr int32_t kEndWarningSeconds = 30;
+
 /// The text an empty deck shows in the title's place.
 constexpr const char* kNoTrack = "No track loaded";
 
