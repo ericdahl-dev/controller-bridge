@@ -84,6 +84,8 @@ public:
 
     /// One UDP payload, a message or a bundle of them (#636), received at `now_ms` (any millisecond clock; it may wrap).
     void feed(const uint8_t* bytes, size_t length, uint32_t now_ms);
+    /// What the core holds now, for the perf env's capture (#636); the screen gets it through render().
+    const DeckView& view() const { return view_; }
     /// The network's state and the panel's IPv4 address ("" if none), from the board layer.
     /// Until told, the core takes the network as up: on the Mac, and for any board without Wi-Fi of its own.
     void set_network(Network state, const char* ip);

@@ -636,6 +636,18 @@ void test_coming_back_from_waiting_keeps_the_deck_loaded() {
     TEST_ASSERT_EQUAL_STRING("Night Drive", deck_core::face(screen.last().view).title);
 }
 
+// For the perf env's capture (#636): what the core holds now, read without a render.
+void test_the_core_says_what_it_holds() {
+    deck_core::DeckCore core;
+    TEST_ASSERT_TRUE(core.view().loaded);
+    feed(core, bundle({int_message(prefix + "deck", 2), int_message(prefix + "loaded", 0),
+                       string_message(prefix + "title", "")}), 100);
+    TEST_ASSERT_EQUAL(2, core.view().deck);
+    TEST_ASSERT_FALSE(core.view().loaded);
+    feed(core, string_message(prefix + "title", "Night Drive"), 110);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", core.view().title);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -695,6 +707,7 @@ int main(int, char**) {
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
     RUN_TEST(test_a_bundle_applies_all_its_messages_as_one_arrival);
+    RUN_TEST(test_the_core_says_what_it_holds);
     RUN_TEST(test_a_bad_element_does_not_lose_the_good_ones);
     RUN_TEST(test_a_nested_bundle_is_skipped);
     RUN_TEST(test_a_clipped_stream_after_boot_never_says_no_track_loaded);
