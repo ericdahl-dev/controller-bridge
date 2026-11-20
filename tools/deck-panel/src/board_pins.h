@@ -98,7 +98,8 @@ constexpr int LCD_VSYNC_FRONT_PORCH = 8;
 constexpr int LCD_VSYNC_PULSE_WIDTH = 4;
 constexpr int LCD_VSYNC_BACK_PORCH  = 8;
 
-constexpr bool LCD_PCLK_IDLE_HIGH = true;
+// Elecrow's LovyanGFX driver sets pclk_idle_high = true, which in LovyanGFX picks the clock edge the data changes
+// on. Since #635 that's esp_lcd's pclk_active_neg = 1, in display_driver.cpp (PANEL_PCLK_ACTIVE_NEG).
 
 // ---------------------------------------------------------------------------
 // Backlight: NOT A GPIO.

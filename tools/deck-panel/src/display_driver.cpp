@@ -1,4 +1,5 @@
-// Implementation of the panel driver and the LVGL 9 binding. From phrasedeck (#615); see LICENSE.crowpanel-drivers.
+// Implementation of the panel driver and the LVGL 9 binding. From phrasedeck (#615), on esp_lcd since #635; see
+// LICENSE.crowpanel-drivers.
 //
 // Author: Mark Castelluccio <markacastelluccio@gmail.com>
 // Written with assistance from Claude Code (Anthropic).
@@ -7,95 +8,142 @@
 
 #include <Arduino.h>
 #include <esp_heap_caps.h>
+#include <esp_lcd_panel_ops.h>
+#include <esp_memory_utils.h>
+#include <esp_lcd_panel_rgb.h>
 #include <esp_private/periph_ctrl.h>
 #include <esp_rom_sys.h>
 #include <esp_system.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <soc/lcd_cam_struct.h>
 
+#include "frame_pacing.h"
 #include "panel_mcu.h"
+#include "swap_gate.h"
 
-LGFX display_lcd;
+// Signal polarity, each overridable with -D to try on the panel without a commit. The defaults reproduce what
+// LovyanGFX 1.2.35 programmed (Bus_RGB.inl), the picture that worked before #635:
+//   lcd_ck_out_edge = pclk_idle_high (true)  -> data changes on the falling edge: pclk_active_neg 1
+//   lcd_ck_idle_edge = false                 -> clock idles low: pclk_idle_high 0
+//   lcd_hsync/vsync_idle_pol = polarity (0)  -> both idle low: hsync_idle_low, vsync_idle_low 1
+//   lcd_de_idle_pol = de_idle_high (0)       -> de_idle_high 0
+#ifndef PANEL_PCLK_ACTIVE_NEG
+#define PANEL_PCLK_ACTIVE_NEG 1
+#endif
+#ifndef PANEL_PCLK_IDLE_HIGH
+#define PANEL_PCLK_IDLE_HIGH 0
+#endif
+#ifndef PANEL_HSYNC_IDLE_LOW
+#define PANEL_HSYNC_IDLE_LOW (board::LCD_HSYNC_POLARITY == 0)
+#endif
+#ifndef PANEL_VSYNC_IDLE_LOW
+#define PANEL_VSYNC_IDLE_LOW (board::LCD_VSYNC_POLARITY == 0)
+#endif
+#ifndef PANEL_DE_IDLE_HIGH
+#define PANEL_DE_IDLE_HIGH 0
+#endif
+// Pixels per bounce buffer: 8000, ten lines, 2 x 16 KB of internal DMA RAM (the old draw buffers' share). Bounce mode
+// is what makes the swap work on this core: the prebuilt core restarts the DMA at every vsync
+// (CONFIG_LCD_RGB_RESTART_IN_VSYNC), and on the S3 that restart link always points into fbs[0] (IDF 5.5
+// esp_lcd_panel_rgb.c, RGB_LCD_NEEDS_SEPARATE_RESTART_LINK), which would undo every swap to fbs[1]. With bounce
+// buffers the interrupt copies each next ten lines from the buffer it latched at the frame's start, and the restart
+// refills from that buffer too. -DPANEL_BOUNCE_PX=0 turns it off, to see that failure; it must divide 384000.
+#ifndef PANEL_BOUNCE_PX
+#define PANEL_BOUNCE_PX 8000
+#endif
+static_assert(PANEL_BOUNCE_PX == 0 || (800 * 480) % PANEL_BOUNCE_PX == 0, "PANEL_BOUNCE_PX must divide 800 x 480");
 
 namespace {
 
+constexpr uint32_t SWAP_TIMEOUT_MS = 60;  // two frames at 16 MHz and then some: only a stopped panel misses it
+
+constexpr frame_pacing::Timing TIMING = {
+    board::LCD_PCLK_HZ,
+    board::LCD_WIDTH,
+    board::LCD_HEIGHT,
+    board::LCD_HSYNC_FRONT_PORCH,
+    board::LCD_HSYNC_PULSE_WIDTH,
+    board::LCD_HSYNC_BACK_PORCH,
+    board::LCD_VSYNC_FRONT_PORCH,
+    board::LCD_VSYNC_PULSE_WIDTH,
+    board::LCD_VSYNC_BACK_PORCH,
+};
+
 lv_display_t* g_disp = nullptr;
+esp_lcd_panel_handle_t g_panel = nullptr;
+SemaphoreHandle_t g_vsync_sem = nullptr;
+swap_gate::Gate g_gate;
 
-// Ten lines of partial rendering, two buffers. Full double buffering would be 1.5 MB and buys nothing here. The flush
-// is a CPU copy into the framebuffer, so LVGL doesn't draw into one buffer while the other goes out yet: two cost
-// 16 KB and are kept for when the flush moves to DMA.
-constexpr int DRAW_LINES = 10;
-constexpr size_t DRAW_PIXELS = static_cast<size_t>(board::LCD_WIDTH) * DRAW_LINES;
+// Written only by the vsync interrupt; read without a reset, so no read-modify-write races it.
+volatile uint32_t g_vsyncs = 0;
 
-void flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
-    const int32_t w = area->x2 - area->x1 + 1;
-    const int32_t h = area->y2 - area->y1 + 1;
-    display_lcd.pushImageDMA(area->x1, area->y1, w, h, reinterpret_cast<lgfx::rgb565_t*>(px_map));
+// LVGL's task only.
+struct {
+    uint32_t vsyncs_seen;
+    uint32_t timeouts_seen;
+    uint32_t swaps;
+    uint32_t draw_bitmap_us;
+    uint32_t flush_wait_us;
+} g_perf = {};
+
+// The interrupt isn't IRAM-safe in this core's build (no CONFIG_LCD_RGB_ISR_IRAM_SAFE), so it never runs while the
+// flash cache is off, and calling the gate's flash-resident code from here is fine.
+bool IRAM_ATTR release_swap() {
+    BaseType_t woke = pdFALSE;
+    if (g_gate.vsync()) xSemaphoreGiveFromISR(g_vsync_sem, &woke);
+    return woke == pdTRUE;
+}
+
+// Without bounce buffers the next frame reads the new buffer from this vsync on, so it releases the swap.
+bool IRAM_ATTR on_vsync(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void*) {
+    g_vsyncs = g_vsyncs + 1;
+    return PANEL_BOUNCE_PX == 0 && release_swap();
+}
+
+// With bounce buffers the driver picks the next frame's buffer here, when it has copied the last of this one, not at
+// the vsync: a swap between the two would be released while the old buffer still feeds a whole frame.
+bool IRAM_ATTR on_frame_buf_complete(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void*) {
+    return release_swap();
+}
+
+// Direct mode: px_map is the whole hidden framebuffer and LVGL has drawn the area into it in place, so an area before
+// the last needs nothing. The last hands the buffer to the panel; flushing stays set until the vsync (flush_wait_cb).
+void flush_cb(lv_display_t* disp, const lv_area_t*, uint8_t* px_map) {
+    // Read here: LVGL clears the flag at the end of every wait.
+    if (g_gate.flush(lv_display_flush_is_last(disp))) {
+        lv_display_flush_ready(disp);
+        return;
+    }
+    // The whole frame, not the last area: draw_bitmap writes the cache back over the range it's given, and every
+    // area of this frame, plus what LVGL copied over from the last one, is still in the cache.
+    const int64_t start = esp_timer_get_time();
+    // Only bad arguments fail it, and these are fixed; the frame is handed over either way.
+    (void)esp_lcd_panel_draw_bitmap(g_panel, 0, 0, board::LCD_WIDTH, board::LCD_HEIGHT, px_map);
+    g_perf.draw_bitmap_us += static_cast<uint32_t>(esp_timer_get_time() - start);
+    ++g_perf.swaps;
+    // A vsync that came between the last timeout and its waited() left a give behind; drop it, or it releases this
+    // frame before its vsync. Nothing can give for this swap until swapped() arms the gate.
+    xSemaphoreTake(g_vsync_sem, 0);
+    g_gate.swapped();
+}
+
+// With this set, LVGL calls it instead of spinning on flushing, before every flush and after every frame. Only a swap
+// waits; everything else returns at once.
+void flush_wait_cb(lv_display_t* disp) {
+    if (!g_gate.must_wait()) {
+        lv_display_flush_ready(disp);
+        return;
+    }
+    const int64_t start = esp_timer_get_time();
+    const bool got = xSemaphoreTake(g_vsync_sem, pdMS_TO_TICKS(SWAP_TIMEOUT_MS)) == pdTRUE;
+    g_perf.flush_wait_us += static_cast<uint32_t>(esp_timer_get_time() - start);
+    g_gate.waited(got);
     lv_display_flush_ready(disp);
 }
 
 uint32_t tick_cb() { return millis(); }
-
-}  // namespace
-
-LGFX::LGFX() {
-    {
-        auto cfg = bus_.config();
-
-        cfg.panel = &panel_;
-
-        cfg.pin_d0 = board::LCD_B0;
-        cfg.pin_d1 = board::LCD_B1;
-        cfg.pin_d2 = board::LCD_B2;
-        cfg.pin_d3 = board::LCD_B3;
-        cfg.pin_d4 = board::LCD_B4;
-        cfg.pin_d5 = board::LCD_G0;
-        cfg.pin_d6 = board::LCD_G1;
-        cfg.pin_d7 = board::LCD_G2;
-        cfg.pin_d8 = board::LCD_G3;
-        cfg.pin_d9 = board::LCD_G4;
-        cfg.pin_d10 = board::LCD_G5;
-        cfg.pin_d11 = board::LCD_R0;
-        cfg.pin_d12 = board::LCD_R1;
-        cfg.pin_d13 = board::LCD_R2;
-        cfg.pin_d14 = board::LCD_R3;
-        cfg.pin_d15 = board::LCD_R4;
-
-        cfg.pin_henable = board::LCD_DE;
-        cfg.pin_vsync = board::LCD_VSYNC;
-        cfg.pin_hsync = board::LCD_HSYNC;
-        cfg.pin_pclk = board::LCD_PCLK;
-        cfg.freq_write = board::LCD_PCLK_HZ;
-
-        cfg.hsync_polarity = board::LCD_HSYNC_POLARITY;
-        cfg.hsync_front_porch = board::LCD_HSYNC_FRONT_PORCH;
-        cfg.hsync_pulse_width = board::LCD_HSYNC_PULSE_WIDTH;
-        cfg.hsync_back_porch = board::LCD_HSYNC_BACK_PORCH;
-
-        cfg.vsync_polarity = board::LCD_VSYNC_POLARITY;
-        cfg.vsync_front_porch = board::LCD_VSYNC_FRONT_PORCH;
-        cfg.vsync_pulse_width = board::LCD_VSYNC_PULSE_WIDTH;
-        cfg.vsync_back_porch = board::LCD_VSYNC_BACK_PORCH;
-
-        cfg.pclk_idle_high = board::LCD_PCLK_IDLE_HIGH;
-
-        bus_.config(cfg);
-    }
-    {
-        auto cfg = panel_.config();
-        cfg.memory_width = board::LCD_WIDTH;
-        cfg.memory_height = board::LCD_HEIGHT;
-        cfg.panel_width = board::LCD_WIDTH;
-        cfg.panel_height = board::LCD_HEIGHT;
-        cfg.offset_x = 0;
-        cfg.offset_y = 0;
-        panel_.config(cfg);
-    }
-
-    panel_.setBus(&bus_);
-    setPanel(&panel_);
-}
-
-namespace {
 
 // Runs inside every esp_restart(). The RGB panel's frame loop and its GDMA keep running through a software reset,
 // and the next boot then hung often enough for the RTC watchdog to reset it again (phrasedeck #150). Stop both first.
@@ -109,53 +157,103 @@ void stopLcdOnRestart() {
     periph_module_reset(PERIPH_GDMA_MODULE);
 }
 
+const char* region(const void* p) { return esp_ptr_external_ram(p) ? "PSRAM" : "internal RAM"; }
+
+bool panel_init() {
+    esp_lcd_rgb_panel_config_t cfg = {};
+    cfg.clk_src = LCD_CLK_SRC_DEFAULT;  // PLL 160 MHz: 16 MHz is an exact divide
+    cfg.timings.pclk_hz = board::LCD_PCLK_HZ;
+    cfg.timings.h_res = board::LCD_WIDTH;
+    cfg.timings.v_res = board::LCD_HEIGHT;
+    cfg.timings.hsync_pulse_width = board::LCD_HSYNC_PULSE_WIDTH;
+    cfg.timings.hsync_back_porch = board::LCD_HSYNC_BACK_PORCH;
+    cfg.timings.hsync_front_porch = board::LCD_HSYNC_FRONT_PORCH;
+    cfg.timings.vsync_pulse_width = board::LCD_VSYNC_PULSE_WIDTH;
+    cfg.timings.vsync_back_porch = board::LCD_VSYNC_BACK_PORCH;
+    cfg.timings.vsync_front_porch = board::LCD_VSYNC_FRONT_PORCH;
+    cfg.timings.flags.hsync_idle_low = PANEL_HSYNC_IDLE_LOW;
+    cfg.timings.flags.vsync_idle_low = PANEL_VSYNC_IDLE_LOW;
+    cfg.timings.flags.de_idle_high = PANEL_DE_IDLE_HIGH;
+    cfg.timings.flags.pclk_active_neg = PANEL_PCLK_ACTIVE_NEG;
+    cfg.timings.flags.pclk_idle_high = PANEL_PCLK_IDLE_HIGH;
+    cfg.data_width = 16;
+    cfg.bits_per_pixel = 16;
+    cfg.num_fbs = 2;
+    cfg.bounce_buffer_size_px = PANEL_BOUNCE_PX;
+    cfg.dma_burst_size = 64;  // the largest burst out of PSRAM, as LovyanGFX's 64-byte alignment had
+    cfg.hsync_gpio_num = board::LCD_HSYNC;
+    cfg.vsync_gpio_num = board::LCD_VSYNC;
+    cfg.de_gpio_num = board::LCD_DE;
+    cfg.pclk_gpio_num = board::LCD_PCLK;
+    cfg.disp_gpio_num = -1;  // no display-enable line: the companion chip owns power and backlight
+    // Bus order as LovyanGFX's pin_d0..d15: blue low, red high.
+    const int data[16] = {board::LCD_B0, board::LCD_B1, board::LCD_B2, board::LCD_B3, board::LCD_B4, board::LCD_G0,
+                          board::LCD_G1, board::LCD_G2, board::LCD_G3, board::LCD_G4, board::LCD_G5, board::LCD_R0,
+                          board::LCD_R1, board::LCD_R2, board::LCD_R3, board::LCD_R4};
+    for (int i = 0; i < 16; ++i) cfg.data_gpio_nums[i] = data[i];
+    cfg.flags.fb_in_psram = 1;
+
+    esp_err_t err = esp_lcd_new_rgb_panel(&cfg, &g_panel);
+    if (err != ESP_OK) {
+        Serial.printf("display: esp_lcd_new_rgb_panel failed: %s\n", esp_err_to_name(err));
+        return false;
+    }
+    esp_lcd_rgb_panel_event_callbacks_t cbs = {};
+    cbs.on_vsync = on_vsync;
+    if (PANEL_BOUNCE_PX > 0) cbs.on_frame_buf_complete = on_frame_buf_complete;
+    err = esp_lcd_rgb_panel_register_event_callbacks(g_panel, &cbs, nullptr);
+    if (err == ESP_OK) err = esp_lcd_panel_reset(g_panel);
+    if (err == ESP_OK) err = esp_lcd_panel_init(g_panel);
+    if (err != ESP_OK) {
+        Serial.printf("display: panel bring-up failed: %s\n", esp_err_to_name(err));
+        esp_lcd_panel_del(g_panel);
+        g_panel = nullptr;
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 bool display_init() {
-    if (!display_lcd.init()) {
-        Serial.println("display: lcd.init() failed");
+    // Before the panel: its vsync interrupt starts with esp_lcd_panel_init and gives this.
+    g_vsync_sem = xSemaphoreCreateBinary();
+    if (g_vsync_sem == nullptr) {
+        Serial.println("display: no memory for the vsync semaphore");
         return false;
     }
-    display_lcd.setColorDepth(16);
+    if (!panel_init()) return false;
+
+    void* fb0 = nullptr;
+    void* fb1 = nullptr;
+    const esp_err_t err = esp_lcd_rgb_panel_get_frame_buffer(g_panel, 2, &fb0, &fb1);
+    if (err != ESP_OK || fb0 == nullptr || fb1 == nullptr) {
+        Serial.printf("display: no framebuffers: %s\n", esp_err_to_name(err));
+        return false;
+    }
 
     lv_init();
     lv_tick_set_cb(tick_cb);
 
-    // The draw buffers go in internal RAM, not PSRAM: the panel scans its framebuffer out of PSRAM continuously, and
-    // with the draw buffers there too LVGL's drawing and the flush's reads would add to that bus. Falls back to PSRAM
-    // if internal memory is short (without MALLOC_CAP_DMA: external RAM on the S3 is never DMA-capable).
-    const size_t bytes = DRAW_PIXELS * sizeof(uint16_t);
-    bool internal = true;
-    void* buf1 = heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-    void* buf2 = heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-    if (buf1 == nullptr || buf2 == nullptr) {
-        heap_caps_free(buf1);
-        heap_caps_free(buf2);
-        internal = false;
-        buf1 = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM);
-        buf2 = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM);
-    }
-    if (buf1 == nullptr || buf2 == nullptr) {
-        heap_caps_free(buf1);
-        heap_caps_free(buf2);
-        Serial.printf("display: draw buffer allocation failed (2 x %u bytes); check OPI PSRAM\n",
-                      static_cast<unsigned>(bytes));
-        return false;
-    }
-
     g_disp = lv_display_create(board::LCD_WIDTH, board::LCD_HEIGHT);
     if (g_disp == nullptr) {
-        heap_caps_free(buf1);
-        heap_caps_free(buf2);
         Serial.println("display: lv_display_create failed");
         return false;
     }
     lv_display_set_flush_cb(g_disp, flush_cb);
-    lv_display_set_buffers(g_disp, buf1, buf2, bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_flush_wait_cb(g_disp, flush_wait_cb);
+    // fb1 first: the panel scans fb0 from the start, so LVGL's first frame goes into the hidden one.
+    const uint32_t fb_bytes = static_cast<uint32_t>(board::LCD_WIDTH) * board::LCD_HEIGHT * sizeof(uint16_t);
+    lv_display_set_buffers(g_disp, fb1, fb0, fb_bytes, LV_DISPLAY_RENDER_MODE_DIRECT);
 
-    Serial.printf("display: %dx%d up, pclk %u Hz, %d-line draw buffers in %s\n", board::LCD_WIDTH,
-                  board::LCD_HEIGHT, static_cast<unsigned>(board::LCD_PCLK_HZ), DRAW_LINES,
-                  internal ? "internal RAM" : "PSRAM (expect jitter)");
+    // Refresh once a frame, no faster: a second frame inside one scan-out would only wait on its vsync.
+    const uint32_t period_ms = frame_pacing::refresh_period_ms(TIMING);
+    lv_timer_set_period(lv_display_get_refr_timer(g_disp), period_ms);
+
+    Serial.printf("display: %dx%d up, pclk %u Hz, %u fps, refresh every %u ms, framebuffers %p %p in %s\n",
+                  board::LCD_WIDTH, board::LCD_HEIGHT, static_cast<unsigned>(board::LCD_PCLK_HZ),
+                  static_cast<unsigned>(frame_pacing::frames_per_second(TIMING)), static_cast<unsigned>(period_ms),
+                  fb0, fb1, region(fb0));
     if (esp_register_shutdown_handler(stopLcdOnRestart) != ESP_OK) {
         Serial.println("display: couldn't register the restart handler");
     }
@@ -163,3 +261,19 @@ bool display_init() {
 }
 
 lv_display_t* display_lvgl() { return g_disp; }
+
+DisplayPerf display_take_perf() {
+    const uint32_t vsyncs = g_vsyncs;
+    const uint32_t timeouts = g_gate.timeouts();
+    DisplayPerf p;
+    // Differences of running counts, so the interrupt's counter is never written from here.
+    p.vsyncs = vsyncs - g_perf.vsyncs_seen;
+    p.swap_timeouts = timeouts - g_perf.timeouts_seen;
+    p.swaps = g_perf.swaps;
+    p.draw_bitmap_us = g_perf.draw_bitmap_us;
+    p.flush_wait_us = g_perf.flush_wait_us;
+    g_perf = {};
+    g_perf.vsyncs_seen = vsyncs;
+    g_perf.timeouts_seen = timeouts;
+    return p;
+}
