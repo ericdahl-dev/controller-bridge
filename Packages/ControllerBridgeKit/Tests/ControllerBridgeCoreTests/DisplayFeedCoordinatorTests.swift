@@ -49,6 +49,7 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/remaining", [.int(loaded ? 428 : 0)]),
             OSCMessage("/DeckBridge/Display/progress", [.float(0)]),
             OSCMessage("/DeckBridge/Display/phase", [.float(-1)]),
+            OSCMessage("/DeckBridge/Display/level", [.float(0)]),
         ]
     }
 
@@ -464,7 +465,7 @@ struct DisplayFeedCoordinatorTests {
         Self.load(rig)
         MainCueTests.feed(rig, "Playing", 1)
         Self.turnOn(rig)
-        #expect(feed.sent.last == Self.message("phase", Float(-1)))
+        #expect(feed.sent.first { $0.address.hasSuffix("/phase") } == Self.message("phase", Float(-1)))
         feed.sent.removeAll()
         func offset(_ beats: Float, at time: Double) {
             rig.clock.now = time
@@ -487,6 +488,40 @@ struct DisplayFeedCoordinatorTests {
         rig.clock.now = 0.3
         MainCueTests.feed(rig, "Playing", 0)
         #expect(phases() == [Self.message("phase", Float(-1))])
+    }
+
+    @Test("level is the deck's mixer meter on the drawn meter's dB scale and ballistics: up at once, falling over 0.5 s, about 30 a second")
+    func level() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        feed.sent.removeAll()
+        func levels() -> [OSCMessage] { feed.sent.filter { $0.address.hasSuffix("/level") } }
+        // 0 dB on the meter's -36 to +16 dB scale: 36/52 of the way up.
+        rig.clock.now = 0.05
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/Ch1/Meter", [.float(1)]))
+        rig.coordinator.tick()
+        #expect(levels() == [Self.message("level", Float(36.0 / 52))])
+        // Then quiet: from 36/52 at full-in-0.5 s, it reaches 0 in about 0.35 s; at about 30 a second that's 10-12 sends.
+        feed.sent.removeAll()
+        for step in 6...105 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
+        #expect((10...12).contains(levels().count))
+        #expect(levels().last == Self.message("level", Float(0)))
+    }
+
+    @Test("While on, the feed asks Syndicate for the meter and PhaseOffset, as the drawn display does; off, it doesn't")
+    func subscriptions() throws {
+        let (rig, _) = try Self.rig()
+        rig.coordinator.start()
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.mixerMeter))
+        Self.turnOn(rig)
+        #expect(rig.coordinator.status.requiredSubscriptions.contains(.mixerMeter))
+        #expect(rig.coordinator.status.requiredSubscriptions.contains(.phaseOffset))
+        var off = Self.on
+        off.enabled = false
+        rig.coordinator.setDisplayFeed(off)
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.phaseOffset))
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")

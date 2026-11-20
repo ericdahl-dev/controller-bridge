@@ -289,6 +289,7 @@ public final class Coordinator {
     /// Settings' display feed: on sends the deck in front at once.
     public func setDisplayFeed(_ settings: DisplayFeedSettings) {
         displayFeed.set(settings)
+        status.requiredSubscriptions = requiredSubscriptions
         updateDisplayFeed()
     }
 
@@ -352,7 +353,8 @@ public final class Coordinator {
                                     loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0,
                                     beat: beat, elapsed: Self.wholeSeconds(facts.position),
                                     remaining: facts.duration == nil ? 0 : max(0, Self.wholeSeconds(facts.duration) - Self.wholeSeconds(facts.position)),
-                                    progress: Self.progress(facts), phase: feedPhase(facts))
+                                    progress: Self.progress(facts), phase: feedPhase(facts),
+                                    level: jogController.meterLevel(facts.deck))
         }
         displayFeed.update(deck, known: known, at: clock.now)
     }
@@ -938,6 +940,8 @@ public final class Coordinator {
         if jogController.drawing { needed.insert(.mixerMeter) }
         // Its phase rule reads the deck's PhaseOffset (#462): asked for only while the unit draws.
         if jogController.drawing { needed.insert(.phaseOffset) }
+        // The display feed's level and phase read them too (#617).
+        if displayFeed.enabled { needed.formUnion([.mixerMeter, .phaseOffset]) }
         // Shift + Needle Drop's relative fader move starts from Syndicate's level (#609).
         if bridges.contains(where: { $0.stripFaderMode == .relative }) { needed.insert(.mixerVolume) }
         return Subscription.allCases.filter(needed.contains)

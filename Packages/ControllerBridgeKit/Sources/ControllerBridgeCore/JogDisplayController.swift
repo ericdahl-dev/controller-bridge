@@ -57,6 +57,9 @@ final class JogDisplayController {
         }
     }
 
+    /// A deck's mixer meter as the drawn meter shows it, 0-1; 0 before its channel reports (#617).
+    func meterLevel(_ deck: Int) -> Double { meters[deck]?.level ?? 0 }
+
     /// The unit's display firmware (#425), kept for a driver attached later.
     private var displayFirmware = DisplayFirmware.denon
     func setDisplayFirmware(_ firmware: DisplayFirmware) {
@@ -155,10 +158,11 @@ final class JogDisplayController {
     /// The driver's timers, then the needles (every playing deck's for the simulator, the deck in front's to the unit,
     /// at most 30 a second) and the play light: 127 while playing, blinking every half-second while loaded and paused.
     func tick(_ entries: [Entry]) {
+        // Every channel's ballistics move on each tick (#582); the front deck's go to the unit, all to the preview and
+        // the display feed (#617), which needs them with no unit too.
+        for channel in meters.keys { meters[channel]?.step(at: clock.now) }
         guard let driver else { return }
         driver.tick()
-        // Every channel's ballistics move on each tick (#582); the front deck's go to the unit, all to the preview.
-        for channel in meters.keys { meters[channel]?.step(at: clock.now) }
         let front = Self.front(entries, previewDeck: previewDeck)
         // The live cadence (#592): the needle, then the meter and the phase below, in the same tick.
         let live = nextLiveDue.map { clock.now >= $0 - 1e-9 } ?? true

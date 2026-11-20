@@ -4,7 +4,7 @@
   "cases": [
     {
       "name": "deck 1 loaded, in red",
-      "state": { "deck": 1, "color": [255, 0, 0], "loaded": true, "title": "Night Drive", "artist": "Example Artist", "key": "Am", "bpm": 126, "tempo": 0.8, "playing": true, "sync": true, "master": true, "loop": true, "loopLength": 0.5, "beat": 3, "elapsed": 95, "remaining": 212, "progress": 0.3125, "phase": 0.5 },
+      "state": { "deck": 1, "color": [255, 0, 0], "loaded": true, "title": "Night Drive", "artist": "Example Artist", "key": "Am", "bpm": 126, "tempo": 0.8, "playing": true, "sync": true, "master": true, "loop": true, "loopLength": 0.5, "beat": 3, "elapsed": 95, "remaining": 212, "progress": 0.3125, "phase": 0.5, "level": 0.75 },
       "messages": [
         { "address": "/DeckBridge/Display/deck", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/color", "type": "i", "value": 16711680 },
@@ -24,7 +24,8 @@
         { "address": "/DeckBridge/Display/elapsed", "type": "i", "value": 95 },
         { "address": "/DeckBridge/Display/remaining", "type": "i", "value": 212 },
         { "address": "/DeckBridge/Display/progress", "type": "f", "value": 0.3125 },
-        { "address": "/DeckBridge/Display/phase", "type": "f", "value": 0.5 }
+        { "address": "/DeckBridge/Display/phase", "type": "f", "value": 0.5 },
+        { "address": "/DeckBridge/Display/level", "type": "f", "value": 0.75 }
       ]
     },
     {
@@ -49,7 +50,8 @@
         { "address": "/DeckBridge/Display/elapsed", "type": "i", "value": 0 },
         { "address": "/DeckBridge/Display/remaining", "type": "i", "value": 0 },
         { "address": "/DeckBridge/Display/progress", "type": "f", "value": 0 },
-        { "address": "/DeckBridge/Display/phase", "type": "f", "value": -1 }
+        { "address": "/DeckBridge/Display/phase", "type": "f", "value": -1 },
+        { "address": "/DeckBridge/Display/level", "type": "f", "value": 0 }
       ]
     },
     {
@@ -74,7 +76,8 @@
         { "address": "/DeckBridge/Display/elapsed", "type": "i", "value": 0 },
         { "address": "/DeckBridge/Display/remaining", "type": "i", "value": 351 },
         { "address": "/DeckBridge/Display/progress", "type": "f", "value": 0 },
-        { "address": "/DeckBridge/Display/phase", "type": "f", "value": -1 }
+        { "address": "/DeckBridge/Display/phase", "type": "f", "value": -1 },
+        { "address": "/DeckBridge/Display/level", "type": "f", "value": 0 }
       ]
     }
   ]
