@@ -58,7 +58,9 @@
       "msb_cc": 64,
       "lsb_cc": 65,
       "touch_note": 70,
-      "require_touch": true
+      "require_touch": true,
+      "shift_fader": true,
+      "shift_fader_mode": "relative"
     },
     "browse": {
       "select_turn_cc": 6,

@@ -103,7 +103,8 @@ struct RequiredSubscriptionsTests {
     func reported() throws {
         let rig = try Rig()
         rig.coordinator.start()
-        #expect(rig.coordinator.status.requiredSubscriptions == Subscription.always)
+        // The LC6000's Shift + Needle Drop fader reads Volume (#609).
+        #expect(rig.coordinator.status.requiredSubscriptions == Subscription.always + [.mixerVolume])
     }
 }
 

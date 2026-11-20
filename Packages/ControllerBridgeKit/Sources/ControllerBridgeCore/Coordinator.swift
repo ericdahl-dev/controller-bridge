@@ -91,6 +91,7 @@ public final class Coordinator {
         bridge.ringColors = ringColors
         bridge.colorMessages = colorMessages
         bridge.lightBrightness = lightBrightness
+        bridge.stripFaderSetting = stripFaderSetting
         return bridge
     }
 
@@ -823,6 +824,8 @@ public final class Coordinator {
         if jogController.drawing { needed.insert(.mixerMeter) }
         // Its phase rule reads the deck's PhaseOffset (#462): asked for only while the unit draws.
         if jogController.drawing { needed.insert(.phaseOffset) }
+        // Shift + Needle Drop's relative fader move starts from Syndicate's level (#609).
+        if bridges.contains(where: { $0.stripFaderMode == .relative }) { needed.insert(.mixerVolume) }
         return Subscription.allCases.filter(needed.contains)
     }
 
@@ -1072,6 +1075,15 @@ public final class Coordinator {
     }
 
     /// Settings (#530): exact RGB through Denon's color message, or the 64-color table; repainted at once.
+    /// Settings' choice for Shift + Needle Drop's fader (#609). Each touch reads it at touch-down; relative asks for
+    /// Syndicate's Volume.
+    private var stripFaderSetting = StripFaderSetting()
+    public func setStripFader(_ setting: StripFaderSetting) {
+        stripFaderSetting = setting
+        for bridge in bridges { bridge.stripFaderSetting = setting }
+        status.requiredSubscriptions = requiredSubscriptions
+    }
+
     public func setColorMessages(_ on: Bool) {
         colorMessages = on
         for bridge in bridges { bridge.setColorMessages(on) }

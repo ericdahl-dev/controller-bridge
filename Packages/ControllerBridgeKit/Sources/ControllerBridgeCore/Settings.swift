@@ -34,11 +34,13 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
     /// A controller profile chosen by hand for a MIDI device (#200): device name → profile id. A device not listed is
     /// Automatic, matched by its name; so is one whose chosen profile no longer exists.
     public var profileChoices: [String: String] = [:]
+    /// Shift + Needle Drop's fader (#609): on or off, relative or jump; unset keeps the profile's.
+    public var stripFader = StripFaderSetting()
 
     enum CodingKeys: String, CodingKey {
         case controllers, syndicateHost, syndicatePort, feedbackPort, feedbackListen, ledsEnabled
         case followSyndicateDeckColors, customDeckColors, appearance, ringColors, jogDisplay, profileChoices
-        case displayFirmware, colorMessages, lightBrightness, keyDisplay
+        case displayFirmware, colorMessages, lightBrightness, keyDisplay, stripFader
     }
 
     /// Settings saved before #123 have no deck colors: they load with the defaults.
@@ -61,6 +63,7 @@ public struct BridgeSettings: Codable, Equatable, Sendable {
         profileChoices = try c.decodeIfPresent([String: String].self, forKey: .profileChoices) ?? [:]
         displayFirmware = try c.decodeIfPresent(DisplayFirmware.self, forKey: .displayFirmware) ?? .denon
         keyDisplay = try c.decodeIfPresent(KeyNotation.self, forKey: .keyDisplay) ?? .traditional
+        stripFader = try c.decodeIfPresent(StripFaderSetting.self, forKey: .stripFader) ?? StripFaderSetting()
     }
 
     public init(
@@ -111,6 +114,7 @@ extension BridgeSettings {
         out.jogDisplay = pick(\.jogDisplay)
         out.displayFirmware = pick(\.displayFirmware)
         out.keyDisplay = pick(\.keyDisplay)
+        out.stripFader = pick(\.stripFader)
         out.profileChoices = pick(\.profileChoices)
         // Controllers: the draft's list (an add or remove is the DJ's edit), each field rebased where both had it.
         out.controllers = draft.controllers.indices.map { index in

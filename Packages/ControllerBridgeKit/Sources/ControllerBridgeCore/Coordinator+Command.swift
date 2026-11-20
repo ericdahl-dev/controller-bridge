@@ -12,6 +12,8 @@ extension Coordinator {
         case setRingColors(RingColors)
         /// Pads and ring through Denon's color message, or the 64-color table (#530).
         case setColorMessages(Bool)
+        /// Shift + Needle Drop's fader (#609).
+        case setStripFader(StripFaderSetting)
         /// The color-message LEDs' brightness, in percent (#532).
         case setLightBrightness(Int)
         /// The OSC destination opened late (#84): ask Syndicate to resend its state, since what was sent before was dropped.
@@ -66,7 +68,7 @@ extension Coordinator {
             case .ledSweep, .stopLEDSweep: .active
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
-            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setColorMessages, .setLightBrightness, .resync, .setControllers, .setProfiles,
+            case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setColorMessages, .setStripFader, .setLightBrightness, .resync, .setControllers, .setProfiles,
                  .setProfileChoices, .setJogDisplay, .setDisplayFirmware, .setKeyDisplay:
                 .waitsForDemo
             }
@@ -83,6 +85,7 @@ extension Coordinator {
         case .setDeckColors(let follow, let custom): setDeckColors(followSyndicate: follow, custom: custom)
         case .setRingColors(let mode): setRingColors(mode)
         case .setColorMessages(let on): setColorMessages(on)
+        case .setStripFader(let setting): setStripFader(setting)
         case .setLightBrightness(let percent): setLightBrightness(percent)
         case .resync: resync()
         case .setControllers(let entries): setControllers(entries)

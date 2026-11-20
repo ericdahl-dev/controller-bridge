@@ -141,6 +141,7 @@ extension Bridge {
             latchedReverse = nil
         }
         jogModule.releaseAll()
+        stripFader.touchUp()
         cueDown = false
         shiftCueDown = false
         if shift {

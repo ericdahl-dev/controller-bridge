@@ -429,19 +429,44 @@ public struct Mapping: Equatable, Sendable, Codable {
         public var lsbCC: Int
         public var touchNote: Int
         public var requireTouch: Bool
+        /// Whether Shift + the strip moves the deck's channel fader (#609) instead of seeking.
+        public var shiftFader: Bool
+        /// How Shift + the strip moves the channel fader (#609): from its level by the travel, or to the finger.
+        public var shiftFaderMode: ShiftFaderMode
+
+        public enum ShiftFaderMode: String, Equatable, Sendable, Codable, CaseIterable {
+            case relative, jump
+        }
 
         enum CodingKeys: String, CodingKey {
             case msbCC = "msb_cc"
             case lsbCC = "lsb_cc"
             case touchNote = "touch_note"
             case requireTouch = "require_touch"
+            case shiftFader = "shift_fader"
+            case shiftFaderMode = "shift_fader_mode"
         }
 
-        public init(msbCC: Int, lsbCC: Int, touchNote: Int, requireTouch: Bool) {
+        public init(msbCC: Int, lsbCC: Int, touchNote: Int, requireTouch: Bool, shiftFader: Bool = false,
+                    shiftFaderMode: ShiftFaderMode = .relative) {
             self.msbCC = msbCC
             self.lsbCC = lsbCC
             self.touchNote = touchNote
             self.requireTouch = requireTouch
+            self.shiftFader = shiftFader
+            self.shiftFaderMode = shiftFaderMode
+        }
+
+        /// `shift_fader` and `shift_fader_mode` may be left out: off, and relative.
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            msbCC = try container.decode(Int.self, forKey: .msbCC)
+            lsbCC = try container.decode(Int.self, forKey: .lsbCC)
+            touchNote = try container.decode(Int.self, forKey: .touchNote)
+            requireTouch = try container.decode(Bool.self, forKey: .requireTouch)
+            shiftFader = try container.decodeIfPresent(Bool.self, forKey: .shiftFader) ?? ProfileKeys.fallback("needle.shift_fader")
+            shiftFaderMode = try container.decodeIfPresent(ShiftFaderMode.self, forKey: .shiftFaderMode)
+                ?? ProfileKeys.fallback("needle.shift_fader_mode")
         }
     }
 

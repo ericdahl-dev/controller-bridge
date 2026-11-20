@@ -58,12 +58,16 @@ struct SubscriptionsTests {
         #expect(rig.coordinator.status.noDeckData == false)
     }
 
+    /// Every channel's Volume, as the owner's trace of 2026-11-20 has every Resend answered: the LC6000 asks for it for
+    /// Shift + Needle Drop (#609).
+    static let volumes = (1...4).map { OSCMessage("/Syndicate/Mixer/CH\($0)/Volume", [.float(1)]) }
+
     /// The launch Resend answered with `messages` at t = 0.3, and its window closed at t = 2.
     static func answered(_ messages: [OSCMessage]) throws -> Rig {
         let rig = try Rig()
         rig.coordinator.start()
         rig.clock.now = 0.3
-        for message in [Self.palette, OSCMessage("/Syndicate/Header/BPM", [.float(120)])] + messages {
+        for message in [Self.palette, OSCMessage("/Syndicate/Header/BPM", [.float(120)])] + Self.volumes + messages {
             rig.coordinator.feedback(message)
         }
         Self.tick(rig, at: 2.0)
@@ -109,7 +113,7 @@ struct SubscriptionsTests {
         #expect(rig.coordinator.status.missingSubscriptions == Self.allButLoaded)
         Self.tick(rig, at: 10.3)                 // 10 s quiet: the next Resend
         rig.clock.now = 10.5
-        for message in EverySubscriptionTests.deck1.map(\.1) { rig.coordinator.feedback(message) }
+        for message in Self.volumes + EverySubscriptionTests.deck1.map(\.1) { rig.coordinator.feedback(message) }
         Self.tick(rig, at: 12.3)
         #expect(rig.coordinator.status.missingSubscriptions == [])
     }
@@ -124,7 +128,8 @@ struct BarRampSubscriptionTests {
         rig.coordinator.setJogDisplay(enabled: jogDisplay)
         rig.coordinator.start()
         rig.clock.now = 0.3
-        var answer = [SubscriptionsTests.palette, OSCMessage("/Syndicate/Header/BPM", [.float(120)])] + EverySubscriptionTests.deck1.map(\.1)
+        var answer = [SubscriptionsTests.palette, OSCMessage("/Syndicate/Header/BPM", [.float(120)])] + SubscriptionsTests.volumes
+            + EverySubscriptionTests.deck1.map(\.1)
         if barRamp { answer.append(OSCMessage("/Syndicate/Deck/1/BarRamp", [.float(0.25)])) }
         for message in answer { rig.coordinator.feedback(message) }
         SubscriptionsTests.tick(rig, at: 2.0)
@@ -141,7 +146,7 @@ struct BarRampSubscriptionTests {
     @Test("Jog display on: required, missing when the answer has no BarRamp, fine when it has one")
     func on() throws {
         let missing = try Self.answered(jogDisplay: true, barRamp: false)
-        #expect(missing.coordinator.status.requiredSubscriptions.last == .barRamp)
+        #expect(missing.coordinator.status.requiredSubscriptions.contains(.barRamp))
         #expect(missing.coordinator.status.missingSubscriptions == [.barRamp])
         #expect(try Self.answered(jogDisplay: true, barRamp: true).coordinator.status.missingSubscriptions == [])
     }

@@ -191,7 +191,7 @@ struct EngineTests {
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { seen.append($0) }).run(pipe.events)
 
-        #expect(seen.values == [
+        var expected = [
             CoordinatorStatus(controllers: [ControllerStatus(deck: 1, connected: false, lastEvent: nil)]),
             CoordinatorStatus(
                 controllers: [ControllerStatus(
@@ -200,7 +200,10 @@ struct EngineTests {
                 )],
                 devices: [DeviceStatus(name: "DENON LC6000 PRIME", profile: "Custom mapping", note: nil)]
             ),
-        ])
+        ]
+        // The LC6000 asks for Volume too, for Shift + Needle Drop (#609).
+        for index in expected.indices { expected[index].requiredSubscriptions = Subscription.always + [.mixerVolume] }
+        #expect(seen.values == expected)
     }
 
     /// Collects what a Sendable callback is given.

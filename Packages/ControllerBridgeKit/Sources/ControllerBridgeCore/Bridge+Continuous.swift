@@ -128,10 +128,36 @@ extension Bridge {
 
     func needleLSB(_ value: UInt8) {
         guard let needle = mapping.needle else { return }
+        if stripFader.touching {
+            if let move = stripFader.position(jogModule.needlePosition(lsb: value)) {
+                send(address: MixerOSC.address(.volume, channel: move.channel, root: root), [.float(Float(move.level))])
+            }
+            return
+        }
         applyJog(jogModule.needleLSB(value, needle: needle, playing: playing, now: clock.now))
     }
 
-    func needleTouch(_ pressed: Bool) { applyJog(jogModule.needleTouch(pressed)) }
+    /// How Shift + the strip moves the channel fader (#609), or nil when it seeks as without Shift: Settings' choice,
+    /// else the profile's. Read at touch-down, so a change applies from the next touch.
+    var stripFaderMode: Mapping.Needle.ShiftFaderMode? {
+        guard let shown = stripFaderSetting.shown(for: mapping.needle), shown.enabled else { return nil }
+        return shown.mode
+    }
+
+    /// With Shift held at touch-down, the touch moves the deck's channel fader until it lifts (#609). Every touch-down
+    /// picks afresh, so a lost touch-up can't leave the strip a fader.
+    func needleTouch(_ pressed: Bool) {
+        if pressed { stripFader.touchUp() }
+        if pressed, shift, let mode = stripFaderMode {
+            stripFader.touchDown(channel: mapping.deck.number, mode: mode)
+            return
+        }
+        if !pressed, stripFader.touching {
+            stripFader.touchUp()
+            return
+        }
+        applyJog(jogModule.needleTouch(pressed))
+    }
 
     func jogMSB(_ value: UInt8) { jogModule.jogMSB(value) }
 
