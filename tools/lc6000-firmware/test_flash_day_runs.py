@@ -529,6 +529,24 @@ class FlashDayRunTests(unittest.TestCase):
     def test_stops_two_block_rewrite(self):
         self.pinned(["UPDATE", "REWRITE", "y", "FLASH"], self.current_element, upper=self.old_b())
 
+    def test_upper_and_owner_name_the_pair_over_the_newest_build(self):
+        chosen_upper, chosen_owner = self.kit_pair_in(os.path.join(self.dir.name, "chosen"))
+        self.kit_pair_in(self.work)
+        self.unit_holds(self.current_element)
+        result = self.run_wizard(["UPDATE", "FLASH", "y", "FLASH"],
+                                 args=("--upper", chosen_upper, "--owner", chosen_owner))
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertIn("Block B: " + chosen_upper + " (--upper)", result.stdout)
+        self.assertIn("▶ file: " + chosen_owner, result.stdout)
+
+    def test_upper_without_owner_is_refused_before_anything(self):
+        self.assert_isolated()
+        result = subprocess.run(["/bin/bash", WIZARD, "drawn", "--upper", self.upper], input="", env=self.env,
+                                cwd=self.dir.name, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--upper and --owner go together", result.stdout)
+        self.assertEqual(self.calls(), [])
+
     def refused_by_the_record(self, record, *reasons):
         self.unit_holds(self.current_element)
         result = self.run_wizard([self.upper, self.owner, record, "UPDATE", "FLASH", "y", "FLASH"],

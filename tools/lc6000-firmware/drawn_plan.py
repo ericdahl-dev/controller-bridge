@@ -2,7 +2,7 @@
 """The drawn wizard's plan (#567): every decision of `flash-day.sh drawn` in one place. The facts so far in, the next
 step out; the shell only does what it's told (dfu-util, the keyboard) and records the result.
 
-  python3 -I drawn_plan.py begin PLAN.json CURRENT.dfu UPPER.dfu OWNER.dfu RECORD.json WORK [REMEMBERED.dfu]
+  python3 -I drawn_plan.py begin PLAN.json CURRENT.dfu UPPER.dfu OWNER.dfu RECORD.json WORK [REMEMBERED.dfu [LAST.json]]
                                                   CURRENT empty: found from the app read (#603)
   python3 -I drawn_plan.py next PLAN.json         one action, its fields separated by tabs
   python3 -I drawn_plan.py record PLAN.json KEY VALUE
@@ -43,12 +43,14 @@ TOP_PANEL_LAYOUT = "/0x08000000/04*016Kg,01*064Kg,01*128Kg"  # 256 KB: the top p
 
 # MARK: the plan file
 
-def begin(path, current, upper, owner, record, work, remembered=""):
+def begin(path, current, upper, owner, record, work, remembered="", last_record=""):
     """A new run: the owner's files and the blocks' build record (#593), and no facts. A plan file from an earlier run
     is replaced, never continued. CURRENT empty: the image the chip runs now is found from the read (#603), and
-    REMEMBERED (the last run's) is one of the candidates."""
+    REMEMBERED (the last run's) is one of the candidates. LAST_RECORD: last run's build record, when it's another
+    build than this one, for the word screens."""
     plan = {"run": uuid.uuid4().hex[:12],
-            "files": {"current": current, "upper": upper, "owner": owner, "record": record, "remembered": remembered},
+            "files": {"current": current, "upper": upper, "owner": owner, "record": record, "remembered": remembered,
+                      "last_record": last_record},
             "work": work, "seq": 0, "facts": {}}
     save(path, plan)
 
@@ -150,15 +152,33 @@ def find_record(upper, owner):
     return ("ask", "No build record beside the two .dfu files.")
 
 
+def built_at(record_path):
+    """When the build was made: the record's own time (#603), else when the record file was written."""
+    try:
+        with open(record_path) as f:
+            built = json.load(f).get("built")
+        if isinstance(built, (int, float)):
+            return built
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        return os.path.getmtime(record_path)
+    except OSError:
+        return None
+
+
 def find_files(work, upper="", owner=""):
-    """Block B's .dfu and the owner's image, found so the owner isn't asked (#603): ("one", upper, owner, record), or
-    ("ask", why). The remembered pair first, when both files are there and one build record is beside them; else
-    the one pair in WORK the kit tools left, each .dfu with its record beside it and the two records the same. A .dfu
-    with no record beside it (a rewrite file, a read) is never a candidate. Finding judges nothing: the plan does."""
+    """Block B's .dfu and the owner's image, found so the owner isn't asked (#603): ("one", upper, owner, record,
+    last run's record when it's another build, else ""), or ("ask", why). The newest build in WORK the kit tools left
+    (each .dfu with its record beside it, the two records the same) wins: the normal rewrite is "rebuild, then
+    flash", and a silent pick of an older pair is a wrong write nobody catches by its hash. No build in WORK: the
+    remembered pair, when both files are there with one record beside them. Two newest builds from the same moment
+    ask. A .dfu with no record beside it (a rewrite file, a read) is never a candidate. Finding judges nothing."""
+    remembered = None
     if upper and owner and os.path.isfile(upper) and os.path.isfile(owner):
         found = find_record(upper, owner)
         if found[0] == "one":
-            return ("one", upper, owner, found[1])
+            remembered = (upper, owner, found[1])
     builds = {}
     for name in sorted(os.listdir(work)) if os.path.isdir(work) else []:
         path = os.path.join(work, name)
@@ -173,12 +193,22 @@ def find_files(work, upper="", owner=""):
         side = "upper" if address == build_upper_dfu.UPPER_BASE else "owner" if address == drawn_flash.APP_BASE else None
         if side:
             builds.setdefault(record, {}).setdefault(side, []).append(path)
-    pairs = [b for b in builds.values() if len(b.get("upper", [])) == 1 and len(b.get("owner", [])) == 1]
-    if len(pairs) == 1 and len(builds) == 1:
-        pair = pairs[0]
-        return ("one", pair["upper"][0], pair["owner"][0], build_record.carried(pair["upper"][0]))
-    return ("ask", f"{len(builds)} builds of block B and the owner's image in {work}; exactly one is needed to pick "
-                   f"them without asking.")
+    pairs = [(built_at(build_record.carried(b["upper"][0])), b["upper"][0], b["owner"][0])
+             for b in builds.values() if len(b.get("upper", [])) == 1 and len(b.get("owner", [])) == 1]
+    pairs.sort(key=lambda p: p[0] or 0, reverse=True)
+    if pairs:
+        if len(pairs) > 1 and pairs[0][0] == pairs[1][0]:
+            return ("ask", f"Two builds of block B and the owner's image in {work} are from the same moment; name them "
+                           f"with --upper and --owner.")
+        _, new_upper, new_owner = pairs[0]
+        record = build_record.carried(new_upper)
+        last = ""
+        if remembered and dfupatch.read(remembered[2]) != dfupatch.read(record):
+            last = remembered[2]
+        return ("one", new_upper, new_owner, record, last)
+    if remembered:
+        return ("one", *remembered, "")
+    return ("ask", f"No build of block B and the owner's image with its record beside it in {work}.")
 
 
 # MARK: the plan
@@ -356,7 +386,7 @@ def step_upper(plan, dfu_path, upper_state):
             end = build_upper_dfu.UPPER_BASE + len(dfupatch.parse(dfupatch.read(image)).element) - 1
             return ("type", "word_upper", word, screen(
                 f"This ERASES and WRITES the display chip's upper flash, 0x08080000-0x{end:08X}, with block B.",
-                image, f"there now: {there_now(upper_state)}", word))
+                image, f"there now: {there_now(upper_state)}", word, *build_lines(files)))
         if typed.strip() != word:
             return ("stop", f"You typed {typed.strip()!r}, not {word}. Nothing was written.")
         return ("write", "upper", dfu_path, image, "upper_written")
@@ -424,6 +454,28 @@ def probe(plan):
            f"remember it by)", None
 
 
+def build_lines(files):
+    """Which build is written (#603): the record's commit and build time, and last run's commit when it differs."""
+    import time
+
+    def read(path):
+        try:
+            with open(path) as f:
+                record = json.load(f)
+            return record if isinstance(record, dict) else {}
+        except (OSError, ValueError):
+            return {}
+    this = read(files["record"])
+    if isinstance(this.get("commit"), str) and isinstance(this.get("built"), (int, float)):
+        lines = [f"▶ build: {this['commit']}, built {time.strftime('%Y-%m-%d %H:%M', time.localtime(this['built']))}"]
+    else:
+        lines = ["▶ build: commit unknown (a record from before #603)"]
+    last = read(files.get("last_record") or "")
+    if last:
+        lines.append(f"▶ last run used: {last.get('commit', 'commit unknown')}")
+    return lines
+
+
 def there_now(upper_state):
     """drawn_flash's state line as the screen says it: "erased (nothing there yet)", or what's to be replaced."""
     if not upper_state.startswith("replace"):
@@ -463,7 +515,7 @@ def step_app(plan, dfu_path, app_state, current):
         if typed is None:
             return ("type", "word_app", "FLASH", screen(
                 "This ERASES and WRITES the display chip's app area, 0x08008000-0x0807FFFF, with the owner's image.",
-                files["owner"], f"there now: {current} (the way back)", "FLASH", probe_line))
+                files["owner"], f"there now: {current} (the way back)", "FLASH", *build_lines(files), probe_line))
         if typed.strip() != "FLASH":
             return ("stop", f"You typed {typed.strip()!r}, not FLASH. Nothing was written.")
         return ("write", "app", dfu_path, files["owner"], "app_written")
@@ -484,9 +536,9 @@ def step_app(plan, dfu_path, app_state, current):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     command = argv[0] if argv else ""
-    if command == "begin" and len(argv) in (7, 8):
+    if command == "begin" and len(argv) in (7, 8, 9):
         begin(argv[1], current=argv[2], upper=argv[3], owner=argv[4], record=argv[5], work=argv[6],
-              remembered=argv[7] if len(argv) == 8 else "")
+              remembered=argv[7] if len(argv) >= 8 else "", last_record=argv[8] if len(argv) == 9 else "")
     elif command == "next" and len(argv) == 2:
         # One line, fields separated by tabs; a field's own line breaks as \\n (the shell prints them with %b).
         print("\t".join(field.replace("\\", "\\\\").replace("\n", "\\n") for field in next_action(argv[1])))

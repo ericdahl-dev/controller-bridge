@@ -550,15 +550,34 @@ if [[ -n "$CURRENT_WD" ]]; then
 else
   note "The image the chip runs now is found from the read: the owner's image, the last run's, or a .dfu in $WORK."
 fi
-# Block B and the owner's image (#603): the remembered pair, or the one pair the kit tools left in $WORK, each with
-# its build record beside it. Asked only when neither is there; the typed words show what's written.
-found="" UPPER_DFU="" OWNER_DFU="" RECORD=""
-IFS=$'\t' read -r found UPPER_DFU OWNER_DFU RECORD \
-  < <(plan find-files "$WORK" "$(_existing UPPER_DFU || true)" "$(_existing OWNER_DFU || true)") || true
-if [[ "$found" == "one" ]]; then
+# Block B and the owner's image (#603): --upper and --owner, or the newest build the kit tools left in $WORK, or the
+# remembered pair, each with its build record beside it. Asked only when none is there; the word screens show the
+# build written and last run's when it differs.
+found="" UPPER_DFU="" OWNER_DFU="" RECORD="" LAST_RECORD=""
+if [[ -n "$DRAWN_UPPER" ]]; then
+  UPPER_DFU="$DRAWN_UPPER" OWNER_DFU="$DRAWN_OWNER"
+  say "Block B: $UPPER_DFU (--upper)"
+  say "The owner's image: $OWNER_DFU (--owner)"
+  IFS=$'\t' read -r found RECORD < <(plan find-record "$UPPER_DFU" "$OWNER_DFU") || true
+  if [[ "$found" == "one" ]]; then
+    say "Build record: $RECORD"
+  else
+    say "${RECORD:-No build record found.}"
+    ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
+    RECORD="${RECORD/#\~/$HOME}"
+  fi
+  found="named"
+else
+  IFS=$'\t' read -r found UPPER_DFU OWNER_DFU RECORD LAST_RECORD \
+    < <(plan find-files "$WORK" "$(_existing UPPER_DFU || true)" "$(_existing OWNER_DFU || true)") || true
+fi
+if [[ "$found" == "named" ]]; then
+  :
+elif [[ "$found" == "one" ]]; then
   say "Block B: $UPPER_DFU"
   say "The owner's image: $OWNER_DFU"
   say "Build record: $RECORD"
+  [[ -n "$LAST_RECORD" ]] && note "The last run used another build ($LAST_RECORD): this is the newest."
 else
   say "${UPPER_DFU:-Block B and the owner's image weren't found.}"
   ask UPPER_DFU "Path to block B's .dfu:"
@@ -597,7 +616,7 @@ if (( PROBE_AGAIN )) && [[ -e "$WORK/probe.json" ]]; then
   note "The probe answer from earlier today is forgotten: it's asked again before the owner's image."
 fi
 PLAN="$WORK/drawn-plan-$STAMP.json"
-plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK" "$REMEMBERED_WD"
+plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK" "$REMEMBERED_WD" "$LAST_RECORD"
 while :; do
   action="" a1="" a2="" a3="" a4=""
   IFS=$'\t' read -r action a1 a2 a3 a4 < <(plan next "$PLAN") || true
@@ -685,17 +704,24 @@ say "Please note on #468 what happened at each stage."
 finish
 }
 
-# flash-day.sh drawn [--current PATH] [--probe-again]
-DRAWN_CURRENT="" PROBE_AGAIN=0
+# flash-day.sh drawn [--current PATH] [--upper PATH --owner PATH] [--probe-again]
+DRAWN_CURRENT="" DRAWN_UPPER="" DRAWN_OWNER="" PROBE_AGAIN=0
 if [[ "${1:-}" == "drawn" ]]; then
   shift
   while (( $# )); do
     case "$1" in
       --current) [[ -n "${2:-}" ]] || { warn "--current needs a path."; exit 2; }; DRAWN_CURRENT="${2/#\~/$HOME}"; shift 2 ;;
+      --upper) [[ -n "${2:-}" ]] || { warn "--upper needs a path."; exit 2; }; DRAWN_UPPER="${2/#\~/$HOME}"; shift 2 ;;
+      --owner) [[ -n "${2:-}" ]] || { warn "--owner needs a path."; exit 2; }; DRAWN_OWNER="${2/#\~/$HOME}"; shift 2 ;;
       --probe-again) PROBE_AGAIN=1; shift ;;
-      *) warn "Unknown option: $1 (flash-day.sh drawn [--current PATH] [--probe-again])"; exit 2 ;;
+      *) warn "Unknown option: $1 (flash-day.sh drawn [--current PATH] [--upper PATH --owner PATH] [--probe-again])"
+         exit 2 ;;
     esac
   done
+  if { [[ -n "$DRAWN_UPPER" ]] && [[ -z "$DRAWN_OWNER" ]]; } || { [[ -z "$DRAWN_UPPER" ]] && [[ -n "$DRAWN_OWNER" ]]; }; then
+    warn "--upper and --owner go together: name both files of one build, or neither."
+    exit 2
+  fi
   run_drawn
 else
   run_wizard "$@"

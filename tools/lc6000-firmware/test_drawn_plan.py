@@ -216,6 +216,36 @@ class WordScreenTests(DrawnPlanTests):
         self.assertIn("0x08008000-0x0807FFFF", app)
         self.assertIn(f"there now: {self.current}", app)
 
+    def stamp(self, path, commit, built):
+        with open(path) as f:
+            record = json.load(f)
+        record.update(commit=commit, built=built)
+        with open(path, "w") as f:
+            json.dump(record, f)
+        return path
+
+    def test_each_screen_shows_the_builds_commit_and_time_and_last_runs_when_it_differs(self):
+        import time
+        self.stamp(self.record, "abc123def456", 1700000000)
+        last = self.stamp(write_record(os.path.join(self.dir.name, "last.json"), self.owner, self.upper),
+                          "0ld0ld0ld0ld", 1600000000)
+        path = os.path.join(self.dir.name, "plan.json")
+        drawn_plan.begin(path, current=self.current, upper=self.upper, owner=self.owner, record=self.record,
+                         work=self.dir.name, last_record=last)
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(path), ("done",))
+        built = time.strftime("%Y-%m-%d %H:%M", time.localtime(1700000000))
+        for text in self.screens(unit).values():
+            self.assertIn(f"▶ build: abc123def456, built {built}", text)
+            self.assertIn("▶ last run used: 0ld0ld0ld0ld", text)
+
+    def test_last_run_is_not_shown_when_its_the_same_build(self):
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        for text in self.screens(unit).values():
+            self.assertIn("▶ build: commit unknown", text)
+            self.assertNotIn("last run used", text)
+
     def test_a_rewrite_shows_the_rewrite_file_that_is_written(self):
         self.current = self.owner
         old = RewriteTests.OLD_B + b"\xff" * (UPPER_SIZE - len(RewriteTests.OLD_B))
@@ -547,8 +577,9 @@ class FindRecordTests(unittest.TestCase):
 
 class FindFilesTests(unittest.TestCase):
     """`drawn_plan.py find-files WORK UPPER OWNER` (#603): block B and the owner's image, found instead of asked. The
-    remembered pair when both are still there with one build record; else the one pair in WORK that the kit tools left
-    with a record beside each; else ask."""
+    newest build in WORK that the kit tools left with a record beside each file (the normal rewrite is "rebuild, then
+    flash"); else the remembered pair when both are still there with one record; else ask. Last run's record comes
+    back too when it's another build, for the word screen."""
 
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
@@ -556,7 +587,7 @@ class FindFilesTests(unittest.TestCase):
         self.work = os.path.join(self.dir.name, "work")
         os.makedirs(self.work)
 
-    def pair(self, folder, tag="1", record=None):
+    def pair(self, folder, tag="1", record=None, built=None):
         """A B .dfu and an owner's image .dfu in FOLDER, each with the build record copy the kit leaves beside it."""
         os.makedirs(folder, exist_ok=True)
         upper, owner = (os.path.join(folder, f"wd-{name}-{tag}.dfu") for name in ("upper-drawing", "owner"))
@@ -566,7 +597,8 @@ class FindFilesTests(unittest.TestCase):
             f.write(dfuse_file(stock_like_element()))
         for dfu in (upper, owner):
             with open(build_record.carried(dfu), "w") as f:
-                f.write(record if record is not None else json.dumps({"build": tag}))
+                f.write(record if record is not None else json.dumps({"build": tag, "commit": f"c{tag}",
+                                                                      **({"built": built} if built else {})}))
         return upper, owner
 
     def find(self, upper="", owner=""):
@@ -579,12 +611,28 @@ class FindFilesTests(unittest.TestCase):
 
     def test_the_one_kit_pair_in_work_is_found(self):
         upper, owner = self.pair(self.work)
-        self.assertEqual(self.find(), ["one", upper, owner, build_record.carried(upper)])
+        self.assertEqual(self.find(), ["one", upper, owner, build_record.carried(upper), ""])
 
-    def test_the_remembered_pair_comes_first(self):
-        self.pair(self.work, "new")
+    def test_the_newest_build_in_work_wins_over_the_remembered_pair(self):
+        # The CoS's call: a silent pick of the older pair is a wrong write nobody catches by hash.
+        new_upper, new_owner = self.pair(self.work, "new", built=2000)
+        old_upper, old_owner = self.pair(os.path.join(self.dir.name, "elsewhere"), "old", built=1000)
+        self.assertEqual(self.find(old_upper, old_owner),
+                         ["one", new_upper, new_owner, build_record.carried(new_upper), build_record.carried(old_upper)])
+
+    def test_the_remembered_pair_is_used_when_work_has_no_build(self):
         upper, owner = self.pair(os.path.join(self.dir.name, "elsewhere"), "old")
-        self.assertEqual(self.find(upper, owner)[:3], ["one", upper, owner])
+        self.assertEqual(self.find(upper, owner), ["one", upper, owner, build_record.carried(upper), ""])
+
+    def test_of_two_builds_in_work_the_newest_wins(self):
+        self.pair(self.work, "1", built=1000)
+        upper, owner = self.pair(self.work, "2", built=2000)
+        self.assertEqual(self.find()[:3], ["one", upper, owner])
+
+    def test_two_builds_from_the_same_moment_ask(self):
+        self.pair(self.work, "1", built=1000)
+        self.pair(self.work, "2", built=1000)
+        self.assertEqual(self.find()[0], "ask")
 
     def test_a_remembered_pair_that_is_gone_falls_back_to_work(self):
         upper, owner = self.pair(self.work)
@@ -596,14 +644,9 @@ class FindFilesTests(unittest.TestCase):
         _, owner = self.pair(os.path.join(self.dir.name, "b"), "b")
         self.assertEqual(self.find(upper, owner)[0], "ask")
 
-    def test_none_or_two_pairs_in_work_ask(self):
+    def test_no_build_anywhere_asks(self):
         kind, why = self.find()
         self.assertEqual(kind, "ask")
-        self.pair(self.work, "1")
-        self.pair(self.work, "2")
-        kind, why = self.find()
-        self.assertEqual(kind, "ask")
-        self.assertIn("2", why)
 
     def test_a_dfu_with_no_record_beside_it_isnt_a_candidate(self):
         upper, owner = self.pair(self.work)

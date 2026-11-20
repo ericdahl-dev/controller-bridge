@@ -104,8 +104,27 @@ def carry(block_path, output, side):
     return f"wrote {target}: the build record, for the wizard"
 
 
+def commit():
+    """The repository's commit as `make arm` builds it, "+changes" when the tree isn't clean; "unknown" outside git."""
+    import subprocess
+    here = os.path.dirname(os.path.realpath(__file__))
+    try:
+        head = subprocess.run(["git", "-C", here, "rev-parse", "--short=12", "HEAD"], capture_output=True, text=True,
+                              timeout=10)
+        dirty = subprocess.run(["git", "-C", here, "status", "--porcelain", "--untracked-files=no"],
+                               capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    if head.returncode != 0 or not head.stdout.strip():
+        return "unknown"
+    return head.stdout.strip() + ("+changes" if dirty.stdout.strip() else "")
+
+
 def write(args):
+    import time
     record = record_of(dfupatch.read(args.block), dfupatch.read(args.upper), args.draw, args.proven)
+    # Which build this is, for the wizard's pick and its word screen (#603); the checks never read these.
+    record["commit"], record["built"] = commit(), int(time.time())
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(record, f, indent=2, sort_keys=True)
         f.write("\n")
