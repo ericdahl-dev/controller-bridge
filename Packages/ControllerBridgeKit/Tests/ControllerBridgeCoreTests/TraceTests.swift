@@ -18,7 +18,7 @@ struct TraceTests {
     @Test("Each category's name, as os_log and the file use it")
     func categoryNames() {
         #expect(TraceCategory.allCases.map(\.rawValue) == [
-            "midi-in", "midi-out", "osc-in", "osc-out", "jog-display", "coordinator", "capture", "quantize",
+            "midi-in", "midi-out", "osc-in", "osc-out", "jog-display", "display-feed", "coordinator", "capture", "quantize",
             "subscriptions", "error", "heartbeat",
         ])
     }

@@ -82,10 +82,13 @@ public struct Engine {
                 }
             case .demo(let on):
                 if on, demo == nil, let makeDemo {
-                    coordinator.stop()
-                    setDiagnostics(coordinator, open: false)
                     // The profile running now, so an imported mapping shows in the demo too (#98).
                     let session = makeDemo(coordinator.runningProfile)
+                    // The deck panel follows the demo, as the preview does (#625): handed over before the real
+                    // controller stops, so its stopping puts nothing on the panel.
+                    session.coordinator.takeDisplayFeed(from: coordinator)
+                    coordinator.stop()
+                    setDiagnostics(coordinator, open: false)
                     setDiagnostics(session.coordinator, open: diagnosticsOpen)
                     session.start()
                     demo = session
@@ -96,6 +99,8 @@ public struct Engine {
                     waitingCommands.removeAll()
                     setDiagnostics(coordinator, open: diagnosticsOpen)
                     coordinator.start()
+                    // Back to the real deck in front, with a full snapshot, under the setting as it is now (#625).
+                    coordinator.takeBackDisplayFeed(from: session.coordinator)
                 }
             case .stop:
                 // Releases are sent synchronously, so they have all gone out once run() returns. Quit, not stop: a

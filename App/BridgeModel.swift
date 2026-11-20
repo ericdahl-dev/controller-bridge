@@ -354,9 +354,18 @@ final class BridgeModel {
         )
         let feedProducer = pipe.producer
         feedDestination.onReady = { feedProducer.send(.displayFeedReady) }
-        feedDestination.onSendFailure = { [weak feedDestination] in Task { await feedDestination?.reresolve() } }
+        feedDestination.onSendFailure = { [weak feedDestination] in
+            #if DEBUG
+            // Failing sends to the display (#636), at most once a second as the destination reports them.
+            DebugTrace.shared.sink(.displayFeed, "sends failing: \(feedDestination?.lastError ?? "unknown"), looking the host up again")
+            #endif
+            Task { await feedDestination?.reresolve() }
+        }
         displayFeedDestination = feedDestination
         let displayFeed = DisplayFeedQueue(feedDestination)
+        #if DEBUG
+        displayFeed.trace = DebugTrace.shared.sink
+        #endif
         if settings.displayFeed.enabled { connectDisplayFeed(settings.displayFeed) }
         producer = pipe.producer
         applier = SettingsApplier(

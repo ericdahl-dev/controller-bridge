@@ -8,6 +8,8 @@ public enum TraceCategory: String, CaseIterable, Sendable {
     case oscIn = "osc-in"
     case oscOut = "osc-out"
     case jogDisplay = "jog-display"
+    /// The display feed to the deck panel (#636): the setting, its destination, each full snapshot, the queue's drops.
+    case displayFeed = "display-feed"
     case coordinator
     case capture
     case quantize

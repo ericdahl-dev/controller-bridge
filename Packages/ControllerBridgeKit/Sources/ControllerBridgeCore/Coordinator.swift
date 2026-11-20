@@ -14,6 +14,7 @@ public final class Coordinator {
         didSet {
             (osc as? OSCTap)?.onTrace = trace.map { sink in { [weak self] message in self?.traceOSC(.oscOut, message, sink) } }
             for index in controllers.indices { controllers[index].bridge.trace = trace }
+            displayFeed.trace = trace
         }
     }
     /// Streaming OSC, both ways, at most 5 a second per address in the trace.
@@ -292,6 +293,24 @@ public final class Coordinator {
         displayFeed.set(settings, at: clock.now)
         status.requiredSubscriptions = requiredSubscriptions
         updateDisplayFeed()
+    }
+
+    /// Takes the display feed and its setting from the real Coordinator, for the demo's while it runs (#625). The
+    /// destination is already open, so the first snapshot goes out once the demo's deck is known.
+    public func takeDisplayFeed(from real: Coordinator) {
+        guard let (sender, settings) = real.displayFeed.release() else { return }
+        displayFeed.attach(sender)
+        displayFeed.set(settings, at: clock.now)
+        status.requiredSubscriptions = requiredSubscriptions
+        displayFeedReady()
+    }
+
+    /// Takes the display feed back from the demo's Coordinator when it ends (#625), with a full snapshot. Its own
+    /// setting stays: a change made during the demo waited for the real Coordinator and is already applied.
+    public func takeBackDisplayFeed(from demo: Coordinator) {
+        guard let (sender, _) = demo.displayFeed.release() else { return }
+        displayFeed.attach(sender)
+        displayFeedReady()
     }
 
     /// The display's destination opened: the full snapshot again, since what went before it was dropped.

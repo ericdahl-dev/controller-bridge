@@ -40,4 +40,18 @@ struct DisplayFeedQueueTests {
         worker.runAll()
         #expect(inner.sent.last == Self.message(7))
     }
+
+    @Test("In the trace: one line when it starts dropping, one when it has caught up, with how many it dropped (#636)")
+    func dropsTraced() {
+        let inner = Rig.FakeOSC(), worker = Worker()
+        final class Lines: @unchecked Sendable { var all: [String] = [] }
+        let lines = Lines()
+        let queue = DisplayFeedQueue(inner, backlog: 2) { worker.jobs.append($0) }
+        queue.trace = { category, text in if category == .displayFeed { lines.all.append(text) } }
+        for n in 1...5 { queue.send(Self.message(n)) }
+        #expect(lines.all == ["dropping sends: 2 waiting on the network"])
+        worker.runAll()
+        queue.send(Self.message(6))
+        #expect(lines.all == ["dropping sends: 2 waiting on the network", "sending again after 3 dropped"])
+    }
 }
