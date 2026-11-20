@@ -12,6 +12,8 @@ final class DisplayFeed {
         var number: Int
         /// The deck color in use, [r, g, b] 0-255: the ring's and the app badge's.
         var color: [Int]
+        /// A track is loaded. False is the empty state: every other field empty.
+        var loaded = false
         /// "" while the deck is empty.
         var title = ""
         var artist = ""
@@ -22,6 +24,7 @@ final class DisplayFeed {
             return [
                 OSCMessage(DisplayFeed.prefix + "deck", [.int(Int32(number))]),
                 OSCMessage(DisplayFeed.prefix + "color", [.int(rgb[0] << 16 | rgb[1] << 8 | rgb[2])]),
+                OSCMessage(DisplayFeed.prefix + "loaded", [.int(loaded ? 1 : 0)]),
                 OSCMessage(DisplayFeed.prefix + "title", [.string(title)]),
                 OSCMessage(DisplayFeed.prefix + "artist", [.string(artist)]),
             ]

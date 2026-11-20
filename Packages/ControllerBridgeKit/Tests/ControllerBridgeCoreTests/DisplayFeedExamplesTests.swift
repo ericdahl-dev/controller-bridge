@@ -28,7 +28,7 @@ struct DisplayFeedExamplesTests {
     }
 
     static func deck(_ state: [String: Any]) -> DisplayFeed.Deck {
-        DisplayFeed.Deck(number: state["deck"] as! Int, color: state["color"] as! [Int],
+        DisplayFeed.Deck(number: state["deck"] as! Int, color: state["color"] as! [Int], loaded: state["loaded"] as? Bool ?? false,
                          title: state["title"] as? String ?? "", artist: state["artist"] as? String ?? "")
     }
 

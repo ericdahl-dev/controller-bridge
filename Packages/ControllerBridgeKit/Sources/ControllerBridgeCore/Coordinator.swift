@@ -298,7 +298,10 @@ public final class Coordinator {
         let entries = jogEntries
         let deck = JogDisplayController.front(entries, previewDeck: jogController.previewDeck).map { index in
             let facts = entries[index].facts
-            return DisplayFeed.Deck(number: facts.deck, color: deckColors[facts.deck] ?? [255, 255, 255],
+            let color = deckColors[facts.deck] ?? [255, 255, 255]
+            // Not loaded is the empty state (#617): nothing of a track, even one TrackInfo named before Loaded.
+            guard facts.loaded else { return DisplayFeed.Deck(number: facts.deck, color: color) }
+            return DisplayFeed.Deck(number: facts.deck, color: color, loaded: true,
                                     title: facts.track?.title ?? "", artist: facts.track?.artist ?? "")
         }
         displayFeed.update(deck)

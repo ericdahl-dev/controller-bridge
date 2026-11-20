@@ -16,21 +16,28 @@ struct DisplayFeedCoordinatorTests {
         return (rig, feed)
     }
 
-    /// The full snapshot of a deck, in the feed's order.
-    static func snapshot(deck: Int, color: Int32, title: String, artist: String) -> [OSCMessage] {
+    /// The full snapshot of a deck, in the feed's order: an empty deck when `title` is nil.
+    static func snapshot(deck: Int, color: Int32, title: String? = nil, artist: String = "") -> [OSCMessage] {
         [
             OSCMessage("/DeckBridge/Display/deck", [.int(Int32(deck))]),
             OSCMessage("/DeckBridge/Display/color", [.int(color)]),
-            OSCMessage("/DeckBridge/Display/title", [.string(title)]),
-            OSCMessage("/DeckBridge/Display/artist", [.string(artist)]),
+            OSCMessage("/DeckBridge/Display/loaded", [.int(title == nil ? 0 : 1)]),
+            OSCMessage("/DeckBridge/Display/title", [.string(title ?? "")]),
+            OSCMessage("/DeckBridge/Display/artist", [.string(title == nil ? "" : artist)]),
         ]
+    }
+
+    /// Syndicate loads a track on `deck`: Loaded, then its TrackInfo.
+    static func load(_ rig: Rig, deck: Int = 1, title: String = "Daybreak") {
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/\(deck)/Loaded", [.int(1)]))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: deck, title: title))
     }
 
     @Test("Turned on with a controller connected: one snapshot of its deck's number, color, title and artist")
     func onSendsSnapshot() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        Self.load(rig)
         #expect(feed.sent == [])
         rig.coordinator.setDisplayFeed(Self.on)
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
@@ -41,7 +48,7 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         rig.coordinator.setDisplayFeed(Self.on)
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        Self.load(rig)
         feed.sent.removeAll()
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
         #expect(feed.sent == [OSCMessage("/DeckBridge/Display/title", [.string("Nightfall")])])
@@ -63,8 +70,8 @@ struct DisplayFeedCoordinatorTests {
     func deckChangeSnapshot() throws {
         let (rig, feed) = try Self.rig()
         Self.layered(rig)
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 1))
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 2))
+        Self.load(rig, deck: 1)
+        Self.load(rig, deck: 2)
         rig.coordinator.setDisplayFeed(Self.on)
         #expect(feed.sent.first == OSCMessage("/DeckBridge/Display/deck", [.int(1)]))
         feed.sent.removeAll()
@@ -76,7 +83,7 @@ struct DisplayFeedCoordinatorTests {
     func addressChangeSnapshot() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        Self.load(rig)
         rig.coordinator.setDisplayFeed(Self.on)
         let daybreak = Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
         feed.sent.removeAll()
@@ -96,7 +103,7 @@ struct DisplayFeedCoordinatorTests {
     func offAndOnAgain() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        Self.load(rig)
         rig.coordinator.setDisplayFeed(Self.on)
         var off = Self.on
         off.enabled = false
@@ -115,26 +122,25 @@ struct DisplayFeedCoordinatorTests {
         Self.layered(rig)
         rig.midi.sources.removeAll { $0.id == Rig.lc6000.id }
         rig.coordinator.devicesChanged()
-        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)]))
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3, title: "Nightfall"))
+        Self.load(rig, deck: 3, title: "Nightfall")
         rig.coordinator.setDisplayFeed(Self.on)
         // No pick: the first loaded deck.
         #expect(feed.sent.first == OSCMessage("/DeckBridge/Display/deck", [.int(3)]))
         feed.sent.removeAll()
         rig.coordinator.setJogPreviewDeck(2)
-        #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00, title: "", artist: ""))
+        #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00))
     }
 
-    @Test("A deck that's unloaded sends the empty state: \"\" for title and artist, never the last track")
+    @Test("A deck that's unloaded sends the empty state: loaded 0, \"\" for title and artist, never the last track")
     func emptyDeck() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        Self.load(rig)
         rig.coordinator.setDisplayFeed(Self.on)
         feed.sent.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         #expect(feed.sent == [
+            OSCMessage("/DeckBridge/Display/loaded", [.int(0)]),
             OSCMessage("/DeckBridge/Display/title", [.string("")]),
             OSCMessage("/DeckBridge/Display/artist", [.string("")]),
         ])
@@ -144,7 +150,7 @@ struct DisplayFeedCoordinatorTests {
     func fromThePipe() async throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        Self.load(rig)
         let pipe = EventPipe()
         pipe.producer.send(.setDisplayFeed(Self.on))
         pipe.producer.send(.displayFeedReady)
@@ -161,7 +167,20 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.setDisplayFeed(Self.on)
         feed.sent.removeAll()
         rig.coordinator.setDeck(2, controller: 0)
-        #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00, title: "", artist: ""))
+        #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00))
+    }
+
+    @Test("TrackInfo with no Loaded yet is still the empty state; Loaded then sends loaded 1 with the track")
+    func loadedIsTheFlag() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.setDisplayFeed(Self.on)
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000))
+        feed.sent.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        #expect(feed.sent == [])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        #expect(feed.sent == Array(Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus").dropFirst(2)))
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")

@@ -4,30 +4,33 @@
   "cases": [
     {
       "name": "deck 1 loaded, in red",
-      "state": { "deck": 1, "color": [255, 0, 0], "title": "Night Drive", "artist": "Example Artist" },
+      "state": { "deck": 1, "color": [255, 0, 0], "loaded": true, "title": "Night Drive", "artist": "Example Artist" },
       "messages": [
         { "address": "/DeckBridge/Display/deck", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/color", "type": "i", "value": 16711680 },
+        { "address": "/DeckBridge/Display/loaded", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/title", "type": "s", "value": "Night Drive" },
         { "address": "/DeckBridge/Display/artist", "type": "s", "value": "Example Artist" }
       ]
     },
     {
       "name": "deck 2 empty, in yellow",
-      "state": { "deck": 2, "color": [255, 255, 0], "title": "", "artist": "" },
+      "state": { "deck": 2, "color": [255, 255, 0], "loaded": false, "title": "", "artist": "" },
       "messages": [
         { "address": "/DeckBridge/Display/deck", "type": "i", "value": 2 },
         { "address": "/DeckBridge/Display/color", "type": "i", "value": 16776960 },
+        { "address": "/DeckBridge/Display/loaded", "type": "i", "value": 0 },
         { "address": "/DeckBridge/Display/title", "type": "s", "value": "" },
         { "address": "/DeckBridge/Display/artist", "type": "s", "value": "" }
       ]
     },
     {
       "name": "deck 4 in a custom color, with non-ASCII text",
-      "state": { "deck": 4, "color": [18, 52, 86], "title": "Café Ångström", "artist": "Señor Ünïcode" },
+      "state": { "deck": 4, "color": [18, 52, 86], "loaded": true, "title": "Café Ångström", "artist": "Señor Ünïcode" },
       "messages": [
         { "address": "/DeckBridge/Display/deck", "type": "i", "value": 4 },
         { "address": "/DeckBridge/Display/color", "type": "i", "value": 1193046 },
+        { "address": "/DeckBridge/Display/loaded", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/title", "type": "s", "value": "Café Ångström" },
         { "address": "/DeckBridge/Display/artist", "type": "s", "value": "Señor Ünïcode" }
       ]
