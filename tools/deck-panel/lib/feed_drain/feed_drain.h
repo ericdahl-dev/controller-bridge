@@ -10,8 +10,9 @@
 
 namespace feed_drain {
 
-/// The biggest datagram read: one feed message with a title of a few hundred bytes. Bigger ones are dropped.
-constexpr size_t kMaxDatagram = 512;
+/// The biggest datagram read: one UDP payload in an Ethernet frame (1500 less the IP and UDP headers). The feed's
+/// bundles (#636) are about 700 B and split past 1200 B. Bigger ones are dropped. A fixed buffer, read into per frame.
+constexpr size_t kMaxDatagram = 1472;
 /// At most this many datagrams a frame, so a burst can't hold the screen up; the rest wait for the next frame.
 constexpr int kPerFrame = 16;
 

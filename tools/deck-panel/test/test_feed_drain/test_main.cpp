@@ -83,10 +83,51 @@ void test_a_datagram_too_big_is_dropped_and_counted() {
     TEST_ASSERT_EQUAL(1, screen.deck);
 }
 
+/// A bundle of `count` deck messages, padded out with an unknown address's string to `size` bytes.
+static std::vector<uint8_t> bundle_of_size(size_t size) {
+    std::vector<uint8_t> out = {'#', 'b', 'u', 'n', 'd', 'l', 'e', 0, 0, 0, 0, 0, 0, 0, 0, 1};
+    std::vector<uint8_t> deck = deck_message(2);
+    const uint8_t deck_size[] = {0, 0, 0, static_cast<uint8_t>(deck.size())};
+    out.insert(out.end(), deck_size, deck_size + 4);
+    out.insert(out.end(), deck.begin(), deck.end());
+    // Filler: one more element, /DeckBridge/Display/pad ,s with a long string, to reach `size`.
+    const size_t element = size - out.size() - 4;
+    std::vector<uint8_t> pad;
+    const char address[] = "/DeckBridge/Display/pad";  // 23 + NUL = 24
+    pad.insert(pad.end(), address, address + sizeof address);
+    const uint8_t tags[] = {',', 's', 0, 0};
+    pad.insert(pad.end(), tags, tags + 4);
+    pad.resize(element, 'x');
+    pad.back() = 0;
+    pad[pad.size() - 2] = 0;
+    const uint8_t pad_size[] = {0, 0, static_cast<uint8_t>(element >> 8), static_cast<uint8_t>(element & 0xFF)};
+    out.insert(out.end(), pad_size, pad_size + 4);
+    out.insert(out.end(), pad.begin(), pad.end());
+    return out;
+}
+
+// The feed's full snapshot is one bundle of about 700 B, up to 1200 B before it splits (#636).
+void test_a_1200_byte_bundle_gets_through_and_one_over_the_limit_does_not() {
+    TEST_ASSERT_TRUE(feed_drain::kMaxDatagram >= 1200);
+    FakeSocket socket;
+    socket.waiting = {bundle_of_size(1200)};
+    deck_core::DeckCore core;
+    feed_drain::Drain drain;
+    drain.run(socket, core, 100);
+    Last screen;
+    core.render(screen, 100);
+    TEST_ASSERT_EQUAL(0, drain.too_big());
+    TEST_ASSERT_EQUAL(2, screen.deck);
+    socket.waiting = {bundle_of_size(feed_drain::kMaxDatagram + 4)};
+    drain.run(socket, core, 200);
+    TEST_ASSERT_EQUAL(1, drain.too_big());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_waiting_datagrams_go_to_the_core_in_order);
     RUN_TEST(test_a_frame_reads_at_most_a_few_the_rest_wait_for_the_next);
     RUN_TEST(test_a_datagram_too_big_is_dropped_and_counted);
+    RUN_TEST(test_a_1200_byte_bundle_gets_through_and_one_over_the_limit_does_not);
     return UNITY_END();
 }
