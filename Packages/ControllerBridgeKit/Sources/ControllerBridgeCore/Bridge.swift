@@ -165,6 +165,8 @@ final class Bridge {
     var ledsHeld = false
     /// The mixer section's state (#207): pair halves, what was sent, what Syndicate reported, and the meter.
     var mixerModule = MixerModule()
+    /// Shift + Needle Drop on the channel fader (#609).
+    var stripFader = StripFader()
     /// The capture window is recording this controller (#186, #187): its LEDs are the LED test's, so the bridge paints
     /// none until the capture ends and it repaints.
     var ledsCaptured = false
@@ -340,8 +342,10 @@ final class Bridge {
         if address == (root + "Header/Clock").lowercased() { return headerClock(message.arguments) }
         if address == (root + "Header/BPM").lowercased() { return headerBPM(message.arguments) }
         // The mixer channel of this deck (#207).
-        if mapping.mixer != nil, let mixer = MixerOSC.parse(message.address, root: root) {
-            if mixer.channel == mapping.deck.number { mixerFeedback(mixer.value, message.arguments) }
+        if let mixer = MixerOSC.parse(message.address, root: root) {
+            // Every channel's Volume, for the strip fader (#609): a layer change finds its level known.
+            if mixer.value == .volume, let level = message.arguments.first?.number { stripFader.reported(channel: mixer.channel, level) }
+            if mapping.mixer != nil, mixer.channel == mapping.deck.number { mixerFeedback(mixer.value, message.arguments) }
             return
         }
         let deckPrefix = (root + "Deck/\(mapping.deck.number)/").lowercased()

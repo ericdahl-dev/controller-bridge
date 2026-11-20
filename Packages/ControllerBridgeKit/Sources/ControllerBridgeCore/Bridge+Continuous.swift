@@ -128,10 +128,27 @@ extension Bridge {
 
     func needleLSB(_ value: UInt8) {
         guard let needle = mapping.needle else { return }
+        if stripFader.touching {
+            if let move = stripFader.position(jogModule.needlePosition(lsb: value)) {
+                send(address: MixerOSC.address(.volume, channel: move.channel, root: root), [.float(Float(move.level))])
+            }
+            return
+        }
         applyJog(jogModule.needleLSB(value, needle: needle, playing: playing, now: clock.now))
     }
 
-    func needleTouch(_ pressed: Bool) { applyJog(jogModule.needleTouch(pressed)) }
+    /// With Shift held at touch-down, the touch moves the deck's channel fader until it lifts (#609).
+    func needleTouch(_ pressed: Bool) {
+        if pressed, shift {
+            stripFader.touchDown(channel: mapping.deck.number)
+            return
+        }
+        if !pressed, stripFader.touching {
+            stripFader.touchUp()
+            return
+        }
+        applyJog(jogModule.needleTouch(pressed))
+    }
 
     func jogMSB(_ value: UInt8) { jogModule.jogMSB(value) }
 

@@ -88,6 +88,9 @@ struct JogModule {
 
     mutating func needleMSB(_ value: UInt8) { needleMSBValue = value }
 
+    /// The strip's position, 0–1, once its LSB arrives.
+    func needlePosition(lsb: UInt8) -> Double { Double(join14Bit(msb: needleMSBValue, lsb: lsb)) / 16383 }
+
     /// The strip's 14-bit position (#103), as a seek across the whole track. Sent when the LSB arrives, so an MSB on
     /// its own never seeks to a half-updated place.
     mutating func needleLSB(_ value: UInt8, needle: Mapping.Needle, playing: Bool, now: Double) -> [Send] {
