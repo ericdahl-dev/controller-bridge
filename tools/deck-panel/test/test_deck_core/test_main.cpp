@@ -592,10 +592,12 @@ void test_reading_packets_and_rendering_use_no_heap() {
     Bytes title = string_message(prefix + "title", repeat("\xC3\xA9 long title ", 20));
     Bytes artist = string_message(prefix + "artist", "Example Artist with a name past the inline size");
     Bytes other_title = string_message(prefix + "title", "Night Drive, the extended mix of it");
+    Bytes snapshot = bundle({deck, title, artist, float_message(prefix + "phase", 0.5f)});
     deck_core::DeckCore core;
     QuietScreen screen;
     size_t before = allocations;
     for (uint32_t t = 0; t < 50; ++t) {
+        core.feed(snapshot.data(), snapshot.size(), t * 100);  // the title it sets is overwritten next
         core.feed(deck.data(), deck.size(), t * 100);
         const Bytes& this_title = t % 2 ? title : other_title;
         core.feed(this_title.data(), this_title.size(), t * 100);
