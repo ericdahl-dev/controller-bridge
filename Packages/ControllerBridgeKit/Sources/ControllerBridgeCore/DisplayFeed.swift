@@ -39,6 +39,8 @@ final class DisplayFeed {
         var remaining = 0
         /// Through the track, 0-1.
         var progress = 0.0
+        /// Against the master, 0-1, 0.5 in phase; -1 unknown (stopped, or no offset yet).
+        var phase = -1.0
 
         /// The full snapshot, in the feed's order. #617 adds its fields here.
         var messages: [OSCMessage] {
@@ -62,6 +64,7 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "elapsed", [.int(Int32(elapsed))]),
                 OSCMessage(DisplayFeed.prefix + "remaining", [.int(Int32(remaining))]),
                 OSCMessage(DisplayFeed.prefix + "progress", [.float(Float(progress))]),
+                OSCMessage(DisplayFeed.prefix + "phase", [.float(Float(phase))]),
             ]
         }
     }
@@ -77,7 +80,7 @@ final class DisplayFeed {
     static let holdSeconds = 1.0
     /// The fast fields go out at most once per `fastInterval` each (#617): a change inside it waits, and the next
     /// update after it sends the value then, so the latest wins and nothing queues. A snapshot sends them at once.
-    static let fastAddresses: Set<String> = [prefix + "progress"]
+    static let fastAddresses: Set<String> = [prefix + "progress", prefix + "phase"]
     static let fastInterval = 1.0 / 30
     /// When each fast field may next go out: a slot every `fastInterval`, kept on its cadence so updates that land
     /// between slots still average about 30 a second, never bursting to catch up.

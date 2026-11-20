@@ -35,7 +35,8 @@ struct DisplayFeedExamplesTests {
                          sync: state["sync"] as? Bool ?? false, master: state["master"] as? Bool ?? false,
                          loop: state["loop"] as? Bool ?? false, loopLength: state["loopLength"] as? Double ?? 0,
                          beat: state["beat"] as? Int ?? 0, elapsed: state["elapsed"] as? Int ?? 0,
-                         remaining: state["remaining"] as? Int ?? 0, progress: state["progress"] as? Double ?? 0)
+                         remaining: state["remaining"] as? Int ?? 0, progress: state["progress"] as? Double ?? 0,
+                         phase: state["phase"] as? Double ?? -1)
     }
 
     @Test("The file's prefix is the feed's, and it has a loaded deck, an empty one and non-ASCII text")

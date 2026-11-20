@@ -48,6 +48,7 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/elapsed", [.int(0)]),
             OSCMessage("/DeckBridge/Display/remaining", [.int(loaded ? 428 : 0)]),
             OSCMessage("/DeckBridge/Display/progress", [.float(0)]),
+            OSCMessage("/DeckBridge/Display/phase", [.float(-1)]),
         ]
     }
 
@@ -454,6 +455,38 @@ struct DisplayFeedCoordinatorTests {
         rig.clock.now = 1.1
         rig.coordinator.tick()
         #expect(feed.sent.last { $0.address.hasSuffix("/progress") } == Self.message("progress", Float(100.0 / 428.5)))
+    }
+
+    @Test("phase against the master, 0-1 with 0.5 in phase, by the drawn display's rule; -1 while unknown: stopped, or no offset yet")
+    func phase() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        MainCueTests.feed(rig, "Playing", 1)
+        Self.turnOn(rig)
+        #expect(feed.sent.last == Self.message("phase", Float(-1)))
+        feed.sent.removeAll()
+        func offset(_ beats: Float, at time: Double) {
+            rig.clock.now = time
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/PhaseOffset", [.float(beats)]))
+        }
+        func phases() -> [OSCMessage] { feed.sent.filter { $0.address.hasSuffix("/phase") } }
+        // A quarter beat ahead, then (inside the same 1/30 s) a quarter behind: only the latest goes, at the slot.
+        offset(0.25, at: 0.05)
+        #expect(phases() == [Self.message("phase", Float(0.75))])
+        offset(-0.25, at: 0.06)
+        #expect(phases() == [Self.message("phase", Float(0.75))])
+        rig.clock.now = 0.09
+        rig.coordinator.tick()
+        #expect(phases() == [Self.message("phase", Float(0.75)), Self.message("phase", Float(0.25))])
+        feed.sent.removeAll()
+        // Under the rule's 0.002 beats: in phase.
+        offset(0.001, at: 0.2)
+        #expect(phases() == [Self.message("phase", Float(0.5))])
+        feed.sent.removeAll()
+        rig.clock.now = 0.3
+        MainCueTests.feed(rig, "Playing", 0)
+        #expect(phases() == [Self.message("phase", Float(-1))])
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")

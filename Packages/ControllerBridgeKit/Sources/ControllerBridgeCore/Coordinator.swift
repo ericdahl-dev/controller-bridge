@@ -73,6 +73,8 @@ public final class Coordinator {
     private var paletteHeard = false
     /// Syndicate's last master clock beat, 1-4, and when it came: the display feed's beat (#617).
     private var masterBeat: (beat: Int, at: Double)?
+    /// Each deck's phase rule for the display feed (#617), with its own in-phase and wrap memory.
+    private var feedPhase: [Int: DrawnPhase] = [:]
     /// Settings' deck colors (#123): follow Syndicate, or the custom colors.
     private var followSyndicateDeckColors = true
     private var customDeckColors = DeckColors.defaults
@@ -316,6 +318,13 @@ public final class Coordinator {
         return min(max(position / duration, 0), 1)
     }
 
+    /// The deck's phase as the drawn display's rule gives it (#462), on the feed's scale: 0.5 in phase, 0 a half beat
+    /// behind, 1 a half beat ahead; -1 unknown.
+    private func feedPhase(_ facts: DeckFacts) -> Double {
+        let value = feedPhase[facts.deck, default: DrawnPhase()].value(offset: facts.phaseOffset, playing: facts.playing)
+        return value == DrawnPhase.unknown ? -1 : 0.5 + Double(value) / 16384
+    }
+
     private func updateDisplayFeed() {
         guard displayFeed.on else { return }
         let entries = jogEntries
@@ -343,7 +352,7 @@ public final class Coordinator {
                                     loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0,
                                     beat: beat, elapsed: Self.wholeSeconds(facts.position),
                                     remaining: facts.duration == nil ? 0 : max(0, Self.wholeSeconds(facts.duration) - Self.wholeSeconds(facts.position)),
-                                    progress: Self.progress(facts))
+                                    progress: Self.progress(facts), phase: feedPhase(facts))
         }
         displayFeed.update(deck, known: known, at: clock.now)
     }
