@@ -155,6 +155,8 @@ void DeckCore::render(Screen& screen, uint32_t now_ms) {
     // before the packet's time sees a little under 0, not 49 days.
     const int32_t since = static_cast<int32_t>(now_ms - last_heard_ms_);
     const bool waiting = !heard_ || since >= static_cast<int32_t>(kWaitAfterMs);
+    // Waiting holds until the next message: the old deck never comes back by itself, even when the clock comes round.
+    if (waiting) heard_ = false;
     if (shown_ && waiting == shown_waiting_ && (waiting || view_ == shown_view_)) return;
     if (waiting) {
         screen.show_waiting();

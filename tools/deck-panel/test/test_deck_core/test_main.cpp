@@ -343,6 +343,19 @@ void test_a_render_a_moment_before_the_last_packet_still_shows_the_deck() {
     TEST_ASSERT_FALSE(screen.last().waiting);
 }
 
+// Once waiting, the panel waits until a message comes, however long: the old deck never shows again by itself, not
+// even when the 32-bit clock comes round (49.7 days).
+void test_once_waiting_the_old_deck_does_not_come_back_without_a_message() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    core.render(screen, 5000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    core.render(screen, 1000 + 0x80000000u);
+    core.render(screen, 1000);  // the clock came round
+    TEST_ASSERT_TRUE(screen.last().waiting);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -401,5 +414,6 @@ int main(int, char**) {
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
     RUN_TEST(test_a_render_a_moment_before_the_last_packet_still_shows_the_deck);
+    RUN_TEST(test_once_waiting_the_old_deck_does_not_come_back_without_a_message);
     return UNITY_END();
 }
