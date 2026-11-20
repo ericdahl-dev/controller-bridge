@@ -123,6 +123,16 @@ class WorkflowTests(unittest.TestCase):
             end = self.ci.find("\n  ", end + 3)
         return self.ci[start:end if end != -1 else len(self.ci)]
 
+    def test_the_arm_toolchain_download_fails_fast_and_retries_once(self):
+        """The apt download of gcc-arm-none-eabi stalled twice until the job's 15 minutes ran out (#640): a stalled
+        transfer must fail within minutes and be tried once more, inside the job's timeout."""
+        step = self.job("Display firmware")
+        install = step[step.index("Arm toolchain and emulator"):]
+        self.assertIn("Acquire::http::Timeout=", install)
+        self.assertIn("Acquire::Retries=", install)
+        self.assertRegex(install, r"for attempt in 1 2; do\s+timeout \d+ sudo apt-get")
+        self.assertIn("install -y --no-install-recommends", install)
+
     def test_it_runs_on_merge_group(self):
         on = self.ci[self.ci.index("\non:\n"):self.ci.index("\npermissions:")]
         self.assertIn("\n  merge_group:", on)
