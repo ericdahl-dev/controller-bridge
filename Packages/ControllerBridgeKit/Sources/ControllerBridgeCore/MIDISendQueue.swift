@@ -177,6 +177,12 @@ final class QueuedJogDisplayPort: JogDisplayPort, @unchecked Sendable {
     }
 
     var isAttached: Bool { inner.isAttached }
+
+    /// Quitting (#600): everything queued so far, on every port (the releases too), then the port under it.
+    func flush() {
+        queue.drain()
+        inner.flush()
+    }
 }
 
 /// A MIDI system whose outputs send through a `MIDISendQueue` (#552); everything else is the inner system's.

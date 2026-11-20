@@ -2,10 +2,11 @@
 """The drawn wizard's plan (#567): every decision of `flash-day.sh drawn` in one place. The facts so far in, the next
 step out; the shell only does what it's told (dfu-util, the keyboard) and records the result.
 
-  python3 -I drawn_plan.py begin PLAN.json CURRENT.dfu UPPER.dfu OWNER.dfu WORK
+  python3 -I drawn_plan.py begin PLAN.json CURRENT.dfu UPPER.dfu OWNER.dfu RECORD.json WORK
   python3 -I drawn_plan.py next PLAN.json         one action, its fields separated by tabs
   python3 -I drawn_plan.py record PLAN.json KEY VALUE
   python3 -I drawn_plan.py devices LISTING        the stock wizard's look: one PATH, ask PATH QUESTION, or stop WHY
+  python3 -I drawn_plan.py find-record UPPER.dfu OWNER.dfu   the build record the kit left beside them: one PATH, or ask WHY
 
 Actions:
   ask KEY QUESTION                 a y/N question; record y or n
@@ -25,6 +26,7 @@ Standard library only; nothing here talks to the unit."""
 import contextlib, io, json, os, sys, types, uuid
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))  # -I leaves this folder off sys.path (#468)
+import build_record  # noqa: E402
 import build_upper_dfu  # noqa: E402
 import dfupatch  # noqa: E402
 import drawn_flash  # noqa: E402
@@ -38,9 +40,11 @@ TOP_PANEL_LAYOUT = "/0x08000000/04*016Kg,01*064Kg,01*128Kg"  # 256 KB: the top p
 
 # MARK: the plan file
 
-def begin(path, current, upper, owner, work):
-    """A new run: the owner's files, and no facts. A plan file from an earlier run is replaced, never continued."""
-    plan = {"run": uuid.uuid4().hex[:12], "files": {"current": current, "upper": upper, "owner": owner},
+def begin(path, current, upper, owner, record, work):
+    """A new run: the owner's files and the blocks' build record (#593), and no facts. A plan file from an earlier run
+    is replaced, never continued."""
+    plan = {"run": uuid.uuid4().hex[:12],
+            "files": {"current": current, "upper": upper, "owner": owner, "record": record},
             "work": work, "seq": 0, "facts": {}}
     save(path, plan)
 
@@ -96,8 +100,12 @@ def checked(plan, name, function, files):
     digest = hashlib.sha256()
     for argument, path in sorted(files.items()):
         digest.update(argument.encode() + b"\0")
-        with open(path, "rb") as f:
-            digest.update(hashlib.sha256(f.read()).digest())
+        try:
+            with open(path, "rb") as f:
+                digest.update(hashlib.sha256(f.read()).digest())
+        except OSError:
+            digest.update(b"unreadable")   # the judge itself says why
+
     key = f"{name}:{digest.hexdigest()}"
     cache = plan.setdefault("checks", {})
     if key not in cache:
@@ -118,6 +126,24 @@ def devices(listing_path):
             if path:
                 found.setdefault(path.group(1), []).append(name.group(1) if name else "")
     return found
+
+
+def find_record(upper, owner):
+    """The build record the kit tools left beside the two .dfu files (#593): ("one", path) when there's exactly one
+    record, the same copy beside both counting once; else ("ask", why). Finding it judges nothing: the plan does."""
+    found = {}
+    for dfu in (upper, owner):
+        path = build_record.carried(dfu)
+        try:
+            with open(path, "rb") as f:
+                found.setdefault(f.read(), path)
+        except OSError:
+            continue
+    if len(found) == 1:
+        return ("one", next(iter(found.values())))
+    if found:
+        return ("ask", "The build records beside the two .dfu files differ: they're from different builds.")
+    return ("ask", "No build record beside the two .dfu files.")
 
 
 # MARK: the plan
@@ -143,11 +169,14 @@ def decide(plan):
     ok, why = checked(plan, "files", drawn_flash.files, {"upper": files["upper"], "owner": files["owner"]})
     if not ok:
         return ("stop", f"Those aren't block B and the owner's image in their places: {why}. Nothing was sent.")
+    # How A and B were built: `make arm`'s record, judged against the very bytes; never asked (#593).
+    ok, why = checked(plan, "record", build_record.check,
+                      {"record": files["record"], "owner": files["owner"], "upper": files["upper"]})
+    if not ok:
+        return ("stop", f"The build record refuses: {why}. Nothing was sent.")
     for key, question in (
-            ("both_true", "Block A, in the owner's image, was built with ARM_UPPER_PROVEN=1, and A and B from the "
-                          "same commit (#516). Both true?"),
             ("all_true", "DeckBridge and every other DJ or MIDI app quit, Denon's updater not open, the LC6000 on a "
-                         "direct cable and running normally, no gig today. All of that true?")):
+                         "direct cable and running normally, no gig today. All of that true?"),):
         answer = fact(plan, key)
         if answer is None:
             return ("ask", key, question)
@@ -342,13 +371,15 @@ def step_app(plan, dfu_path, app_state):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     command = argv[0] if argv else ""
-    if command == "begin" and len(argv) == 6:
-        begin(argv[1], current=argv[2], upper=argv[3], owner=argv[4], work=argv[5])
+    if command == "begin" and len(argv) == 7:
+        begin(argv[1], current=argv[2], upper=argv[3], owner=argv[4], record=argv[5], work=argv[6])
     elif command == "next" and len(argv) == 2:
         # One line, fields separated by tabs; a field's own line breaks as \\n (the shell prints them with %b).
         print("\t".join(field.replace("\\", "\\\\").replace("\n", "\\n") for field in next_action(argv[1])))
     elif command == "devices" and len(argv) == 2:
         print("\t".join(judge_devices(argv[1])))
+    elif command == "find-record" and len(argv) == 3:
+        print("\t".join(find_record(argv[1], argv[2])))
     elif command == "record" and len(argv) == 4:
         record(argv[1], argv[2], argv[3])
     else:

@@ -513,6 +513,16 @@ public final class Coordinator {
         }
     }
 
+    /// The app is quitting (#600): as stop, but a drawing jog display keeps our logo rather than Denon's screen. Then
+    /// it waits for the sends to go out: they leave on a queue (#552), and the app exits after this.
+    public func quit() {
+        jogController.quit()
+        stop()
+        // Every controller gone says the goodbye already; this covers a display with none connected.
+        jogController.disconnect()
+        jogController.flush()
+    }
+
     /// The Mac is about to sleep: release everything held, since the controller may be gone on wake.
     public func willSleep() {
         for bridge in bridges { bridge.releaseAll() }

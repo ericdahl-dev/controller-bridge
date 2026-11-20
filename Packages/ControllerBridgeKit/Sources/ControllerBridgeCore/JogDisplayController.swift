@@ -18,18 +18,20 @@ final class JogDisplayController {
     private(set) var enabled = false
     /// The deck the preview follows with no controller connected (#221): the user's pick, 1-4; nil, the first loaded.
     private(set) var previewDeck: Int?
-    /// When the next needle is due: a schedule 1/`needleRate` apart (#558), so a send that lands late on a tick doesn't
-    /// push the next one back. After a stall it restarts from now, with no burst to catch up.
-    private var nextMarkerDue: Double?
-    /// At most this many meter and phase updates a second (the needle has its own, `needleRate`).
-    static let markerRate = 30.0
-    /// The needle's own rate (#582): 50 a second, 20 ms, two of the app's 10 ms ticks, so every step is the same
-    /// (1/30 s beat against the tick: steps of 30 and 40 ms, which read as judder). The chip draws a step in ~14 ms.
-    static let needleRate = 50.0
+    /// When the next live update is due: a schedule 1/`liveRate` apart (#558), so a send that lands late on a tick
+    /// doesn't push the next one back. After a stall it restarts from now, with no burst to catch up.
+    private var nextLiveDue: Double?
+    /// The live cadence (#592): the needle, the meter and the phase go together, 25 times a second, every 40 ms. 40 ms
+    /// is four of the app's 10 ms ticks, so every step is the same (30 a second beat against the tick into 30 and 40 ms
+    /// steps, which read as judder), and together they cost the chip one redraw (dfw_tick parses what's waiting, then
+    /// draws once). 50 a second (#592) stalled the unit's USB within a minute.
+    static let liveRate = 25.0
+    /// The chip's redraw budget (#592): each redraw takes ~14 ms of its superloop (#563), and stock must keep servicing
+    /// USB, so redraws stay under ~45% of its time: 0.45 / 0.014 = 32 a second. The live cadence (25) plus the master
+    /// beat (at most 3 a second at 180 BPM) and the time (1 a second, when the shown second changes) is 29: 41%.
+    static let redrawBudget = 32
     /// Each mixer channel's meter (#461), through its ballistics (#582): what the drawn meter and the preview show.
     private var meters: [Int: MeterBallistics] = [:]
-    /// When the next meter is due: a schedule 1/`markerRate` apart (#582), as the needle's (#561).
-    private var nextMeterDue: Double?
     /// The deck whose meter went out last: a switch sends the new one's at once.
     private var lastMeterDeck: Int?
 
@@ -63,6 +65,16 @@ final class JogDisplayController {
     /// Says goodbye, so the next refresh says hello again (#429).
     func disconnect() {
         driver?.disconnect()
+    }
+
+    /// The app is quitting (#600): our logo stays on a drawing unit.
+    func quit() {
+        driver?.quit()
+    }
+
+    /// Everything sent so far gone out, before the app exits (#600).
+    func flush() {
+        driver?.flush()
     }
 
     /// Whether the driver has said hello to a unit.
@@ -142,25 +154,26 @@ final class JogDisplayController {
         // Every channel's ballistics move on each tick (#582); the front deck's go to the unit, all to the preview.
         for channel in meters.keys { meters[channel]?.step(at: clock.now) }
         let front = Self.front(entries, previewDeck: previewDeck)
-        let due = nextMarkerDue.map { clock.now >= $0 - 1e-9 } ?? true
-        if due {
+        // The live cadence (#592): the needle, then the meter and the phase below, in the same tick.
+        let live = nextLiveDue.map { clock.now >= $0 - 1e-9 } ?? true
+        if live {
             for index in entries.indices where entries[index].facts.playing {
                 let needle = needle(index, at: clock.now)
                 driver.deckMarker(deck: entries[index].facts.deck, needle)
                 if index == front { driver.marker(needle) }
             }
-            let period = 1 / Self.needleRate
-            let next = (nextMarkerDue ?? clock.now) + period
-            nextMarkerDue = next > clock.now ? next : clock.now + period
+            let period = 1 / Self.liveRate
+            let next = (nextLiveDue ?? clock.now) + period
+            nextLiveDue = next > clock.now ? next : clock.now + period
         }
         // Every deck's play state for the simulator, from Syndicate's Playing (#317), not the blinking light below.
         for entry in entries { driver.deckPlaying(deck: entry.facts.deck, entry.facts.playing) }
         drawnPreviewTick(entries, driver: driver)
         guard let front else { return }
         let facts = entries[front].facts
-        meterTick(deck: facts.deck, driver: driver)
+        meterTick(deck: facts.deck, live: live, driver: driver)
         timeTick(facts, driver: driver)
-        phaseTick(entries, front: front, driver: driver)
+        phaseTick(entries, front: front, live: live, driver: driver)
         driver.deckState(loaded: facts.loaded, playing: facts.playing, pending: facts.playPending, loop: facts.looping,
                          cue: facts.cueHeld)
         driver.playLight(facts.playing || (facts.loaded && Int((clock.now / 0.5).rounded(.down)) % 2 == 0))
@@ -182,12 +195,11 @@ final class JogDisplayController {
     /// Each deck's phase value (#462), from its PhaseOffset with DrawnPhase's hysteresis and wrap guard, kept for every
     /// deck so a switch shows the new one's at once.
     private var phases: [Int: DrawnPhase] = [:]
-    private var lastPhaseSent: Double?
     private var lastPhaseDeck: Int?
 
     /// The deck in front's phase to the drawn display, at most 30 times a second (Syndicate sends about 45 during a
     /// nudge); a held-back change goes once the interval is up, and a deck switch at once.
-    private func phaseTick(_ entries: [Entry], front: Int, driver: JogDisplayDriver) {
+    private func phaseTick(_ entries: [Entry], front: Int, live: Bool, driver: JogDisplayDriver) {
         var value = DrawnPhase.unknown
         for (index, entry) in entries.enumerated() {
             let facts = entry.facts
@@ -195,9 +207,10 @@ final class JogDisplayController {
             if index == front { value = deckValue }
         }
         let deck = entries[front].facts.deck
-        if deck == lastPhaseDeck, let sent = lastPhaseSent, clock.now - sent < 1 / Self.markerRate - 1e-9 { return }
+        // On the live cadence, or at once for a new deck.
+        guard live || deck != lastPhaseDeck else { return }
         lastPhaseDeck = deck
-        if driver.phase(value) { lastPhaseSent = clock.now }
+        driver.phase(value)
     }
 
     /// Every deck's drawn preview (#465): its flags, needle, meter, phase and time, as the unit would get them.
@@ -217,20 +230,18 @@ final class JogDisplayController {
         }
     }
 
-    private func meterTick(deck: Int, driver: JogDisplayDriver) {
+    private func meterTick(deck: Int, live: Bool, driver: JogDisplayDriver) {
         // A channel that hasn't reported shows an empty meter, not the last deck's (#461).
         guard let meter = meters[deck] else {
             lastMeterDeck = deck
             driver.meter(level: 0, peak: 0)
             return
         }
-        if deck == lastMeterDeck, let due = nextMeterDue, clock.now < due - 1e-9 { return }
+        // On the live cadence, or at once for a new deck.
+        guard live || deck != lastMeterDeck else { return }
         lastMeterDeck = deck
         func scaled(_ value: Double) -> Int { Int((min(max(value, 0), 1) * 127).rounded()) }
-        if driver.meter(level: scaled(meter.level), peak: scaled(meter.peak)) {
-            let next = (nextMeterDue ?? clock.now) + 1 / Self.markerRate
-            nextMeterDue = next > clock.now ? next : clock.now + 1 / Self.markerRate
-        }
+        driver.meter(level: scaled(meter.level), peak: scaled(meter.peak))
     }
 
     /// Each entry's facts, after Syndicate's feedback: a deck that stops keeps its needle where it is, and a new

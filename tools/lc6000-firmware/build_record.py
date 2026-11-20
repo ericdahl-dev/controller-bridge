@@ -78,6 +78,32 @@ def judge(record_path, owner_path, upper_path):
     return Judged(a["draw"], a["proven"], a["sha1"], b["sha1"])
 
 
+def carried(output):
+    """Where a .dfu's copy of the record lives: its own name, .build.json for .dfu (wd-upper-drawing.build.json)."""
+    return os.path.splitext(output)[0] + ".build.json"
+
+
+def carry(block_path, output, side):
+    """Copy `make arm`'s record from beside BLOCK to beside OUTPUT, only when it names BLOCK's very bytes (`side` is
+    block_a or block_b), so the wizard finds it (#593). Never overwrites. Says what it did; refuses nothing: the .dfu
+    is good without it, and the wizard then asks for the record."""
+    source = os.path.join(os.path.dirname(os.path.abspath(block_path)), "build.json")
+    try:
+        record = load(source)
+    except dfupatch.Refused as why:
+        return f"no build record copied: {why}"
+    if record[side]["sha1"] != sha1(dfupatch.read(block_path)):
+        return f"no build record copied: {source} names another {'block A' if side == 'block_a' else 'block B'}"
+    target = carried(output)
+    try:
+        with open(target, "x", encoding="utf-8") as f:
+            json.dump(record, f, indent=2, sort_keys=True)
+            f.write("\n")
+    except FileExistsError:
+        return f"no build record copied: {target} already exists; not overwriting it"
+    return f"wrote {target}: the build record, for the wizard"
+
+
 def write(args):
     record = record_of(dfupatch.read(args.block), dfupatch.read(args.upper), args.draw, args.proven)
     with open(args.output, "w", encoding="utf-8") as f:

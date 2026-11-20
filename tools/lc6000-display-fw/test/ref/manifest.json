@@ -73,6 +73,17 @@
       "stale": true
     },
     {
+      "file": "quit-deck2.ppm",
+      "deck": 2,
+      "color": [
+        213,
+        213,
+        213
+      ],
+      "player": "track",
+      "stale": true
+    },
+    {
       "file": "text-strobe.ppm",
       "deck": 2,
       "color": [
