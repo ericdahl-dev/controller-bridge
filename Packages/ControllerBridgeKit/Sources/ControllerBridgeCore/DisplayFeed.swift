@@ -37,6 +37,8 @@ final class DisplayFeed {
         /// The track time in whole seconds, as the drawn display counts it; remaining is 0 with no known length.
         var elapsed = 0
         var remaining = 0
+        /// Through the track, 0-1.
+        var progress = 0.0
 
         /// The full snapshot, in the feed's order. #617 adds its fields here.
         var messages: [OSCMessage] {
@@ -59,6 +61,7 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "beat", [.int(Int32(beat))]),
                 OSCMessage(DisplayFeed.prefix + "elapsed", [.int(Int32(elapsed))]),
                 OSCMessage(DisplayFeed.prefix + "remaining", [.int(Int32(remaining))]),
+                OSCMessage(DisplayFeed.prefix + "progress", [.float(Float(progress))]),
             ]
         }
     }
@@ -72,6 +75,13 @@ final class DisplayFeed {
     /// until this time, so a panel never flashes a default color or an empty deck at launch (#617).
     private var holdUntil: Double?
     static let holdSeconds = 1.0
+    /// The fast fields go out at most once per `fastInterval` each (#617): a change inside it waits, and the next
+    /// update after it sends the value then, so the latest wins and nothing queues. A snapshot sends them at once.
+    static let fastAddresses: Set<String> = [prefix + "progress"]
+    static let fastInterval = 1.0 / 30
+    /// When each fast field may next go out: a slot every `fastInterval`, kept on its cadence so updates that land
+    /// between slots still average about 30 a second, never bursting to catch up.
+    private var fastDue: [String: Double] = [:]
     /// What each address carried last, as sent; empty means the next update is a full snapshot.
     private var sent: [String: [OSCArgument]] = [:]
     /// The deck number the last update was for: another deck in front is a full snapshot.
@@ -112,7 +122,14 @@ final class DisplayFeed {
         }
         if deck.number != sentDeck { sent = [:] }
         sentDeck = deck.number
+        let snapshot = sent.isEmpty
         for message in deck.messages where sent[message.address] != message.arguments {
+            if Self.fastAddresses.contains(message.address) {
+                let due = fastDue[message.address]
+                // A hair of slack, so an update on the slot isn't lost to rounding.
+                if !snapshot, let due, now < due - 1e-9 { continue }
+                fastDue[message.address] = (due.map { max($0, now - Self.fastInterval) } ?? now) + Self.fastInterval
+            }
             sender.send(message)
             sent[message.address] = message.arguments
         }

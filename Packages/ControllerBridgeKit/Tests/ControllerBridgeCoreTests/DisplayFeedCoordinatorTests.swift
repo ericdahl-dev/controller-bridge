@@ -47,6 +47,7 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/beat", [.int(0)]),
             OSCMessage("/DeckBridge/Display/elapsed", [.int(0)]),
             OSCMessage("/DeckBridge/Display/remaining", [.int(loaded ? 428 : 0)]),
+            OSCMessage("/DeckBridge/Display/progress", [.float(0)]),
         ]
     }
 
@@ -407,6 +408,52 @@ struct DisplayFeedCoordinatorTests {
         #expect(feed.sent == [])
         MainCueTests.position(rig, 31.0)
         #expect(feed.sent == [Self.message("elapsed", Int32(31)), Self.message("remaining", Int32(397))])
+    }
+
+    @Test("progress, 0-1 through the track, goes out at most every 1/30 s; held, the latest value goes, never a queue of old ones")
+    func progressRateLimit() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        feed.sent.removeAll()
+        // Daybreak is 428.5 s.
+        rig.clock.now = 0.01
+        MainCueTests.position(rig, 107.125)
+        rig.clock.now = 0.02
+        MainCueTests.position(rig, 214.25)
+        rig.clock.now = 0.03
+        rig.coordinator.tick()
+        #expect(!feed.sent.contains { $0.address.hasSuffix("/progress") })
+        rig.clock.now = 0.034
+        rig.coordinator.tick()
+        #expect(feed.sent.filter { $0.address.hasSuffix("/progress") } == [Self.message("progress", Float(0.5))])
+        feed.sent.removeAll()
+        rig.clock.now = 0.04
+        MainCueTests.position(rig, 321.375)
+        #expect(!feed.sent.contains { $0.address.hasSuffix("/progress") })
+        rig.clock.now = 0.068
+        rig.coordinator.tick()
+        #expect(feed.sent.filter { $0.address.hasSuffix("/progress") } == [Self.message("progress", Float(0.75))])
+    }
+
+    @Test("A second of Position at 100 a second sends progress about 30 times, the last one where the deck is")
+    func progressAbout30PerSecond() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        feed.sent.removeAll()
+        for step in 1...100 {
+            rig.clock.now = Double(step) * 0.01
+            MainCueTests.position(rig, Float(step))
+            rig.coordinator.tick()
+        }
+        let progress = feed.sent.filter { $0.address.hasSuffix("/progress") }
+        #expect((28...31).contains(progress.count))
+        rig.clock.now = 1.1
+        rig.coordinator.tick()
+        #expect(feed.sent.last { $0.address.hasSuffix("/progress") } == Self.message("progress", Float(100.0 / 428.5)))
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")

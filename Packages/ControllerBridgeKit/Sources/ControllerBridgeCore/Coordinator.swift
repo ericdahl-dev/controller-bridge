@@ -310,6 +310,12 @@ public final class Coordinator {
         return Int(min(value, Double(Int32.max)))
     }
 
+    /// Where the deck is through its track, 0-1; 0 with no length known.
+    private static func progress(_ facts: DeckFacts) -> Double {
+        guard let duration = facts.duration, duration > 0, let position = facts.position, position.isFinite else { return 0 }
+        return min(max(position / duration, 0), 1)
+    }
+
     private func updateDisplayFeed() {
         guard displayFeed.on else { return }
         let entries = jogEntries
@@ -336,7 +342,8 @@ public final class Coordinator {
                                     playing: facts.playing, cue: facts.cueHeld, sync: facts.synced, master: facts.master,
                                     loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0,
                                     beat: beat, elapsed: Self.wholeSeconds(facts.position),
-                                    remaining: facts.duration == nil ? 0 : max(0, Self.wholeSeconds(facts.duration) - Self.wholeSeconds(facts.position)))
+                                    remaining: facts.duration == nil ? 0 : max(0, Self.wholeSeconds(facts.duration) - Self.wholeSeconds(facts.position)),
+                                    progress: Self.progress(facts))
         }
         displayFeed.update(deck, known: known, at: clock.now)
     }
