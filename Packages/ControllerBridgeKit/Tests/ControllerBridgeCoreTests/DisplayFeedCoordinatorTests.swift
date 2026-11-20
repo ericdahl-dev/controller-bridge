@@ -253,6 +253,8 @@ struct DisplayFeedCoordinatorTests {
         Self.load(rig)
         Self.turnOn(rig)
         feed.sent.removeAll()
+        // Past bpm's 1/30 s slot from the snapshot.
+        rig.clock.now = 0.05
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         #expect(feed.sent == [
             OSCMessage("/DeckBridge/Display/loaded", [.int(0)]),
@@ -302,24 +304,53 @@ struct DisplayFeedCoordinatorTests {
         feed.sent.removeAll()
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
         #expect(feed.sent == [])
+        // Past bpm's 1/30 s slot from the snapshot.
+        rig.clock.now = 0.05
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
         // loaded through bpm, and the time left: the rest (0% tempo, the flags, 0 s gone) were already the empty state's.
         #expect(feed.sent == Array(Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")[2..<7])
             + [Self.message("remaining", Int32(428))])
     }
 
-    @Test("The deck's live BPM sends bpm and tempo, the change from the track's BPM in percent: 132 on a 128 track is +3.125%")
+    @Test("The deck's live BPM sends bpm and tempo, the change from the track's BPM in percent, both to 2 decimals: 132 on a 128 track is +3.13%")
     func bpmAndTempo() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
         Self.turnOn(rig)
         feed.sent.removeAll()
+        rig.clock.now = 0.05
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(132)]))
         #expect(feed.sent == [
             OSCMessage("/DeckBridge/Display/bpm", [.float(132)]),
-            OSCMessage("/DeckBridge/Display/tempo", [.float(3.125)]),
+            OSCMessage("/DeckBridge/Display/tempo", [.float(3.13)]),
         ])
+    }
+
+    @Test("A synced deck's BPM wobbling under 0.005 sends nothing; a second of BPM changing every 10 ms sends bpm and tempo about 30 times each, the last where it ended")
+    func bpmAndTempoAreLimited() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        feed.sent.removeAll()
+        func bpm(_ value: Float, at time: Double) {
+            rig.clock.now = time
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(value)]))
+            rig.coordinator.tick()
+        }
+        bpm(128.001, at: 0.05)
+        bpm(127.998, at: 0.1)
+        #expect(feed.sent == [])
+        for step in 1...100 { bpm(128 + Float(step) / 10, at: 0.1 + Double(step) * 0.01) }
+        rig.clock.now = 1.2
+        rig.coordinator.tick()
+        let bpms = feed.sent.filter { $0.address.hasSuffix("/bpm") }, tempos = feed.sent.filter { $0.address.hasSuffix("/tempo") }
+        #expect((28...32).contains(bpms.count))
+        #expect((28...32).contains(tempos.count))
+        // 138 on a 128 track: +7.8125%, sent as 7.81.
+        #expect(bpms.last == Self.message("bpm", Float(138)))
+        #expect(tempos.last == Self.message("tempo", Float(7.81)))
     }
 
     @Test("A track with no BPM of its own: tempo 0, bpm the live one")

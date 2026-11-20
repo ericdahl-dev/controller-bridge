@@ -54,8 +54,9 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "title", [.string(title)]),
                 OSCMessage(DisplayFeed.prefix + "artist", [.string(artist)]),
                 OSCMessage(DisplayFeed.prefix + "key", [.string(key)]),
-                OSCMessage(DisplayFeed.prefix + "bpm", [.float(Float(bpm))]),
-                OSCMessage(DisplayFeed.prefix + "tempo", [.float(Float(tempo))]),
+                // To 2 decimals, so a BPM wobbling in Syndicate's last digits isn't a change.
+                OSCMessage(DisplayFeed.prefix + "bpm", [.float(Float((bpm * 100).rounded() / 100))]),
+                OSCMessage(DisplayFeed.prefix + "tempo", [.float(Float((tempo * 100).rounded() / 100))]),
                 OSCMessage(DisplayFeed.prefix + "playing", [.int(playing ? 1 : 0)]),
                 OSCMessage(DisplayFeed.prefix + "cue", [.int(cue ? 1 : 0)]),
                 OSCMessage(DisplayFeed.prefix + "sync", [.int(sync ? 1 : 0)]),
@@ -85,9 +86,12 @@ final class DisplayFeed {
     /// that opened before the setting came. It doesn't wait for the destination or for Syndicate.
     static let keepaliveSeconds = 2.0
     private var lastSnapshot = 0.0
-    /// The fast fields go out at most once per `fastInterval` each (#617): a change inside it waits, and the next
+    /// The fast fields, every one that can follow Syndicate's feedback rate, go out at most once per `fastInterval`
+    /// each (#617): a change inside it waits, and the next
     /// update after it sends the value then, so the latest wins and nothing queues. A snapshot sends them at once.
-    static let fastAddresses: Set<String> = [prefix + "progress", prefix + "phase", prefix + "level"]
+    static let fastAddresses: Set<String> = [
+        prefix + "bpm", prefix + "tempo", prefix + "progress", prefix + "phase", prefix + "level",
+    ]
     static let fastInterval = 1.0 / 30
     /// When each fast field may next go out: a slot every `fastInterval`, kept on its cadence so updates that land
     /// between slots still average about 30 a second, never bursting to catch up.

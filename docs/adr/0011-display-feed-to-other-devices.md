@@ -14,8 +14,8 @@ Every address is under `/DeckBridge/Display/` and carries exactly one value, of 
 | `title` | `s` | The track's title |
 | `artist` | `s` | The track's artist |
 | `key` | `s` | The track's key, in Settings' key notation (traditional or Camelot), as the jog display writes it |
-| `bpm` | `f` | The deck's live BPM, else the track's; 0 unknown |
-| `tempo` | `f` | The change from the track's BPM in percent: (live / track - 1) × 100; 0 when the track's BPM is unknown |
+| `bpm` | `f` | The deck's live BPM, else the track's, to 2 decimals; 0 unknown |
+| `tempo` | `f` | The change from the track's BPM in percent, (live / track - 1) × 100, to 2 decimals; 0 when the track's BPM is unknown |
 | `playing` | `i` | 0 or 1 |
 | `cue` | `i` | 1 while the deck's CUE button is held |
 | `sync` | `i` | 0 or 1 |
@@ -29,7 +29,7 @@ Every address is under `/DeckBridge/Display/` and carries exactly one value, of 
 | `phase` | `f` | Against the master, 0-1: 0.5 in phase, below behind, above ahead (a half beat at the ends), by the drawn display's phase rule. **-1 is unknown** (the deck stopped, or no offset since it loaded): the one value outside its range |
 | `level` | `f` | The deck's mixer meter, 0-1, on the drawn meter's dB scale (-36 to +16 dB) and ballistics |
 
-`progress`, `phase` and `level` change fast, so each goes out at most about 30 times a second, the latest value winning; nothing is queued. A full snapshot also goes out every 2 seconds as a keepalive, so a message lost on Wi-Fi or dropped while DeckBridge's sender was behind is fixed within 2 s. While the feed is on, DeckBridge asks Syndicate for its Meter and PhaseOffset feedback.
+`bpm`, `tempo`, `progress`, `phase` and `level` can follow Syndicate's feedback rate, so each goes out at most about 30 times a second, the latest value winning; nothing is queued. A full snapshot also goes out every 2 seconds as a keepalive, so a message lost on Wi-Fi or dropped while DeckBridge's sender was behind is fixed within 2 s. While the feed is on, DeckBridge asks Syndicate for its Meter and PhaseOffset feedback.
 
 **A display must ignore an address it doesn't know**, and a message whose type isn't the one above. That way a newer DeckBridge can add addresses without breaking an older display.
 
