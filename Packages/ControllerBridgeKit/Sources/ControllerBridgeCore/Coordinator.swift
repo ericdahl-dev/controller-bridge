@@ -823,6 +823,8 @@ public final class Coordinator {
         if jogController.drawing { needed.insert(.mixerMeter) }
         // Its phase rule reads the deck's PhaseOffset (#462): asked for only while the unit draws.
         if jogController.drawing { needed.insert(.phaseOffset) }
+        // Shift + Needle Drop's relative fader move starts from Syndicate's level (#609).
+        if bridges.contains(where: { $0.stripFaderMode == .relative }) { needed.insert(.mixerVolume) }
         return Subscription.allCases.filter(needed.contains)
     }
 

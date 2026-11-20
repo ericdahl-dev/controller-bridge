@@ -83,7 +83,7 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .loop: "the loop LEDs don't follow the deck"
         case .barRamp: "the jog display's needle doesn't follow the deck"
         case .phaseOffset: "the jog display's rule doesn't show the deck's phase"
-        case .mixerVolume: "the channel fader can jump"
+        case .mixerVolume: "the channel fader can jump, and Shift + Needle Drop moves no fader in relative mode"
         case .mixerTrim: "the trim knob can jump"
         case .mixerEQ: "the EQ knobs can jump"
         case .mixerFilter: "the filter knob can jump"

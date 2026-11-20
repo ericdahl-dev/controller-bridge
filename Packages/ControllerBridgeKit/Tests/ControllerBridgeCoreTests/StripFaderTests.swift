@@ -190,4 +190,23 @@ struct StripFaderTests {
         #expect(Self.sentVolumes(rig).suffix(2) == [1.0, 0.0])
         #expect(Self.seeks(rig).isEmpty)
     }
+
+    @Test("needle.shift_fader false: Shift + the strip seeks as it always has, and moves no fader")
+    func off() throws {
+        let rig = try C.started(#"{ "needle": { "shift_fader": false } }"#)
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.at(rig, 8192)
+        #expect(Self.sentVolumes(rig).isEmpty)
+        #expect(!Self.seeks(rig).isEmpty)
+    }
+
+    @Test("Relative needs Syndicate's Volume, so the health check asks for it; off, or in jump, it isn't asked for")
+    func volumeSubscription() throws {
+        #expect(try C.started().coordinator.status.requiredSubscriptions.contains(.mixerVolume))
+        #expect(try !C.started(#"{ "needle": { "shift_fader": false } }"#).coordinator.status.requiredSubscriptions.contains(.mixerVolume))
+        #expect(try !C.started(Self.jump).coordinator.status.requiredSubscriptions.contains(.mixerVolume))
+    }
 }

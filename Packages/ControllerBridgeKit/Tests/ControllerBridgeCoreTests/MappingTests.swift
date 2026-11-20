@@ -29,7 +29,8 @@ struct MappingTests {
         ))
         // pickup and pickup_tolerance are new in the app (#22): Python had no pickup.
         #expect(mapping.pitch == .init(msbCC: 8, lsbCC: 40, invert: false, deadZone: 0.005, pickup: true, pickupTolerance: 0.02))
-        #expect(mapping.needle == .init(msbCC: 64, lsbCC: 65, touchNote: 70, requireTouch: true))
+        // shift_fader and its mode are new in the app (#609).
+        #expect(mapping.needle == .init(msbCC: 64, lsbCC: 65, touchNote: 70, requireTouch: true, shiftFader: true, shiftFaderMode: .relative))
         #expect(mapping.browse == .init(selectTurnCC: 6, autoLoopSizeCC: 3))
         #expect(mapping.notes.buttons == [
             "play": 1, "cue": 2, "beat_jump_back": 3, "beat_jump_forward": 4, "track_prev": 5, "track_next": 6,

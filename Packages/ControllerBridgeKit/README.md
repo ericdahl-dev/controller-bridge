@@ -179,6 +179,7 @@ equal to the table.
 - `needle.lsb_cc`: a whole number; 0–127; LC6000 `65`
 - `needle.touch_note`: a whole number; 0–127; LC6000 `70`
 - `needle.require_touch`: true or false; LC6000 `true`
+- `needle.shift_fader`: true or false; LC6000 `true`
 - `needle.shift_fader_mode`: text; one of `relative`, `jump`; LC6000 `"relative"`
 - `browse`: an object
 - `browse.select_turn_cc`: a whole number; 0–127; LC6000 `6`

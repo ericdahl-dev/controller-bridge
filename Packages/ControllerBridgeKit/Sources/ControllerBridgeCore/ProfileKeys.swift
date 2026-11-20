@@ -135,6 +135,7 @@ public enum ProfileKeys {
         ProfileKey("needle.lsb_cc", .wholeNumber, "65", range: cc),
         ProfileKey("needle.touch_note", .wholeNumber, "70", range: note),
         ProfileKey("needle.require_touch", .bool, "true"),
+        ProfileKey("needle.shift_fader", .bool, "true", fallback: "false"),
         ProfileKey("needle.shift_fader_mode", .text, #""relative""#, choices: Mapping.Needle.ShiftFaderMode.allRawValues,
                    fallback: #""relative""#),
         ProfileKey("browse", .object, "{}"),
