@@ -272,6 +272,7 @@ public final class JogDisplayDriver {
         lastPlayLight = nil
         for message in JogDisplay.hello { sendController(message) }
         hello = (at: clock.now, resent: 0, due: clock.now + Self.helloAgainFirst, said: false)
+        awaitingReady = true
         // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
         mode = .images
         lastDeck = nil
@@ -353,7 +354,10 @@ public final class JogDisplayDriver {
     /// The front deck's slot for the beat now, on screen if it holds the deck's content.
     private func showFrontBeat() {
         guard let current, let slot = slot(deck: current.deck, beat: lastMasterBeat ?? 1), slotContent[slot] == current else { return }
-        if connected { sendWD(JogDisplay.show(slot: slot)) }
+        if connected {
+            sendWD(JogDisplay.show(slot: slot))
+            lastShow = (slot, JogDisplay.show(slot: slot))
+        }
         screenSlot = slot
         onEvent?(.shown(slot: slot))
     }
@@ -554,9 +558,25 @@ public final class JogDisplayDriver {
         return waiting.resent > 0
     }
 
+    /// Whether the display chip hasn't said ready since the hello (#606). After a power cycle its own boot sequence
+    /// covers the host's images until it ends; it then answers the pending 10, and the next 0A uncovers them. Its
+    /// first 10 reply sends the last show again, so that 0A comes at once.
+    private var awaitingReady = false
+    /// The last show sent for a stored slot: never an upload's lead.
+    private var lastShow: (slot: UInt8, bytes: [UInt8])?
+
+    private func readyIfFirst(_ bytes: [UInt8]) {
+        guard awaitingReady, connected, case .images = mode, JogDisplay.Reply(bytes) == .committed else { return }
+        awaitingReady = false
+        guard let lastShow else { return }
+        sendWD(lastShow.bytes)
+        trace?(.jogDisplay, "jog display: the display said ready (its first 10 reply since the hello): show slot \(lastShow.slot) sent again")
+    }
+
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
         traceReply(bytes)
+        if upload == nil { readyIfFirst(bytes) }
         if case .asking = mode, let version = DrawnDisplay.answer(bytes) {
             return draw(version: min(version, DrawnDisplay.version))
         }
@@ -611,6 +631,7 @@ public final class JogDisplayDriver {
 
     private func showSlot(_ running: Running) {
         sendWD(running.upload.show)
+        lastShow = (running.slot, running.upload.show)
         shownSlot = running.slot
         onEvent?(.shown(slot: running.slot))
     }

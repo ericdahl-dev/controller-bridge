@@ -148,4 +148,37 @@ struct JogDisplayPowerCycleTests {
             #expect(Self.hellos(rig, port, clock, from: 0.3, until: 40) == (stops ? 0 : 5), "\(event) from \(source)")
         }
     }
+
+    // MARK: A: the display chip's first 10 reply since the hello is "ready": the show goes again.
+
+    static let ready = JogDisplayDriverTests.committed
+
+    /// Connected, deck 1 uploaded into slot 1 with every ack, stored by the commit grace (no 10 reply: the chip is still
+    /// booting) and shown; WD's record cleared.
+    static func shownByGrace(_ rig: DriverRig) -> JogDisplay.Upload {
+        rig.driver.connect()
+        rig.driver.helloAnswered()
+        rig.driver.show(JogDisplayContent(deck: 1, color: [255, 0, 0]))
+        let upload = JogDisplayDriverTests.upload(deck: 1, slot: 1)
+        for _ in 0..<upload.expectedAcks { rig.driver.reply(JogDisplayDriverTests.accepted) }
+        rig.clock.now = 0.4
+        rig.driver.tick()
+        #expect(rig.port.wd.last == upload.show)
+        rig.port.wd.removeAll()
+        return upload
+    }
+
+    @Test("Ready with nothing in flight: the last show once more, at once; a second 10 reply sends nothing")
+    func readyShowsAgain() {
+        let rig = DriverRig()
+        let lines = Self.traced(rig)
+        let upload = Self.shownByGrace(rig)
+        rig.clock.now = 22
+        rig.driver.reply(Self.ready)
+        #expect(rig.port.wd == [upload.show])
+        rig.driver.reply(Self.ready)
+        rig.driver.tick()
+        #expect(rig.port.wd == [upload.show])
+        #expect(lines.list == ["jog display: the display said ready (its first 10 reply since the hello): show slot 1 sent again"])
+    }
 }
