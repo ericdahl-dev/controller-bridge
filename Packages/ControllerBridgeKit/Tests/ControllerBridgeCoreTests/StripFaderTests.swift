@@ -69,4 +69,21 @@ struct StripFaderTests {
         #expect(Self.sentVolumes(rig).isEmpty)
         #expect(Self.seeks(rig).isEmpty)
     }
+
+    @Test("Clamped at both ends, and travel past an end isn't stored up: coming back moves the fader at once")
+    func clamped() throws {
+        let rig = try C.started()
+        Self.volume(rig, 0.75)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.at(rig, 8192)    // +0.5 from 0.75: past the top
+        Self.at(rig, 12288)   // further past it
+        Self.at(rig, 8192)    // back by a quarter: from the top, not from where the finger went
+        let sent = Self.sentVolumes(rig)
+        #expect(sent.count == 2 && sent[0] == 1.0 && abs(sent[1] - 0.75) < 0.001, "sent \(sent)")
+        Self.at(rig, 0)
+        Self.at(rig, 0)
+        #expect(abs((Self.sentVolumes(rig).last ?? -1) - 0.25) < 0.001)
+    }
 }

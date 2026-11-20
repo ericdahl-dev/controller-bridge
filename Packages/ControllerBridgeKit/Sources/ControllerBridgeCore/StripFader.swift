@@ -1,6 +1,7 @@
 /// Shift + Needle Drop moves the deck's channel fader in Syndicate (#609). Whether a touch moves the fader or seeks is
 /// fixed at touch-down. Relative: the fader moves from its level at touch-down by how far the finger travels, the
-/// strip's length being the fader's range. Plain values in, the level to send out: the Bridge sends the OSC.
+/// strip's length being the fader's range, clamped at both ends. Plain values in, the level to send out: the Bridge
+/// sends the OSC.
 struct StripFader {
     /// The last level known for each mixer channel: Syndicate's report.
     private var levels: [Int: Double] = [:]
@@ -42,7 +43,10 @@ struct StripFader {
             }
             return nil
         }
-        let level = start.level + position - start.position
+        let moved = start.level + position - start.position
+        let level = min(max(moved, 0), 1)
+        // Past an end, the travel counts from that end: coming back moves the fader at once.
+        if level != moved { touch.start = (level, position) }
         guard level != touch.level else { return nil }
         touch.level = level
         return (touch.channel, level)
