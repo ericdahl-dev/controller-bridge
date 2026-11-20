@@ -69,8 +69,9 @@ public final class Coordinator {
     private var capturing: MIDIEndpoint.ID?
     /// Deck colors from Syndicate's palette, the defaults until one arrives (#123).
     private var syndicateDeckColors = DeckColors.defaults
-    /// Syndicate has sent its cue palette, so `syndicateDeckColors` are its own, not the defaults (#617).
-    private var paletteHeard = false
+    /// The decks whose palette slot Syndicate has sent, so their `syndicateDeckColors` are its own, not the defaults
+    /// (#617). Slots may come one per message.
+    private var paletteHeard: Set<Int> = []
     /// Syndicate's last master clock beat, 1-4, and when it came: the display feed's beat (#617).
     private var masterBeat: (beat: Int, at: Double)?
     /// Each deck's phase rule for the display feed (#617), with its own in-phase and wrap memory.
@@ -339,7 +340,7 @@ public final class Coordinator {
         // deck is loaded, with its track when it is.
         let known = front.map { index in
             let facts = entries[index].facts
-            return (paletteHeard || !followSyndicateDeckColors) && facts.loadedHeard && (!facts.loaded || facts.track != nil)
+            return (paletteHeard.contains(facts.deck) || !followSyndicateDeckColors) && facts.loadedHeard && (!facts.loaded || facts.track != nil)
         } ?? false
         // The master clock, as the ring's beat pulse: none once it's been quiet for the Bridge's timeout.
         let beat = masterBeat.flatMap { clock.now - $0.at <= Bridge.clockTimeout ? $0.beat : nil } ?? 0
@@ -862,9 +863,9 @@ public final class Coordinator {
             let numbers = message.arguments.compactMap(\.wholeNumber)
             var colors = syndicateDeckColors
             for start in stride(from: 0, to: numbers.count - 3, by: 4) {
+                if let deck = DeckColors.deck(forSlot: numbers[start]) { paletteHeard.insert(deck) }
                 if let updated = colors.updated(byPalette: noteBlackSlot(Array(numbers[start..<(start + 4)]))) { colors = updated }
             }
-            paletteHeard = true
             if colors != syndicateDeckColors {
                 syndicateDeckColors = colors
                 applyDeckColors()

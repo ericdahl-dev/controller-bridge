@@ -8,10 +8,17 @@ import Testing
 struct DisplayFeedCoordinatorTests {
     static let on = DisplayFeedSettings(enabled: true, host: "192.168.1.40", port: 9100)
 
+    /// Syndicate's cue palette slots for the four decks (1, 3, 5, 7) in its factory deck colors, in one message.
+    static var factoryPalette: OSCMessage {
+        OSCMessage("/Syndicate/ColorPalette", (1...4).flatMap { deck -> [OSCArgument] in
+            [.int(Int32(2 * deck - 1))] + (DeckColors.defaults[deck] ?? [0, 0, 0]).map { .int(Int32($0)) }
+        })
+    }
+
     /// Turns the feed on as the app does: the setting, then its destination opening. `heard`: Syndicate's cue palette
     /// came first (its factory deck colors), so the first snapshot doesn't wait for it.
     static func turnOn(_ rig: Rig, _ settings: DisplayFeedSettings = on, heard: Bool = true) {
-        if heard { rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(0), .int(0)])) }
+        if heard { rig.coordinator.feedback(factoryPalette) }
         rig.coordinator.setDisplayFeed(settings)
         rig.coordinator.displayFeedReady()
     }
@@ -108,6 +115,19 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.start()
         Self.turnOn(rig, heard: false)
         Self.load(rig)
+        #expect(feed.sent == [])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(0), .int(0xF5), .int(0xFF)]))
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0x00F5FF, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
+    }
+
+    @Test("Another deck's palette slot isn't the front deck's color: still held until its own slot comes")
+    func holdsForTheFrontDecksSlot() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.turnOn(rig, heard: false)
+        Self.load(rig)
+        // Slot 3 is deck 2's.
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(3), .int(0), .int(255), .int(0)]))
         #expect(feed.sent == [])
         rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(0), .int(0xF5), .int(0xFF)]))
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0x00F5FF, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
