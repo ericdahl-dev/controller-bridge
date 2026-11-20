@@ -514,18 +514,30 @@ step "block B's .dfu, from build_upper_dfu.py with --proof (the README's read-on
 step "the owner's image, from build_owner_image.py"
 ask CURRENT_WD "Path to the .dfu the chip runs now:"
 CURRENT_WD="${CURRENT_WD/#\~/$HOME}"
-ask UPPER_DFU "Path to block B's .dfu:"
-UPPER_DFU="${UPPER_DFU/#\~/$HOME}"
-ask OWNER_DFU "Path to the owner's image .dfu:"
-OWNER_DFU="${OWNER_DFU/#\~/$HOME}"
-# The blocks' build record (#593): the kit tools leave a copy beside each .dfu; ask only without exactly one.
-IFS=$'\t' read -r found RECORD < <(plan find-record "$UPPER_DFU" "$OWNER_DFU") || true
+# Block B and the owner's image (#603): the remembered pair, or the one pair the kit tools left in $WORK, each with
+# its build record beside it. Asked only when neither is there; the typed words show what's written.
+found="" UPPER_DFU="" OWNER_DFU="" RECORD=""
+IFS=$'\t' read -r found UPPER_DFU OWNER_DFU RECORD \
+  < <(plan find-files "$WORK" "$(_existing UPPER_DFU || true)" "$(_existing OWNER_DFU || true)") || true
 if [[ "$found" == "one" ]]; then
+  say "Block B: $UPPER_DFU"
+  say "The owner's image: $OWNER_DFU"
   say "Build record: $RECORD"
 else
-  say "${RECORD:-No build record found.}"
-  ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
-  RECORD="${RECORD/#\~/$HOME}"
+  say "${UPPER_DFU:-Block B and the owner's image weren't found.}"
+  ask UPPER_DFU "Path to block B's .dfu:"
+  UPPER_DFU="${UPPER_DFU/#\~/$HOME}"
+  ask OWNER_DFU "Path to the owner's image .dfu:"
+  OWNER_DFU="${OWNER_DFU/#\~/$HOME}"
+  # The blocks' build record (#593): the kit tools leave a copy beside each .dfu; ask only without exactly one.
+  IFS=$'\t' read -r found RECORD < <(plan find-record "$UPPER_DFU" "$OWNER_DFU") || true
+  if [[ "$found" == "one" ]]; then
+    say "Build record: $RECORD"
+  else
+    say "${RECORD:-No build record found.}"
+    ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
+    RECORD="${RECORD/#\~/$HOME}"
+  fi
 fi
 write_env CURRENT_WD "$CURRENT_WD"
 write_env UPPER_DFU "$UPPER_DFU"

@@ -331,6 +331,35 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertEqual(self.memory("upper.bin")[:len(good_block())], good_block())
 
 
+    def kit_pair_in(self, folder):
+        """Block B and the owner's image as the kit tools leave them in FOLDER, each with the build record beside it."""
+        os.makedirs(folder, exist_ok=True)
+        upper, owner = os.path.join(folder, "wd-upper-drawing.dfu"), os.path.join(folder, "wd-owner.dfu")
+        shutil.copy(self.upper, upper)
+        shutil.copy(self.owner, owner)
+        for dfu in (upper, owner):
+            shutil.copy(self.record, build_record.carried(dfu))
+        return upper, owner
+
+    def test_the_kits_pair_in_the_work_folder_is_used_and_never_asked_for(self):
+        # #603: only the image on the chip now is asked for; B, the owner's image and the record are found.
+        self.upper, self.owner = self.kit_pair_in(self.work)
+        self.unit_holds(self.current_element)
+        result = self.run_wizard(["", self.current, "y", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""])
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertIn("Block B: " + self.upper, result.stdout)
+        self.assertIn("The owner's image: " + self.owner, result.stdout)
+        self.assertEqual(len(self.downloads()), 2)
+
+    def test_the_remembered_pair_is_used_when_its_record_is_beside_it(self):
+        self.upper, self.owner = self.kit_pair_in(os.path.join(self.dir.name, "built"))
+        with open(os.path.join(self.work, "flash-day.env"), "w") as f:
+            f.write(f"UPPER_DFU='{self.upper}'\nOWNER_DFU='{self.owner}'\n")
+        self.unit_holds(self.current_element)
+        result = self.run_wizard(["", self.current, "y", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""])
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertIn("Block B: " + self.upper, result.stdout)
+
     def refused_by_the_record(self, record, *reasons):
         self.unit_holds(self.current_element)
         result = self.run_wizard(["", self.current, self.upper, self.owner, record, "y", "y", "y", "FLASH", "FLASH"],

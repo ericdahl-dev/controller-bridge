@@ -7,6 +7,8 @@ step out; the shell only does what it's told (dfu-util, the keyboard) and record
   python3 -I drawn_plan.py record PLAN.json KEY VALUE
   python3 -I drawn_plan.py devices LISTING        the stock wizard's look: one PATH, or stop WHY
   python3 -I drawn_plan.py find-record UPPER.dfu OWNER.dfu   the build record the kit left beside them: one PATH, or ask WHY
+  python3 -I drawn_plan.py find-files WORK UPPER OWNER  B and the owner's image (UPPER, OWNER: remembered, or empty):
+                                                        one UPPER OWNER RECORD, or ask WHY
 
 Actions:
   ask KEY QUESTION                 a y/N question; record y or n
@@ -144,6 +146,37 @@ def find_record(upper, owner):
     if found:
         return ("ask", "The build records beside the two .dfu files differ: they're from different builds.")
     return ("ask", "No build record beside the two .dfu files.")
+
+
+def find_files(work, upper="", owner=""):
+    """Block B's .dfu and the owner's image, found so the owner isn't asked (#603): ("one", upper, owner, record), or
+    ("ask", why). The remembered pair first, when both files are there and one build record is beside them; else
+    the one pair in WORK the kit tools left, each .dfu with its record beside it and the two records the same. A .dfu
+    with no record beside it (a rewrite file, a read) is never a candidate. Finding judges nothing: the plan does."""
+    if upper and owner and os.path.isfile(upper) and os.path.isfile(owner):
+        found = find_record(upper, owner)
+        if found[0] == "one":
+            return ("one", upper, owner, found[1])
+    builds = {}
+    for name in sorted(os.listdir(work)) if os.path.isdir(work) else []:
+        path = os.path.join(work, name)
+        if not name.endswith(".dfu") or not os.path.isfile(build_record.carried(path)):
+            continue
+        try:
+            address = dfupatch.parse(dfupatch.read(path)).address
+            with open(build_record.carried(path), "rb") as f:
+                record = f.read()
+        except (dfupatch.Refused, OSError, ValueError):
+            continue
+        side = "upper" if address == build_upper_dfu.UPPER_BASE else "owner" if address == drawn_flash.APP_BASE else None
+        if side:
+            builds.setdefault(record, {}).setdefault(side, []).append(path)
+    pairs = [b for b in builds.values() if len(b.get("upper", [])) == 1 and len(b.get("owner", [])) == 1]
+    if len(pairs) == 1 and len(builds) == 1:
+        pair = pairs[0]
+        return ("one", pair["upper"][0], pair["owner"][0], build_record.carried(pair["upper"][0]))
+    return ("ask", f"{len(builds)} builds of block B and the owner's image in {work}; exactly one is needed to pick "
+                   f"them without asking.")
 
 
 # MARK: the plan
@@ -372,6 +405,8 @@ def main(argv=None):
         print("\t".join(field.replace("\\", "\\\\").replace("\n", "\\n") for field in next_action(argv[1])))
     elif command == "devices" and len(argv) == 2:
         print("\t".join(judge_devices(argv[1])))
+    elif command == "find-files" and len(argv) == 4:
+        print("\t".join(find_files(argv[1], argv[2], argv[3])))
     elif command == "find-record" and len(argv) == 3:
         print("\t".join(find_record(argv[1], argv[2])))
     elif command == "record" and len(argv) == 4:

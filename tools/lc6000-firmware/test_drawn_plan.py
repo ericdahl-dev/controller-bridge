@@ -387,6 +387,73 @@ class FindRecordTests(unittest.TestCase):
         self.assertIn("differ", why)
 
 
+class FindFilesTests(unittest.TestCase):
+    """`drawn_plan.py find-files WORK UPPER OWNER` (#603): block B and the owner's image, found instead of asked. The
+    remembered pair when both are still there with one build record; else the one pair in WORK that the kit tools left
+    with a record beside each; else ask."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.work = os.path.join(self.dir.name, "work")
+        os.makedirs(self.work)
+
+    def pair(self, folder, tag="1", record=None):
+        """A B .dfu and an owner's image .dfu in FOLDER, each with the build record copy the kit leaves beside it."""
+        os.makedirs(folder, exist_ok=True)
+        upper, owner = (os.path.join(folder, f"wd-{name}-{tag}.dfu") for name in ("upper-drawing", "owner"))
+        with open(upper, "wb") as f:
+            f.write(build_upper_dfu.dfuse(good_block()))
+        with open(owner, "wb") as f:
+            f.write(dfuse_file(stock_like_element()))
+        for dfu in (upper, owner):
+            with open(build_record.carried(dfu), "w") as f:
+                f.write(record if record is not None else json.dumps({"build": tag}))
+        return upper, owner
+
+    def find(self, upper="", owner=""):
+        import contextlib, io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = drawn_plan.main(["find-files", self.work, upper, owner])
+        self.assertEqual(code, 0)
+        return out.getvalue().rstrip("\n").split("\t")
+
+    def test_the_one_kit_pair_in_work_is_found(self):
+        upper, owner = self.pair(self.work)
+        self.assertEqual(self.find(), ["one", upper, owner, build_record.carried(upper)])
+
+    def test_the_remembered_pair_comes_first(self):
+        self.pair(self.work, "new")
+        upper, owner = self.pair(os.path.join(self.dir.name, "elsewhere"), "old")
+        self.assertEqual(self.find(upper, owner)[:3], ["one", upper, owner])
+
+    def test_a_remembered_pair_that_is_gone_falls_back_to_work(self):
+        upper, owner = self.pair(self.work)
+        gone = os.path.join(self.dir.name, "gone.dfu")
+        self.assertEqual(self.find(gone, gone)[:3], ["one", upper, owner])
+
+    def test_a_remembered_pair_from_two_builds_isnt_used(self):
+        upper, _ = self.pair(os.path.join(self.dir.name, "a"), "a")
+        _, owner = self.pair(os.path.join(self.dir.name, "b"), "b")
+        self.assertEqual(self.find(upper, owner)[0], "ask")
+
+    def test_none_or_two_pairs_in_work_ask(self):
+        kind, why = self.find()
+        self.assertEqual(kind, "ask")
+        self.pair(self.work, "1")
+        self.pair(self.work, "2")
+        kind, why = self.find()
+        self.assertEqual(kind, "ask")
+        self.assertIn("2", why)
+
+    def test_a_dfu_with_no_record_beside_it_isnt_a_candidate(self):
+        upper, owner = self.pair(self.work)
+        with open(os.path.join(self.work, "wd-upper-rewrite-abc.dfu"), "wb") as f:
+            f.write(build_upper_dfu.dfuse(good_block()))
+        self.assertEqual(self.find()[:3], ["one", upper, owner])
+
+
 class DevicesCommandTests(unittest.TestCase):
     """`drawn_plan.py devices LISTING`, for the stock wizard's look() (#567): the same judgment the drawn plan makes,
     so the shell no longer counts devices itself."""
