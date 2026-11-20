@@ -338,6 +338,8 @@ struct JogDisplayPowerCycleTests {
         let (rig, port, clock, driver) = try Self.owned()
         let lc6000 = JogDisplayRingHoldTests.lc6000.id
         let ledsAtStart = Set(JogDisplayHelloRepaintTests.sent(rig).map(\.note))
+        let output = try #require(rig.midi.outputs[lc6000 + 1000])
+        let writesAtStart = output.writes
         final class Box: @unchecked Sendable { var list: [String] = [] }
         let lines = Box()
         rig.coordinator.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
@@ -376,6 +378,10 @@ struct JogDisplayPowerCycleTests {
         }
         // The late repaint is today's LEDs again: no note the start didn't paint.
         #expect(Set(JogDisplayHelloRepaintTests.sent(rig).map(\.note)).isSubset(of: ledsAtStart))
+        // Every LED write, note-ons and Denon's color messages (#541) alike, is one the start already made.
+        let later = output.writes.dropFirst(writesAtStart.count)
+        #expect(!later.isEmpty)
+        for write in later { #expect(writesAtStart.contains(write), "LED write \(write)") }
         // Each new path ran: the re-sends, the late repaint, and the show after ready.
         #expect(lines.list.contains("jog display: a re-sent hello was answered: the LEDs painted again"))
         #expect(lines.list.contains { $0.hasPrefix("jog display: the display said ready") && !$0.contains("nothing shown") })
