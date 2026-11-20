@@ -190,6 +190,35 @@ struct DisplayFeedCoordinatorTests {
         #expect(feed.bundles.flatMap { $0 } == Self.snapshot(deck: 1, color: 0xFF0000, title: long, artist: longer))
     }
 
+    @Test("A playing deck under Syndicate's real streams sends at most about 30 datagrams a second, and every keepalive is one whole bundle (#636)")
+    func playingRate() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        MainCueTests.feed(rig, "Playing", 1)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(128)]))
+        Self.turnOn(rig)
+        feed.bundles.removeAll()
+        // 10 s: Meter every 5 ms (Syndicate streams it at about 190 a second), Position, PhaseOffset and BPM every
+        // 20 ms, the master clock every 1.25 s, ticks every 10 ms.
+        for step in 1...2000 {
+            let t = Double(step) * 0.005
+            rig.clock.now = t
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Mixer/CH1/Meter", [.float(Float(0.3 + 0.6 * abs(sin(t * 37))))]))
+            if step % 4 == 0 {
+                MainCueTests.position(rig, Float(100 + t))
+                rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/PhaseOffset", [.float(Float(0.01 * sin(t * 3)))]))
+                rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(Float(128 + 0.02 * sin(t * 5)))]))
+            }
+            if step % 2 == 0 { rig.coordinator.tick() }
+            if step % 250 == 0 { rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(Int32(step / 250 % 4 + 1))])) }
+        }
+        #expect(feed.bundles.count <= 350)
+        let keepalives = feed.bundles.filter { $0.first?.address.hasSuffix("/deck") == true }
+        #expect(keepalives.count == 5)
+        #expect(keepalives.allSatisfy { $0.count == 20 })
+    }
+
     @Test("Only changes go out: a new title sends the title alone; the same feedback again sends nothing")
     func changesOnly() throws {
         let (rig, feed) = try Self.rig()

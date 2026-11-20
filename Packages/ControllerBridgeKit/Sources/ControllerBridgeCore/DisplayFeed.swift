@@ -93,9 +93,10 @@ final class DisplayFeed {
         prefix + "bpm", prefix + "tempo", prefix + "progress", prefix + "phase", prefix + "level",
     ]
     static let fastInterval = 1.0 / 30
-    /// When each fast field may next go out: a slot every `fastInterval`, kept on its cadence so updates that land
-    /// between slots still average about 30 a second, never bursting to catch up.
-    private var fastDue: [String: Double] = [:]
+    /// When the fast fields may next go out: one slot every `fastInterval` that they all share (#636), so a playing
+    /// deck sends one bundle of them per slot, about 30 a second, not one per field drifting onto every tick. Kept on
+    /// its cadence so updates that land between slots still average about 30 a second, never bursting to catch up.
+    private var fastDue: Double?
     /// What each address carried last, as sent; empty means the next update is a full snapshot.
     private var sent: [String: [OSCArgument]] = [:]
     /// The deck number the last update was for: another deck in front is a full snapshot.
@@ -208,17 +209,19 @@ final class DisplayFeed {
         let snapshot = sent.isEmpty
         if snapshot { lastSnapshot = now }
         var changes: [OSCMessage] = []
+        // A hair of slack, so an update on the slot isn't lost to rounding.
+        let fastOpen = snapshot || fastDue.map { now >= $0 - 1e-9 } ?? true
+        var fastSent = false
         for message in deck.messages where sent[message.address] != message.arguments {
             if Self.fastAddresses.contains(message.address) {
-                let due = fastDue[message.address]
-                // A hair of slack, so an update on the slot isn't lost to rounding.
-                if !snapshot, let due, now < due - 1e-9 { continue }
-                fastDue[message.address] = (due.map { max($0, now - Self.fastInterval) } ?? now) + Self.fastInterval
+                guard fastOpen else { continue }
+                fastSent = true
             }
             changes.append(message)
             sent[message.address] = message.arguments
         }
         // One datagram for the update (#636): a panel takes a few at a time, so a snapshot spread over 20 lost most.
+        if fastSent { fastDue = (fastDue.map { max($0, now - Self.fastInterval) } ?? now) + Self.fastInterval }
         for bundle in Self.bundles(changes) { sender.send(bundle: bundle) }
         let count = changes.count
         if snapshot {
