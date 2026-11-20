@@ -124,6 +124,27 @@ void test_the_bar_warns_in_the_last_30_seconds() {
     TEST_ASSERT_FALSE(deck_core::face(v).end_warning);
 }
 
+void test_the_beat_lights_its_block_and_none_outside_1_to_4() {
+    DeckView v = loaded_deck();
+    TEST_ASSERT_EQUAL(3, deck_core::face(v).beat);
+    v.beat = 0;
+    TEST_ASSERT_EQUAL(0, deck_core::face(v).beat);
+    v.beat = 5;
+    TEST_ASSERT_EQUAL(0, deck_core::face(v).beat);
+}
+
+void test_the_lamps_follow_play_cue_sync_master_and_loop() {
+    DeckView v = loaded_deck();
+    Face f = deck_core::face(v);
+    TEST_ASSERT_TRUE(f.playing && f.sync && f.master && f.loop);
+    TEST_ASSERT_FALSE(f.cue);
+    v.playing = v.sync = v.master = v.loop = false;
+    v.cue = true;
+    f = deck_core::face(v);
+    TEST_ASSERT_FALSE(f.playing || f.sync || f.master || f.loop);
+    TEST_ASSERT_TRUE(f.cue);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_empty_deck_shows_no_track_loaded_and_nothing_else);
@@ -135,5 +156,7 @@ int main(int, char**) {
     RUN_TEST(test_with_no_known_length_remaining_is_blank);
     RUN_TEST(test_the_progress_bar_is_clamped_to_0_1);
     RUN_TEST(test_the_bar_warns_in_the_last_30_seconds);
+    RUN_TEST(test_the_beat_lights_its_block_and_none_outside_1_to_4);
+    RUN_TEST(test_the_lamps_follow_play_cue_sync_master_and_loop);
     return UNITY_END();
 }

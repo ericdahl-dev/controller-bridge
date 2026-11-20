@@ -53,6 +53,12 @@ Face face(const DeckView& view) {
     if (view.remaining > 0) time_text(f.remaining, "-", view.remaining);
     f.progress = clamp01(view.progress);
     f.end_warning = view.remaining > 0 && view.remaining <= kEndWarningSeconds;
+    if (view.beat >= 1 && view.beat <= 4) f.beat = view.beat;
+    f.playing = view.playing;
+    f.cue = view.cue;
+    f.sync = view.sync;
+    f.master = view.master;
+    f.loop = view.loop;
     return f;
 }
 
