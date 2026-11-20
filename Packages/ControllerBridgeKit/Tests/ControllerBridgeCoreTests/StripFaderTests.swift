@@ -140,4 +140,19 @@ struct StripFaderTests {
         let sent = Self.sentVolumes(rig)
         #expect(abs((sent.last ?? 0) - 0.75) < 0.001, "sent \(sent)")
     }
+
+    @Test("Another deck layer moves that deck's channel, from that channel's own level")
+    func layerChange() throws {
+        let rig = try C.started()
+        Self.volume(rig, channel: 1, 0.25)
+        Self.volume(rig, channel: 2, 0.5)
+        rig.coordinator.setDeck(2, controller: 0)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.at(rig, 4096)
+        let sent = Self.sentVolumes(rig, channel: 2)
+        #expect(abs((sent.last ?? 0) - 0.75) < 0.001, "sent \(sent)")
+        #expect(Self.sentVolumes(rig, channel: 1).isEmpty)
+    }
 }
