@@ -33,7 +33,17 @@ FAKE_DFU_UTIL = textwrap.dedent('''\
     def opt(flag):
         return args[args.index(flag) + 1] if flag in args else None
     if "-l" in args:
-        # Only a chip in update mode is listed (#603): the update-mode stand-in's send puts it there.
+        # Only a chip in update mode is listed (#603): the update-mode stand-in's send puts it there. The second list
+        # after a write is the wizard waiting for the power cycle (the first may be the plan's own look before the
+        # owner's image): the fake owner power-cycles then, unless the chip is stuck.
+        written = os.path.join(unit, "written")
+        if os.path.exists(written):
+            looks = int(open(written).read() or 0) + 1
+            open(written, "w").write(str(looks))
+            if looks >= 2 and not os.path.exists(os.path.join(unit, "stuck-in-update-mode")):
+                os.remove(written)
+                os.remove(os.path.join(unit, "in-update-mode"))
+                open(os.path.join(unit, "cycled"), "w").close()
         if os.path.exists(os.path.join(unit, "in-update-mode")):
             sys.stdout.write(open(os.path.join(unit, "listing.txt")).read())
         sys.exit(0)
@@ -62,19 +72,20 @@ FAKE_DFU_UTIL = textwrap.dedent('''\
         memory = bytearray(open(path, "rb").read())
         memory[image.address - base:image.address - base + len(image.element)] = image.element
         open(path, "wb").write(bytes(memory))
+        open(os.path.join(unit, "written"), "w").close()
         sys.exit(0)
     sys.exit("fake dfu-util: unexpected " + " ".join(args))
     ''')
 # The update-mode tool's stand-in, which the fake swiftc "builds": it sends nothing, and logs each call. Its send
-# puts the fake chip in update mode; its check finds the display's MIDI port only while the chip isn't (#603). The
-# wizard checks for the port while the chip is in update mode only when it waits for the owner's power cycle: the
-# fake owner power-cycles then, so the chip leaves update mode and the port is back on the next check.
+# puts the fake chip in update mode; its check finds the display's MIDI port only while the chip isn't (#603), and
+# never after the power cycle when $FAKE_UNIT/no-midi is there (a chip that doesn't boot its new app).
 FAKE_UPDATE_MODE = textwrap.dedent('''\
     #!/bin/sh
     echo "$@" >> "$FAKE_UNIT/update-mode.log"
     case "$1" in
       send) touch "$FAKE_UNIT/in-update-mode" ;;
-      check) [ ! -e "$FAKE_UNIT/in-update-mode" ] || { rm "$FAKE_UNIT/in-update-mode"; exit 1; } ;;
+      check) [ ! -e "$FAKE_UNIT/in-update-mode" ] || exit 1
+             [ -e "$FAKE_UNIT/no-midi" ] && [ -e "$FAKE_UNIT/cycled" ] && exit 1 ;;
     esac
     exit 0
     ''')
@@ -115,7 +126,8 @@ class FlashDayRunTests(unittest.TestCase):
         self.upper = self.file("upper.dfu", build_upper_dfu.dfuse(good_block()))
         self.record = write_record(os.path.join(self.dir.name, "build.json"), self.owner, self.upper)
         self.env = {"PATH": f"{self.stubs}:/usr/bin:/bin", "HOME": self.home, "LC6000_WORK": self.work,
-                    "FAKE_UNIT": self.unit, "TERM": "dumb", "LC6000_APP_WAIT": "3"}
+                    "FAKE_UNIT": self.unit, "TERM": "dumb", "LC6000_APP_WAIT": "3",
+                    "LC6000_POWER_WAIT": "3"}
 
     def stub(self, name, text):
         path = os.path.join(self.stubs, name)
@@ -135,7 +147,7 @@ class FlashDayRunTests(unittest.TestCase):
             f.write(" ".join(what))
 
     def unit_holds(self, app, upper=None, devices=(("2-1.2", DISPLAY_LAYOUT),), in_update_mode=False):
-        for log in ("calls.log", "update-mode.log"):   # a fresh unit for each subtest
+        for log in ("calls.log", "update-mode.log", "written", "stuck-in-update-mode", "no-midi", "cycled"):   # a fresh unit
             if os.path.exists(os.path.join(self.unit, log)):
                 os.remove(os.path.join(self.unit, log))
         flag = os.path.join(self.unit, "in-update-mode")
@@ -200,7 +212,6 @@ class FlashDayRunTests(unittest.TestCase):
                    "FLASH",                                     # block B
                    "y",                                         # the probe, before the owner's image
                    "FLASH",                                     # the owner's image
-                   "",                                          # power cycle: back on
                    "y",                                         # looks like stock
                    "", ""]                                      # the last two pauses
         result = self.run_wizard(answers)
@@ -214,7 +225,7 @@ class FlashDayRunTests(unittest.TestCase):
         # A re-run after a stop that left the chip in update mode (#603): the display's MIDI port is gone, so the
         # port check would fail. The wizard sees the DFU device instead, says so, and sends nothing.
         self.unit_holds(self.current_element, in_update_mode=True)
-        answers = ["", self.upper, self.owner, self.record, "FLASH", "y", "FLASH", "", "y", "", ""]
+        answers = ["", self.upper, self.owner, self.record, "FLASH", "y", "FLASH", "y", "", ""]
         result = self.run_wizard(answers, sent=0)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("already in update mode", result.stdout)
@@ -223,7 +234,7 @@ class FlashDayRunTests(unittest.TestCase):
     def test_a_b_only_rewrite_leaves_the_app_area_alone(self):
         old_b = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
         self.unit_holds(self.owner_element, upper=old_b + b"\xff" * (0x80000 - len(old_b)))
-        answers = ["", self.upper, self.owner, self.record, "UPDATE", "REWRITE", "", "y", "",
+        answers = ["", self.upper, self.owner, self.record, "UPDATE", "REWRITE", "y", "",
                    ""]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
@@ -299,7 +310,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertEqual(self.run_wizard(self.answers()).returncode, 0)
         # The same day and unit: no probe question, and its line is on the image's word screen.
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", self.upper, self.owner, self.record, "UPDATE", "FLASH", "FLASH", "", "y", "", ""])
+        result = self.run_wizard(["", self.upper, self.owner, self.record, "UPDATE", "FLASH", "FLASH", "y", "", ""])
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertNotIn("Is an ST-Link probe connected", result.stdout)
         self.assertIn("probe: yes (answered today at ", result.stdout)
@@ -319,6 +330,30 @@ class FlashDayRunTests(unittest.TestCase):
                 self.assertIn(f"▶ sha256: {hashlib.sha256(f.read()).hexdigest()}", result.stdout)
         self.assertIn("▶ probe: yes (answered today at ", result.stdout)
 
+    def test_the_power_cycle_is_seen_on_usb_with_no_key(self):
+        self.unit_holds(self.current_element)
+        result = self.run_wizard(self.answers())
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertNotIn("Press Enter once it's back on", result.stdout)
+        self.assertIn("left update mode", result.stdout)
+        self.assertIn("its MIDI port is back", result.stdout)
+
+    def test_a_chip_that_never_leaves_update_mode_is_no_success(self):
+        self.unit_holds(self.current_element)
+        open(os.path.join(self.unit, "stuck-in-update-mode"), "w").close()
+        result = self.run_wizard(self.answers())
+        self.assert_stopped_with_the_way_back(result, "still in update mode after 3 s")
+        self.assertIn("Check: was the power switched off", result.stdout)
+        self.assertNotIn("booted", result.stdout)
+
+    def test_a_chip_whose_midi_port_never_comes_back_is_no_success(self):
+        self.unit_holds(self.current_element)
+        open(os.path.join(self.unit, "no-midi"), "w").close()
+        result = self.run_wizard(self.answers())
+        self.assert_stopped_with_the_way_back(result, "MIDI port didn't come back in 3 s")
+        self.assertIn("Check:", result.stdout)
+        self.assertNotIn("booted", result.stdout)
+
     def test_a_wrong_word_writes_nothing(self):
         self.unit_holds(self.current_element)
         result = self.run_wizard(["", self.upper, self.owner, self.record, "UPDATE", "flash"])
@@ -327,7 +362,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertEqual(self.memory("app.bin"), self.current_element)
 
 
-    FRESH = ["", "{upper}", "{owner}", "{record}", "UPDATE", "FLASH", "y", "FLASH", "", "y", "", ""]
+    FRESH = ["", "{upper}", "{owner}", "{record}", "UPDATE", "FLASH", "y", "FLASH", "y", "", ""]
 
     def answers(self):
         return [a.format(current=self.current, upper=self.upper, owner=self.owner, record=self.record)
@@ -381,7 +416,7 @@ class FlashDayRunTests(unittest.TestCase):
                 self.assertEqual(tool.main(argv), 0)
         self.unit_holds(self.current_element)
         answers = ["", self.upper, self.owner,   # no record path: it's found
-                   "UPDATE", "FLASH", "y", "FLASH", "", "y", "", ""]
+                   "UPDATE", "FLASH", "y", "FLASH", "y", "", ""]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Build record: " + os.path.join(kit, "wd-upper-drawing.build.json"), result.stdout)
@@ -403,7 +438,7 @@ class FlashDayRunTests(unittest.TestCase):
         # #603: only the image on the chip now is asked for; B, the owner's image and the record are found.
         self.upper, self.owner = self.kit_pair_in(self.work)
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", "UPDATE", "FLASH", "y", "FLASH", "", "y", "", ""])
+        result = self.run_wizard(["", "UPDATE", "FLASH", "y", "FLASH", "y", "", ""])
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Block B: " + self.upper, result.stdout)
         self.assertIn("The owner's image: " + self.owner, result.stdout)
@@ -414,7 +449,7 @@ class FlashDayRunTests(unittest.TestCase):
         with open(os.path.join(self.work, "flash-day.env"), "w") as f:
             f.write(f"UPPER_DFU='{self.upper}'\nOWNER_DFU='{self.owner}'\n")
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", "UPDATE", "FLASH", "y", "FLASH", "", "y", "", ""])
+        result = self.run_wizard(["", "UPDATE", "FLASH", "y", "FLASH", "y", "", ""])
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Block B: " + self.upper, result.stdout)
 

@@ -348,6 +348,36 @@ wait_for_quit() {
   printf '  %s✓%s %s quit\n' "$GREEN" "$RESET" "$name"
 }
 
+# power_cycle_wait has the owner power-cycle and watches USB, with no key to press (#603): the DFU device leaves,
+# then the display's MIDI port comes back. LC6000_POWER_WAIT seconds (120 by default) for each; a timeout is never
+# taken as success. The drawn wizard's; the stock wizard keeps reboot_check.
+power_cycle_wait() {
+  local limit="${LC6000_POWER_WAIT:-120}" waited=0
+  step "Power the LC6000 off, wait 5 seconds, power it on. No buttons held. The wizard watches USB for it."
+  until [[ -z "$(dfu_paths)" ]]; do
+    waited=$((waited + 1))
+    if (( waited > limit )); then
+      warn "The display chip is still in update mode after $limit s: the power cycle wasn't seen."
+      note "Check: was the power switched off for 5 s, not just the USB cable pulled? Is it on the same cable?"
+      way_back
+    fi
+    sleep 1
+  done
+  printf '  %s✓%s the chip left update mode\n' "$GREEN" "$RESET"
+  waited=0
+  until "$WORK/enter-update-mode" check >/dev/null 2>&1; do
+    waited=$((waited + 1))
+    if (( waited > limit )); then
+      warn "The display's MIDI port didn't come back in $limit s."
+      if [[ -n "$(dfu_paths)" ]]; then note "It's back in update mode: the bootloader didn't start the app."; fi
+      note "Check: is the LC6000 on and its screens lit? Is it on a direct cable? Is the jog display dark?"
+      way_back
+    fi
+    sleep 1
+  done
+  printf '  %s✓%s the display chip booted: its MIDI port is back\n' "$GREEN" "$RESET"
+}
+
 run_wizard() {
 
 TOTAL_STAGES=8
@@ -615,7 +645,7 @@ while :; do
       plan record "$PLAN" "$a4" "$rc"
       ;;
     power-cycle)
-      reboot_check
+      power_cycle_wait
       plan record "$PLAN" power_cycle ok
       ;;
     skip)
