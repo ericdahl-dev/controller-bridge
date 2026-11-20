@@ -271,6 +271,7 @@ public final class JogDisplayDriver {
         lastMarker = nil
         lastPlayLight = nil
         for message in JogDisplay.hello { sendController(message) }
+        helloResends = (0, clock.now + Self.helloAgainFirst)
         // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
         mode = .images
         lastDeck = nil
@@ -293,6 +294,7 @@ public final class JogDisplayDriver {
         mode = .images
         asked = false
         reasks = nil
+        helloResends = nil
         connected = false
         upload = nil
         lastMarker = nil
@@ -505,6 +507,19 @@ public final class JogDisplayDriver {
         reasks = done < Self.reaskLimit ? (done, clock.now + Self.reaskFirst * Double(1 << done)) : nil
     }
 
+    /// The hello again while the top panel hasn't answered it (#606): after a power cycle it can miss the first. The
+    /// same pair, `helloAgainLimit` times, the first `helloAgainFirst` s after the hello and each gap twice the last (1,
+    /// 3, 7, 15, 31 s), then never until the next connect.
+    static let helloAgainFirst = 1.0, helloAgainLimit = 5
+    private var helloResends: (done: Int, due: Double)?
+
+    private func helloAgainIfDue() {
+        guard connected, let pending = helloResends, clock.now >= pending.due - 1e-9 else { return }
+        for message in JogDisplay.hello { sendController(message) }
+        let done = pending.done + 1
+        helloResends = done < Self.helloAgainLimit ? (done, pending.due + Self.helloAgainFirst * Double(1 << done)) : nil
+    }
+
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
         traceReply(bytes)
@@ -573,6 +588,7 @@ public final class JogDisplayDriver {
             if displayFirmware == .custom { reasks = (0, clock.now + Self.reaskFirst) }
         }
         reaskIfDue()
+        helloAgainIfDue()
         if case .drawn = mode, let last = lastFullState, clock.now - last >= Self.heartbeat - 1e-9 { beat() }
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)

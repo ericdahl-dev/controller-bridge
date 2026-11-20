@@ -50,15 +50,17 @@ struct JogDisplayRecoveryTests {
         }
         Self.at(12.9, rig, clock)
         rig.coordinator.tick()
-        #expect(port.controller.isEmpty, "no restart inside the back-off")
+        // A restart is its goodbye: the hello's own re-sends (#606) go on the same port meanwhile.
+        #expect(!port.controller.contains(JogDisplay.goodbye), "no restart inside the back-off")
         Self.at(13.0, rig, clock)
         rig.coordinator.tick()
-        #expect(port.controller == [JogDisplay.goodbye] + JogDisplay.hello, "one restart when it ends")
+        #expect(Array(port.controller.drop { $0 != JogDisplay.goodbye }) == [JogDisplay.goodbye] + JogDisplay.hello,
+                "one restart when it ends")
         let said = lines.list.filter { $0.0 == .jogDisplay && $0.1.contains("again within") }
         #expect(said.count == 1)
         port.controller.removeAll()
         Self.at(14, rig, clock)
         rig.coordinator.tick()
-        #expect(port.controller.isEmpty, "nothing pending after it")
+        #expect(!port.controller.contains(JogDisplay.goodbye), "nothing pending after it")
     }
 }
