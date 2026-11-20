@@ -476,6 +476,31 @@ void test_flags_go_off_with_0_and_phase_takes_minus_1() {
     TEST_ASSERT_EQUAL_FLOAT(-1.0f, v.phase);
 }
 
+// Fast fields (phase, level, progress) come at up to 30 a second: each change is one show_deck, the same value again
+// none.
+void test_a_fast_field_change_is_one_redraw_and_the_same_value_none() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 1), 100);
+    core.render(screen, 100);
+    const size_t before = screen.shown.size();
+    const char* fields[] = {"phase", "level", "progress", "bpm", "tempo", "loopLength"};
+    for (const char* field : fields) {
+        feed(core, float_message(prefix + field, 0.25f), 110);
+        core.render(screen, 110);
+        feed(core, float_message(prefix + field, 0.25f), 120);
+        core.render(screen, 120);
+    }
+    const char* ints[] = {"loaded", "playing", "cue", "sync", "master", "loop", "beat", "elapsed", "remaining"};
+    for (const char* field : ints) {
+        feed(core, int_message(prefix + field, field == std::string("loaded") ? 0 : 2), 130);
+        core.render(screen, 130);
+    }
+    feed(core, string_message(prefix + "key", "11B"), 140);
+    core.render(screen, 140);
+    TEST_ASSERT_EQUAL(before + 6 + 9 + 1, screen.shown.size());
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -535,6 +560,7 @@ int main(int, char**) {
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
+    RUN_TEST(test_a_fast_field_change_is_one_redraw_and_the_same_value_none);
     RUN_TEST(test_the_waiting_screen_says_why);
     RUN_TEST(test_losing_wifi_is_the_waiting_screen_at_once);
     RUN_TEST(test_control_characters_show_as_spaces);

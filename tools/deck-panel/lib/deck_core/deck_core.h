@@ -37,10 +37,14 @@ struct DeckView {
     float phase = -1;  ///< 0-1, 0.5 in phase; -1 unknown
     float level = 0;  ///< 0-1
 
-    /// Every field: one #617 adds goes here too, or a change to it won't redraw.
-    bool operator==(const DeckView& other) const {
-        return deck == other.deck && color == other.color && std::strcmp(title, other.title) == 0 &&
-               std::strcmp(artist, other.artist) == 0;
+    /// Every field: one added later goes here too, or a change to it won't redraw.
+    bool operator==(const DeckView& o) const {
+        return deck == o.deck && color == o.color && std::strcmp(title, o.title) == 0 &&
+               std::strcmp(artist, o.artist) == 0 && loaded == o.loaded && std::strcmp(key, o.key) == 0 &&
+               bpm == o.bpm && tempo == o.tempo && playing == o.playing && cue == o.cue && sync == o.sync &&
+               master == o.master && loop == o.loop && loop_length == o.loop_length && beat == o.beat &&
+               elapsed == o.elapsed && remaining == o.remaining && progress == o.progress && phase == o.phase &&
+               level == o.level;
     }
 };
 
