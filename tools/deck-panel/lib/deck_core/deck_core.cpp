@@ -26,7 +26,30 @@ long read_string(const uint8_t* bytes, size_t length, size_t at) {
 
 size_t padded(size_t n) { return (n + 4) & ~size_t(3); }
 
+/// Well-formed UTF-8: no stray, cut-short, overlong or surrogate sequences, nothing past U+10FFFF.
+bool valid_utf8(const char* text) {
+    const auto* p = reinterpret_cast<const uint8_t*>(text);
+    while (*p) {
+        uint8_t lead = *p++;
+        int more;
+        uint32_t code;
+        if (lead < 0x80) continue;
+        if (lead >= 0xC2 && lead <= 0xDF) { more = 1; code = lead & 0x1F; }
+        else if (lead >= 0xE0 && lead <= 0xEF) { more = 2; code = lead & 0x0F; }
+        else if (lead >= 0xF0 && lead <= 0xF4) { more = 3; code = lead & 0x07; }
+        else return false;
+        for (int i = 0; i < more; ++i, ++p) {
+            if ((*p & 0xC0) != 0x80) return false;
+            code = code << 6 | (*p & 0x3F);
+        }
+        if ((more == 2 && code < 0x800) || (more == 3 && code < 0x10000) || code > 0x10FFFF) return false;
+        if (code >= 0xD800 && code <= 0xDFFF) return false;
+    }
+    return true;
+}
+
 bool parse(const uint8_t* bytes, size_t length, Message& out) {
+    if (length % 4 != 0) return false;
     long address_length = read_string(bytes, length, 0);
     if (address_length < 0) return false;
     const char* address = reinterpret_cast<const char*>(bytes);
@@ -47,7 +70,7 @@ bool parse(const uint8_t* bytes, size_t length, Message& out) {
         case 's':
             if (read_string(bytes, length, at) < 0) return false;
             out.s = reinterpret_cast<const char*>(bytes + at);
-            return true;
+            return valid_utf8(out.s);
         default:
             return false;
     }
@@ -57,14 +80,32 @@ bool parse(const uint8_t* bytes, size_t length, Message& out) {
 struct Row {
     const char* name;
     char type;
-    void (*apply)(DeckView&, const Message&);
+    /// Sets the value; false if it's out of range, which leaves the view as it was.
+    bool (*apply)(DeckView&, const Message&);
 };
 
 const Row kRows[] = {
-    {"deck", 'i', [](DeckView& v, const Message& m) { v.deck = m.i; }},
-    {"color", 'i', [](DeckView& v, const Message& m) { v.color = static_cast<uint32_t>(m.i) & 0xFFFFFF; }},
-    {"title", 's', [](DeckView& v, const Message& m) { v.title = m.s; }},
-    {"artist", 's', [](DeckView& v, const Message& m) { v.artist = m.s; }},
+    {"deck", 'i',
+     [](DeckView& v, const Message& m) {
+         if (m.i < 1 || m.i > 4) return false;
+         v.deck = m.i;
+         return true;
+     }},
+    {"color", 'i',
+     [](DeckView& v, const Message& m) {
+         v.color = static_cast<uint32_t>(m.i) & 0xFFFFFF;
+         return true;
+     }},
+    {"title", 's',
+     [](DeckView& v, const Message& m) {
+         v.title = m.s;
+         return true;
+     }},
+    {"artist", 's',
+     [](DeckView& v, const Message& m) {
+         v.artist = m.s;
+         return true;
+     }},
 };
 
 }  // namespace
@@ -74,8 +115,7 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t) {
     if (!parse(bytes, length, message)) return;
     for (const Row& row : kRows) {
         if (row.type == message.type && std::strcmp(row.name, message.name) == 0) {
-            row.apply(view_, message);
-            heard_ = true;
+            if (row.apply(view_, message)) heard_ = true;
         }
     }
 }
