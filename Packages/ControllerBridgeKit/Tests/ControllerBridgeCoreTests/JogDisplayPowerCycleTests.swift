@@ -314,6 +314,8 @@ struct JogDisplayPowerCycleTests {
         let after = Array(JogDisplayHelloRepaintTests.sent(rig).dropFirst(before))
         #expect(Set(after.map(\.note)).isSuperset(of: painted))
         #expect(lines.list.contains("jog display: a re-sent hello was answered: the LEDs painted again"))
+        // Mid-upload, so the ring stays at 0 (#422).
+        #expect(after.last { $0.note == 40 }?.velocity == 0)
         let again = JogDisplayHelloRepaintTests.sent(rig).count
         rig.coordinator.midi(Self.answer, source: JogDisplayRingHoldTests.lc6000.id)
         #expect(JogDisplayHelloRepaintTests.sent(rig).count - again < painted.count, "not a second repaint")
