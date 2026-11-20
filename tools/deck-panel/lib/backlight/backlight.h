@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 namespace backlight {
 
@@ -17,5 +18,12 @@ struct Bytes {
 Bytes level(int revision, uint8_t percent);
 
 uint8_t touch_activate(int revision);
+
+// Tries for each byte before giving up: the chip can NAK while it's busy, and it comes up after the ESP32.
+constexpr int kTries = 3;
+
+// Sends the bytes in order through put, which returns whether the chip ACKed (and does any wait between tries). Each
+// byte is tried up to kTries times; false, and nothing more sent, once a byte never gets an ACK.
+bool send(const Bytes& bytes, const std::function<bool(uint8_t)>& put);
 
 }  // namespace backlight

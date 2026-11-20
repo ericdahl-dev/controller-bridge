@@ -29,6 +29,18 @@ bool present() {
     return Wire.endTransmission() == 0;
 }
 
+// Sends through lib/backlight's retries, 10 ms apart, and says so if the chip never ACKed: a lost backlight byte is
+// otherwise a dark screen with nothing in the log.
+bool put(const backlight::Bytes& bytes, const char* what) {
+    const bool ok = backlight::send(bytes, [](uint8_t b) {
+        if (send(b)) return true;
+        delay(10);
+        return false;
+    });
+    if (!ok) Serial.printf("panel_mcu: %s byte not acknowledged after %d tries\n", what, backlight::kTries);
+    return ok;
+}
+
 }  // namespace
 
 bool begin() {
@@ -50,17 +62,18 @@ bool begin() {
     return true;
 }
 
+bool probe() { return present(); }
+
 int detectedRevision() { return g_revision; }
 
-void backlightOn() { backlightLevel(100); }
+bool backlightOn() { return backlightLevel(100); }
 
-void backlightOff() { backlightLevel(0); }
+bool backlightOff() { return backlightLevel(0); }
 
-void backlightLevel(uint8_t percent) {
-    const backlight::Bytes out = backlight::level(CROWPANEL_ADVANCE_REV, percent);
-    for (uint8_t i = 0; i < out.count; ++i) send(out.bytes[i]);
+bool backlightLevel(uint8_t percent) { return put(backlight::level(CROWPANEL_ADVANCE_REV, percent), "backlight"); }
+
+bool activateTouch() {
+    return put({{backlight::touch_activate(CROWPANEL_ADVANCE_REV), 0}, 1}, "touch activation");
 }
-
-void activateTouch() { send(backlight::touch_activate(CROWPANEL_ADVANCE_REV)); }
 
 }  // namespace panel_mcu

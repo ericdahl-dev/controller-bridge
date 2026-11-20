@@ -45,23 +45,29 @@ namespace panel_mcu {
 // supported here.
 bool begin();
 
-// 130 for V1.3 and later, 120 for V1.2, or 0 if begin() has not run or found
+// Whether anything answers at 0x30, with nothing logged: for waiting on a chip that comes up after the ESP32.
+bool probe();
+
+// CROWPANEL_ADVANCE_REV (140 for the owner's V1.4; 130 or more is V1.3 and later, 120 V1.2), or 0 if begin() has
+// not run or found
 // nothing. Log this at startup: on a board whose revision you have not checked,
 // it is the fastest way to find out.
 int detectedRevision();
 
+// Each returns false if the chip never acknowledged a byte (lib/backlight retries each byte, and this logs it).
+//
 // Full brightness. Call this LAST, after the panel is initialized and the RGB
 // clocks have settled, or the screen flashes on boot.
-void backlightOn();
+bool backlightOn();
 
-void backlightOff();
+bool backlightOff();
 
 // 0 (off) to 100 (brightest). The revision's encoding is applied internally, so
 // callers never see the inverted V1.3+ scale.
-void backlightLevel(uint8_t percent);
+bool backlightLevel(uint8_t percent);
 
 // Asks the companion MCU to reset the touch controller. The caller must hold
 // board::TP_INT low across this call to latch the GT911 at address 0x5D.
-void activateTouch();
+bool activateTouch();
 
 }  // namespace panel_mcu

@@ -18,6 +18,7 @@ namespace {
 
 lv_obj_t* g_touch_label = nullptr;
 bool g_was_pressed = false;
+int16_t g_shown_x = -1, g_shown_y = -1;
 
 lv_obj_t* plain_box(lv_obj_t* parent) {
     lv_obj_t* box = lv_obj_create(parent);
@@ -69,7 +70,12 @@ void show_touch() {
     }
     if (!g_was_pressed) Serial.printf("touch: %d,%d\n", touch_x(), touch_y());
     g_was_pressed = true;
-    lv_label_set_text_fmt(g_touch_label, "Touch at %d, %d", touch_x(), touch_y());
+    // Only when the point moves: each set redraws the label, and every redraw writes the framebuffer the panel is
+    // scanning out.
+    if (touch_x() == g_shown_x && touch_y() == g_shown_y) return;
+    g_shown_x = touch_x();
+    g_shown_y = touch_y();
+    lv_label_set_text_fmt(g_touch_label, "Touch at %d, %d", g_shown_x, g_shown_y);
 }
 
 }  // namespace
@@ -78,12 +84,10 @@ void setup() {
     Serial.begin(115200);
     Serial.printf("deck panel: boot, build %s\n", DECK_PANEL_SHA);
     Wire.begin(board::I2C_SDA, board::I2C_SCL, board::I2C_HZ);
-    // The companion chip can come up after the ESP32 (seen at power-on on a V1.4). Elecrow's V1.3+ example retries,
-    // sending the touch-activate byte, until it answers.
-    for (int i = 0; i < 20 && !panel_mcu::begin(); ++i) {
-        panel_mcu::activateTouch();
-        delay(100);
-    }
+    // The companion chip can come up after the ESP32 (seen at power-on on a V1.4): wait up to 2 s for it, quietly,
+    // then let begin() log what it found once.
+    for (int i = 0; i < 20 && !panel_mcu::probe(); ++i) delay(100);
+    panel_mcu::begin();
     if (!display_init()) {
         Serial.println("deck panel: no display, restarting in 5 s");
         delay(5000);
@@ -91,8 +95,9 @@ void setup() {
     }
     touch_init();
     build_screen();
-    lv_timer_handler();
-    panel_mcu::backlightOn();  // last, after the first draw, so the screen doesn't flash on boot
+    lv_refr_now(display_lvgl());  // the whole first frame, now, whatever ran before
+    // Last, after that frame, so the screen doesn't flash on boot.
+    if (!panel_mcu::backlightOn()) Serial.println("deck panel: the backlight may be off");
     Serial.println("deck panel: test screen up");
 }
 

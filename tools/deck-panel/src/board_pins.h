@@ -21,7 +21,7 @@
 
 // Board revision. The backlight encoding, the touch activation command and the
 // pixel clock all depend on it, and it is printed on the silkscreen.
-//   130 = V1.3, V1.4, V1.5   (current stock)
+//   130 or more = V1.3, V1.4, V1.5   (current stock; the owner's V1.4 builds with 140)
 //   120 = V1.2
 // Set this once the physical board is in hand and its silkscreen has been read.
 // It cannot be detected at run time: the companion MCU acknowledges any byte,
