@@ -1,0 +1,27 @@
+// The perf build's serial line (#635, -DPANEL_PERF_LOG): one window's numbers as text. Kept free of Arduino so it's
+// host-tested; src/perf_log.cpp gathers the numbers and prints it every 5 s.
+#pragma once
+
+#include <cstdint>
+#include <string>
+
+#include "frame_stats.h"
+
+namespace perf_line {
+
+struct Window {
+    uint32_t ms = 0;                // how long the window was
+    frame_stats::Report frames;     // LVGL's refreshes in it
+    uint32_t vsyncs = 0;            // the panel's (39 a second at 16 MHz, drawing or not)
+    uint32_t swaps = 0;             // frames handed to the panel
+    uint32_t swap_timeouts = 0;     // swaps the panel never released within 60 ms
+    uint64_t swap_wait_us = 0;      // LVGL waiting for a release
+    uint64_t draw_bitmap_us = 0;    // handing frames over
+    uint32_t datagrams = 0;         // feed datagrams read; lwIP's own drops aren't visible here
+    uint32_t too_big = 0;           // feed datagrams dropped for size
+    uint32_t internal_free = 0;     // bytes
+};
+
+std::string format(const Window& w);
+
+}  // namespace perf_line
