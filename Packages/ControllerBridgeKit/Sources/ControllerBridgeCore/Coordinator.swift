@@ -294,13 +294,21 @@ public final class Coordinator {
         updateDisplayFeed()
     }
 
-    /// Takes the display feed from `other` (#625): the demo's Coordinator while the demo runs, and the real one back
-    /// when it ends. The destination is already open, so this one's first snapshot goes out once its deck is known.
-    public func takeDisplayFeed(from other: Coordinator) {
-        guard let (sender, settings) = other.displayFeed.release() else { return }
+    /// Takes the display feed and its setting from the real Coordinator, for the demo's while it runs (#625). The
+    /// destination is already open, so the first snapshot goes out once the demo's deck is known.
+    public func takeDisplayFeed(from real: Coordinator) {
+        guard let (sender, settings) = real.displayFeed.release() else { return }
         displayFeed.attach(sender)
         displayFeed.set(settings, at: clock.now)
         status.requiredSubscriptions = requiredSubscriptions
+        displayFeedReady()
+    }
+
+    /// Takes the display feed back from the demo's Coordinator when it ends (#625), with a full snapshot. Its own
+    /// setting stays: a change made during the demo waited for the real Coordinator and is already applied.
+    public func takeBackDisplayFeed(from demo: Coordinator) {
+        guard let (sender, _) = demo.displayFeed.release() else { return }
+        displayFeed.attach(sender)
         displayFeedReady()
     }
 

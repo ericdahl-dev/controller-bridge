@@ -135,4 +135,24 @@ struct DisplayFeedDemoTests {
         #expect(Self.text(feed, "title") == ["Demo Track"])
         #expect(!Self.text(feed, "title").contains("Daybreak"))
     }
+
+    @Test("The feed turned off in Settings during the demo waits for its end, like every setting, and then holds: nothing goes out after")
+    func turnedOffDuringDemo() async throws {
+        let (rig, feed) = try Self.realRig()
+        let made = Made()
+        var off = DisplayFeedCoordinatorTests.on
+        off.enabled = false
+        await Self.run(rig, made) {
+            $0.send(.setDisplayFeed(DisplayFeedCoordinatorTests.on))
+            $0.send(.displayFeedReady)
+            $0.demo(on: true)
+            $0.send(.setDisplayFeed(off))
+            $0.demo(on: false)
+        }
+        let daybreak = DisplayFeedCoordinatorTests.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
+        #expect(feed.sent == daybreak)
+        feed.sent.removeAll()
+        for step in 1...300 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
+        #expect(feed.sent == [])
+    }
 }
