@@ -121,6 +121,7 @@ struct DrawnDisplayReconnectTests {
             clock.now = time
             rig.coordinator.tick()
         }
-        #expect(Self.ops(port).isEmpty)
+        // The capability question again (#604) is the only drawn op: no begin, no deck, no state.
+        #expect(Self.ops(port).allSatisfy { $0 == 0x00 })
     }
 }

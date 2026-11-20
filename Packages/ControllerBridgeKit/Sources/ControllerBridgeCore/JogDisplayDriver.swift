@@ -280,6 +280,7 @@ public final class JogDisplayDriver {
         }
         mode = .images
         asked = false
+        reasks = nil
         connected = false
         upload = nil
         lastMarker = nil
@@ -479,6 +480,19 @@ public final class JogDisplayDriver {
         sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
     }
 
+    /// The question again after the fallback to images (#604), custom firmware only: `reaskLimit` times, the first
+    /// `reaskFirst` s after it and each gap twice the last (1, 3, 7, 15, 31 s), then never until the next hello. Only the
+    /// same question again; Denon's firmware drops it silently (#466).
+    static let reaskFirst = 1.0, reaskLimit = 5
+    private var reasks: (done: Int, due: Double)?
+
+    private func reaskIfDue() {
+        guard case .images = mode, let pending = reasks, clock.now >= pending.due - 1e-9 else { return }
+        ask()
+        let done = pending.done + 1
+        reasks = done < Self.reaskLimit ? (done, clock.now + Self.reaskFirst * Double(1 << done)) : nil
+    }
+
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
         traceReply(bytes)
@@ -537,7 +551,11 @@ public final class JogDisplayDriver {
 
     /// Times out a silent upload; starts the next one.
     public func tick() {
-        if case .asking(let since) = mode, clock.now - since >= Self.answerTimeout - 1e-9 { showImages() }
+        if case .asking(let since) = mode, clock.now - since >= Self.answerTimeout - 1e-9 {
+            showImages()
+            if displayFirmware == .custom { reasks = (0, clock.now + Self.reaskFirst) }
+        }
+        reaskIfDue()
         if case .drawn = mode, let last = lastFullState, clock.now - last >= Self.heartbeat - 1e-9 { beat() }
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)
@@ -595,6 +613,7 @@ public final class JogDisplayDriver {
     /// The unit draws (#456): begin, then the deck in front.
     private func draw(version: Int) {
         mode = .drawn(version: version)
+        reasks = nil
         trace?(.jogDisplay, "jog display: drawn display, protocol \(version)")
         sendWD(DrawnDisplay.Message.begin(version: version).bytes)
         if wanted == nil { wanted = current }

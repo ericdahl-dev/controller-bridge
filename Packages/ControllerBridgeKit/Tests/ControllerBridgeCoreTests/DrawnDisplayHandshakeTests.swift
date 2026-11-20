@@ -169,6 +169,29 @@ struct DrawnDisplayHandshakeTests {
         #expect(since.last != nil && since.last != 0)
     }
 
+    /// When the capability question went out, over `seconds` of 10 ms ticks with no answer.
+    static func asksOver(_ seconds: Double, _ rig: ProfileMatchingTests.ProfileRig, _ port: Port, _ clock: Rig.FakeClock) -> [Double] {
+        var at: [Double] = port.wd.contains(Self.ask) ? [0] : []
+        for step in 1...Int(seconds * 100) {
+            clock.now = Double(step) / 100
+            let before = port.wd.filter { $0 == Self.ask }.count
+            rig.coordinator.tick()
+            if port.wd.filter({ $0 == Self.ask }).count > before { at.append(clock.now) }
+        }
+        return at
+    }
+
+    @Test("No answer (#604): asked again 1, 3, 7, 15 and 31 s after the fallback, then never; an answer then draws")
+    func reasksWithBackoff() throws {
+        let (rig, port, clock) = try Self.rig(.custom)
+        let at = Self.asksOver(100, rig, port, clock)
+        #expect(at.count == 6)
+        let due = [0, 1.5, 3.5, 7.5, 15.5, 31.5]
+        #expect(at.count == 6 && zip(at, due).allSatisfy { $0 >= $1 - 1e-9 && $0 < $1 + 2.5 })
+        rig.coordinator.jogDisplayReply(Self.answer)
+        #expect(rig.coordinator.status.displayFound?.label == "Custom (drawn display, protocol 1)")
+    }
+
     static let end = DrawnDisplay.Message.end(version: 1).bytes
 
     @Test("Turning the jog display off in drawn mode: end, then the goodbye")
