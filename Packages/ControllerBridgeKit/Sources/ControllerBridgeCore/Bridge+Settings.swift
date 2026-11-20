@@ -27,6 +27,7 @@ extension Bridge {
         lastPulseTime = old.lastPulseTime
         lastClockTime = old.lastClockTime
         loaded = old.loaded
+        loadedHeard = old.loadedHeard
         synced = old.synced
         sliderEnabled = old.sliderEnabled
         looping = old.looping

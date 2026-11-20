@@ -6,8 +6,8 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
     case playing, playPending, loaded, progress, tempoSlider, cues, sync, loop
     /// The deck's phase in the bar, for the jog display's needle (#165). Asked for only while the display is on.
     case barRamp
-    /// The deck's beat offset from the master, for the drawn display's phase rule (#462). Asked for only while the
-    /// unit draws.
+    /// The deck's beat offset from the master, for the drawn display's phase rule (#462) and the display feed's phase
+    /// (#617). Asked for only while the unit draws or the feed is on; the mixer's Meter too.
     case phaseOffset
     /// The mixer's (#207), asked for only by a profile with those controls. Their checkbox names are from Syndicate's
     /// feedback addresses; the screen's own labels are unconfirmed.
@@ -82,13 +82,13 @@ public enum Subscription: String, CaseIterable, Equatable, Sendable {
         case .sync: "the Sync LED doesn't follow the deck"
         case .loop: "the loop LEDs don't follow the deck"
         case .barRamp: "the jog display's needle doesn't follow the deck"
-        case .phaseOffset: "the jog display's rule doesn't show the deck's phase"
+        case .phaseOffset: "the jog display's rule doesn't show the deck's phase, and the display feed sends its phase as unknown"
         case .mixerVolume: "the channel fader can jump, and Shift + Needle Drop moves no fader in relative mode"
         case .mixerTrim: "the trim knob can jump"
         case .mixerEQ: "the EQ knobs can jump"
         case .mixerFilter: "the filter knob can jump"
         case .mixerButtons: "the cue, mute and solo LEDs don't follow the mixer"
-        case .mixerMeter: "the VU meters stay dark"
+        case .mixerMeter: "the VU meters stay dark, and the display feed's level stays at 0"
         }
     }
 
