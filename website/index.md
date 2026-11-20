@@ -44,7 +44,7 @@ Four settings in Syndicate, once. DeckBridge opens a setup guide with the same s
 
 1. **Settings → OSC:** turn OSC input on. The listen port is 9090.
 2. **Settings → OSC Feedback:** set DEST IP to 127.0.0.1 (or this Mac's address if Syndicate runs on another Mac) and PORT to 9096.
-3. **Settings → OSC Feedback → Subscriptions:** turn on Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync and Loop.
+3. **Settings → OSC Feedback → Subscriptions:** turn on Playing, PlayPending, Loaded and TrackInfo, Position/Progress, TempoSlider/TempoSliderEnabled, Cues, BPM/Sync, Loop and Volume.
 4. **Settings → MIDI:** turn the LC6000 PRIME's MIDI input off in Syndicate, so Syndicate's own mapping and DeckBridge don't both react to every button.
 
 Quit djay Pro, Engine DJ or any other app using the controller first, and power-cycle the controller if one was open. When it's working, the DeckBridge panel shows CONTROLLER CONNECTED and FEEDBACK LIVE.
