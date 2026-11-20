@@ -265,7 +265,7 @@ public final class JogDisplayDriver {
         lastState = nil
         if displayFirmware == .custom {
             mode = .asking(since: clock.now)
-            sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
+            ask()
         }
         onEvent?(.connected)
         next()
@@ -279,6 +279,8 @@ public final class JogDisplayDriver {
             if quitting, let leaving { leaveLogo(leaving) } else { endDrawing(version) }
         }
         mode = .images
+        asked = false
+        reasks = nil
         connected = false
         upload = nil
         lastMarker = nil
@@ -469,15 +471,47 @@ public final class JogDisplayDriver {
         for deck in previews.keys.sorted() { reportPreview(previews[deck]!) }
     }
 
+    /// Whether the capability question went out since the hello (#604): an answer after the fallback to images still
+    /// counts, since a unit just power cycled answers only once its chip has started.
+    private var asked = false
+
+    private func ask() {
+        asked = true
+        sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
+    }
+
+    /// The question again after the fallback to images (#604), custom firmware only: `reaskLimit` times, the first
+    /// `reaskFirst` s after it and each gap twice the last (1, 3, 7, 15, 31 s), then never until the next hello. Only the
+    /// same question again; Denon's firmware drops it silently (#466).
+    static let reaskFirst = 1.0, reaskLimit = 5
+    private var reasks: (done: Int, due: Double)?
+
+    private func reaskIfDue() {
+        guard case .images = mode, let pending = reasks, clock.now >= pending.due - 1e-9 else { return }
+        ask()
+        let done = pending.done + 1
+        reasks = done < Self.reaskLimit ? (done, clock.now + Self.reaskFirst * Double(1 << done)) : nil
+    }
+
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
         traceReply(bytes)
         if case .asking = mode, let version = DrawnDisplay.answer(bytes) {
             return draw(version: min(version, DrawnDisplay.version))
         }
+        // A late answer, in images (#604): drawn from here. An upload in flight is dropped; the chip draws over it.
+        if case .images = mode, asked, let version = DrawnDisplay.answer(bytes) {
+            upload = nil
+            return draw(version: min(version, DrawnDisplay.version))
+        }
         // A refusal (ack 06) ends the wait at once. Denon's firmware never sends one for this command: it says nothing,
         // so the timeout is its path (#466).
         if case .asking = mode, upload == nil, case .refused = JogDisplay.Reply(bytes) { return showImages() }
+        // A refusal to the question again (#604): not drawing firmware after all, so no more asking.
+        if case .images = mode, reasks != nil, upload == nil, case .refused = JogDisplay.Reply(bytes) {
+            reasks = nil
+            return
+        }
         guard var running = upload, let reply = JogDisplay.Reply(bytes) else { return }
         switch reply {
         case .accepted where !running.finished:
@@ -522,7 +556,11 @@ public final class JogDisplayDriver {
 
     /// Times out a silent upload; starts the next one.
     public func tick() {
-        if case .asking(let since) = mode, clock.now - since >= Self.answerTimeout - 1e-9 { showImages() }
+        if case .asking(let since) = mode, clock.now - since >= Self.answerTimeout - 1e-9 {
+            showImages()
+            if displayFirmware == .custom { reasks = (0, clock.now + Self.reaskFirst) }
+        }
+        reaskIfDue()
         if case .drawn = mode, let last = lastFullState, clock.now - last >= Self.heartbeat - 1e-9 { beat() }
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)
@@ -560,11 +598,14 @@ public final class JogDisplayDriver {
             current = nil
         }
         mode = .images
+        // The asking starts over (#604): Denon's firmware is never asked, nor drawn on by a late answer.
+        asked = false
+        reasks = nil
         lastDeck = nil
         lastState = nil
         if displayFirmware == .custom {
             mode = .asking(since: clock.now)
-            sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
+            ask()
         }
     }
 
@@ -580,6 +621,7 @@ public final class JogDisplayDriver {
     /// The unit draws (#456): begin, then the deck in front.
     private func draw(version: Int) {
         mode = .drawn(version: version)
+        reasks = nil
         trace?(.jogDisplay, "jog display: drawn display, protocol \(version)")
         sendWD(DrawnDisplay.Message.begin(version: version).bytes)
         if wanted == nil { wanted = current }
