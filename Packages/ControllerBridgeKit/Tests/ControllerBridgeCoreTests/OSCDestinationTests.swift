@@ -21,9 +21,12 @@ struct OSCDestinationTests {
         }
         var opened: [Sink] = []
         var refuse: Set<String> = []
+        /// New sockets fail their sends too, as while a host is off the network.
+        var failNew = false
         func open(_ host: String, _ port: Int) throws -> any DatagramSink {
             if refuse.contains(host) { throw POSIXError(.EADDRNOTAVAIL) }
             let sink = Sink("\(host):\(port)")
+            sink.fails = failNew
             opened.append(sink)
             return sink
         }
