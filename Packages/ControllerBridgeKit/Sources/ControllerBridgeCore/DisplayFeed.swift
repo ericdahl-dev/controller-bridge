@@ -222,10 +222,11 @@ final class DisplayFeed {
         }
         // One datagram for the update (#636): a panel takes a few at a time, so a snapshot spread over 20 lost most.
         if fastSent { fastDue = (fastDue.map { max($0, now - Self.fastInterval) } ?? now) + Self.fastInterval }
-        for bundle in Self.bundles(changes) { sender.send(bundle: bundle) }
+        let bundles = Self.bundles(changes)
+        for bundle in bundles { sender.send(bundle: bundle) }
         let count = changes.count
         if snapshot {
-            say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", \(count) messages")
+            say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", \(count) messages in \(bundles.count) bundle\(bundles.count == 1 ? "" : "s")")
         }
     }
 }

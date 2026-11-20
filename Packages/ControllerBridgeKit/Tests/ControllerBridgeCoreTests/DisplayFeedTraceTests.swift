@@ -22,7 +22,7 @@ struct DisplayFeedTraceTests {
         #expect(lines.of(.displayFeed) == [
             "on: 192.168.1.40:9100, waiting for its destination",
             "destination open",
-            #"snapshot (destination open): deck 1, loaded 1, "Daybreak", 20 messages"#,
+            #"snapshot (destination open): deck 1, loaded 1, "Daybreak", 20 messages in 1 bundle"#,
         ])
     }
 
@@ -37,7 +37,7 @@ struct DisplayFeedTraceTests {
             MainCueTests.position(rig, Float(step) / 10)
             rig.coordinator.tick()
         }
-        #expect(lines.of(.displayFeed) == [#"snapshot (keepalive): deck 1, loaded 1, "Daybreak", 20 messages"#])
+        #expect(lines.of(.displayFeed) == [#"snapshot (keepalive): deck 1, loaded 1, "Daybreak", 20 messages in 1 bundle"#])
         lines.list.removeAll()
         var off = DisplayFeedCoordinatorTests.on
         off.enabled = false
@@ -55,7 +55,7 @@ struct DisplayFeedTraceTests {
             "on: 192.168.1.40:9100, waiting for its destination",
             "destination open",
             "holding the first snapshot until Syndicate answers for deck 1, at most 1 s",
-            #"snapshot (no answer from Syndicate in 1 s): deck 1, loaded 0, "", 20 messages"#,
+            #"snapshot (no answer from Syndicate in 1 s): deck 1, loaded 0, "", 20 messages in 1 bundle"#,
         ])
     }
 
@@ -66,6 +66,6 @@ struct DisplayFeedTraceTests {
         DisplayFeedCoordinatorTests.turnOn(rig)
         lines.list.removeAll()
         rig.coordinator.setDeck(2, controller: 0)
-        #expect(lines.of(.displayFeed) == [#"snapshot (deck 2 in front): deck 2, loaded 0, "", 20 messages"#])
+        #expect(lines.of(.displayFeed) == [#"snapshot (deck 2 in front): deck 2, loaded 0, "", 20 messages in 1 bundle"#])
     }
 }
