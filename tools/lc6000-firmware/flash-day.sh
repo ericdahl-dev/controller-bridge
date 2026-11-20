@@ -558,6 +558,11 @@ wait_for_quit "Denon's updater" "Firmware Updater.app/Contents/MacOS/FirmwareUpd
 note "Check: the LC6000 is on a direct cable to the Mac (not a hub), running normally, and there's no gig today."
 
 stage "The drawn flash"
+# The probe answer is kept for today and this unit (#603); --probe-again forgets it, so it's asked once more.
+if (( PROBE_AGAIN )) && [[ -e "$WORK/probe.json" ]]; then
+  rm -f "$WORK/probe.json"
+  note "The probe answer from earlier today is forgotten: it's asked again before the owner's image."
+fi
 PLAN="$WORK/drawn-plan-$STAMP.json"
 plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK" "$REMEMBERED_WD"
 while :; do
@@ -644,14 +649,15 @@ pause
 finish
 }
 
-# flash-day.sh drawn [--current PATH]
-DRAWN_CURRENT=""
+# flash-day.sh drawn [--current PATH] [--probe-again]
+DRAWN_CURRENT="" PROBE_AGAIN=0
 if [[ "${1:-}" == "drawn" ]]; then
   shift
   while (( $# )); do
     case "$1" in
       --current) [[ -n "${2:-}" ]] || { warn "--current needs a path."; exit 2; }; DRAWN_CURRENT="${2/#\~/$HOME}"; shift 2 ;;
-      *) warn "Unknown option: $1 (flash-day.sh drawn [--current PATH])"; exit 2 ;;
+      --probe-again) PROBE_AGAIN=1; shift ;;
+      *) warn "Unknown option: $1 (flash-day.sh drawn [--current PATH] [--probe-again])"; exit 2 ;;
     esac
   done
   run_drawn

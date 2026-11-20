@@ -140,10 +140,10 @@ class FreshFlashTests(DrawnPlanTests):
         end = unit.run(self.plan())
         self.assertEqual(end, ("done",))
         self.assertEqual(self.kinds(unit), [
-            "ask probe", "update-mode", "list",
+            "update-mode", "list",
             "read app", "read options", "read upper",
             "type word_upper", "write upper", "read upper",
-            "list", "type word_app", "write app", "read app",
+            "list", "ask probe", "type word_app", "write app", "read app",
             "power-cycle", "ask stock_look", "done"])
         words = [a for a in unit.log if a[0] == "type"]
         self.assertEqual([(w[1], w[2]) for w in words], [("word_upper", "FLASH"), ("word_app", "FLASH")])
@@ -188,6 +188,72 @@ class RewriteTests(DrawnPlanTests):
         self.assertIn("skip upper_step", self.kinds(unit))
         self.assertIn("skip app_step", self.kinds(unit))
 
+
+
+class ProbeTests(DrawnPlanTests):
+    """The probe question (#603): asked only when the owner's image is written, and remembered for the day and the
+    unit (the DFU serial) in the work folder, shown on the image's word screen."""
+
+    def b_only(self):
+        self.current = self.owner
+        upper = RewriteTests.OLD_B + b"\xff" * (UPPER_SIZE - len(RewriteTests.OLD_B))
+        return FakeUnit(self.dir.name, self.owner_element, upper=upper)
+
+    def word_app_text(self, unit):
+        return [a[3] for a in unit.log if a[:2] == ("type", "word_app")][0]
+
+    def remembered(self):
+        with open(os.path.join(self.dir.name, "probe.json")) as f:
+            return json.load(f)
+
+    def test_a_b_only_rewrite_never_asks(self):
+        unit = self.b_only()
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertNotIn("probe", [a[1] for a in unit.log if a[0] in ("ask", "type")])
+
+    def test_a_yes_is_remembered_and_shown_and_not_asked_again_today(self):
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertEqual(self.remembered()["serial"], "FFFFFFFEFFFF")
+        self.assertEqual(self.remembered()["answer"], "yes")
+        self.assertIn("probe: yes (answered today at ", self.word_app_text(unit))
+        again = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(again.run(self.plan()), ("done",))
+        self.assertNotIn("probe", [a[1] for a in again.log if a[0] == "ask"])
+        self.assertIn("probe: yes (answered today at ", self.word_app_text(again))
+
+    def test_no_probe_is_remembered_with_its_phrase(self):
+        unit = FakeUnit(self.dir.name, self.current_element, answers={"probe": "n"})
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertEqual(self.remembered()["answer"], "no probe")
+        again = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(again.run(self.plan()), ("done",))
+        self.assertEqual([a[1] for a in again.log if a[0] in ("ask", "type") and "probe" in a[1]], [])
+        self.assertIn("probe: NO, NO PROBE typed today at ", self.word_app_text(again))
+
+    def test_a_wrong_phrase_isnt_remembered(self):
+        unit = FakeUnit(self.dir.name, self.current_element, answers={"probe": "n"}, words={"no_probe": "no"})
+        self.assertEqual(unit.run(self.plan())[0], "stop")
+        self.assertFalse(os.path.exists(os.path.join(self.dir.name, "probe.json")))
+
+    def test_another_day_or_another_unit_asks_again(self):
+        for field, value in (("date", "2001-01-01"), ("serial", "123456789ABC")):
+            with self.subTest(field):
+                FakeUnit(self.dir.name, self.current_element).run(self.plan())
+                remembered = self.remembered()
+                remembered[field] = value
+                with open(os.path.join(self.dir.name, "probe.json"), "w") as f:
+                    json.dump(remembered, f)
+                again = FakeUnit(self.dir.name, self.current_element)
+                again.run(self.plan())
+                self.assertIn("probe", [a[1] for a in again.log if a[0] == "ask"])
+
+    def test_an_unreadable_remembered_answer_is_asked_again(self):
+        with open(os.path.join(self.dir.name, "probe.json"), "w") as f:
+            f.write("{not json")
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertIn("probe", [a[1] for a in unit.log if a[0] == "ask"])
 
 
 class CutOffTests(DrawnPlanTests):
@@ -279,9 +345,9 @@ class RefusalTests(DrawnPlanTests):
     def test_a_wrong_word_for_the_image_writes_only_b(self):
         self.refused("not FLASH", writes=["upper"], words={"word_app": "yes"})
 
-    def test_no_probe_without_the_phrase_stops_before_update_mode(self):
-        fake = self.refused("not NO PROBE", answers={"probe": "n"}, words={"no_probe": "y"})
-        self.assertNotIn("update-mode", self.kinds(fake))
+    def test_no_probe_without_the_phrase_stops_before_the_image_is_written(self):
+        # #603: asked just before the owner's image, so B is already written by then.
+        self.refused("not NO PROBE", writes=["upper"], answers={"probe": "n"}, words={"no_probe": "y"})
 
     def test_no_probe_with_the_phrase_goes_on(self):
         fake = FakeUnit(self.dir.name, self.current_element, answers={"probe": "n"})
@@ -329,7 +395,7 @@ class BuildRecordTests(DrawnPlanTests):
     def test_a_good_record_is_read_and_the_owner_is_never_asked(self):
         unit = FakeUnit(self.dir.name, self.current_element)
         self.assertEqual(unit.run(self.plan()), ("done",))
-        self.assertEqual(self.kinds(unit)[0], "ask probe")
+        self.assertEqual(self.kinds(unit)[0], "update-mode")
         self.assertNotIn("both_true", [a[1] for a in unit.log if a[0] == "ask"])
 
     def test_no_record_stops_before_anything_is_sent(self):
@@ -543,7 +609,7 @@ class FreshnessTests(DrawnPlanTests):
         # The same file, begun again for a new run.
         drawn_plan.begin(path, current=self.current, upper=self.upper, owner=self.owner, record=self.record,
                          work=self.dir.name)
-        self.assertEqual(drawn_plan.next_action(path)[:2], ("ask", "probe"))
+        self.assertEqual(drawn_plan.next_action(path)[:1], ("update-mode",))
 
     def test_facts_from_another_run_kept_in_the_file_authorize_nothing(self):
         # A completed run's facts left in the file under a new run id: the reads come again before any write.
@@ -557,11 +623,10 @@ class FreshnessTests(DrawnPlanTests):
         kinds = self.kinds(unit)
         self.assertLess(kinds.index("read upper"), kinds.index("write upper"))
         self.assertLess(kinds.index("read app"), kinds.index("write app"))
-        self.assertEqual(kinds[0], "ask probe")
+        self.assertEqual(kinds[0], "update-mode")
 
     def test_a_read_made_before_update_mode_is_read_again(self):
         path = self.plan()
-        drawn_plan.record(path, "probe", "y")
         upper = self.write("old-upper.bin", b"\xff" * UPPER_SIZE)
         drawn_plan.record(path, "upper_read", upper)   # before update mode
         drawn_plan.record(path, "update_mode", "ok")

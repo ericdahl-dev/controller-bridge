@@ -212,15 +212,6 @@ def decide(plan):
     if not ok:
         return ("stop", f"The build record refuses: {why}. Nothing was sent.")
     # The apps that open the unit are watched by the shell before the plan begins (#603); nothing else is asked.
-    probe = fact(plan, "probe")
-    if probe is None:
-        return ("ask", "probe", "Is an ST-Link probe connected, and can it read the chip (#433)?")
-    if probe != "y":
-        typed = fact(plan, "no_probe")
-        if typed is None:
-            return ("type", "no_probe", drawn_flash.NO_PROBE, drawn_flash.NO_PROBE_RISK)
-        if typed.strip() != drawn_flash.NO_PROBE:
-            return ("stop", f"You typed {typed.strip()!r}, not {drawn_flash.NO_PROBE}. Nothing was sent.")
     # Update mode, and the one device.
     entered = fact(plan, "update_mode")
     if entered is None:
@@ -384,6 +375,56 @@ def step_upper(plan, dfu_path, upper_state):
     return None
 
 
+PROBE_FILE = "probe.json"
+
+
+def listing_serial(listing):
+    """The display chip's DFU serial from dfu-util -l: the ST bootloader's, from the chip's own ID. None if absent."""
+    import re
+    for line in open(listing):
+        if "[0483:df11]" in line.lower():
+            found = re.search(r'serial="([^"]*)"', line)
+            if found:
+                return found.group(1)
+    return None
+
+
+def probe(plan):
+    """(the word screen's probe line, None), or (None, an action) (#603). Asked only before the owner's image is
+    written; a B-only rewrite leaves the app area, and the update-mode path in it, as they are. The answer (yes, or
+    no with NO PROBE typed) is remembered in the work folder for today and this unit's DFU serial; another day,
+    another unit or an unreadable file asks again. `flash-day.sh drawn --probe-again` forgets it."""
+    import time
+    path = os.path.join(plan["work"], PROBE_FILE)
+    serial, today = listing_serial(fact(plan, "list_again")), time.strftime("%Y-%m-%d")
+    try:
+        with open(path) as f:
+            kept = json.load(f)
+        if kept["date"] == today and kept["serial"] == serial and serial and kept["answer"] in ("yes", "no probe"):
+            if kept["answer"] == "yes":
+                return f"▶ probe: yes (answered today at {kept['time']})", None
+            return f"▶ probe: NO, {drawn_flash.NO_PROBE} typed today at {kept['time']}: no way back over USB if the " \
+                   f"image can't take the update-mode message", None
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    answer = fact(plan, "probe")
+    if answer is None:
+        return None, ("ask", "probe", "Is an ST-Link probe connected, and can it read the chip (#433)?")
+    if answer != "y":
+        typed = fact(plan, "no_probe")
+        if typed is None:
+            return None, ("type", "no_probe", drawn_flash.NO_PROBE, drawn_flash.NO_PROBE_RISK)
+        if typed.strip() != drawn_flash.NO_PROBE:
+            return None, ("stop", f"You typed {typed.strip()!r}, not {drawn_flash.NO_PROBE}. Nothing more was written.")
+    kept = {"date": today, "time": time.strftime("%H:%M"), "serial": serial, "answer": "yes" if answer == "y" else "no probe"}
+    if serial:
+        with open(path, "w") as f:
+            json.dump(kept, f)
+        return probe(plan)
+    return f"▶ probe: {'yes' if answer == 'y' else 'NO, ' + drawn_flash.NO_PROBE} (answered just now; no serial to " \
+           f"remember it by)", None
+
+
 def step_app(plan, dfu_path, app_state):
     files = plan["files"]
     if app_state.startswith("holds"):
@@ -398,10 +439,13 @@ def step_app(plan, dfu_path, app_state):
             return problem
         if again != dfu_path:
             return ("stop", "The display chip isn't at the same USB path any more.")
+        probe_line, problem = probe(plan)
+        if problem:
+            return problem
         typed = fact(plan, "word_app")
         if typed is None:
             return ("type", "word_app", "FLASH", "This ERASES and WRITES the display chip's app area "
-                                                 "(0x08008000-0x0807FFFF). Type FLASH to write it.")
+                                                 "(0x08008000-0x0807FFFF). Type FLASH to write it.\n" + probe_line)
         if typed.strip() != "FLASH":
             return ("stop", f"You typed {typed.strip()!r}, not FLASH. Nothing was written.")
         return ("write", "app", dfu_path, files["owner"], "app_written")
