@@ -16,7 +16,7 @@ public enum DisplayFeedStatus: Equatable, Sendable {
         let address = "\(settings.host.trimmingCharacters(in: .whitespaces)):\(settings.port)"
         if !settings.enabled {
             self = .off
-        } else if let problem = destination.lastError {
+        } else if let problem = destination.connectProblem {
             // Before "sending": a new address that failed leaves the old one open, which isn't the one asked for.
             self = .notSending(problem)
         } else if destination.isReady {
