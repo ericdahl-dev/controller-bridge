@@ -115,6 +115,53 @@ tools/deck-panel/fonts/make_fonts.sh
 
 The deck view no longer uses Montserrat 20, 28 or 48; the test screen still has 20 and 28, and LVGL keeps 14 as its default. Together 438 KB of flash, about 287 KB more than the Montserrat sizes they replace. Geist has no glyph for 12 of the range's characters (Geist Mono 14), so the script draws them as their base letter: the soft hyphen as `-`, Ĕĕ Ĭĭ Ŏŏ without the breve, ĸ as `k`, Ŀŀ as `Ll`, ŉ as `n`, ſ as `s`, and in Mono Ĳĳ as `Ii`.
 
+## Drawing without tearing (#635)
+
+The panel scans its picture out of a framebuffer in PSRAM 39 times a second (16 MHz pixel clock). There are two framebuffers. LVGL draws into the hidden one (DIRECT mode), then hands it to the panel at the frame's end. Until the panel has moved off the old buffer, LVGL waits, so it never draws into the picture being shown. LVGL refreshes every 25 ms, one frame. The timing is `lib/frame_pacing`, and the handshake is `lib/swap_gate`; both are host-tested.
+
+The driver is Espressif's `esp_lcd` RGB panel with bounce buffers: two buffers of ten lines each, in internal RAM, filled by an interrupt from the current framebuffer. They're needed on this core. It restarts the panel's DMA at every vsync, and on the S3 that restart always starts from the first framebuffer, which would undo every swap to the second.
+
+**Overrides, to try on the panel without a commit** (defaults in `src/display_driver.cpp`):
+
+| Flag | Default | What it changes |
+|---|---|---|
+| `-DPANEL_PCLK_HZ=14000000` | 16 MHz | Pixel clock, 12.3 to 16 MHz (34 Hz at 14 MHz; the refresh period follows) |
+| `-DPANEL_PCLK_ACTIVE_NEG=0` | 1 | The clock edge the panel samples on |
+| `-DPANEL_BOUNCE_PX=0` | 8000 | Bounce buffers off: expected to show only every other frame on this core |
+| `-DPANEL_PCLK_IDLE_HIGH`, `-DPANEL_HSYNC_IDLE_LOW`, `-DPANEL_VSYNC_IDLE_LOW`, `-DPANEL_DE_IDLE_HIGH` | as LovyanGFX had them | Signal idle levels |
+
+Stack them on any env: `PLATFORMIO_BUILD_FLAGS="-DPANEL_PCLK_ACTIVE_NEG=0" pio run -d tools/deck-panel -e crowpanel-perf -t upload --upload-port /dev/cu.wchusbserial210`.
+
+**What a fault looks like on the glass:**
+
+| You see | Likely | Try |
+|---|---|---|
+| A fine shimmer or sparkle on edges and text, even on the still test screen; colors a little off or noisy | The wrong clock edge | `-DPANEL_PCLK_ACTIVE_NEG=0` |
+| Moving parts flicker between old and new values, or move in steps with the old picture flashing back; the perf line shows swap timeouts, or vsyncs/s well off 39 | The swap's timing | Read the perf line first. `-DPANEL_BOUNCE_PX=0` shows the core's restart problem on its own |
+| The whole picture jitters sideways or shifts, worse with Wi-Fi busy | Scan-out starved of PSRAM | `-DPANEL_PCLK_HZ=14000000` |
+| Black with the backlight on | No frame reached the panel | The serial log's `display:` lines |
+
+## The perf build
+
+`crowpanel-perf` is the deck view plus a line on serial every 5 s. To read it, after flashing:
+
+```sh
+pio device monitor -d tools/deck-panel -e crowpanel-perf -p /dev/cu.wchusbserial210 -b 115200
+```
+
+```text
+perf: 30.0 frames/s, render avg 4.2 ms max 9.5 ms, swap wait 18.0 ms/frame, draw_bitmap 0.02 ms/frame, 39.0 vsyncs/s, 0 swap timeouts, feed 900 datagrams 1 too big, internal free 123456
+```
+
+- **frames/s:** LVGL's refreshes that drew something, at most 39. With the deck playing it should be about 30.
+- **render:** from a refresh's start to its end, the swap wait included.
+- **swap wait:** how long LVGL waited, per frame, for the panel to take the last one. Up to one frame (25.6 ms) is normal.
+- **vsyncs/s:** the panel's own rate, 39.0 at 16 MHz, drawing or not.
+- **swap timeouts:** waits that hit 60 ms. Anything but 0 is a fault.
+- **feed:** datagrams read in the window, and those dropped for being too big. lwIP's own drops, when its 6-deep receive queue is full, can't be seen from here.
+- **internal free:** free internal RAM, in bytes.
+- A still screen prints `perf: no frames (nothing changed)`: LVGL draws only what changes.
+
 ## What the test screen shows
 
 Build and flash `crowpanel-test` (`-e crowpanel-test` in the commands above) for it.
