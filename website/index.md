@@ -80,7 +80,7 @@ Yes. Set the Syndicate host in DeckBridge's Settings to that Mac's IP address, a
 
 ### Can I try it without a controller?
 
-Yes. Turn on the demo controller in the panel. A scripted controller plays against a simulated session, with nothing sent to the network.
+Yes. Turn on the demo controller in the panel. A scripted controller plays against a simulated session. Nothing goes to the network unless you turn on the display feed, and then only unencrypted to the one address you set on your local network.
 
 ### Does DeckBridge collect any data?
 

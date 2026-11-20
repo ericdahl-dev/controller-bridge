@@ -220,6 +220,30 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(root), ["support/index.html: no <title>",
                                                      "support/index.html: no meta description"])
 
+    def test_saying_nothing_goes_to_the_network_must_name_the_display_feed(self):
+        """With the display feed on, the deck in front goes to the address the DJ sets (#632, ADR 0011): a sentence
+        that says nothing goes to the network must say so, in its HTML text, its JSON-LD and index.md alike."""
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                                            '<p>A scripted controller plays, with nothing sent to the network.</p>'),
+            "for/lc6000/index.html": page(head='<script type="application/ld+json">{"text": "Nothing goes to the network, and it\'s off at launch."}</script>',
+                                          body='<a href="../../">Home</a>'),
+            "index.md": "Yes. Nothing goes to the network.\n",
+        })
+        self.assertEqual(check_site.problems(root), [
+            'for/lc6000/index.html: says nothing goes to the network without naming the display feed: "Nothing goes to the network, and it\'s off at launch."',
+            'index.md: says nothing goes to the network without naming the display feed: "Nothing goes to the network."',
+            'support/index.html: says nothing goes to the network without naming the display feed: "A scripted controller plays, with nothing sent to the network."',
+        ])
+
+    def test_naming_the_display_feed_in_that_sentence_passes(self):
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                                            '<p>Nothing goes to the network unless you turn on the display feed, and then only'
+                                            ' unencrypted to the one address you set on your local network.</p>'),
+        })
+        self.assertEqual(check_site.problems(root), [])
+
     def test_the_privacy_page_must_say_no_data_is_collected(self):
         root = self.site({"privacy/index.html": page(body="<p>We care about your privacy.</p>" + WEBSITE)})
         self.assertEqual(check_site.problems(root), ['privacy/index.html: doesn\'t say "collects no data"'])

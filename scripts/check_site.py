@@ -15,11 +15,12 @@
 - no page title or main heading uses another company's name as the product's
 - the privacy page says the app collects no data, and discloses the website's PostHog visit counts as
   showrecorder.app's does (PRIVACY_STATEMENTS)
+- a sentence saying nothing goes to the network names the display feed (#632)
 - no other company's logo is in the site
 - the whole site stays under 2 MB
 Standard library only. Run: python3 -I scripts/check_site.py [website]   (exits 1 on any problem)
 Tested by scripts/test_check_site.py."""
-import json, os, re, sys
+import html, json, os, re, sys
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
@@ -191,6 +192,21 @@ def json_ld_nodes(blocks):
     return out
 
 
+# A sentence that says nothing goes to the network (#632): with the display feed on, the deck in front goes,
+# unencrypted, to the one address the DJ sets (ADR 0011), so the sentence must name the display feed.
+NOTHING_TO_THE_NETWORK = re.compile(r'[^.!?"<>{}]*\bnothing\b[^.!?"<>{}]*\bnetwork\b[^.!?"<>{}]*[.!?]', re.IGNORECASE)
+
+
+INLINE_TAG = re.compile(r"</?(?:a|strong|em|b|i|code|span|abbr)\b[^>]*>", re.IGNORECASE)
+
+
+def network_problems(file, text):
+    # Inline tags sit inside a sentence; any other tag ends one.
+    plain = html.unescape(re.sub(r"<[^>]+>", ".", INLINE_TAG.sub(" ", text))) if file.endswith(".html") else text
+    return [f'{file}: says nothing goes to the network without naming the display feed: "{" ".join(m.group(0).split())}"'
+            for m in NOTHING_TO_THE_NETWORK.finditer(plain) if "display feed" not in m.group(0).lower()]
+
+
 def check_price(file, blocks):
     """The app's price in the JSON-LD offers and the FAQ answer about cost agree: "free" for a price of 0."""
     nodes = json_ld_nodes(blocks)
@@ -318,6 +334,7 @@ def problems(root, app_prompts=None):
             with open(path, encoding="utf-8") as f:
                 text = f.read()
             out += company_problems(file, text)
+            out += network_problems(file, text)
             if PLACEHOLDER.search(text):
                 out.append(f"{file}: still has a TODO(user) TestFlight placeholder")
             if file.endswith(".html"):
