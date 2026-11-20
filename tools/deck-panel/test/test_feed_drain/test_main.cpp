@@ -58,14 +58,32 @@ void test_waiting_datagrams_go_to_the_core_in_order() {
     TEST_ASSERT_EQUAL(3, screen.deck);
 }
 
-void test_a_frame_reads_at_most_a_few_the_rest_wait_for_the_next() {
+// lwIP holds only 6 datagrams for the socket (#636): a frame reads until it's empty, so a burst isn't clipped there.
+static uint32_t g_clock_ms = 0;
+static uint32_t still_clock() { return g_clock_ms; }
+static uint32_t ticking_clock() { return g_clock_ms++; }  // 1 ms a read
+
+void test_a_frame_reads_until_the_socket_is_empty() {
     FakeSocket socket;
-    for (int i = 0; i < feed_drain::kPerFrame + 3; ++i) socket.waiting.push_back(deck_message(2));
+    for (int i = 0; i < 40; ++i) socket.waiting.push_back(deck_message(2));
     deck_core::DeckCore core;
     feed_drain::Drain drain;
-    TEST_ASSERT_EQUAL(feed_drain::kPerFrame, drain.run(socket, core, 100));
-    TEST_ASSERT_EQUAL(3, socket.waiting.size());
-    TEST_ASSERT_EQUAL(3, drain.run(socket, core, 110));
+    g_clock_ms = 0;
+    TEST_ASSERT_EQUAL(40, drain.run(socket, core, 100, still_clock));
+    TEST_ASSERT_TRUE(socket.waiting.empty());
+}
+
+// But never past its time budget, so a flood can't hold the screen up; the rest wait for the next frame.
+void test_a_frame_stops_at_its_time_budget() {
+    FakeSocket socket;
+    for (int i = 0; i < 40; ++i) socket.waiting.push_back(deck_message(2));
+    deck_core::DeckCore core;
+    feed_drain::Drain drain;
+    g_clock_ms = 0;
+    const int read = drain.run(socket, core, 100, ticking_clock);
+    TEST_ASSERT_TRUE(read >= 1);
+    TEST_ASSERT_TRUE(read <= static_cast<int>(feed_drain::kBudgetMs) + 1);
+    TEST_ASSERT_EQUAL(40 - read, socket.waiting.size());
 }
 
 void test_a_datagram_too_big_is_dropped_and_counted() {
@@ -126,7 +144,8 @@ void test_a_1200_byte_bundle_gets_through_and_one_over_the_limit_does_not() {
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_waiting_datagrams_go_to_the_core_in_order);
-    RUN_TEST(test_a_frame_reads_at_most_a_few_the_rest_wait_for_the_next);
+    RUN_TEST(test_a_frame_reads_until_the_socket_is_empty);
+    RUN_TEST(test_a_frame_stops_at_its_time_budget);
     RUN_TEST(test_a_datagram_too_big_is_dropped_and_counted);
     RUN_TEST(test_a_1200_byte_bundle_gets_through_and_one_over_the_limit_does_not);
     return UNITY_END();
