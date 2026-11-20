@@ -220,11 +220,21 @@ tools/lc6000-firmware/flash-day.sh
 
 ### The drawn flash (#468)
 
-`flash-day.sh drawn` does the two writes of the drawn display. It's run by the owner after the read-only checks above, with B's `.dfu` and the owner's image built. There is no stock flash: the chip must already hold the image you name as the one it runs now (stock, or your slot 16 file).
+`flash-day.sh drawn [--current PATH] [--probe-again]` does the two writes of the drawn display. It's run by the owner after the read-only checks above, with B's `.dfu` and the owner's image built. There is no stock flash: the chip must already hold a known image (stock, your slot 16 file, or the owner's image).
 
-1. **Ready check.** Nothing is sent. It verifies the current image and the owner's image. `drawn_flash.py files` checks that B's file is one element at `0x08080000` that passes block A's header checks, and that the owner's image is a `wd` image at `0x08008000`, so the two can't be swapped. Then it reads `make arm`'s build record (`build.json`), and doesn't ask you (#593). `build_upper_dfu.py` and `build_owner_image.py` each copy that record next to the .dfu they write (`wd-upper-drawing.build.json`, for example), so the wizard finds it there and prints which one it uses. It asks for the path only when there's no record, or when the two copies differ. The record must name the exact block A inside the owner's image and the exact block B inside its .dfu, so both come from one build (#516). It must also say A was built with `ARM_DRAW=1` and `ARM_UPPER_PROVEN=1`. If the record is missing or doesn't match, the run stops, and nothing is sent.
+**It asks only what it can't find out itself (#603).** A typed word before each send or write, shown with the file, its sha256 and the address range: `UPDATE` for the update-mode message, `FLASH` or `REWRITE` for block B, `FLASH` for the owner's image. The probe question is asked only before the owner's image, and kept for the day. Everything else is found and printed, or watched on USB. Stops per path, pinned by `test_flash_day_runs.py`: first flash 4, B-only rewrite 2, B-only with the chip already in update mode 1, two-block rewrite 4; without a probe, one more the first time in a day.
+
+- **Files.** Block B and the owner's image are found, not asked: the last run's pair, if both are still there with one build record beside them, or else the one pair the kit tools left in `~/lc6000`. Asked only when there are none, or more than one build.
+- **The image the chip runs now.** Found from the read: the owner's image, the last run's file, or a `.dfu` in `~/lc6000` that matches byte for byte. It's the way back, so a read that matches none of them stops. `--current PATH` names a file kept elsewhere.
+- **Apps.** DeckBridge, djay Pro (it ships LC6000 MIDI mappings), Engine DJ (it knows the LC6000 as a controller) and Denon's updater are waited for, then refused after 60 s. Syndicate isn't on the list: DeckBridge sits between it and the unit.
+- **Update mode.** A chip already in update mode (a re-run after a stop) is listed, so nothing is sent.
+- **Probe.** The answer, yes or no with `NO PROBE` typed, is kept in `~/lc6000/probe.json` for today and this unit's DFU serial, and shown on the owner's image's screen. `--probe-again` forgets it. A B-only rewrite never asks: block B runs only after the host's own command, and update mode branches off before the hook.
+- **Power cycle.** Seen on USB: the DFU device leaves, then the display's MIDI port comes back, 120 s each. A timeout says what to check and stops.
+- **Refused, not asked:** a device whose layout isn't the display chip's (in the stock wizard's look too).
+
+1. **Ready check.** Nothing is sent. It verifies the owner's image (and `--current`'s file, if given). `drawn_flash.py files` checks that B's file is one element at `0x08080000` that passes block A's header checks, and that the owner's image is a `wd` image at `0x08008000`, so the two can't be swapped. Then it reads `make arm`'s build record (`build.json`), and doesn't ask you (#593). `build_upper_dfu.py` and `build_owner_image.py` each copy that record next to the .dfu they write (`wd-upper-drawing.build.json`, for example), so the wizard finds it there and prints which one it uses. It asks for the path only when there's no record, or when the two copies differ. The record must name the exact block A inside the owner's image and the exact block B inside its .dfu, so both come from one build (#516). It must also say A was built with `ARM_DRAW=1` and `ARM_UPPER_PROVEN=1`. If the record is missing or doesn't match, the run stops, and nothing is sent.
 2. **Update mode and look**, as on the first flash day.
-3. **Before (read-only).** It reads the app and compares it with the image the chip runs now.
+3. **Before (read-only).** It reads the app and finds the image the chip runs now in it, as above.
    - It reads the option bytes (`0x1FFFC000`, 16 bytes, alt 1), and `drawn_flash.py options` checks them: read protection at level 0, sectors 8-11 not write-protected, one bank. Otherwise it stops with a plain message, and nothing is written.
    - Then it reads all of `0x08080000`-`0x080FFFFF`, and `drawn_flash.py upper` judges that read against B's file:
      - erased: go on;
@@ -233,7 +243,7 @@ tools/lc6000-firmware/flash-day.sh
      - anything else: stop, and nothing is written over it.
 4. **Step 1: block B**, after you type `FLASH`, or `REWRITE` when it replaces what's there. A rewrite writes `drawn_flash.py rewrite`'s file: this B, then erased bytes to the end of the old one, since a write erases only the sectors it covers. It reads all of the upper flash back and must find exactly B, then erased flash. With only B on the chip, the image there runs as before.
 5. **Step 2: the owner's image**, after you type `FLASH` again. It's read back and compared, as every image is.
-6. **Power cycle.** With no host the display looks like stock. Then DeckBridge in drawn mode draws the deck chip, and `end` brings back stock images. Write what you see on #468.
+6. **Power cycle**, seen on USB. With no host the display should look like stock: the wizard prints it as a check. Then DeckBridge in drawn mode draws the deck chip, and `end` brings back stock images. Write what you see on #468.
 
 **Where the decisions live (#567).**
 - `drawn_plan.py` decides every step of the drawn flash, from the facts so far: the owner's three files, each answer and typed word, each read, and each write's result. `flash-day.sh drawn` is a thin loop: it asks `drawn_plan.py next` for one step, does it with `dfu-util` or the keyboard, records the result with `drawn_plan.py record`, and asks again.
@@ -241,8 +251,8 @@ tools/lc6000-firmware/flash-day.sh
 - `drawn_flash.py` and `dfupatch.py` hold the judges the plan uses, and they only read files.
 
 **How it's tested.**
-- `test_drawn_plan.py` runs whole flashes against a fake unit: a fresh flash, a B-only rewrite, a cut-off write of B, the device list (none, two, the top panel chip), and every refusal.
-- `test_flash_day_runs.py` runs the real `flash-day.sh drawn` with stand-ins for `dfu-util`, the update-mode tool and `swiftc`, on a `PATH` that can't reach the real ones.
+- `test_drawn_plan.py` runs whole flashes against a fake unit: a fresh flash, a B-only rewrite, a cut-off write of B, the device list (none, two, the top panel chip, another layout), the found files, the kept probe answer, the word screens, and every refusal.
+- `test_flash_day_runs.py` runs the real `flash-day.sh drawn` with stand-ins for `dfu-util`, the update-mode tool, `pgrep` and `swiftc`, on a `PATH` that can't reach the real ones. Its fake unit enters update mode on the stand-in's send and power-cycles when the wizard waits for it. It pins the stops per path.
 - The wizard itself is never run by an agent against the unit, since it calls the real `dfu-util`.
 
 **Unproven on hardware** until #435 is done: whether Denon's bootloader allows reading flash, whether a power cycle clears its update-mode flag, and whether it accepts a changed image. The wizard stops at each surprise and prints the way back (power cycle; then update mode plus Denon's own updater; then SWD, #433). A patched image still reports version 00.50, so the updater calls a running patched unit current: put the chip in update mode first. Have an ST-Link on the desk first. Never run Denon's updater "to look": it starts erasing as soon as it finds the unit.
