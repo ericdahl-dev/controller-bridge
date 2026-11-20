@@ -51,9 +51,9 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "deck", [.int(Int32(number))]),
                 OSCMessage(DisplayFeed.prefix + "color", [.int(rgb[0] << 16 | rgb[1] << 8 | rgb[2])]),
                 OSCMessage(DisplayFeed.prefix + "loaded", [.int(loaded ? 1 : 0)]),
-                OSCMessage(DisplayFeed.prefix + "title", [.string(title)]),
-                OSCMessage(DisplayFeed.prefix + "artist", [.string(artist)]),
-                OSCMessage(DisplayFeed.prefix + "key", [.string(key)]),
+                OSCMessage(DisplayFeed.prefix + "title", [.string(DisplayFeed.capped(title))]),
+                OSCMessage(DisplayFeed.prefix + "artist", [.string(DisplayFeed.capped(artist))]),
+                OSCMessage(DisplayFeed.prefix + "key", [.string(DisplayFeed.capped(key))]),
                 // To 2 decimals, so a BPM wobbling in Syndicate's last digits isn't a change.
                 OSCMessage(DisplayFeed.prefix + "bpm", [.float(Float((bpm * 100).rounded() / 100))]),
                 OSCMessage(DisplayFeed.prefix + "tempo", [.float(Float((tempo * 100).rounded() / 100))]),
@@ -116,11 +116,28 @@ final class DisplayFeed {
         sent = [:]
     }
 
+    /// Title, artist and key are at most this many UTF-8 bytes (#636), so even a snapshot of all three fits one
+    /// bundle under `bundleCeiling`. A panel shows far fewer characters anyway.
+    static let textCap = 255
+
+    /// `text` cut to `textCap` UTF-8 bytes at a character boundary, never inside one.
+    static func capped(_ text: String) -> String {
+        guard text.utf8.count > textCap else { return text }
+        var out = "", bytes = 0
+        for character in text {
+            let size = String(character).utf8.count
+            guard bytes + size <= textCap else { break }
+            out.append(character)
+            bytes += size
+        }
+        return out
+    }
+
     /// A bundle at most this many bytes (#636), well under Wi-Fi's MTU, so one never goes out in IP fragments.
     static let bundleCeiling = 1200
 
-    /// The messages as bundles of at most `bundleCeiling` bytes each, in order. A message too long for one with
-    /// anything else (a very long title) goes alone in its own.
+    /// The messages as bundles of at most `bundleCeiling` bytes each, in order. With text capped at `textCap`, no one
+    /// message comes near the ceiling, so it holds for every bundle.
     static func bundles(_ messages: [OSCMessage]) -> [[OSCMessage]] {
         let header = 16, sizeField = 4
         var out: [[OSCMessage]] = [], current: [OSCMessage] = [], size = header

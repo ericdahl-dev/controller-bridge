@@ -172,22 +172,32 @@ struct DisplayFeedCoordinatorTests {
         #expect(feed.bundles == [])
     }
 
-    @Test("A bundle that would be over 1200 bytes is split, in order, none over 1200; a message too long on its own goes alone")
+    @Test("Title, artist and key are cut to 255 UTF-8 bytes on a character boundary, so no bundle is ever over 1200 bytes")
     func bundleCeiling() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        let long = String(repeating: "Long title ", count: 60), longer = String(repeating: "Artist ", count: 200)
+        // Two-byte é and four-byte 🎧, so a byte cut would land inside a character.
+        let long = String(repeating: "Café 🎧 ", count: 60), longer = String(repeating: "Ärtist ", count: 200)
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [
-            .string(long), .string(longer), .string("A#m"), .float(128), .float(428.5), .int(229), .int(914), .string("track"),
+            .string(long), .string(longer), .string(String(repeating: "m", count: 300)), .float(128), .float(428.5), .int(229),
+            .int(914), .string("track"),
         ]))
         Self.turnOn(rig)
-        let sizes = feed.bundles.map { OSCPacket.bundle($0).count }
-        #expect(feed.bundles.count > 1)
-        // The artist alone is over 1400 bytes: its bundle holds only it.
-        #expect(feed.bundles.contains { $0.count == 1 && $0[0].address.hasSuffix("/artist") })
-        #expect(zip(feed.bundles, sizes).allSatisfy { $0.0.count == 1 || $0.1 <= 1200 })
-        #expect(feed.bundles.flatMap { $0 } == Self.snapshot(deck: 1, color: 0xFF0000, title: long, artist: longer))
+        #expect(feed.bundles.allSatisfy { OSCPacket.bundle($0).count <= 1200 })
+        func text(_ name: String) -> String? {
+            feed.sent.last { $0.address.hasSuffix("/" + name) }.flatMap { if case .string(let v)? = $0.arguments.first { v } else { nil } }
+        }
+        for (name, full) in [("title", long), ("artist", longer), ("key", String(repeating: "m", count: 300))] {
+            let sent = try #require(text(name))
+            #expect(sent.utf8.count <= 255, "\(name)")
+            #expect(sent.utf8.count > 250, "\(name)")
+            #expect(full.hasPrefix(sent), "\(name)")
+        }
+        // A short title is sent as it is.
+        feed.sent.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        #expect(text("title") == "Nightfall")
     }
 
     @Test("A playing deck under Syndicate's real streams sends at most about 30 datagrams a second, and every keepalive is one whole bundle (#636)")
