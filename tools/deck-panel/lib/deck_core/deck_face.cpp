@@ -41,6 +41,20 @@ void loop_text(char (&out)[N], float beats) {
     std::snprintf(out, N, "%g", static_cast<double>(beats));
 }
 
+/// `x`, taken at 2 decimals, in tenths rounded half away from zero: 128.25 is 1283, -2.55 is -26.
+long tenths(float x) {
+    const long hundredths = std::lround(static_cast<double>(x) * 100);
+    return (hundredths + (hundredths < 0 ? -5 : 5)) / 10;
+}
+
+/// `x` at one decimal, without its sign, after `sign` and before `unit`.
+template <size_t N>
+void tenths_text(char (&out)[N], const char* sign, float x, const char* unit = "") {
+    const long signed_tenths = tenths(x);
+    const long t = signed_tenths < 0 ? -signed_tenths : signed_tenths;
+    std::snprintf(out, N, "%s%ld.%ld%s", sign, t / 10, t % 10, unit);
+}
+
 float clamp01(float x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
 }  // namespace
@@ -57,14 +71,15 @@ Face face(const DeckView& view) {
     copy(f.title, view.title);
     copy(f.artist, view.artist);
     copy(f.key, view.key);
-    // Both arrive at 2 decimals; shown at 2, the panel never rounds them differently from DeckBridge. 0 BPM is
-    // unknown, and with it the tempo.
+    // One decimal (the owner's look at #633). Both arrive at 2 decimals; rounded from those, half away from zero, so
+    // the result doesn't depend on how the float holds them. 0 BPM is unknown, and with it the tempo.
     if (view.bpm > 0) {
-        std::snprintf(f.bpm, sizeof f.bpm, "%.2f", static_cast<double>(view.bpm));
-        if (view.tempo == 0) {
-            copy(f.tempo, "0.00%");
+        tenths_text(f.bpm, "", view.bpm);
+        const long tempo = tenths(view.tempo);
+        if (tempo == 0) {
+            copy(f.tempo, "0.0%");
         } else {
-            std::snprintf(f.tempo, sizeof f.tempo, "%+.2f%%", static_cast<double>(view.tempo));
+            tenths_text(f.tempo, tempo > 0 ? "+" : "-", view.tempo, "%");
         }
     }
     time_text(f.elapsed, "", view.elapsed);

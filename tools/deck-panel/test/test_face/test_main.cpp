@@ -56,17 +56,24 @@ void test_a_loaded_deck_shows_its_title_and_artist() {
     TEST_ASSERT_EQUAL_STRING("Am", f.key);
 }
 
-// BPM and tempo arrive at 2 decimals and show at 2, so the panel never rounds them differently from DeckBridge.
-void test_bpm_and_tempo_show_at_2_decimals_tempo_signed() {
+// BPM and tempo show at one decimal (the owner's look at #633), rounded half away from zero from the 2 decimals they
+// arrive at, so the panel rounds them one way whatever the float holds.
+void test_bpm_and_tempo_show_at_1_decimal_tempo_signed() {
     DeckView v = loaded_deck();
-    TEST_ASSERT_EQUAL_STRING("126.00", deck_core::face(v).bpm);
-    TEST_ASSERT_EQUAL_STRING("+0.80%", deck_core::face(v).tempo);
-    v.bpm = 174.25f;
-    v.tempo = -2.5f;
-    TEST_ASSERT_EQUAL_STRING("174.25", deck_core::face(v).bpm);
-    TEST_ASSERT_EQUAL_STRING("-2.50%", deck_core::face(v).tempo);
+    TEST_ASSERT_EQUAL_STRING("126.0", deck_core::face(v).bpm);
+    TEST_ASSERT_EQUAL_STRING("+0.8%", deck_core::face(v).tempo);
+    v.bpm = 128.25f;
+    v.tempo = -2.55f;
+    TEST_ASSERT_EQUAL_STRING("128.3", deck_core::face(v).bpm);
+    TEST_ASSERT_EQUAL_STRING("-2.6%", deck_core::face(v).tempo);
+    v.bpm = 174.04f;
+    v.tempo = 0.85f;
+    TEST_ASSERT_EQUAL_STRING("174.0", deck_core::face(v).bpm);
+    TEST_ASSERT_EQUAL_STRING("+0.9%", deck_core::face(v).tempo);
     v.tempo = 0;
-    TEST_ASSERT_EQUAL_STRING("0.00%", deck_core::face(v).tempo);
+    TEST_ASSERT_EQUAL_STRING("0.0%", deck_core::face(v).tempo);
+    v.tempo = -0.04f;  // rounds to 0: no sign
+    TEST_ASSERT_EQUAL_STRING("0.0%", deck_core::face(v).tempo);
 }
 
 void test_an_unknown_bpm_shows_neither_bpm_nor_tempo() {
@@ -187,7 +194,7 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_empty_deck_shows_no_track_loaded_and_nothing_else);
     RUN_TEST(test_a_loaded_deck_shows_its_title_and_artist);
-    RUN_TEST(test_bpm_and_tempo_show_at_2_decimals_tempo_signed);
+    RUN_TEST(test_bpm_and_tempo_show_at_1_decimal_tempo_signed);
     RUN_TEST(test_an_unknown_bpm_shows_neither_bpm_nor_tempo);
     RUN_TEST(test_times_show_as_minutes_and_seconds_remaining_with_a_minus);
     RUN_TEST(test_past_an_hour_times_show_hours);
