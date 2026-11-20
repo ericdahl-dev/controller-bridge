@@ -31,4 +31,13 @@ Bytes level(int revision, uint8_t percent) {
 
 uint8_t touch_activate(int revision) { return revision >= 130 ? kV13Touch : kV12Touch; }
 
+bool send(const Bytes& bytes, const std::function<bool(uint8_t)>& put) {
+    for (uint8_t i = 0; i < bytes.count; ++i) {
+        bool acked = false;
+        for (int t = 0; t < kTries && !acked; ++t) acked = put(bytes.bytes[i]);
+        if (!acked) return false;
+    }
+    return true;
+}
+
 }  // namespace backlight
