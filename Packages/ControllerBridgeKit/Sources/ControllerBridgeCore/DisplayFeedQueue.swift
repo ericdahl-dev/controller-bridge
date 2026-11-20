@@ -14,6 +14,9 @@ public final class DisplayFeedQueue: OSCSender {
     private struct State {
         var pending = 0
         var dropped = 0
+        var trace: TraceSink?
+        /// Sends dropped since the last one taken: the trace's "sending again" line counts them.
+        var droppedSinceSent = 0
     }
     private let state = Mutex(State())
 
@@ -30,18 +33,29 @@ public final class DisplayFeedQueue: OSCSender {
         self.init(inner, backlog: backlog) { queue.async(execute: $0) }
     }
 
+    /// The Debug trace (#636): when it starts dropping, and when it sends again.
+    public var trace: TraceSink? {
+        get { state.withLock { $0.trace } }
+        set { state.withLock { $0.trace = newValue } }
+    }
+
     /// Sends dropped because the worker was behind.
     public var dropped: Int { state.withLock { $0.dropped } }
 
     public func send(_ message: OSCMessage) {
-        let taken = state.withLock { state -> Bool in
+        let (taken, line, trace) = state.withLock { state -> (Bool, String?, TraceSink?) in
             guard state.pending < backlog else {
                 state.dropped += 1
-                return false
+                state.droppedSinceSent += 1
+                let first = state.droppedSinceSent == 1
+                return (false, first ? "dropping sends: \(state.pending) waiting on the network" : nil, state.trace)
             }
             state.pending += 1
-            return true
+            let line = state.droppedSinceSent > 0 ? "sending again after \(state.droppedSinceSent) dropped" : nil
+            state.droppedSinceSent = 0
+            return (true, line, state.trace)
         }
+        if let line { trace?(.displayFeed, line) }
         guard taken else { return }
         run { [self] in
             inner.send(message)

@@ -19,7 +19,7 @@ The board layer comes from the owner's phrasedeck firmware. Its board settings f
 
 ## Build and test
 
-You need PlatformIO 6.2.0 running on Python 3.10-3.14: the pioarduino ESP32 platform refuses newer Pythons. Homebrew's `platformio` runs on Python 3.15 and can't build it, so install PlatformIO from PyPI on Python 3.13 and use that one (`~/.venvs/pio/bin/pio`, or put `~/.venvs/pio/bin` first on your `PATH`):
+You need PlatformIO 6.2.0 running on Python 3.10-3.14: the pioarduino ESP32 platform refuses newer Pythons. Homebrew's `platformio` runs on Python 3.15 and is refused ("Python version must be 3.10 … 3.14"), so install PlatformIO from PyPI on Python 3.13 and use that one (`~/.venvs/pio/bin/pio`, or put `~/.venvs/pio/bin` first on your `PATH`). It builds and uploads at the ini's 921,600 baud:
 
 ```sh
 python3.13 -m venv ~/.venvs/pio && ~/.venvs/pio/bin/pip install platformio==6.2.0
@@ -52,6 +52,8 @@ Each build of `crowpanel` writes `src/wifi_secrets.h` from it (mode 600, gitigno
 
 Without the file (as in CI), the panel builds with no Wi-Fi and says "Wi-Fi isn't set".
 
+The panel joins 2.4 GHz networks only. An iPhone hotspot needs **Maximize Compatibility** on (Settings › Personal Hotspot); on 5 GHz the panel stays at "Joining Wi-Fi…" forever, which is also what a wrong password looks like.
+
 ## Flash
 
 The panel's USB serial chip is a CH340K (1A86:7522), and the Mac needs WCH's CH34x driver for it. With the driver installed, the port is `/dev/cu.wchusbserial210`:
@@ -59,6 +61,8 @@ The panel's USB serial chip is a CH340K (1A86:7522), and the Mac needs WCH's CH3
 ```sh
 pio run -d tools/deck-panel -e crowpanel -t upload --upload-port /dev/cu.wchusbserial210
 ```
+
+**If the port fails with `tcsetattr: Invalid argument`**, WCH's driver is stuck. This happens after the panel re-enumerates, for example after the Mac sleeps or another USB device is replugged. Unplug the panel and plug it back in, then upload again.
 
 This writes the bootloader, the partition table (Arduino's stock `default_16MB` layout, `partitions.csv`), `boot_app0` and the app.
 

@@ -1,6 +1,7 @@
 // The built-in demo controller (#64), for App Review: no DJ controller, no Syndicate. A real Coordinator runs the
 // active profile against an in-process demo controller and an in-memory Syndicate, so the panel shows CONNECTED and
-// LIVE and the Diagnostics window fills with traffic. Nothing is sent to the network.
+// LIVE and the Diagnostics window fills with traffic. Nothing is sent to Syndicate or the controller; the one thing
+// that leaves the Mac is the display feed, if the DJ turned it on: the deck panel follows the demo (#625).
 
 /// A demo run: its own Coordinator, a scripted controller and a Syndicate that answers in memory.
 public final class DemoSession {

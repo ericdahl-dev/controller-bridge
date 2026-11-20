@@ -100,11 +100,33 @@ final class DisplayFeed {
     private var sent: [String: [OSCArgument]] = [:]
     /// The deck number the last update was for: another deck in front is a full snapshot.
     private var sentDeck: Int?
+    /// The Debug trace (#636): the setting, the destination opening, the hold and each full snapshot, one line each.
+    var trace: TraceSink?
+    /// Why the next full snapshot goes, for its trace line.
+    private var snapshotReason = "destination open"
+    /// The hold's line went out for this hold.
+    private var holdSaid = false
+
+    private func say(_ text: String) { trace?(.displayFeed, text) }
 
     /// Where the feed's OSC goes. The app's sender is the display's own UDP destination, off the event path.
     func attach(_ sender: any OSCSender) {
         self.sender = sender
         sent = [:]
+    }
+
+    /// Seconds as a trace line writes them: 1, not 1.0.
+    private static func format(_ seconds: Double) -> String {
+        seconds == seconds.rounded() ? String(Int(seconds)) : String(seconds)
+    }
+
+    /// Gives up the sender and the setting, for another Coordinator to take (the demo, #625); this one sends nothing
+    /// until it gets them back.
+    func release() -> (sender: any OSCSender, settings: DisplayFeedSettings)? {
+        guard let sender else { return nil }
+        self.sender = nil
+        sent = [:]
+        return (sender, settings)
     }
 
     /// The setting. Turning it on, or a new host or port, waits for the destination to open.
@@ -113,6 +135,9 @@ final class DisplayFeed {
             sent = [:]
             open = false
             lastSnapshot = now
+            say("on: \(new.host):\(new.port), waiting for its destination")
+        } else if !new.enabled && settings.enabled {
+            say("off")
         }
         settings = new
     }
@@ -128,6 +153,9 @@ final class DisplayFeed {
         sent = [:]
         open = true
         holdUntil = now + Self.holdSeconds
+        holdSaid = false
+        snapshotReason = "destination open"
+        say("destination open")
     }
 
     /// Sends what changed about the deck in front: everything when it's another deck. `known`: Syndicate has
@@ -138,16 +166,26 @@ final class DisplayFeed {
             sent = [:]
             open = true
             holdUntil = nil
+            snapshotReason = "keepalive"
         }
         guard open else { return }
         if let until = holdUntil {
-            guard known || now >= until else { return }
+            guard known || now >= until else {
+                if !holdSaid {
+                    holdSaid = true
+                    say("holding the first snapshot until Syndicate answers for deck \(deck.number), at most \(Self.format(Self.holdSeconds)) s")
+                }
+                return
+            }
             holdUntil = nil
+            if !known { snapshotReason = "no answer from Syndicate in \(Self.format(Self.holdSeconds)) s" }
         }
+        if let sentDeck, deck.number != sentDeck { snapshotReason = "deck \(deck.number) in front" }
         if deck.number != sentDeck { sent = [:] }
         sentDeck = deck.number
         let snapshot = sent.isEmpty
         if snapshot { lastSnapshot = now }
+        var count = 0
         for message in deck.messages where sent[message.address] != message.arguments {
             if Self.fastAddresses.contains(message.address) {
                 let due = fastDue[message.address]
@@ -157,6 +195,10 @@ final class DisplayFeed {
             }
             sender.send(message)
             sent[message.address] = message.arguments
+            count += 1
+        }
+        if snapshot {
+            say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", \(count) messages")
         }
     }
 }

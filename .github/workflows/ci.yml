@@ -112,9 +112,16 @@ jobs:
       # and its entry shims run in unicorn against a synthetic flash. Still no vendor data.
       - name: Arm toolchain and emulator
         run: |
-          sudo apt-get update
+          # The mirror's download of the toolchain (67 MB) has stalled until the job timed out (#640): apt gives up on a
+          # transfer with no data for 30 s and retries it, and a whole attempt over 4 minutes is cut off and tried once more.
+          apt="-o Acquire::http::Timeout=30 -o Acquire::Retries=3"
           # The block is freestanding: no newlib or libstdc++, which add about 500 MB as recommended packages.
-          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi binutils-arm-none-eabi
+          for attempt in 1 2; do
+            timeout 240 sudo apt-get $apt update && timeout 240 sudo apt-get $apt install -y --no-install-recommends \
+              gcc-arm-none-eabi binutils-arm-none-eabi && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "Arm toolchain download attempt $attempt failed or stalled; trying once more"
+          done
           arm-none-eabi-gcc --version | head -1
           python3 -m venv "$RUNNER_TEMP/fw"
           # Pinned (#515): 2.1.4 skips instructions in code under a memory-read hook, which the block tests now avoid;
