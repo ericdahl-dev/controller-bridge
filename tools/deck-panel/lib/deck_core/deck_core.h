@@ -15,6 +15,10 @@ struct DeckView {
     uint32_t color = 0;  ///< 0xRRGGBB
     std::string title;
     std::string artist;
+
+    bool operator==(const DeckView& other) const {
+        return deck == other.deck && color == other.color && title == other.title && artist == other.artist;
+    }
 };
 
 /// The board layer draws what the core decides.
@@ -31,13 +35,17 @@ public:
 
     /// One UDP payload, received at `now_ms` (any millisecond clock; it may wrap).
     void feed(const uint8_t* bytes, size_t length, uint32_t now_ms);
-    /// Tells `screen` what to show at `now_ms`.
+    /// Tells `screen` what to show at `now_ms`, only when that changed since the last call.
     void render(Screen& screen, uint32_t now_ms);
 
 private:
     DeckView view_;
     bool heard_ = false;
     uint32_t last_heard_ms_ = 0;
+    // What the screen was last told.
+    bool shown_ = false;
+    bool shown_waiting_ = true;
+    DeckView shown_view_;
 };
 
 }  // namespace deck_core

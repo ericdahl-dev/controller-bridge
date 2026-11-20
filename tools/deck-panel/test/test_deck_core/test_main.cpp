@@ -181,6 +181,33 @@ void test_the_clock_wrapping_round_does_not_end_the_wait_early_or_late() {
     TEST_ASSERT_TRUE(screen.last().waiting);
 }
 
+// The board redraws only when something changed, so the core tells the screen only then.
+void test_the_screen_hears_only_of_changes() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.render(screen, 0);
+    core.render(screen, 10);
+    TEST_ASSERT_EQUAL(1, screen.shown.size());  // waiting, once
+    feed(core, int_message(prefix + "deck", 2), 100);
+    core.render(screen, 100);
+    core.render(screen, 200);
+    TEST_ASSERT_EQUAL(2, screen.shown.size());
+    feed(core, int_message(prefix + "deck", 2), 300);  // the keepalive snapshot: same value
+    core.render(screen, 300);
+    TEST_ASSERT_EQUAL(2, screen.shown.size());
+    feed(core, string_message(prefix + "title", "Night Drive"), 400);
+    core.render(screen, 400);
+    TEST_ASSERT_EQUAL(3, screen.shown.size());
+    core.render(screen, 400 + 3000);
+    core.render(screen, 400 + 4000);
+    TEST_ASSERT_EQUAL(4, screen.shown.size());  // waiting, once
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    feed(core, int_message(prefix + "deck", 2), 5000);
+    core.render(screen, 5000);
+    TEST_ASSERT_EQUAL(5, screen.shown.size());  // back, unchanged deck shown again
+    TEST_ASSERT_FALSE(screen.last().waiting);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -202,5 +229,6 @@ int main(int, char**) {
     RUN_TEST(test_a_message_for_an_address_the_panel_does_not_know_keeps_the_feed_alive);
     RUN_TEST(test_a_bad_packet_does_not_keep_the_feed_alive);
     RUN_TEST(test_the_clock_wrapping_round_does_not_end_the_wait_early_or_late);
+    RUN_TEST(test_the_screen_hears_only_of_changes);
     return UNITY_END();
 }

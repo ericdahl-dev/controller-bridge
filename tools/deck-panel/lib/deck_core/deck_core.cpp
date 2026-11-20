@@ -126,11 +126,16 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
 
 void DeckCore::render(Screen& screen, uint32_t now_ms) {
     // Unsigned subtraction, so a clock that wraps round still counts the time since.
-    if (heard_ && now_ms - last_heard_ms_ < kWaitAfterMs) {
-        screen.show_deck(view_);
-    } else {
+    const bool waiting = !heard_ || now_ms - last_heard_ms_ >= kWaitAfterMs;
+    if (shown_ && waiting == shown_waiting_ && (waiting || view_ == shown_view_)) return;
+    if (waiting) {
         screen.show_waiting();
+    } else {
+        screen.show_deck(view_);
+        shown_view_ = view_;
     }
+    shown_ = true;
+    shown_waiting_ = waiting;
 }
 
 }  // namespace deck_core
