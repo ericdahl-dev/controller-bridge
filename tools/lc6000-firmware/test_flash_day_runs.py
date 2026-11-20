@@ -220,8 +220,8 @@ class FlashDayRunTests(unittest.TestCase):
         answers = [self.upper, self.owner,                      # the two paths: nothing beside them to find
                    self.record,                                 # the build record
                    "UPDATE",                                    # send the update-mode message
+                   "y",                                         # the probe, up front: the image will be written
                    "FLASH",                                     # block B
-                   "y",                                         # the probe, before the owner's image
                    "FLASH"]                                     # the owner's image
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
@@ -234,7 +234,7 @@ class FlashDayRunTests(unittest.TestCase):
         # A re-run after a stop that left the chip in update mode (#603): the display's MIDI port is gone, so the
         # port check would fail. The wizard sees the DFU device instead, says so, and sends nothing.
         self.unit_holds(self.current_element, in_update_mode=True)
-        answers = [self.upper, self.owner, self.record, "FLASH", "y", "FLASH"]
+        answers = [self.upper, self.owner, self.record, "y", "FLASH", "FLASH"]
         result = self.run_wizard(answers, sent=0)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("already in update mode", result.stdout)
@@ -379,7 +379,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertEqual(self.memory("app.bin"), self.current_element)
 
 
-    FRESH = ["{upper}", "{owner}", "{record}", "UPDATE", "FLASH", "y", "FLASH"]
+    FRESH = ["{upper}", "{owner}", "{record}", "UPDATE", "y", "FLASH", "FLASH"]
 
     def answers(self):
         return [a.format(current=self.current, upper=self.upper, owner=self.owner, record=self.record)
@@ -433,7 +433,7 @@ class FlashDayRunTests(unittest.TestCase):
                 self.assertEqual(tool.main(argv), 0)
         self.unit_holds(self.current_element)
         answers = [self.upper, self.owner,   # no record path: it's found
-                   "UPDATE", "FLASH", "y", "FLASH"]
+                   "UPDATE", "y", "FLASH", "FLASH"]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Build record: " + os.path.join(kit, "wd-upper-drawing.build.json"), result.stdout)
@@ -455,7 +455,7 @@ class FlashDayRunTests(unittest.TestCase):
         # #603: only the image on the chip now is asked for; B, the owner's image and the record are found.
         self.upper, self.owner = self.kit_pair_in(self.work)
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["UPDATE", "FLASH", "y", "FLASH"])
+        result = self.run_wizard(["UPDATE", "y", "FLASH", "FLASH"])
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Block B: " + self.upper, result.stdout)
         self.assertIn("The owner's image: " + self.owner, result.stdout)
@@ -466,7 +466,7 @@ class FlashDayRunTests(unittest.TestCase):
         with open(os.path.join(self.work, "flash-day.env"), "w") as f:
             f.write(f"UPPER_DFU='{self.upper}'\nOWNER_DFU='{self.owner}'\n")
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["UPDATE", "FLASH", "y", "FLASH"])
+        result = self.run_wizard(["UPDATE", "y", "FLASH", "FLASH"])
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Block B: " + self.upper, result.stdout)
 
@@ -513,10 +513,10 @@ class FlashDayRunTests(unittest.TestCase):
         return self.OLD_B + b"\xff" * (0x80000 - len(self.OLD_B))
 
     def test_stops_first_flash(self):
-        self.pinned(["UPDATE", "FLASH", "y", "FLASH"], self.current_element)
+        self.pinned(["UPDATE", "y", "FLASH", "FLASH"], self.current_element)
 
     def test_stops_first_flash_without_a_probe_then_again_the_same_day(self):
-        self.pinned(["UPDATE", "FLASH", "n", "NO PROBE", "FLASH"], self.current_element)
+        self.pinned(["UPDATE", "n", "NO PROBE", "FLASH", "FLASH"], self.current_element)
         self.pinned(["UPDATE", "FLASH", "FLASH"], self.current_element)
 
     def test_stops_b_only_rewrite(self):
@@ -527,13 +527,13 @@ class FlashDayRunTests(unittest.TestCase):
         self.pinned(["REWRITE"], self.owner_element, upper=self.old_b(), in_update_mode=True)
 
     def test_stops_two_block_rewrite(self):
-        self.pinned(["UPDATE", "REWRITE", "y", "FLASH"], self.current_element, upper=self.old_b())
+        self.pinned(["UPDATE", "y", "REWRITE", "FLASH"], self.current_element, upper=self.old_b())
 
     def test_upper_and_owner_name_the_pair_over_the_newest_build(self):
         chosen_upper, chosen_owner = self.kit_pair_in(os.path.join(self.dir.name, "chosen"))
         self.kit_pair_in(self.work)
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["UPDATE", "FLASH", "y", "FLASH"],
+        result = self.run_wizard(["UPDATE", "y", "FLASH", "FLASH"],
                                  args=("--upper", chosen_upper, "--owner", chosen_owner))
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Block B: " + chosen_upper + " (--upper)", result.stdout)
@@ -549,7 +549,7 @@ class FlashDayRunTests(unittest.TestCase):
 
     def refused_by_the_record(self, record, *reasons):
         self.unit_holds(self.current_element)
-        result = self.run_wizard([self.upper, self.owner, record, "UPDATE", "FLASH", "y", "FLASH"],
+        result = self.run_wizard([self.upper, self.owner, record, "UPDATE", "y", "FLASH", "FLASH"],
                                  entered=False)
         self.assertNotEqual(result.returncode, 0)
         for reason in ("Nothing was sent", *reasons):

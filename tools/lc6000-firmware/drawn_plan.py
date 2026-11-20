@@ -287,6 +287,12 @@ def decide(plan):
     if not ok:
         return ("stop", f"The flash above the image is neither erased, this block B, nor a block B that checks out: "
                         f"{upper_state}. Nothing is written over it.")
+    # The probe, up front whenever the owner's image is to be written (#603): a "no" without NO PROBE stops before
+    # anything is written, never half way.
+    if not app_state.startswith("holds"):
+        _, problem = probe(plan)
+        if problem:
+            return problem
     # Step 1: block B.
     step = step_upper(plan, dfu_path, upper_state)
     if step:
@@ -419,13 +425,13 @@ def listing_serial(listing):
 
 
 def probe(plan):
-    """(the word screen's probe line, None), or (None, an action) (#603). Asked only before the owner's image is
-    written; a B-only rewrite leaves the app area, and the update-mode path in it, as they are. The answer (yes, or
+    """(the word screen's probe line, None), or (None, an action) (#603). Asked only when the owner's image is to be
+    written, before the first write; a B-only rewrite leaves the app area, and the update-mode path in it, as they are. The answer (yes, or
     no with NO PROBE typed) is remembered in the work folder for today and this unit's DFU serial; another day,
     another unit or an unreadable file asks again. `flash-day.sh drawn --probe-again` forgets it."""
     import time
     path = os.path.join(plan["work"], PROBE_FILE)
-    serial, today = listing_serial(fact(plan, "list_again")), time.strftime("%Y-%m-%d")
+    serial, today = listing_serial(fact(plan, "list")), time.strftime("%Y-%m-%d")
     try:
         with open(path) as f:
             kept = json.load(f)
@@ -444,7 +450,7 @@ def probe(plan):
         if typed is None:
             return None, ("type", "no_probe", drawn_flash.NO_PROBE, drawn_flash.NO_PROBE_RISK)
         if typed.strip() != drawn_flash.NO_PROBE:
-            return None, ("stop", f"You typed {typed.strip()!r}, not {drawn_flash.NO_PROBE}. Nothing more was written.")
+            return None, ("stop", f"You typed {typed.strip()!r}, not {drawn_flash.NO_PROBE}. Nothing was written.")
     kept = {"date": today, "time": time.strftime("%H:%M"), "serial": serial, "answer": "yes" if answer == "y" else "no probe"}
     if serial:
         with open(path, "w") as f:

@@ -141,9 +141,9 @@ class FreshFlashTests(DrawnPlanTests):
         self.assertEqual(end, ("done",))
         self.assertEqual(self.kinds(unit), [
             "update-mode", "list",
-            "read app", "read options", "read upper",
+            "read app", "read options", "read upper", "ask probe",
             "type word_upper", "write upper", "read upper",
-            "list", "ask probe", "type word_app", "write app", "read app",
+            "list", "type word_app", "write app", "read app",
             "power-cycle", "done"])
         words = [a for a in unit.log if a[0] == "type"]
         self.assertEqual([(w[1], w[2]) for w in words], [("word_upper", "FLASH"), ("word_app", "FLASH")])
@@ -413,9 +413,10 @@ class RefusalTests(DrawnPlanTests):
     def test_a_wrong_word_for_the_image_writes_only_b(self):
         self.refused("not FLASH", writes=["upper"], words={"word_app": "yes"})
 
-    def test_no_probe_without_the_phrase_stops_before_the_image_is_written(self):
-        # #603: asked just before the owner's image, so B is already written by then.
-        self.refused("not NO PROBE", writes=["upper"], answers={"probe": "n"}, words={"no_probe": "y"})
+    def test_no_probe_without_the_phrase_stops_before_anything_is_written(self):
+        # #603, the coordinator's call: asked up front whenever the owner's image is to be written, so a run never
+        # ends half done on an answer it could have had at the start.
+        self.refused("not NO PROBE", answers={"probe": "n"}, words={"no_probe": "y"})
 
     def test_no_probe_with_the_phrase_goes_on(self):
         fake = FakeUnit(self.dir.name, self.current_element, answers={"probe": "n"})
