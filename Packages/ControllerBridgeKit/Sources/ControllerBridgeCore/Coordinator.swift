@@ -258,6 +258,7 @@ public final class Coordinator {
     }
 
     private func updateJogDisplay() {
+        updateDisplayFeed()
         let wasConnected = jogController.connected
         jogController.refresh(jogEntries, color: { self.deckColors[$0] })
         holdRing()
@@ -266,6 +267,41 @@ public final class Coordinator {
         for (index, entry) in jogEntries.enumerated() where entry.ownsDisplay && controllers[index].bridge.layerShown {
             controllers[index].bridge.repaintLEDs()
         }
+    }
+
+    // MARK: Display feed (#490, #616)
+
+    /// The deck in front, as plain OSC, for a display such as the panel. Off until the setting turns it on.
+    private let displayFeed = DisplayFeed()
+
+    /// Where the display feed goes: the app's UDP destination for the display.
+    public func attachDisplayFeed(_ sender: any OSCSender) {
+        displayFeed.attach(sender)
+        updateDisplayFeed()
+    }
+
+    /// Settings' display feed: on sends the deck in front at once.
+    public func setDisplayFeed(_ settings: DisplayFeedSettings) {
+        displayFeed.set(settings)
+        updateDisplayFeed()
+    }
+
+    /// The display's destination opened: the full snapshot again, since what went before it was dropped.
+    public func displayFeedReady() {
+        displayFeed.resend()
+        updateDisplayFeed()
+    }
+
+    /// The feed's deck: the jog display's deck in front (the active layer; with no controller, the preview's deck),
+    /// whether or not the jog display is on.
+    private func updateDisplayFeed() {
+        let entries = jogEntries
+        let deck = JogDisplayController.front(entries, previewDeck: jogController.previewDeck).map { index in
+            let facts = entries[index].facts
+            return DisplayFeed.Deck(number: facts.deck, color: deckColors[facts.deck] ?? [255, 255, 255],
+                                    title: facts.track?.title ?? "", artist: facts.track?.artist ?? "")
+        }
+        displayFeed.update(deck)
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -555,6 +591,8 @@ public final class Coordinator {
         runSweep()
         for bridge in bridges { bridge.tick() }
         jogController.tick(jogEntries)
+        // Any change no other call sent, within a tick; only changes go out.
+        updateDisplayFeed()
         holdRing()
         checkLiveness()
         disconnectFailedOutputs()
@@ -857,6 +895,7 @@ public final class Coordinator {
         guard controllers.indices.contains(index), controllers[index].bridge.mapping.deck.number != deck else { return }
         controllers[index].bridge.switchDeck(to: deck)
         status.controllers[index].deck = deck
+        updateDisplayFeed()
         requestResend()
         disconnectFailedOutputs()
     }
