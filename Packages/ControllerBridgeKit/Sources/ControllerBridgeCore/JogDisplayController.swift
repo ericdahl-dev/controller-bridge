@@ -107,7 +107,7 @@ final class JogDisplayController {
     }
 
     /// How the key is written (#590): every content, so the images, the drawn display's key text and the preview.
-    private var keyDisplay = KeyNotation.traditional
+    private(set) var keyDisplay = KeyNotation.traditional
     func setKeyDisplay(_ notation: KeyNotation) {
         keyDisplay = notation
     }

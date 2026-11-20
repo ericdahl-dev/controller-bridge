@@ -295,14 +295,19 @@ public final class Coordinator {
     /// The feed's deck: the jog display's deck in front (the active layer; with no controller, the preview's deck),
     /// whether or not the jog display is on.
     private func updateDisplayFeed() {
+        guard displayFeed.on else { return }
         let entries = jogEntries
         let deck = JogDisplayController.front(entries, previewDeck: jogController.previewDeck).map { index in
             let facts = entries[index].facts
             let color = deckColors[facts.deck] ?? [255, 255, 255]
             // Not loaded is the empty state (#617): nothing of a track, even one TrackInfo named before Loaded.
             guard facts.loaded else { return DisplayFeed.Deck(number: facts.deck, color: color) }
+            let trackBPM = facts.track?.bpm ?? 0
+            let bpm = facts.bpm ?? (trackBPM > 0 ? trackBPM : 0)
             return DisplayFeed.Deck(number: facts.deck, color: color, loaded: true,
-                                    title: facts.track?.title ?? "", artist: facts.track?.artist ?? "")
+                                    title: facts.track?.title ?? "", artist: facts.track?.artist ?? "",
+                                    key: facts.track.map { jogController.keyDisplay.shown($0.key) } ?? "", bpm: bpm,
+                                    tempo: trackBPM > 0 && bpm > 0 ? (bpm / trackBPM - 1) * 100 : 0)
         }
         displayFeed.update(deck)
     }
@@ -821,6 +826,8 @@ public final class Coordinator {
         if message.address.lowercased().hasSuffix("/trackinfo") || message.address.lowercased().hasSuffix("/loaded") {
             updateJogDisplay()
         }
+        // Any of the feed's fields may have changed; only what did goes out.
+        updateDisplayFeed()
         disconnectFailedOutputs()
     }
 

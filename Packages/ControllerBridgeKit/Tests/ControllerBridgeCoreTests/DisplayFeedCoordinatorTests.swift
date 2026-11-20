@@ -16,14 +16,20 @@ struct DisplayFeedCoordinatorTests {
         return (rig, feed)
     }
 
-    /// The full snapshot of a deck, in the feed's order: an empty deck when `title` is nil.
-    static func snapshot(deck: Int, color: Int32, title: String? = nil, artist: String = "") -> [OSCMessage] {
-        [
+    /// The full snapshot of a deck, in the feed's order: an empty deck when `title` is nil. The rest default to
+    /// Daybreak's TrackInfo with no BPM feedback yet: A#m at 128, 0%.
+    static func snapshot(deck: Int, color: Int32, title: String? = nil, artist: String = "", key: String = "A#m",
+                         bpm: Float = 128, tempo: Float = 0) -> [OSCMessage] {
+        let loaded = title != nil
+        return [
             OSCMessage("/DeckBridge/Display/deck", [.int(Int32(deck))]),
             OSCMessage("/DeckBridge/Display/color", [.int(color)]),
-            OSCMessage("/DeckBridge/Display/loaded", [.int(title == nil ? 0 : 1)]),
+            OSCMessage("/DeckBridge/Display/loaded", [.int(loaded ? 1 : 0)]),
             OSCMessage("/DeckBridge/Display/title", [.string(title ?? "")]),
-            OSCMessage("/DeckBridge/Display/artist", [.string(title == nil ? "" : artist)]),
+            OSCMessage("/DeckBridge/Display/artist", [.string(loaded ? artist : "")]),
+            OSCMessage("/DeckBridge/Display/key", [.string(loaded ? key : "")]),
+            OSCMessage("/DeckBridge/Display/bpm", [.float(loaded ? bpm : 0)]),
+            OSCMessage("/DeckBridge/Display/tempo", [.float(loaded ? tempo : 0)]),
         ]
     }
 
@@ -143,6 +149,8 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/loaded", [.int(0)]),
             OSCMessage("/DeckBridge/Display/title", [.string("")]),
             OSCMessage("/DeckBridge/Display/artist", [.string("")]),
+            OSCMessage("/DeckBridge/Display/key", [.string("")]),
+            OSCMessage("/DeckBridge/Display/bpm", [.float(0)]),
         ])
     }
 
@@ -180,7 +188,45 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
         #expect(feed.sent == [])
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
-        #expect(feed.sent == Array(Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus").dropFirst(2)))
+        // Everything but the deck, its color and the 0% tempo, which the empty state already sent.
+        #expect(feed.sent == Array(Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
+            .dropFirst(2).dropLast()))
+    }
+
+    @Test("The deck's live BPM sends bpm and tempo, the change from the track's BPM in percent: 132 on a 128 track is +3.125%")
+    func bpmAndTempo() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        rig.coordinator.setDisplayFeed(Self.on)
+        feed.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(132)]))
+        #expect(feed.sent == [
+            OSCMessage("/DeckBridge/Display/bpm", [.float(132)]),
+            OSCMessage("/DeckBridge/Display/tempo", [.float(3.125)]),
+        ])
+    }
+
+    @Test("A track with no BPM of its own: tempo 0, bpm the live one")
+    func tempoWithNoTrackBPM() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(bpm: 0))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(124)]))
+        rig.coordinator.setDisplayFeed(Self.on)
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus", bpm: 124))
+    }
+
+    @Test("The key in Settings' notation, as the jog display writes it: Camelot sends A#m as 3A at once")
+    func keyNotation() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        rig.coordinator.setDisplayFeed(Self.on)
+        feed.sent.removeAll()
+        rig.coordinator.setKeyDisplay(.camelot)
+        #expect(feed.sent == [OSCMessage("/DeckBridge/Display/key", [.string("3A")])])
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")

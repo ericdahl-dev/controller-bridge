@@ -21,7 +21,7 @@ struct DisplayFeedExamplesTests {
         let address = entry["address"] as! String
         switch entry["type"] as! String {
         case "i": return OSCMessage(address, [.int(Int32(entry["value"] as! Int))])
-        case "f": return OSCMessage(address, [.float(Float(entry["value"] as! Double))])
+        case "f": return OSCMessage(address, [.float((entry["value"] as! NSNumber).floatValue)])
         case "s": return OSCMessage(address, [.string(entry["value"] as! String)])
         default: return nil
         }
@@ -29,7 +29,8 @@ struct DisplayFeedExamplesTests {
 
     static func deck(_ state: [String: Any]) -> DisplayFeed.Deck {
         DisplayFeed.Deck(number: state["deck"] as! Int, color: state["color"] as! [Int], loaded: state["loaded"] as? Bool ?? false,
-                         title: state["title"] as? String ?? "", artist: state["artist"] as? String ?? "")
+                         title: state["title"] as? String ?? "", artist: state["artist"] as? String ?? "",
+                         key: state["key"] as? String ?? "", bpm: state["bpm"] as? Double ?? 0, tempo: state["tempo"] as? Double ?? 0)
     }
 
     @Test("The file's prefix is the feed's, and it has a loaded deck, an empty one and non-ASCII text")

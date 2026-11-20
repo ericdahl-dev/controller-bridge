@@ -17,6 +17,12 @@ final class DisplayFeed {
         /// "" while the deck is empty.
         var title = ""
         var artist = ""
+        /// In Settings' key notation, as the jog display writes it.
+        var key = ""
+        /// The live BPM, else the track's; 0 unknown.
+        var bpm = 0.0
+        /// The change from the track's BPM, in percent; 0 when the track's is unknown.
+        var tempo = 0.0
 
         /// The full snapshot, in the feed's order. #617 adds its fields here.
         var messages: [OSCMessage] {
@@ -27,6 +33,9 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "loaded", [.int(loaded ? 1 : 0)]),
                 OSCMessage(DisplayFeed.prefix + "title", [.string(title)]),
                 OSCMessage(DisplayFeed.prefix + "artist", [.string(artist)]),
+                OSCMessage(DisplayFeed.prefix + "key", [.string(key)]),
+                OSCMessage(DisplayFeed.prefix + "bpm", [.float(Float(bpm))]),
+                OSCMessage(DisplayFeed.prefix + "tempo", [.float(Float(tempo))]),
             ]
         }
     }
@@ -49,6 +58,9 @@ final class DisplayFeed {
         if new.enabled && (!settings.enabled || new.host != settings.host || new.port != settings.port) { sent = [:] }
         settings = new
     }
+
+    /// Turned on with somewhere to send: worth building the deck for.
+    var on: Bool { settings.enabled && sender != nil }
 
     /// The next update is a full snapshot.
     func resend() {
