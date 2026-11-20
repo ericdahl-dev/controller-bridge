@@ -302,9 +302,17 @@ void test_each_shared_example_shows_its_deck_state() {
     for (const json_mini::Value& example : file["cases"].array) {
         ++walked;
         const char* name = example["name"].string.c_str();
+        // Each case twice: as single messages (an older DeckBridge), and as one bundle (#636); both must show it.
+      for (int as_bundle = 0; as_bundle < 2; ++as_bundle) {
         deck_core::DeckCore core;
         ScreenStub screen;
-        for (const json_mini::Value& m : example["messages"].array) feed(core, example_message(m), 100);
+        std::vector<Bytes> messages;
+        for (const json_mini::Value& m : example["messages"].array) messages.push_back(example_message(m));
+        if (as_bundle) {
+            feed(core, bundle(messages), 100);
+        } else {
+            for (const Bytes& m : messages) feed(core, m, 100);
+        }
         core.render(screen, 100);
         // A key this walker doesn't know (a later field, #617) is left for its own test.
         const json_mini::Value& state = example["state"];
@@ -349,6 +357,7 @@ void test_each_shared_example_shows_its_deck_state() {
         } else {
             TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), f.title, name);
         }
+      }
     }
     TEST_ASSERT_EQUAL(file["cases"].array.size(), walked);
     TEST_ASSERT_TRUE(walked >= 3);
