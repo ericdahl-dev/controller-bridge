@@ -51,6 +51,8 @@ Each build of `crowpanel` writes `src/wifi_secrets.h` from it (mode 600, gitigno
 
 Without the file (as in CI), the panel builds with no Wi-Fi and says "Wi-Fi isn't set".
 
+The panel joins 2.4 GHz networks only. An iPhone hotspot needs **Maximize Compatibility** on (Settings › Personal Hotspot); on 5 GHz the panel stays at "Joining Wi-Fi…" forever, which is also what a wrong password looks like.
+
 ## Flash
 
 The panel's USB serial chip is a CH340K (1A86:7522), and the Mac needs WCH's CH34x driver for it. With the driver installed, the port is `/dev/cu.wchusbserial210`:
