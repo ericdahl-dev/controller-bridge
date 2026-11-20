@@ -22,13 +22,19 @@ static perf_line::Window window() {
     w.datagrams = 900;
     w.too_big = 1;
     w.internal_free = 123456;
+    w.scan.lag_min_us = 20000;
+    w.scan.lag_max_us = 20800;
+    w.scan.vsync_min_us = 25625;
+    w.scan.vsync_max_us = 30000;
+    w.scan.resyncs = 1;
     return w;
 }
 
 void test_the_line_has_every_number_in_one_fixed_order() {
     TEST_ASSERT_EQUAL_STRING(
         "perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, "
-        "39.0 vsyncs/s, 0 swap timeouts, feed 900 datagrams 1 too big, internal free 123456",
+        "39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, vsync 25.6-30.0 ms, 1 resyncs, "
+        "feed 900 datagrams 1 too big, internal free 123456",
         perf_line::format(window()).c_str());
 }
 
@@ -41,8 +47,8 @@ void test_a_window_with_no_frames_says_so_without_dividing_by_zero() {
     w.swap_wait_us = 0;
     w.draw_bitmap_us = 0;
     TEST_ASSERT_EQUAL_STRING(
-        "perf: no frames (nothing changed), 39.0 vsyncs/s, 0 swap timeouts, feed 900 datagrams 1 too big, "
-        "internal free 123456",
+        "perf: no frames (nothing changed), 39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, "
+        "vsync 25.6-30.0 ms, 1 resyncs, feed 900 datagrams 1 too big, internal free 123456",
         perf_line::format(w).c_str());
 }
 
