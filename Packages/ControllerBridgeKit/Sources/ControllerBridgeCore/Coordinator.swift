@@ -212,6 +212,19 @@ public final class Coordinator {
         updateJogDisplay()
     }
 
+    /// The top panel's answer to the hello (#606, #439: `9F 37 7F`), from the controller that owns the display.
+    private func jogHelloAnswered(source: MIDIEndpoint.ID) {
+        let entries = jogEntries
+        guard entries.indices.contains(where: { entries[$0].ownsDisplay && controllers[$0].source?.id == source }) else { return }
+        // A re-sent hello that landed: the unit came back with its LEDs cleared, so they're painted again, as after the
+        // first hello (#426). Once per connect: the driver reports it only for the first answer.
+        guard jogController.helloAnswered() else { return }
+        trace?(.jogDisplay, "jog display: a re-sent hello was answered: the LEDs painted again")
+        for (index, entry) in entries.enumerated() where entry.ownsDisplay && controllers[index].bridge.layerShown {
+            controllers[index].bridge.repaintLEDs()
+        }
+    }
+
     /// A message from the jog display's WD port: the unit's answers to an upload.
     public func jogDisplayReply(_ bytes: [UInt8]) {
         jogController.reply(bytes)
@@ -565,6 +578,7 @@ public final class Coordinator {
     /// A MIDI message from a source. Only the controller connected to that source handles it.
     public func midi(_ event: MIDIEvent, source: MIDIEndpoint.ID) {
         let mapping = (controllers.first { $0.source?.id == source } ?? controllers[0]).bridge.mapping
+        if case .noteOn(15, 55, 127) = event { jogHelloAnswered(source: source) }
         // Notes the controller sends on its own, such as the LC6000's idle heartbeat (#103), reach nothing.
         if case .noteOn(_, let note, _) = event, mapping.midi.ignoreNotes.contains(Int(note)) { return }
         if case .noteOff(_, let note, _) = event, mapping.midi.ignoreNotes.contains(Int(note)) { return }

@@ -271,6 +271,11 @@ public final class JogDisplayDriver {
         lastMarker = nil
         lastPlayLight = nil
         for message in JogDisplay.hello { sendController(message) }
+        hello = (at: clock.now, resent: 0, due: clock.now + Self.helloAgainFirst, said: false)
+        awaitingReady = true
+        readyAskedSince = nil
+        readyPending = false
+        lastShow = nil
         // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
         mode = .images
         lastDeck = nil
@@ -293,6 +298,10 @@ public final class JogDisplayDriver {
         mode = .images
         asked = false
         reasks = nil
+        if hello?.said == true { trace?(.jogDisplay, "jog display: hello re-sends stop: goodbye") }
+        hello = nil
+        awaitingReady = false
+        readyPending = false
         connected = false
         upload = nil
         lastMarker = nil
@@ -350,7 +359,11 @@ public final class JogDisplayDriver {
     /// The front deck's slot for the beat now, on screen if it holds the deck's content.
     private func showFrontBeat() {
         guard let current, let slot = slot(deck: current.deck, beat: lastMasterBeat ?? 1), slotContent[slot] == current else { return }
-        if connected { sendWD(JogDisplay.show(slot: slot)) }
+        if connected {
+            sendWD(JogDisplay.show(slot: slot))
+            lastShow = (slot, JogDisplay.show(slot: slot))
+            showAfterReady(sent: true)
+        }
         screenSlot = slot
         onEvent?(.shown(slot: slot))
     }
@@ -505,9 +518,103 @@ public final class JogDisplayDriver {
         reasks = done < Self.reaskLimit ? (done, clock.now + Self.reaskFirst * Double(1 << done)) : nil
     }
 
+    /// The hello again while the top panel hasn't answered it (#606): after a power cycle it can miss the first. The
+    /// same pair, `helloAgainLimit` times, the first `helloAgainFirst` s after the hello and each gap twice the last (1,
+    /// 3, 7, 15, 31 s), then never until the next connect. An answer is due within `helloAnswerTime` of a hello.
+    static let helloAgainFirst = 1.0, helloAgainLimit = 5, helloAnswerTime = 0.5
+    /// The hello awaiting the top panel's answer: when it first went, how many re-sends, the next one's time (nil
+    /// after the last), and whether the trace said it wasn't answered. Nil once answered, given up on, or gone.
+    private var hello: (at: Double, resent: Int, due: Double?, said: Bool)?
+
+    private func helloAgainIfDue() {
+        guard connected, var waiting = hello else { return }
+        let now = clock.now
+        if !waiting.said, now >= waiting.at + Self.helloAnswerTime - 1e-9 {
+            waiting.said = true
+            trace?(.jogDisplay, "jog display: no answer to the hello in 0.5 s: sending it again at 1, 3, 7, 15, 31 s")
+        }
+        if let due = waiting.due, now >= due - 1e-9 {
+            for message in JogDisplay.hello { sendController(message) }
+            waiting.resent += 1
+            trace?(.jogDisplay, "jog display: hello again (\(waiting.resent) of \(Self.helloAgainLimit))")
+            // From now, not from when it was due: a stalled tick sends one pair, not the missed ones in a burst.
+            waiting.due = waiting.resent < Self.helloAgainLimit ? now + Self.helloAgainFirst * Double(1 << waiting.resent) : nil
+            if waiting.due == nil { lastHelloAt = now }
+        } else if waiting.due == nil, let last = lastHelloAt, now >= last + Self.helloAnswerTime - 1e-9 {
+            let text = String(format: "the top panel never answered the hello (%d re-sends, %.1f s): no more",
+                              waiting.resent, now - waiting.at)
+            log.log("The jog display: " + text)
+            trace?(.jogDisplay, "jog display: " + text)
+            hello = nil
+            return
+        }
+        hello = waiting
+    }
+    private var lastHelloAt: Double?
+
+    /// The top panel answered the hello (#606): ch16 note 55 on (`9F 37 7F`). Shift + deck select sends the same, and
+    /// stops the re-sends too. Whether a re-sent hello was the one answered.
+    @discardableResult
+    public func helloAnswered() -> Bool {
+        guard connected, let waiting = hello else { return false }
+        hello = nil
+        if waiting.said {
+            trace?(.jogDisplay, String(format: "jog display: the top panel answered the hello %.1f s after it: no more re-sends",
+                                       clock.now - waiting.at))
+        }
+        return waiting.resent > 0
+    }
+
+    /// Whether the display chip hasn't said ready since the hello (#606). After a power cycle its own boot sequence
+    /// covers the host's images until it ends; it then answers the pending 10, and the next 0A uncovers them. Its
+    /// first 10 reply sends the last show again, so that 0A comes at once.
+    private var awaitingReady = false
+    /// The last show sent for a stored slot: never an upload's lead.
+    private var lastShow: (slot: UInt8, bytes: [UInt8])?
+
+    /// Ready came, and the show again waits for the upload in flight to end: a 0A between its chunks can spoil it.
+    private var readyPending = false
+    private static let readySaid = "jog display: the display said ready (its first 10 reply since the hello): "
+
+    /// When the first 10 since the hello went (#606): no reply `readyWait` s later is said once; nothing is sent for it.
+    private var readyAskedSince: Double?
+    static let readyWait = 60.0
+
+    private func neverReadyIfDue() {
+        guard awaitingReady, connected, case .images = mode, let since = readyAskedSince,
+              clock.now - since >= Self.readyWait - 1e-9 else { return }
+        awaitingReady = false
+        let text = "the display never said ready in 60 s (no 10 reply since the hello); nothing sent for it"
+        log.log("The jog display: " + text)
+        trace?(.jogDisplay, "jog display: " + text)
+    }
+
+    private func readyIfFirst(_ bytes: [UInt8]) {
+        guard awaitingReady, connected, case .images = mode, JogDisplay.Reply(bytes) == .committed else { return }
+        awaitingReady = false
+        readyPending = true
+    }
+
+    /// The show after ready: an upload's own, once stored, counts; with none in flight, the last show again.
+    private func showAfterReady(sent: Bool) {
+        guard readyPending else { return }
+        if sent {
+            readyPending = false
+            return trace?(.jogDisplay, Self.readySaid + "a show went out after it, nothing sent again") ?? ()
+        }
+        guard upload == nil else { return }
+        readyPending = false
+        guard connected, case .images = mode else { return }
+        guard let lastShow else { return trace?(.jogDisplay, Self.readySaid + "nothing shown yet, nothing sent") ?? () }
+        sendWD(lastShow.bytes)
+        trace?(.jogDisplay, Self.readySaid + "show slot \(lastShow.slot) sent again")
+    }
+
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
         traceReply(bytes)
+        readyIfFirst(bytes)
+        defer { showAfterReady(sent: false) }
         if case .asking = mode, let version = DrawnDisplay.answer(bytes) {
             return draw(version: min(version, DrawnDisplay.version))
         }
@@ -532,6 +639,7 @@ public final class JogDisplayDriver {
                 running.finished = true
                 running.startedAt = clock.now   // from here, the commit grace
                 for message in running.upload.finish { sendWD(message) }
+                if readyAskedSince == nil { readyAskedSince = clock.now }
             }
             upload = running
         case .refused(let status):
@@ -562,6 +670,8 @@ public final class JogDisplayDriver {
 
     private func showSlot(_ running: Running) {
         sendWD(running.upload.show)
+        lastShow = (running.slot, running.upload.show)
+        showAfterReady(sent: true)
         shownSlot = running.slot
         onEvent?(.shown(slot: running.slot))
     }
@@ -573,6 +683,7 @@ public final class JogDisplayDriver {
             if displayFirmware == .custom { reasks = (0, clock.now + Self.reaskFirst) }
         }
         reaskIfDue()
+        helloAgainIfDue()
         if case .drawn = mode, let last = lastFullState, clock.now - last >= Self.heartbeat - 1e-9 { beat() }
         if let running = upload, running.finished, clock.now - running.startedAt >= Self.commitGrace {
             stored(running)
@@ -582,6 +693,8 @@ public final class JogDisplayDriver {
             fail(running)
             onEvent?(.failed(refusal: nil))
         }
+        showAfterReady(sent: false)
+        neverReadyIfDue()
         if upload == nil { next() }
     }
 
