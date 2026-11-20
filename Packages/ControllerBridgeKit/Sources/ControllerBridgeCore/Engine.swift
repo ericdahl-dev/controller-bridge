@@ -98,6 +98,8 @@ public struct Engine {
                     waitingCommands.removeAll()
                     setDiagnostics(coordinator, open: diagnosticsOpen)
                     coordinator.start()
+                    // Back to the real deck in front, with a full snapshot (#625).
+                    coordinator.takeDisplayFeed(from: session.coordinator)
                 }
             case .stop:
                 // Releases are sent synchronously, so they have all gone out once run() returns. Quit, not stop: a

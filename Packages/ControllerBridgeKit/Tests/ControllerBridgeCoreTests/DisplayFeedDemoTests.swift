@@ -83,4 +83,23 @@ struct DisplayFeedDemoTests {
         #expect(beats.count == 1)
         #expect(Self.text(feed, "title").isEmpty)
     }
+
+    @Test("Demo off: the feed goes back to the real deck in front with a full snapshot, and the stopped demo sends nothing")
+    func demoOff() async throws {
+        let (rig, feed) = try Self.realRig()
+        let made = Made()
+        await Self.run(rig, made) {
+            $0.send(.setDisplayFeed(DisplayFeedCoordinatorTests.on))
+            $0.send(.displayFeedReady)
+            $0.demo(on: true)
+            $0.demo(on: false)
+        }
+        let daybreak = DisplayFeedCoordinatorTests.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
+        // Turned on, then back from the demo (whose own snapshot was still held).
+        #expect(feed.sent == daybreak + daybreak)
+        feed.sent.removeAll()
+        let session = try #require(made.session)
+        for step in 1...300 { rig.clock.now = Double(step) * 0.01; session.tick() }
+        #expect(feed.sent == [])
+    }
 }
