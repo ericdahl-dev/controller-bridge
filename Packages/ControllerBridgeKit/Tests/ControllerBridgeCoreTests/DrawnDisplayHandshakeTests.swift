@@ -13,6 +13,9 @@ struct DrawnDisplayHandshakeTests {
         var both: [[UInt8]] = []
         func sendController(_ bytes: [UInt8]) { controller.append(bytes); both.append(bytes) }
         func sendWD(_ bytes: [UInt8]) { wd.append(bytes); both.append(bytes) }
+        /// How many messages had been sent at each flush.
+        var flushes: [Int] = []
+        func flush() { flushes.append(both.count) }
     }
     static let ask = DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes
 
@@ -164,6 +167,19 @@ struct DrawnDisplayHandshakeTests {
         var stale = state
         stale[10] |= 0x20
         #expect(port.both == [neutral, stale, JogDisplay.goodbye])
+    }
+
+    @Test("Quitting flushes the port after the last message, drawn or not, so the app can't exit with them queued (#600)")
+    func quitFlushes() throws {
+        let (drawn, drawnPort, _) = try Self.rig(.custom)
+        drawn.coordinator.jogDisplayReply(Self.answer)
+        drawn.coordinator.quit()
+        #expect(drawnPort.flushes == [drawnPort.both.count])
+        #expect(drawnPort.both.last == JogDisplay.goodbye)
+
+        let (images, imagesPort, _) = try Self.rig(.denon)
+        images.coordinator.quit()
+        #expect(imagesPort.flushes == [imagesPort.both.count])
     }
 
     @Test("In image mode the goodbye goes alone, as today")

@@ -9,10 +9,13 @@ public protocol JogDisplayPort: AnyObject, Sendable {
     func sendWD(_ bytes: [UInt8])
     /// Whether the unit's WD port is there now (#305). Without it there's no display to say hello to.
     var isAttached: Bool { get }
+    /// Returns once everything sent so far has gone out (#600): the app is about to exit.
+    func flush()
 }
 
 extension JogDisplayPort {
     public var isAttached: Bool { true }
+    public func flush() {}
 }
 
 /// What the display shows for the deck in front (#165). Two of these that are equal draw the same image.
@@ -298,6 +301,11 @@ public final class JogDisplayDriver {
             mode = .images
         }
         disconnect()
+    }
+
+    /// Returns once everything sent so far has gone out (#600): the app is about to exit.
+    public func flush() {
+        port?.flush()
     }
 
     /// Asks for `content` on the display. Equal content sends nothing; while an upload runs, only the newest waits.
