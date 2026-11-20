@@ -52,7 +52,7 @@ struct DraftLC6000Tests {
         let todo = draft.todos.map(\.key)
         let general = ["mapping.osc.", "mapping.deck.", "mapping.pads.roll_sizes", "mapping.jog.bend_release_ms",
                        "mapping.jog.seek_seconds_per_rev", "mapping.jog.beats_per_rev", "mapping.jog.require_touch",
-                       "mapping.pitch.dead_zone", "mapping.pitch.pickup", "mapping.needle.require_touch",
+                       "mapping.pitch.dead_zone", "mapping.pitch.pickup", "mapping.needle.require_touch", "mapping.needle.shift_fader",
                        "mapping.leds.", "mapping.notes."]
         // Denon's color message (#530) is never drafted: it would send Denon's SysEx to another controller.
         let unexplained = try Self.bundled().keys.filter { key in

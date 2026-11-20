@@ -140,7 +140,7 @@ extension Bridge {
     /// With Shift held at touch-down, the touch moves the deck's channel fader until it lifts (#609).
     func needleTouch(_ pressed: Bool) {
         if pressed, shift {
-            stripFader.touchDown(channel: mapping.deck.number)
+            stripFader.touchDown(channel: mapping.deck.number, mode: mapping.needle?.shiftFaderMode ?? .relative)
             return
         }
         if !pressed, stripFader.touching {

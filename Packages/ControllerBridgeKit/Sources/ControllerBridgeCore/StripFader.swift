@@ -1,7 +1,7 @@
 /// Shift + Needle Drop moves the deck's channel fader in Syndicate (#609). Whether a touch moves the fader or seeks is
 /// fixed at touch-down. Relative: the fader moves from its level at touch-down by how far the finger travels, the
-/// strip's length being the fader's range, clamped at both ends. Plain values in, the level to send out: the Bridge
-/// sends the OSC.
+/// strip's length being the fader's range, clamped at both ends. Jump: the fader goes to the finger and follows it, no
+/// level needed. Plain values in, the level to send out: the Bridge sends the OSC.
 struct StripFader {
     /// The last level known for each mixer channel: Syndicate's report, or where a touch left the fader.
     private var levels: [Int: Double] = [:]
@@ -9,6 +9,7 @@ struct StripFader {
 
     private struct Touch {
         let channel: Int
+        let mode: Mapping.Needle.ShiftFaderMode
         /// The level and strip position the travel counts from; nil until the first position after touch-down.
         var start: (level: Double, position: Double)?
         /// The fader's level as this touch last left it: an unchanged level isn't sent again.
@@ -26,8 +27,8 @@ struct StripFader {
     }
 
     /// The strip was touched with Shift held: this touch moves `channel`'s fader until it lifts.
-    mutating func touchDown(channel: Int) {
-        touch = Touch(channel: channel)
+    mutating func touchDown(channel: Int, mode: Mapping.Needle.ShiftFaderMode) {
+        touch = Touch(channel: channel, mode: mode)
     }
 
     /// The finger lifted: where it left the fader is the level the next touch starts from, until Syndicate says
@@ -41,6 +42,11 @@ struct StripFader {
     mutating func position(_ position: Double) -> (channel: Int, level: Double)? {
         guard var touch else { return nil }
         defer { self.touch = touch }
+        if touch.mode == .jump {
+            guard position != touch.level else { return nil }
+            touch.level = position
+            return (touch.channel, position)
+        }
         guard let start = touch.start else {
             if let level = levels[touch.channel] {
                 touch.start = (level, position)

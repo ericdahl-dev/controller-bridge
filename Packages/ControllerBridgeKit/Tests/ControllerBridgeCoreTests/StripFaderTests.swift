@@ -175,4 +175,19 @@ struct StripFaderTests {
         #expect(sent.count == 4, "sent \(sent)")
         #expect(abs(sent[2] - 0.625) < 0.001 && abs(sent[3] - 0.75) < 0.001, "sent \(sent)")
     }
+
+    static let jump = #"{ "needle": { "shift_fader_mode": "jump" } }"#
+
+    @Test("Jump: touching the strip's midpoint with Shift sets the fader to half, with no travel and no level from Syndicate")
+    func jumpMidpoint() throws {
+        let rig = try C.started(Self.jump)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 8192)
+        #expect(Self.sentVolumes(rig).count == 1 && abs((Self.sentVolumes(rig).first ?? 0) - 0.5) < 0.001, "sent \(Self.sentVolumes(rig))")
+        Self.at(rig, 16383)   // and follows the finger: the top is the fader's top
+        Self.at(rig, 0)
+        #expect(Self.sentVolumes(rig).suffix(2) == [1.0, 0.0])
+        #expect(Self.seeks(rig).isEmpty)
+    }
 }
