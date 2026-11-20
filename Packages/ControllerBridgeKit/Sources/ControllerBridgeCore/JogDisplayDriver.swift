@@ -273,6 +273,7 @@ public final class JogDisplayDriver {
         for message in JogDisplay.hello { sendController(message) }
         hello = (at: clock.now, resent: 0, due: clock.now + Self.helloAgainFirst, said: false)
         awaitingReady = true
+        readyAskedSince = nil
         readyPending = false
         lastShow = nil
         // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
@@ -574,6 +575,19 @@ public final class JogDisplayDriver {
     private var readyPending = false
     private static let readySaid = "jog display: the display said ready (its first 10 reply since the hello): "
 
+    /// When the first 10 since the hello went (#606): no reply `readyWait` s later is said once; nothing is sent for it.
+    private var readyAskedSince: Double?
+    static let readyWait = 60.0
+
+    private func neverReadyIfDue() {
+        guard awaitingReady, connected, case .images = mode, let since = readyAskedSince,
+              clock.now - since >= Self.readyWait - 1e-9 else { return }
+        awaitingReady = false
+        let text = "the display never said ready in 60 s (no 10 reply since the hello); nothing sent for it"
+        log.log("The jog display: " + text)
+        trace?(.jogDisplay, "jog display: " + text)
+    }
+
     private func readyIfFirst(_ bytes: [UInt8]) {
         guard awaitingReady, connected, case .images = mode, JogDisplay.Reply(bytes) == .committed else { return }
         awaitingReady = false
@@ -624,6 +638,7 @@ public final class JogDisplayDriver {
                 running.finished = true
                 running.startedAt = clock.now   // from here, the commit grace
                 for message in running.upload.finish { sendWD(message) }
+                if readyAskedSince == nil { readyAskedSince = clock.now }
             }
             upload = running
         case .refused(let status):
@@ -678,6 +693,7 @@ public final class JogDisplayDriver {
             onEvent?(.failed(refusal: nil))
         }
         showAfterReady(sent: false)
+        neverReadyIfDue()
         if upload == nil { next() }
     }
 

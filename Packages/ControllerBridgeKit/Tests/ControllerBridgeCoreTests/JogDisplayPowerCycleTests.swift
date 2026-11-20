@@ -255,4 +255,36 @@ struct JogDisplayPowerCycleTests {
         rig.driver.tick()
         #expect(!rig.port.wd.contains { $0.count > 6 && $0[6] == 0x0A })
     }
+
+    static let neverReady = "jog display: the display never said ready in 60 s (no 10 reply since the hello); nothing sent for it"
+
+    @Test("No 10 reply 60 s after the first 10 since the hello: said once, to the trace and the log; nothing sent for it")
+    func neverReady() {
+        let rig = DriverRig()
+        let lines = Self.traced(rig)
+        _ = Self.shownByGrace(rig)
+        for t in stride(from: 1.0, through: 59.9, by: 0.1) { rig.clock.now = t; rig.driver.tick() }
+        #expect(!lines.list.contains(Self.neverReady))
+        for t in stride(from: 60.0, through: 200, by: 0.1) { rig.clock.now = t; rig.driver.tick() }
+        #expect(lines.list.filter { $0 == Self.neverReady }.count == 1)
+        #expect(rig.log.lines.filter { $0.contains("never said ready") }.count == 1)
+        #expect(rig.port.wd.isEmpty)
+    }
+
+    @Test("No 10 ever sent (nothing to show), or the display said ready: no line")
+    func readyOrNotAsked() {
+        let quiet = DriverRig()
+        let quietLines = Self.traced(quiet)
+        quiet.driver.connect()
+        quiet.driver.helloAnswered()
+        for t in stride(from: 1.0, through: 100, by: 1) { quiet.clock.now = t; quiet.driver.tick() }
+        #expect(!quietLines.list.contains(Self.neverReady))
+
+        let ready = DriverRig()
+        let readyLines = Self.traced(ready)
+        _ = Self.shownByGrace(ready)
+        ready.driver.reply(Self.ready)
+        for t in stride(from: 1.0, through: 100, by: 1) { ready.clock.now = t; ready.driver.tick() }
+        #expect(!readyLines.list.contains(Self.neverReady))
+    }
 }
