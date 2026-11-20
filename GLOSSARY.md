@@ -141,7 +141,7 @@ _Avoid_: custom mode, chip mode
 
 **Panel**:
 The jog display's whole screen in drawn mode, which our picture covers: the round frame in its middle, black around it but for the progress ring.
-_Avoid_: screen (not the menu-bar panel, and not the controller's top panel)
+_Avoid_: screen (not the menu-bar panel, the controller's top panel, or the deck panel)
 
 **Block A**:
 Our small part of the drawn display's firmware, inside Denon's own: it takes DeckBridge's messages, answers its ask, and hands drawing to block B only once block B has checked out.
@@ -150,3 +150,13 @@ _Avoid_: hook, patch
 **Block B**:
 The drawn display's drawing, kept in the display's spare flash beside Denon's firmware; block A and block B must come from the same build, or the display stays silent.
 _Avoid_: upper block
+
+### Deck display
+
+**Display feed**:
+DeckBridge's OSC stream of the deck in front, for a display other than the jog display: one value per address under `/DeckBridge/Display/`, sent to the host and port the DJ sets, never read back (ADR 0011).
+_Avoid_: display OSC, panel feed
+
+**Deck panel**:
+The Wi-Fi display by the controller that shows the display feed: an ESP32 7" screen running our firmware from `tools/deck-panel/`. "The panel" in the display feed's tickets.
+_Avoid_: Panel alone (that's the jog display's drawn screen), ESP32 display
