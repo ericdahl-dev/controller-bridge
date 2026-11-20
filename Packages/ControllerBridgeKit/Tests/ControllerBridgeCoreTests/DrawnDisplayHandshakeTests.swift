@@ -192,6 +192,33 @@ struct DrawnDisplayHandshakeTests {
         #expect(rig.coordinator.status.displayFound?.label == "Custom (drawn display, protocol 1)")
     }
 
+    @Test("A refusal (ack 06) to a question again, no upload running, ends the asking: images from then on (#604)")
+    func refusalEndsReasks() throws {
+        let (rig, port, clock) = try Self.rig(.custom)
+        // Every image goes up at once (acked and committed), so by the question at 3.5 s none is running.
+        for step in 1...360 {
+            clock.now = Double(step) / 100
+            rig.coordinator.tick()
+            for _ in 1...4 { rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted) }
+            rig.coordinator.jogDisplayReply(JogDisplayDriverTests.committed)
+        }
+        #expect(port.wd.filter { $0 == Self.ask }.count == 3)   // at 0, 1.5 and 3.5
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.refused)
+        port.wd.removeAll()
+        for step in 1...1000 {
+            clock.now = 3.6 + Double(step) / 10
+            rig.coordinator.tick()
+        }
+        #expect(!port.wd.contains(Self.ask))
+        #expect(rig.coordinator.status.displayFound?.label == "Custom (images)")
+    }
+
+    @Test("Denon's firmware is never asked, however long the session (#604 changes only Custom)")
+    func denonNeverReasked() throws {
+        let (rig, port, clock) = try Self.rig(.denon)
+        #expect(Self.asksOver(100, rig, port, clock).isEmpty)
+    }
+
     static let end = DrawnDisplay.Message.end(version: 1).bytes
 
     @Test("Turning the jog display off in drawn mode: end, then the goodbye")
