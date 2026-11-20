@@ -16,13 +16,15 @@ concurrency:
 
 jobs:
   # Which jobs a change needs (scripts/ci_changes.py): a change to only the website, its scripts or Markdown docs
-  # skips the two Mac jobs. A skipped job counts as passed for the ruleset's required Kit tests check.
+  # skips the two Mac jobs. A skipped job counts as passed for the ruleset's required Kit tests check. The Deck panel
+  # job runs only for tools/deck-panel or this workflow.
   changes:
     name: Changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       mac: ${{ steps.diff.outputs.mac }}
+      deck_panel: ${{ steps.diff.outputs.deck_panel }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,6 +62,34 @@ jobs:
         run: node --test scripts/test_analytics.mjs scripts/test_capture.mjs
       - name: Site check
         run: python3 -I scripts/check_site.py website
+
+  deck-panel:
+    name: Deck panel
+    # The deck panel's firmware (#615): the portable code's host tests, then the CrowPanel build. Only when
+    # tools/deck-panel or this workflow changes; not a required check. PlatformIO is pinned, and the pioarduino
+    # platform it builds with takes Python 3.10-3.14.
+    needs: changes
+    if: needs.changes.outputs.deck_panel == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: PlatformIO and its platform cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: deck-panel-pio-6.2.0-${{ hashFiles('tools/deck-panel/platformio.ini') }}
+      - name: PlatformIO
+        run: pip install platformio==6.2.0
+      - name: Deck panel host tests
+        run: pio test -d tools/deck-panel -e native
+      - name: Deck panel firmware build
+        run: pio run -d tools/deck-panel -e crowpanel
 
   display-firmware:
     name: Display firmware
