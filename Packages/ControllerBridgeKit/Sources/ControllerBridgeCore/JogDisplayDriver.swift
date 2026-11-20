@@ -265,7 +265,7 @@ public final class JogDisplayDriver {
         lastState = nil
         if displayFirmware == .custom {
             mode = .asking(since: clock.now)
-            sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
+            ask()
         }
         onEvent?(.connected)
         next()
@@ -279,6 +279,7 @@ public final class JogDisplayDriver {
             if quitting, let leaving { leaveLogo(leaving) } else { endDrawing(version) }
         }
         mode = .images
+        asked = false
         connected = false
         upload = nil
         lastMarker = nil
@@ -469,10 +470,24 @@ public final class JogDisplayDriver {
         for deck in previews.keys.sorted() { reportPreview(previews[deck]!) }
     }
 
+    /// Whether the capability question went out since the hello (#604): an answer after the fallback to images still
+    /// counts, since a unit just power cycled answers only once its chip has started.
+    private var asked = false
+
+    private func ask() {
+        asked = true
+        sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
+    }
+
     /// A message from the WD port.
     public func reply(_ bytes: [UInt8]) {
         traceReply(bytes)
         if case .asking = mode, let version = DrawnDisplay.answer(bytes) {
+            return draw(version: min(version, DrawnDisplay.version))
+        }
+        // A late answer, in images (#604): drawn from here. An upload in flight is dropped; the chip draws over it.
+        if case .images = mode, asked, let version = DrawnDisplay.answer(bytes) {
+            upload = nil
             return draw(version: min(version, DrawnDisplay.version))
         }
         // A refusal (ack 06) ends the wait at once. Denon's firmware never sends one for this command: it says nothing,
@@ -564,7 +579,7 @@ public final class JogDisplayDriver {
         lastState = nil
         if displayFirmware == .custom {
             mode = .asking(since: clock.now)
-            sendWD(DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes)
+            ask()
         }
     }
 

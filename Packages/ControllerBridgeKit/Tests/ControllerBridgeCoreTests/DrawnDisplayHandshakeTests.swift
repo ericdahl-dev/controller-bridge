@@ -89,10 +89,7 @@ struct DrawnDisplayHandshakeTests {
         clock.now = 9
         rig.coordinator.tick()
         #expect(rig.log.lines.filter { $0 == Self.fallbackLine }.count == 1)
-        // A late answer changes nothing: images until the next connect.
-        port.wd.removeAll()
-        rig.coordinator.jogDisplayReply(Self.answer)
-        #expect(Self.drawn(port).isEmpty)
+        // A late answer draws now (#604): lateAnswerDraws.
     }
 
     @Test("A refusal (ack 06), which Denon's firmware never sends for this command (#466): images at once, without waiting")
@@ -131,6 +128,45 @@ struct DrawnDisplayHandshakeTests {
         #expect(!port.wd.contains(where: Self.isUpload))
         let since = JogDisplayRingHoldTests.ring(rig).dropFirst(before)
         #expect(!since.isEmpty && !since.contains(0))
+    }
+
+    static let begin = DrawnDisplay.Message.begin(version: 1).bytes
+
+    @Test("An answer after the 0.5 s fallback to images (#604: the chip still starting after a power cycle) switches to drawn: begin, then the deck")
+    func lateAnswerDraws() throws {
+        let (rig, port, clock) = try Self.rig(.custom)
+        clock.now = 0.5
+        rig.coordinator.tick()
+        #expect(rig.coordinator.status.displayFound?.label == "Custom (images)")
+        clock.now = 7
+        rig.coordinator.tick()
+        port.wd.removeAll()
+        rig.coordinator.jogDisplayReply(Self.answer)
+        #expect(rig.coordinator.status.displayFound?.label == "Custom (drawn display, protocol 1)")
+        #expect(port.wd.first == Self.begin)
+        #expect(Self.drawn(port).contains { $0[9] == 0x03 })
+    }
+
+    @Test("A late answer mid-upload (#604): the upload is dropped (its later acks finish nothing), no upload after, and the ring's hold is released")
+    func lateAnswerMidUpload() throws {
+        let (rig, port, clock) = try Self.rig(.custom)
+        clock.now = 0.5
+        rig.coordinator.tick()
+        #expect(Self.uploadSlots(port) == [1])
+        #expect(JogDisplayRingHoldTests.ring(rig).last == 0)   // held dark while the image goes up (#422)
+        port.wd.removeAll()
+        let before = JogDisplayRingHoldTests.ring(rig).count
+        rig.coordinator.jogDisplayReply(Self.answer)
+        for _ in 1...8 { rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted) }   // more than any upload's acks
+        for step in 1...10 {
+            clock.now = 0.5 + Double(step) * 0.1
+            rig.coordinator.tick()
+        }
+        #expect(port.wd.first == Self.begin)
+        #expect(!port.wd.contains(where: Self.isUpload))
+        #expect(port.wd.allSatisfy { $0.first != 0xF0 || ($0.count > 9 && $0[6] == DrawnDisplay.command) })   // no finish, no show
+        let since = JogDisplayRingHoldTests.ring(rig).dropFirst(before)
+        #expect(since.last != nil && since.last != 0)
     }
 
     static let end = DrawnDisplay.Message.end(version: 1).bytes
