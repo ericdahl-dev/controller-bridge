@@ -482,6 +482,39 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertEqual(len(self.downloads()), 2)
 
+    OLD_B = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
+
+    def pinned(self, answers, app, upper=None, in_update_mode=False, args=()):
+        """A run with the kit's pair in the work folder (#603): exactly ANSWERS, each one a stop the output shows as
+        a "?" prompt, and none left over. Returns the run."""
+        if os.path.dirname(self.upper) != self.work:
+            self.upper, self.owner = self.kit_pair_in(self.work)
+        self.unit_holds(app, upper=upper, in_update_mode=in_update_mode)
+        result = self.run_wizard(answers, sent=0 if in_update_mode else 1, args=args)
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertEqual(result.stdout.count("  ? "), len(answers), result.stdout)
+        return result
+
+    def old_b(self):
+        return self.OLD_B + b"\xff" * (0x80000 - len(self.OLD_B))
+
+    def test_stops_first_flash(self):
+        self.pinned(["UPDATE", "FLASH", "y", "FLASH"], self.current_element)
+
+    def test_stops_first_flash_without_a_probe_then_again_the_same_day(self):
+        self.pinned(["UPDATE", "FLASH", "n", "NO PROBE", "FLASH"], self.current_element)
+        self.pinned(["UPDATE", "FLASH", "FLASH"], self.current_element)
+
+    def test_stops_b_only_rewrite(self):
+        self.pinned(["UPDATE", "REWRITE"], self.owner_element, upper=self.old_b())
+
+    def test_stops_b_only_rewrite_with_the_chip_already_in_update_mode(self):
+        # The ticket's case: one typed word and nothing else.
+        self.pinned(["REWRITE"], self.owner_element, upper=self.old_b(), in_update_mode=True)
+
+    def test_stops_two_block_rewrite(self):
+        self.pinned(["UPDATE", "REWRITE", "y", "FLASH"], self.current_element, upper=self.old_b())
+
     def refused_by_the_record(self, record, *reasons):
         self.unit_holds(self.current_element)
         result = self.run_wizard([self.upper, self.owner, record, "UPDATE", "FLASH", "y", "FLASH"],
