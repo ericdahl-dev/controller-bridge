@@ -70,8 +70,17 @@ FAKE_DFU_UTIL = textwrap.dedent('''\
         name, base = ("app.bin", {app}) if image.address == {app} else ("upper.bin", {upper})
         path = os.path.join(unit, name)
         memory = bytearray(open(path, "rb").read())
-        memory[image.address - base:image.address - base + len(image.element)] = image.element
+        element = image.element
+        cut = "cut-app" in fail and image.address == {app}   # erased, then cut off half way
+        if cut:
+            memory[image.address - base:image.address - base + len(element)] = bytes([0xFF]) * len(element)
+            element = element[:len(element) // 2]
+        memory[image.address - base:image.address - base + len(element)] = element
         open(path, "wb").write(bytes(memory))
+        if cut:   # the run stops here: no power cycle follows, so the chip stays in update mode
+            if os.path.exists(os.path.join(unit, "written")):
+                os.remove(os.path.join(unit, "written"))
+            sys.exit("dfu-util: fake write cut off")
         open(os.path.join(unit, "written"), "w").close()
         sys.exit(0)
     sys.exit("fake dfu-util: unexpected " + " ".join(args))
@@ -142,7 +151,8 @@ class FlashDayRunTests(unittest.TestCase):
         return path
 
     def unit_fails(self, *what):
-        """The fake dfu-util fails these: read-app, read-upper, read-options, write-upper, write-app."""
+        """The fake dfu-util fails these: read-app, read-upper, read-options, write-upper, write-app, and cut-app (the
+        app write erases, writes half, and fails)."""
         with open(os.path.join(self.unit, "fail.txt"), "w") as f:
             f.write(" ".join(what))
 
@@ -546,6 +556,42 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("--upper and --owner go together", result.stdout)
         self.assertEqual(self.calls(), [])
+
+    def test_a_rerun_after_an_interrupted_image_write_finishes_that_same_write(self):
+        # The coordinator's call (#603): the chip sits in update mode with a half-written app area, which matches no
+        # file. The wizard's own record of the write it started lets a re-run offer exactly that write again.
+        self.upper, self.owner = self.kit_pair_in(self.work)
+        self.unit_holds(self.current_element)
+        self.unit_fails("cut-app")
+        result = self.run_wizard(["UPDATE", "y", "FLASH", "FLASH"])
+        self.assert_stopped_with_the_way_back(result, "dfu-util reported an error writing the owner's image")
+        self.assertNotEqual(self.memory("app.bin"), self.owner_element)
+        for name in ("fail.txt", "update-mode.log", "calls.log"):   # the same unit, still in update mode
+            os.remove(os.path.join(self.unit, name))
+        left = []
+        result = self.run_wizard(["FLASH"], sent=0, left=left)   # still in update mode; B there; probe kept
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertEqual(left, ["UNREAD\n"])
+        self.assertIn("FINISHING AN INTERRUPTED WRITE", result.stdout)
+        self.assertEqual(self.memory("app.bin"), self.owner_element)
+        self.assertFalse(os.path.exists(os.path.join(self.work, "app-write.json")), "cleared once verified")
+
+    def test_an_interrupted_write_of_another_image_still_refuses(self):
+        self.upper, self.owner = self.kit_pair_in(self.work)
+        self.unit_holds(self.current_element)
+        self.unit_fails("cut-app")
+        self.run_wizard(["UPDATE", "y", "FLASH", "FLASH"])
+        for name in ("fail.txt", "update-mode.log", "calls.log"):   # the same unit, still in update mode
+            os.remove(os.path.join(self.unit, name))
+        record = os.path.join(self.work, "app-write.json")   # a write of another build's image was cut
+        with open(record) as f:
+            kept = json.load(f)
+        kept["sha256"] = "0" * 64
+        with open(record, "w") as f:
+            json.dump(kept, f)
+        result = self.run_wizard(["FLASH"], sent=0)
+        self.assert_stopped_with_the_way_back(result, "interrupted write")
+        self.assertEqual(len(self.downloads()), 0)
 
     def refused_by_the_record(self, record, *reasons):
         self.unit_holds(self.current_element)

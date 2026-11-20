@@ -256,19 +256,31 @@ def decide(plan):
         return unreadable(plan, "app_read")
     if not fresh(plan, "app_read"):
         return ("read", "app", dfu_path, out(plan, "wd-app-before"), "app_read")
-    current = files["current"]
+    current, finishing = files["current"], False
     if not current:
         current = found_current(plan)
-        if current is None:
-            return ("stop", f"The app area matches none of the images the wizard knows: the owner's image, the one from "
-                            f"the last run, or a .dfu in {plan['work']}. That file is the way back, so it must be known. "
-                            f"Run again with --current PATH. Nothing was written.")
-        if fact(plan, "current_found") is None:
+        if current is not None:
+            forget_app_write(plan, earlier_only=True)   # a known image was there: an earlier run's record is stale
+        elif fact(plan, "interrupted_found") is not None:
+            finishing = True   # this run took the record up; it's forgotten once the write is verified
+        else:
+            finishing, problem = interrupted(plan)
+            if problem:
+                return problem
+            if not finishing:
+                return ("stop", f"The app area matches none of the images the wizard knows: the owner's image, the one "
+                                f"from the last run, or a .dfu in {plan['work']}. That file is the way back, so it must "
+                                f"be known. Run again with --current PATH. Nothing was written.")
+        if current and fact(plan, "current_found") is None:
             return ("skip", "current_found", f"The chip runs {current} now: the read matches it byte for byte. It's "
                                              f"the way back.")
-    ok, why = checked(plan, "compare", dfupatch.compare, {"input": current, "readback": fact(plan, "app_read")})
-    if not ok:
-        return ("stop", f"The chip doesn't hold the image it runs now ({why}). Nothing was written.")
+        if finishing and fact(plan, "interrupted_found") is None:
+            return ("skip", "interrupted_found", f"The app area holds a write of {files['owner']} that this wizard "
+                                                 f"started and didn't verify. That same write is offered again.")
+    if current:
+        ok, why = checked(plan, "compare", dfupatch.compare, {"input": current, "readback": fact(plan, "app_read")})
+        if not ok:
+            return ("stop", f"The chip doesn't hold the image it runs now ({why}). Nothing was written.")
     ok, app_state = checked(plan, "app", drawn_flash.app, {"owner": files["owner"], "read": fact(plan, "app_read")})
     if not ok:
         return ("stop", f"The app area couldn't be judged against the owner's image: {app_state}")
@@ -298,7 +310,8 @@ def decide(plan):
     if step:
         return step
     # Step 2: the owner's image.
-    step = step_app(plan, dfu_path, app_state, current)
+    there = f"{current} (the way back)" if current else f"an interrupted write of {files['owner']}"
+    step = step_app(plan, dfu_path, app_state, there, finishing)
     if step:
         return step
     # Power cycle.
@@ -500,7 +513,63 @@ def screen(what, image, there, word, *more):
                       f"Type {word} to write it."))
 
 
-def step_app(plan, dfu_path, app_state, current):
+APP_WRITE_FILE = "app-write.json"
+
+
+def sha256_of(path):
+    import hashlib
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def remember_app_write(plan, image):
+    """The wizard's own record of a write of the owner's image it starts (#603): the file, its sha256, B and the
+    build record that went with it, and the unit's DFU serial. Forgotten once the read-back matches."""
+    import time
+    with open(os.path.join(plan["work"], APP_WRITE_FILE), "w") as f:
+        json.dump({"file": os.path.realpath(image), "sha256": sha256_of(image), "upper": plan["files"]["upper"],
+                   "record": plan["files"]["record"], "serial": listing_serial(fact(plan, "list")),
+                   "started": time.strftime("%Y-%m-%d %H:%M"), "run": plan["run"]}, f)
+
+
+def forget_app_write(plan, earlier_only=False):
+    """EARLIER_ONLY: only a record from another run; this run's own write keeps its record until verified."""
+    path = os.path.join(plan["work"], APP_WRITE_FILE)
+    if earlier_only:
+        try:
+            with open(path) as f:
+                if json.load(f).get("run") == plan["run"]:
+                    return
+        except (OSError, ValueError, AttributeError):
+            pass
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(path)
+
+
+def interrupted(plan):
+    """(True, None) when the wizard's record says it started writing exactly this run's owner's image (the same file
+    and sha256) on this unit and never verified it: the one way past an app area that matches no file. (False, None)
+    with no record; (False, a stop) when the record is for another file, another hash or another unit."""
+    try:
+        with open(os.path.join(plan["work"], APP_WRITE_FILE)) as f:
+            kept = json.load(f)
+        image, digest, serial = kept["file"], kept["sha256"], kept["serial"]
+    except FileNotFoundError:
+        return False, None
+    except (OSError, ValueError, KeyError, TypeError):
+        return False, ("stop", "The record of an interrupted write can't be read, so the app area matches nothing known. "
+                               "Run again with --current PATH. Nothing was written.")
+    owner = plan["files"]["owner"]
+    if os.path.realpath(owner) == image and sha256_of(owner) == digest and serial and \
+            serial == listing_serial(fact(plan, "list")):
+        return True, None
+    return False, ("stop", f"The app area matches no known image, and the interrupted write this wizard started "
+                           f"({kept.get('started', '?')}) was of {image}, sha256 {digest[:12]}…, which isn't this run's "
+                           f"owner's image as it is now, or was on another unit. To finish that write, run again with "
+                           f"--upper {kept.get('upper', '?')} --owner {image}, the file unchanged. Nothing was written.")
+
+
+def step_app(plan, dfu_path, app_state, there, finishing=False):
     files = plan["files"]
     if app_state.startswith("holds"):
         if fact(plan, "app_step") is None:
@@ -520,10 +589,13 @@ def step_app(plan, dfu_path, app_state, current):
         typed = fact(plan, "word_app")
         if typed is None:
             return ("type", "word_app", "FLASH", screen(
+                ("FINISHING AN INTERRUPTED WRITE: the same file and hash as the write that was cut off. " if finishing
+                 else "") +
                 "This ERASES and WRITES the display chip's app area, 0x08008000-0x0807FFFF, with the owner's image.",
-                files["owner"], f"there now: {current} (the way back)", "FLASH", *build_lines(files), probe_line))
+                files["owner"], f"there now: {there}", "FLASH", *build_lines(files), probe_line))
         if typed.strip() != "FLASH":
             return ("stop", f"You typed {typed.strip()!r}, not FLASH. Nothing was written.")
+        remember_app_write(plan, files["owner"])
         return ("write", "app", dfu_path, files["owner"], "app_written")
     if written != "0":
         return ("stop", "dfu-util reported an error writing the owner's image. Don't power-cycle: the chip is still "
@@ -535,7 +607,8 @@ def step_app(plan, dfu_path, app_state, current):
     ok, why = checked(plan, "compare", dfupatch.compare, {"input": files["owner"], "readback": fact(plan, "app_back")})
     if not ok:
         return ("stop", f"What's on the chip differs from the owner's image ({why}). Don't power-cycle into it: "
-                        f"flash the stock or slot 16 image again.")
+                        f"run the wizard again to write it once more, or flash the stock or slot 16 image.")
+    forget_app_write(plan)   # verified (#603)
     return None
 
 

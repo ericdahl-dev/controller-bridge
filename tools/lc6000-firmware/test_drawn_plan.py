@@ -512,6 +512,23 @@ class FoundCurrentTests(DrawnPlanTests):
         self.assertEqual(unit.run(self.found_plan(remembered)), ("done",))
         self.assertIn(remembered, [a[2] for a in unit.log if a[:2] == ("skip", "current_found")][0])
 
+    def test_a_verified_write_leaves_no_record_of_an_interrupted_one(self):
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.found_plan()), ("done",))
+        self.assertFalse(os.path.exists(os.path.join(self.dir.name, "app-write.json")))
+
+    def test_a_record_of_a_cut_write_on_another_unit_refuses(self):
+        half = bytearray(b"\xff" * len(self.owner_element))
+        half[:len(half) // 2] = self.owner_element[:len(half) // 2]
+        with open(os.path.join(self.dir.name, "app-write.json"), "w") as f:
+            json.dump({"file": os.path.realpath(self.owner), "sha256": drawn_plan.sha256_of(self.owner),
+                       "upper": self.upper, "serial": "123456789ABC", "started": "earlier", "run": "x"}, f)
+        unit = FakeUnit(self.dir.name, bytes(half))
+        end = unit.run(self.found_plan())
+        self.assertEqual(end[0], "stop")
+        self.assertIn("interrupted write", end[1])
+        self.assertEqual(unit.writes, [])
+
     def test_a_garbage_dfu_in_the_work_folder_is_passed_over(self):
         self.write("aaa-garbage.dfu", b"not a dfu at all")
         self.write("aab-empty.dfu", b"")
