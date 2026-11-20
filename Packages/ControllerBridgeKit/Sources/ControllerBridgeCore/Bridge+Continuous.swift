@@ -140,8 +140,8 @@ extension Bridge {
     /// How Shift + the strip moves the channel fader (#609), or nil when it seeks as without Shift: Settings' choice,
     /// else the profile's. Read at touch-down, so a change applies from the next touch.
     var stripFaderMode: Mapping.Needle.ShiftFaderMode? {
-        guard let needle = mapping.needle, needle.requireTouch, stripFaderSetting.enabled ?? needle.shiftFader else { return nil }
-        return stripFaderSetting.mode ?? needle.shiftFaderMode
+        guard let shown = stripFaderSetting.shown(for: mapping.needle), shown.enabled else { return nil }
+        return shown.mode
     }
 
     /// With Shift held at touch-down, the touch moves the deck's channel fader until it lifts (#609).

@@ -241,4 +241,16 @@ struct StripFaderTests {
         #expect(!Self.seeks(rig).isEmpty)
         #expect(!rig.coordinator.status.requiredSubscriptions.contains(.mixerVolume))
     }
+
+    @Test("Settings shows the profile's choice until the DJ makes one, and nothing for a strip without a touch note")
+    func shown() throws {
+        let needle = try #require(try Mapping.bundledDefault().needle)
+        #expect(StripFaderSetting().shown(for: needle) == .init(enabled: true, mode: .relative))
+        #expect(StripFaderSetting(enabled: false).shown(for: needle) == .init(enabled: false, mode: .relative))
+        #expect(StripFaderSetting(mode: .jump).shown(for: needle) == .init(enabled: true, mode: .jump))
+        var untouched = needle
+        untouched.requireTouch = false
+        #expect(StripFaderSetting().shown(for: untouched) == nil)
+        #expect(StripFaderSetting().shown(for: nil) == nil)
+    }
 }

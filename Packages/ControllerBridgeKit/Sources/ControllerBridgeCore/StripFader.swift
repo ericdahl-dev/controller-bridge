@@ -12,6 +12,18 @@ public struct StripFaderSetting: Equatable, Sendable, Codable {
         self.enabled = enabled
         self.mode = mode
     }
+
+    public struct Shown: Equatable, Sendable {
+        public var enabled: Bool
+        public var mode: Mapping.Needle.ShiftFaderMode
+    }
+
+    /// What applies to `needle`'s strip, and what Settings shows: this choice, else the profile's. Nil for a strip
+    /// without a touch note, which has no touch-down to fix the mode at.
+    public func shown(for needle: Mapping.Needle?) -> Shown? {
+        guard let needle, needle.requireTouch else { return nil }
+        return Shown(enabled: enabled ?? needle.shiftFader, mode: mode ?? needle.shiftFaderMode)
+    }
 }
 
 struct StripFader {
