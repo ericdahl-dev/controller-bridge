@@ -8,6 +8,12 @@ import Testing
 struct DisplayFeedCoordinatorTests {
     static let on = DisplayFeedSettings(enabled: true, host: "192.168.1.40", port: 9100)
 
+    /// Turns the feed on as the app does: the setting, then its destination opening.
+    static func turnOn(_ rig: Rig, _ settings: DisplayFeedSettings = on) {
+        rig.coordinator.setDisplayFeed(settings)
+        rig.coordinator.displayFeedReady()
+    }
+
     /// A rig with the feed's port attached, the feed still off.
     static func rig() throws -> (Rig, Rig.FakeOSC) {
         let rig = try Rig()
@@ -54,15 +60,28 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.start()
         Self.load(rig)
         #expect(feed.sent == [])
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
+    }
+
+    @Test("Turned on, nothing goes out until the destination opens: the setting alone could reach the old address")
+    func waitsForTheDestination() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        rig.coordinator.setDisplayFeed(Self.on)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        for step in 1...10 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
+        #expect(feed.sent == [])
+        rig.coordinator.displayFeedReady()
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Nightfall", artist: "Bill Hamel, Jeremus"))
     }
 
     @Test("Only changes go out: a new title sends the title alone; the same feedback again sends nothing")
     func changesOnly() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         Self.load(rig)
         feed.sent.removeAll()
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
@@ -87,31 +106,34 @@ struct DisplayFeedCoordinatorTests {
         Self.layered(rig)
         Self.load(rig, deck: 1)
         Self.load(rig, deck: 2)
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         #expect(feed.sent.first == OSCMessage("/DeckBridge/Display/deck", [.int(1)]))
         feed.sent.removeAll()
         LayersTests.switchLayer(rig, from: 1, to: 2)
         #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
     }
 
-    @Test("A new host or port sends the full snapshot at once; the same setting again sends nothing")
+    @Test("A new host or port sends nothing to the old one; its destination opening sends the full snapshot; the same setting again sends nothing")
     func addressChangeSnapshot() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
-        rig.coordinator.setDisplayFeed(Self.on)
-        let daybreak = Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
+        Self.turnOn(rig)
         feed.sent.removeAll()
         rig.coordinator.setDisplayFeed(Self.on)
         #expect(feed.sent == [])
         var moved = Self.on
         moved.host = "deck-panel.local"
         rig.coordinator.setDisplayFeed(moved)
-        #expect(feed.sent == daybreak)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        #expect(feed.sent == [])
+        rig.coordinator.displayFeedReady()
+        let nightfall = Self.snapshot(deck: 1, color: 0xFF0000, title: "Nightfall", artist: "Bill Hamel, Jeremus")
+        #expect(feed.sent == nightfall)
         feed.sent.removeAll()
         moved.port = 9200
-        rig.coordinator.setDisplayFeed(moved)
-        #expect(feed.sent == daybreak)
+        Self.turnOn(rig, moved)
+        #expect(feed.sent == nightfall)
     }
 
     @Test("Off: nothing goes out through loads and ticks; on again: the full snapshot, with what changed meanwhile")
@@ -119,7 +141,7 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         var off = Self.on
         off.enabled = false
         rig.coordinator.setDisplayFeed(off)
@@ -127,7 +149,7 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
         for step in 1...10 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
         #expect(feed.sent == [])
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Nightfall", artist: "Bill Hamel, Jeremus"))
     }
 
@@ -138,7 +160,7 @@ struct DisplayFeedCoordinatorTests {
         rig.midi.sources.removeAll { $0.id == Rig.lc6000.id }
         rig.coordinator.devicesChanged()
         Self.load(rig, deck: 3, title: "Nightfall")
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         // No pick: the first loaded deck.
         #expect(feed.sent.first == OSCMessage("/DeckBridge/Display/deck", [.int(3)]))
         feed.sent.removeAll()
@@ -151,7 +173,7 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         feed.sent.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         #expect(feed.sent == [
@@ -163,13 +185,15 @@ struct DisplayFeedCoordinatorTests {
         ])
     }
 
-    @Test("From the app's pipe: the setting turns it on; the display's destination opening sends the full snapshot again")
+    @Test("From the app's pipe: the setting, then the destination opening, send one full snapshot, not two (#617's live check); a later opening sends it again")
     func fromThePipe() async throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
         let pipe = EventPipe()
         pipe.producer.send(.setDisplayFeed(Self.on))
+        pipe.producer.send(.displayFeedReady)
+        // The Mac woke and the destination opened again.
         pipe.producer.send(.displayFeedReady)
         pipe.producer.finish()
         await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
@@ -181,7 +205,7 @@ struct DisplayFeedCoordinatorTests {
     func deckSetting() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         feed.sent.removeAll()
         rig.coordinator.setDeck(2, controller: 0)
         #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00))
@@ -191,7 +215,7 @@ struct DisplayFeedCoordinatorTests {
     func loadedIsTheFlag() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000))
         feed.sent.removeAll()
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
@@ -206,7 +230,7 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         feed.sent.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(132)]))
         #expect(feed.sent == [
@@ -222,7 +246,7 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo(bpm: 0))
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(124)]))
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus", bpm: 124))
     }
 
@@ -231,7 +255,7 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         feed.sent.removeAll()
         rig.coordinator.setKeyDisplay(.camelot)
         #expect(feed.sent == [OSCMessage("/DeckBridge/Display/key", [.string("3A")])])
@@ -242,7 +266,7 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         feed.sent.removeAll()
         MainCueTests.feed(rig, "Playing", 1)
         #expect(feed.sent == [Self.message("playing", Int32(1))])
@@ -265,7 +289,7 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         feed.sent.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/LoopInfo", [.int(1), .float(10), .float(11.875)]))
         MainCueTests.feed(rig, "Loop", 1)
@@ -282,7 +306,7 @@ struct DisplayFeedCoordinatorTests {
     func colorChange() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
-        rig.coordinator.setDisplayFeed(Self.on)
+        Self.turnOn(rig)
         feed.sent.removeAll()
         // Cue palette slot 1, deck 1's color (#123), now blue.
         rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(0), .int(0), .int(255)]))

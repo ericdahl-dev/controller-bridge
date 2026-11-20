@@ -1,6 +1,6 @@
 // The display feed (#490, #616): the deck in front, as plain OSC, for a display other than the jog display, such as
 // the panel. One value per address under one prefix; only changes go out, and a full snapshot when the deck in front
-// changes, when the feed is turned on and when its address changes. It only sends (ADR 0011).
+// changes and each time the destination opens (turned on, a new address, a wake). It only sends (ADR 0011).
 
 final class DisplayFeed {
     /// Every address starts with this.
@@ -57,6 +57,9 @@ final class DisplayFeed {
 
     private var sender: (any OSCSender)?
     private var settings = DisplayFeedSettings()
+    /// The destination is open at the setting's address: turning the feed on or a new address waits for it, since
+    /// until then a send would be dropped or reach the old address. The one snapshot goes when it opens (#617).
+    private var open = false
     /// What each address carried last, as sent; empty means the next update is a full snapshot.
     private var sent: [String: [OSCArgument]] = [:]
     /// The deck number the last update was for: another deck in front is a full snapshot.
@@ -68,23 +71,27 @@ final class DisplayFeed {
         sent = [:]
     }
 
-    /// The setting. Turning it on, or a new host or port, makes the next update a full snapshot.
+    /// The setting. Turning it on, or a new host or port, waits for the destination to open.
     func set(_ new: DisplayFeedSettings) {
-        if new.enabled && (!settings.enabled || new.host != settings.host || new.port != settings.port) { sent = [:] }
+        if new.enabled && (!settings.enabled || new.host != settings.host || new.port != settings.port) {
+            sent = [:]
+            open = false
+        }
         settings = new
     }
 
     /// Turned on with somewhere to send: worth building the deck for.
     var on: Bool { settings.enabled && sender != nil }
 
-    /// The next update is a full snapshot.
+    /// The destination opened (or opened again, after a wake): the next update is a full snapshot.
     func resend() {
         sent = [:]
+        open = true
     }
 
     /// Sends what changed about the deck in front: everything when it's another deck.
     func update(_ deck: Deck?) {
-        guard settings.enabled, let sender, let deck else { return }
+        guard settings.enabled, open, let sender, let deck else { return }
         if deck.number != sentDeck { sent = [:] }
         sentDeck = deck.number
         for message in deck.messages where sent[message.address] != message.arguments {

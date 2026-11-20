@@ -4,7 +4,7 @@
 
 ## The contract
 
-Every address is under `/DeckBridge/Display/` and carries exactly one value, of the OSC type below. Only changes are sent. A full snapshot of every address goes out when the deck in front changes, when the feed is turned on, when its host or port changes, and when its destination opens.
+Every address is under `/DeckBridge/Display/` and carries exactly one value, of the OSC type below. Only changes are sent. A full snapshot of every address goes out when the deck in front changes and each time the feed's destination opens. Turning the feed on or a new host or port sends nothing until the destination opens, then sends the snapshot once (#617).
 
 | Address | Type | Value |
 |---|---|---|
