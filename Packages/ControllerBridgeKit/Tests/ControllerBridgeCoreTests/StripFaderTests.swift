@@ -155,4 +155,24 @@ struct StripFaderTests {
         #expect(abs((sent.last ?? 0) - 0.75) < 0.001, "sent \(sent)")
         #expect(Self.sentVolumes(rig, channel: 1).isEmpty)
     }
+
+    @Test("During a touch Syndicate's echoes are ignored, a late one too: the fader goes by the travel, and can't fight itself")
+    func echoesIgnored() throws {
+        let rig = try C.started()
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.at(rig, 2048)        // to 0.375
+        Self.at(rig, 4096)        // to 0.5
+        Self.volume(rig, 0.375)   // the echo of the first, arriving late
+        Self.at(rig, 6144)        // to 0.625, not 0.375 + an eighth
+        Self.touch(rig, false)
+        Self.touch(rig, true)
+        Self.at(rig, 6144)
+        Self.at(rig, 8192)        // the next touch starts where this one left it: 0.75
+        let sent = Self.sentVolumes(rig)
+        #expect(sent.count == 4, "sent \(sent)")
+        #expect(abs(sent[2] - 0.625) < 0.001 && abs(sent[3] - 0.75) < 0.001, "sent \(sent)")
+    }
 }

@@ -18,8 +18,10 @@ struct StripFader {
     /// Whether a touch is moving the fader now.
     var touching: Bool { touch != nil }
 
-    /// Syndicate's report of a channel's Volume.
+    /// Syndicate's report of a channel's Volume. While a touch moves that channel, its reports are echoes of what the
+    /// touch sent, some late: ignored, so the fader can't fight itself.
     mutating func reported(channel: Int, _ level: Double) {
+        guard touch?.channel != channel else { return }
         levels[channel] = level
     }
 
