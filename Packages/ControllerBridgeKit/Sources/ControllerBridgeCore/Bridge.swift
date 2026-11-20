@@ -343,7 +343,8 @@ final class Bridge {
         if address == (root + "Header/Clock").lowercased() { return headerClock(message.arguments) }
         if address == (root + "Header/BPM").lowercased() { return headerBPM(message.arguments) }
         // The mixer channel of this deck (#207).
-        if let mixer = MixerOSC.parse(message.address, root: root) {
+        // Only the mixer's addresses are parsed: the deck values, PhaseOffset and BarRamp at their rates among them, skip it.
+        if address.hasPrefix((root + "Mixer/").lowercased()), let mixer = MixerOSC.parse(message.address, root: root) {
             // Every channel's Volume, for the strip fader (#609): a layer change finds its level known.
             if mixer.value == .volume, let level = message.arguments.first?.number { stripFader.reported(channel: mixer.channel, level) }
             if mapping.mixer != nil, mixer.channel == mapping.deck.number { mixerFeedback(mixer.value, message.arguments) }
