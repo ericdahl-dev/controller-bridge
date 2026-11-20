@@ -8,6 +8,9 @@ public enum DisplayFeedStatus: Equatable, Sendable {
     /// The destination is open and sends go out. UDP says nothing about a panel that is off or deaf, so this is
     /// "sending", never "connected" or "received" (#618).
     case sending(String)
+    /// Open, but sends fail with "no route to host": the panel left the network, or macOS 15 and later refuse LAN
+    /// sends while Local Network access is off for the app. The two look the same here.
+    case unreachable(String)
     /// On, but the address can't be used: the reason.
     case notSending(String)
 
@@ -19,6 +22,8 @@ public enum DisplayFeedStatus: Equatable, Sendable {
         } else if let problem = destination.connectProblem {
             // Before "sending": a new address that failed leaves the old one open, which isn't the one asked for.
             self = .notSending(problem)
+        } else if destination.sendsFailing {
+            self = .unreachable(address)
         } else if destination.isReady {
             self = .sending(address)
         } else {
@@ -33,6 +38,9 @@ public enum DisplayFeedStatus: Equatable, Sendable {
         case .connecting(let address): "Connecting to \(address)…"
         case .sending(let address): "Sending to \(address)"
         case .notSending(let reason): "Not sending: \(reason)"
+        case .unreachable(let address):
+            "Not sending: can't reach \(address). If the panel is on, macOS may be blocking local network access: "
+                + "turn on DeckBridge in System Settings › Privacy & Security › Local Network."
         }
     }
 }

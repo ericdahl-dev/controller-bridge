@@ -39,4 +39,22 @@ struct DisplayFeedStatusTests {
         _ = await refused.connect(host: "192.168.1.40", port: 9100)
         #expect(DisplayFeedStatus(Self.on, refused).text == "Not sending: Couldn't send OSC to 192.168.1.40:9100")
     }
+
+    /// macOS 15 and later refuse a LAN send with "no route to host" when Local Network access is off for the app, the
+    /// same error as a host that left the network: the line says both.
+    @Test("Sends failing is not sending, with where macOS's Local Network switch is; a send that works again is sending")
+    func sendsFailing() async {
+        let sinks = Sinks()
+        let destination = OSCDestinationTests.destination(sinks, Resolver())
+        _ = await destination.connect(host: "192.168.1.40", port: 9100)
+        sinks.sink("192.168.1.40:9100")?.fails = true
+        destination.send(OSCDestinationTests.play)
+        #expect(DisplayFeedStatus(Self.on, destination) == .unreachable("192.168.1.40:9100"))
+        #expect(DisplayFeedStatus(Self.on, destination).text == "Not sending: can't reach 192.168.1.40:9100. If the panel is on, "
+            + "macOS may be blocking local network access: turn on DeckBridge in System Settings › Privacy & Security › Local Network.")
+        sinks.sink("192.168.1.40:9100")?.fails = false
+        destination.send(OSCDestinationTests.play)
+        #expect(DisplayFeedStatus(Self.on, destination) == .sending("192.168.1.40:9100"))
+    }
 }
+
