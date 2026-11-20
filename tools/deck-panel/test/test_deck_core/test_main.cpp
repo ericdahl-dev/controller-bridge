@@ -127,6 +127,60 @@ void test_a_deck_outside_1_to_4_is_ignored() {
     assert_ignored(int_message(prefix + "deck", 5));
 }
 
+void test_3_seconds_without_the_feed_is_the_waiting_screen() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    core.render(screen, 3999);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    core.render(screen, 4000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+}
+
+void test_the_next_message_brings_the_deck_back_as_it_was() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    feed(core, string_message(prefix + "title", "Night Drive"), 1000);
+    core.render(screen, 9000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    feed(core, int_message(prefix + "color", 0xFF0000), 9000);
+    core.render(screen, 9000);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_EQUAL(2, screen.last().deck);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", screen.last().title.c_str());
+}
+
+void test_a_message_for_an_address_the_panel_does_not_know_keeps_the_feed_alive() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    feed(core, float_message(prefix + "bpm", 128.0f), 3500);  // a newer DeckBridge's address (ADR 0011)
+    core.render(screen, 5000);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_EQUAL(2, screen.last().deck);
+}
+
+void test_a_bad_packet_does_not_keep_the_feed_alive() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    feed(core, int_message("/Syndicate/Deck1/deck", 1), 3500);
+    core.render(screen, 4000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+}
+
+void test_the_clock_wrapping_round_does_not_end_the_wait_early_or_late() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    const uint32_t near_end = 0xFFFFFFFFu - 500;
+    feed(core, int_message(prefix + "deck", 1), near_end);
+    core.render(screen, near_end + 2999);  // wraps
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    core.render(screen, near_end + 3000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -143,5 +197,10 @@ int main(int, char**) {
     RUN_TEST(test_a_bundle_is_ignored);
     RUN_TEST(test_text_that_is_not_utf8_is_ignored);
     RUN_TEST(test_a_deck_outside_1_to_4_is_ignored);
+    RUN_TEST(test_3_seconds_without_the_feed_is_the_waiting_screen);
+    RUN_TEST(test_the_next_message_brings_the_deck_back_as_it_was);
+    RUN_TEST(test_a_message_for_an_address_the_panel_does_not_know_keeps_the_feed_alive);
+    RUN_TEST(test_a_bad_packet_does_not_keep_the_feed_alive);
+    RUN_TEST(test_the_clock_wrapping_round_does_not_end_the_wait_early_or_late);
     return UNITY_END();
 }

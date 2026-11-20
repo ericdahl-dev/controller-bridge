@@ -110,18 +110,23 @@ const Row kRows[] = {
 
 }  // namespace
 
-void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t) {
+void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
     Message message;
     if (!parse(bytes, length, message)) return;
+    // An address this panel doesn't know is a newer DeckBridge's (ADR 0011): ignored, but the feed is alive.
+    bool alive = true;
     for (const Row& row : kRows) {
-        if (row.type == message.type && std::strcmp(row.name, message.name) == 0) {
-            if (row.apply(view_, message)) heard_ = true;
-        }
+        if (std::strcmp(row.name, message.name) != 0) continue;
+        alive = row.type == message.type && row.apply(view_, message);
     }
+    if (!alive) return;
+    heard_ = true;
+    last_heard_ms_ = now_ms;
 }
 
-void DeckCore::render(Screen& screen, uint32_t) {
-    if (heard_) {
+void DeckCore::render(Screen& screen, uint32_t now_ms) {
+    // Unsigned subtraction, so a clock that wraps round still counts the time since.
+    if (heard_ && now_ms - last_heard_ms_ < kWaitAfterMs) {
         screen.show_deck(view_);
     } else {
         screen.show_waiting();

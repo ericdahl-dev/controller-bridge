@@ -26,6 +26,9 @@ struct Screen {
 
 class DeckCore {
 public:
+    /// No feed for this long and the panel shows the waiting screen (#490).
+    static constexpr uint32_t kWaitAfterMs = 3000;
+
     /// One UDP payload, received at `now_ms` (any millisecond clock; it may wrap).
     void feed(const uint8_t* bytes, size_t length, uint32_t now_ms);
     /// Tells `screen` what to show at `now_ms`.
@@ -34,6 +37,7 @@ public:
 private:
     DeckView view_;
     bool heard_ = false;
+    uint32_t last_heard_ms_ = 0;
 };
 
 }  // namespace deck_core
