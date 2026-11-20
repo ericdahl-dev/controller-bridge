@@ -253,4 +253,34 @@ struct StripFaderTests {
         #expect(StripFaderSetting().shown(for: untouched) == nil)
         #expect(StripFaderSetting().shown(for: nil) == nil)
     }
+
+    @Test("A fader touch ends with everything released (sleep, unplug): the next plain touch seeks and moves no fader")
+    func releasedEndsTouch() throws {
+        let rig = try C.started()
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        rig.coordinator.willSleep()   // no touch-up ever comes
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.at(rig, 8192)
+        #expect(Self.sentVolumes(rig).isEmpty)
+        #expect(!Self.seeks(rig).isEmpty)
+    }
+
+    @Test("A lost touch-up doesn't keep the strip a fader: each touch-down picks the mode afresh")
+    func lostTouchUp() throws {
+        let rig = try C.started()
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.shift(rig, false)
+        Self.touch(rig, true)         // the note-off went missing: a new touch-down, without Shift
+        Self.at(rig, 0)
+        Self.at(rig, 8192)
+        #expect(Self.sentVolumes(rig).isEmpty)
+        #expect(!Self.seeks(rig).isEmpty)
+    }
 }

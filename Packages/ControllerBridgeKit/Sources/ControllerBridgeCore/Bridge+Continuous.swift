@@ -144,8 +144,10 @@ extension Bridge {
         return shown.mode
     }
 
-    /// With Shift held at touch-down, the touch moves the deck's channel fader until it lifts (#609).
+    /// With Shift held at touch-down, the touch moves the deck's channel fader until it lifts (#609). Every touch-down
+    /// picks afresh, so a lost touch-up can't leave the strip a fader.
     func needleTouch(_ pressed: Bool) {
+        if pressed { stripFader.touchUp() }
         if pressed, shift, let mode = stripFaderMode {
             stripFader.touchDown(channel: mapping.deck.number, mode: mode)
             return
