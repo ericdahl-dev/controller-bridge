@@ -243,14 +243,10 @@ class DeviceListTests(DrawnPlanTests):
         why = self.stopped_before_reading((("2-1.2", "@Internal Flash  /0x08000000/04*016Kg,01*064Kg,01*128Kg"),))
         self.assertIn("top panel chip", why)
 
-    def test_another_layout_asks_and_no_stops(self):
+    def test_another_layout_stops_and_is_never_asked(self):
+        # #603: a wrong-chip guard is a hard refusal, not a question; a yes answer can't take it past.
         other = (("2-1.2", "@Internal Flash  /0x08000000/12*016Kg"),)
-        self.assertIn("isn't the display chip's", self.stopped_before_reading(other, {"list_layout_go_on": "n"}))
-
-    def test_another_layout_answered_yes_goes_on(self):
-        unit = FakeUnit(self.dir.name, self.current_element, devices=(("2-1.2", "@Internal Flash  /0x08000000/12*016Kg"),),
-                        answers={"list_layout_go_on": "y", "list_again_layout_go_on": "y"})
-        self.assertEqual(unit.run(self.plan()), ("done",))
+        self.assertIn("isn't the display chip's", self.stopped_before_reading(other, {"list_layout_go_on": "y"}))
 
 
 
@@ -418,9 +414,11 @@ class DevicesCommandTests(unittest.TestCase):
         self.assertEqual(kind, "stop")
         self.assertIn("top panel chip", why)
 
-    def test_another_layout_asks(self):
-        code, fields = self.judge(("2-1.2", "@Internal Flash  /0x08000000/12*016Kg"))
-        self.assertEqual(fields[:2], ["ask", "2-1.2"])
+    def test_another_layout_stops(self):
+        # Both wizards' look (#603): the stock wizard's look refuses it too.
+        code, (kind, why) = self.judge(("2-1.2", "@Internal Flash  /0x08000000/12*016Kg"))
+        self.assertEqual(kind, "stop")
+        self.assertIn("isn't the display chip's", why)
 
 
 class FreshnessTests(DrawnPlanTests):

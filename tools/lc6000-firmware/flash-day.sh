@@ -268,13 +268,12 @@ enter_update_mode() {
 # look lists the DFU devices and remembers the display chip's path: drawn_plan.py judges the list (#567), exactly one
 # device and the display chip (not the top panel chip), the same judgment as the drawn wizard's.
 look() {
-  local listing="$WORK/dfu-list-$STAMP-$1.txt" kind="" path="" why=""
+  local listing="$WORK/dfu-list-$STAMP-$1.txt" kind="" path=""
   dfu-util -l > "$listing" 2>&1 || true
   grep -i 'Found DFU' "$listing" | sed 's/^/    /' || true
-  IFS=$'\t' read -r kind path why < <(plan devices "$listing") || true
+  IFS=$'\t' read -r kind path < <(plan devices "$listing") || true
   case "$kind" in
     one) ;;
-    ask) warn "$why"; confirm "Go on anyway?" || way_back ;;
     *) [[ -n "$path" ]] && warn "$path" || warn "The device list could not be judged."; way_back ;;
   esac
   DFU_PATH="$path"

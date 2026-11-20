@@ -5,7 +5,7 @@ step out; the shell only does what it's told (dfu-util, the keyboard) and record
   python3 -I drawn_plan.py begin PLAN.json CURRENT.dfu UPPER.dfu OWNER.dfu RECORD.json WORK
   python3 -I drawn_plan.py next PLAN.json         one action, its fields separated by tabs
   python3 -I drawn_plan.py record PLAN.json KEY VALUE
-  python3 -I drawn_plan.py devices LISTING        the stock wizard's look: one PATH, ask PATH QUESTION, or stop WHY
+  python3 -I drawn_plan.py devices LISTING        the stock wizard's look: one PATH, or stop WHY
   python3 -I drawn_plan.py find-record UPPER.dfu OWNER.dfu   the build record the kit left beside them: one PATH, or ask WHY
 
 Actions:
@@ -261,9 +261,9 @@ def unreadable(plan, key):
 
 
 def judge_devices(listing):
-    """What dfu-util -l saw (#567): ("one", path) for exactly one device that is the display chip; ("ask", path,
-    question) for one device whose layout isn't the display chip's (the owner may go on); ("stop", why) for none, two,
-    or the top panel chip. Both wizards' look uses it."""
+    """What dfu-util -l saw (#567): ("one", path) for exactly one device that is the display chip; else ("stop", why):
+    none, two, the top panel chip, or a layout that isn't the display chip's, which is refused, never asked (#603).
+    Both wizards' look uses it."""
     found = devices(listing)
     if len(found) != 1:
         return ("stop", f"{len(found)} update-mode devices found; exactly one, the display chip, is needed. Two "
@@ -273,7 +273,8 @@ def judge_devices(listing):
         return ("stop", "That's the top panel chip (256 KB), not the display chip. It's in update mode from "
                         "BACK + FWD + VINYL: power the LC6000 off and on to leave it. Nothing was read or written.")
     if not any(DISPLAY_LAYOUT in name for name in names):
-        return ("ask", dfu_path, "Its memory layout isn't the display chip's 1 MB one. Go on anyway?")
+        return ("stop", "Its memory layout isn't the display chip's 1 MB one, so it isn't the display chip. Nothing "
+                        "was read or written.")
     return ("one", dfu_path)
 
 
@@ -285,14 +286,7 @@ def one_display_chip(plan, key):
     judged_devices = judge_devices(listing)
     if judged_devices[0] == "stop":
         return None, judged_devices
-    dfu_path = judged_devices[1]
-    if judged_devices[0] == "ask":
-        go_on = fact(plan, f"{key}_layout_go_on")
-        if go_on is None:
-            return None, ("ask", f"{key}_layout_go_on", judged_devices[2])
-        if go_on != "y":
-            return None, ("stop", "Its memory layout isn't the display chip's. Nothing was read or written.")
-    return dfu_path, None
+    return judged_devices[1], None
 
 
 def step_upper(plan, dfu_path, upper_state):
