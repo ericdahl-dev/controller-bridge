@@ -29,7 +29,9 @@ Every address is under `/DeckBridge/Display/` and carries exactly one value, of 
 | `phase` | `f` | Against the master, 0-1: 0.5 in phase, below behind, above ahead (a half beat at the ends), by the drawn display's phase rule. **-1 is unknown** (the deck stopped, or no offset since it loaded): the one value outside its range |
 | `level` | `f` | The deck's mixer meter, 0-1, on the drawn meter's dB scale (-36 to +16 dB) and ballistics |
 
-`bpm`, `tempo`, `progress`, `phase` and `level` can follow Syndicate's feedback rate, so each goes out at most about 30 times a second, the latest value winning; nothing is queued. A full snapshot also goes out every 2 seconds as a keepalive, so a message lost on Wi-Fi or dropped while DeckBridge's sender was behind is fixed within 2 s. While the feed is on, DeckBridge asks Syndicate for its Meter and PhaseOffset feedback.
+`bpm`, `tempo`, `progress`, `phase` and `level` can follow Syndicate's feedback rate, so they go out together, in one slot about 30 times a second, the latest value winning; nothing is queued. A full snapshot also goes out every 2 seconds as a keepalive, so a message lost on Wi-Fi or dropped while DeckBridge's sender was behind is fixed within 2 s. While the feed is on, DeckBridge asks Syndicate for its Meter and PhaseOffset feedback.
+
+**Datagrams.** Each update's changes go as one OSC bundle in one UDP datagram (time tag "immediately"), so a full snapshot is one datagram, not one per address (#636): a panel drains a few datagrams a frame, and with a deck playing, a snapshot spread over 20 lost its title. A bundle is at most 1200 bytes; a bigger one is split into several, in order, and a message too long to share one (a very long title) goes alone. The fast fields share one slot, so a playing deck sends about 30 datagrams a second. **A display must accept both a single message and a bundle of messages**, reading each message in a bundle as if it came alone.
 
 **A display must ignore an address it doesn't know**, and a message whose type isn't the one above. That way a newer DeckBridge can add addresses without breaking an older display.
 

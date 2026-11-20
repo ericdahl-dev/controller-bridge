@@ -1,5 +1,5 @@
 {
-  "about": "The display feed's shared examples (#490, #616, #617): for each deck state, the OSC messages DeckBridge sends when the feed turns on with that deck in front, in order (a full snapshot). A state key left out is that field's empty value (phase's is -1). One value per message; type is the OSC type tag (i, f or s). Walked by DisplayFeedExamplesTests (Swift) and the panel core's test (#619). A display ignores addresses it doesn't know (ADR 0011).",
+  "about": "The display feed's shared examples (#490, #616, #617): for each deck state, the OSC messages DeckBridge sends when the feed turns on with that deck in front, in order (a full snapshot), sent as one OSC bundle in one datagram (#636): a display reads each message in the bundle as if it came alone. A state key left out is that field's empty value (phase's is -1). One value per message; type is the OSC type tag (i, f or s). Walked by DisplayFeedExamplesTests (Swift) and the panel core's test (#619). A display ignores addresses it doesn't know (ADR 0011).",
   "prefix": "/DeckBridge/Display/",
   "cases": [
     {

@@ -62,6 +62,8 @@ struct DisplayFeedExamplesTests {
             feed.resend(at: 0)
             feed.update(Self.deck(example["state"] as! [String: Any]))
             #expect(sender.sent == expected.compactMap { $0 }, "\(name)")
+            // Since #636 the snapshot is one bundle: the case's messages, in order, in one datagram.
+            #expect(sender.bundles == [expected.compactMap { $0 }], "\(name)")
             #expect(sender.sent.allSatisfy { $0.address.hasPrefix(DisplayFeed.prefix) && $0.arguments.count == 1 }, "\(name)")
         }
     }
