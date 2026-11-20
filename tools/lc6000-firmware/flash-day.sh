@@ -233,7 +233,8 @@ dfu_paths() {
   dfu-util -l 2>/dev/null | grep -i 'Found DFU: \[0483:df11\]' | sed -E 's/.*path="([^"]*)".*/\1/' | sort -u
 }
 
-# enter_update_mode sends the one SysEx to the display chip and waits for it to come back as a DFU device.
+# enter_update_mode sends the one SysEx to the display chip and waits for it to come back as a DFU device. The drawn
+# wizard passes "typed": the owner types UPDATE (#603), not y/N; the stock wizard keeps its y/N.
 enter_update_mode() {
   say "The display chip has no buttons. One MIDI message on its own port restarts it into update mode."
   note "This writes nothing to its firmware, but it stays in update mode until it's flashed or power-cycled."
@@ -241,7 +242,15 @@ enter_update_mode() {
     warn "The display's MIDI port isn't there (or there are two). Is the LC6000 on, on a direct cable?"
     way_back
   fi
-  confirm "Send the update-mode message to the display chip now?" || way_back
+  if [[ "${1:-}" == "typed" ]]; then
+    local typed=""
+    printf '  %s? Type UPDATE to send the update-mode message to the display chip now, anything else to stop:%s ' \
+      "$YELLOW" "$RESET"
+    read -r typed || true
+    [[ "$typed" == "UPDATE" ]] || { warn "You typed '$typed', not UPDATE. Nothing was sent."; way_back; }
+  else
+    confirm "Send the update-mode message to the display chip now?" || way_back
+  fi
   "$WORK/enter-update-mode" send --yes-enter-update-mode || way_back
   say "Waiting for the chip to come back as a DFU device (up to 20 s)…"
   local tries=0
@@ -549,7 +558,7 @@ while :; do
       if [[ -n "$(dfu_paths)" ]]; then
         printf '  %s✓%s a DFU device is listed: the chip is already in update mode, so nothing is sent\n' "$GREEN" "$RESET"
       else
-        enter_update_mode
+        enter_update_mode typed
       fi
       plan record "$PLAN" update_mode ok
       ;;

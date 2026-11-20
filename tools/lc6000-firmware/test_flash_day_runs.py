@@ -193,7 +193,7 @@ class FlashDayRunTests(unittest.TestCase):
         answers = ["", self.current, self.upper, self.owner,   # banner; the three paths
                    self.record,                                 # the build record
                    "y", "y",                                    # all true, the probe
-                   "y",                                         # send the update-mode message
+                   "UPDATE",                                    # send the update-mode message
                    "FLASH", "FLASH",                            # block B, then the owner's image
                    "",                                          # power cycle: back on
                    "y",                                         # looks like stock
@@ -218,7 +218,8 @@ class FlashDayRunTests(unittest.TestCase):
     def test_a_b_only_rewrite_leaves_the_app_area_alone(self):
         old_b = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
         self.unit_holds(self.owner_element, upper=old_b + b"\xff" * (0x80000 - len(old_b)))
-        answers = ["", self.owner, self.upper, self.owner, self.record, "y", "y", "y", "REWRITE", "", "y", "", ""]
+        answers = ["", self.owner, self.upper, self.owner, self.record, "y", "y", "UPDATE", "REWRITE", "", "y", "",
+                   ""]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertEqual(len(self.downloads()), 1)
@@ -249,15 +250,26 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertIn("DeckBridge is still running", result.stdout)
         self.assertEqual(self.calls(), [])
 
+    def test_the_update_mode_message_needs_the_typed_word(self):
+        # #603: a typed word, not y/N, before the one send to the unit. y is not the word.
+        for answer in ("y", "update", ""):
+            with self.subTest(answer):
+                self.unit_holds(self.current_element)
+                result = self.run_wizard(["", self.current, self.upper, self.owner, self.record, "y", "y", answer],
+                                         entered=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Type UPDATE", result.stdout)
+                self.assertEqual([c for c in self.calls() if c != "-l"], [], "only listed: no read, no write")
+
     def test_a_wrong_word_writes_nothing(self):
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", self.current, self.upper, self.owner, self.record, "y", "y", "y", "flash"])
+        result = self.run_wizard(["", self.current, self.upper, self.owner, self.record, "y", "y", "UPDATE", "flash"])
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.downloads(), [])
         self.assertEqual(self.memory("app.bin"), self.current_element)
 
 
-    FRESH = ["", "{current}", "{upper}", "{owner}", "{record}", "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+    FRESH = ["", "{current}", "{upper}", "{owner}", "{record}", "y", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""]
 
     def answers(self):
         return [a.format(current=self.current, upper=self.upper, owner=self.owner, record=self.record)
@@ -311,7 +323,7 @@ class FlashDayRunTests(unittest.TestCase):
                 self.assertEqual(tool.main(argv), 0)
         self.unit_holds(self.current_element)
         answers = ["", self.current, self.upper, self.owner,   # no record path: it's found
-                   "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+                   "y", "y", "UPDATE", "FLASH", "FLASH", "", "y", "", ""]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Build record: " + os.path.join(kit, "wd-upper-drawing.build.json"), result.stdout)
