@@ -381,6 +381,27 @@ void test_the_waiting_screen_says_why() {
     TEST_ASSERT_EQUAL_STRING("192.168.1.40  port 9100", screen.last().detail.c_str());
 }
 
+// Off Wi-Fi the feed can't be coming: waiting at once, not 3 s later; back on, the next message brings the deck.
+void test_losing_wifi_is_the_waiting_screen_at_once() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    core.render(screen, 1000);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 1100);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    TEST_ASSERT_EQUAL_STRING("Joining Wi-Fi\xE2\x80\xA6", screen.last().headline.c_str());
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 1200);
+    TEST_ASSERT_TRUE(screen.last().waiting);  // no message since
+    feed(core, int_message(prefix + "deck", 2), 1300);
+    core.render(screen, 1300);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_EQUAL(2, screen.last().deck);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -439,6 +460,7 @@ int main(int, char**) {
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
     RUN_TEST(test_the_waiting_screen_says_why);
+    RUN_TEST(test_losing_wifi_is_the_waiting_screen_at_once);
     RUN_TEST(test_control_characters_show_as_spaces);
     RUN_TEST(test_a_render_a_moment_before_the_last_packet_still_shows_the_deck);
     RUN_TEST(test_once_waiting_the_old_deck_does_not_come_back_without_a_message);
