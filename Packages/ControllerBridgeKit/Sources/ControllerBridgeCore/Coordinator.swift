@@ -591,6 +591,8 @@ public final class Coordinator {
         runSweep()
         for bridge in bridges { bridge.tick() }
         jogController.tick(jogEntries)
+        // Any change no other call sent, within a tick; only changes go out.
+        updateDisplayFeed()
         holdRing()
         checkLiveness()
         disconnectFailedOutputs()
@@ -893,6 +895,7 @@ public final class Coordinator {
         guard controllers.indices.contains(index), controllers[index].bridge.mapping.deck.number != deck else { return }
         controllers[index].bridge.switchDeck(to: deck)
         status.controllers[index].deck = deck
+        updateDisplayFeed()
         requestResend()
         disconnectFailedOutputs()
     }

@@ -153,4 +153,25 @@ struct DisplayFeedCoordinatorTests {
         let daybreak = Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
         #expect(feed.sent == daybreak + daybreak)
     }
+
+    @Test("Settings' deck for a controller with no layers: the new deck's full snapshot goes out")
+    func deckSetting() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.setDisplayFeed(Self.on)
+        feed.sent.removeAll()
+        rig.coordinator.setDeck(2, controller: 0)
+        #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00, title: "", artist: ""))
+    }
+
+    @Test("Syndicate changing the deck's color sends the color alone")
+    func colorChange() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.setDisplayFeed(Self.on)
+        feed.sent.removeAll()
+        // Cue palette slot 1, deck 1's color (#123), now blue.
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(0), .int(0), .int(255)]))
+        #expect(feed.sent == [OSCMessage("/DeckBridge/Display/color", [.int(0x0000FF)])])
+    }
 }
