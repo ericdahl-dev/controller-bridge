@@ -123,17 +123,6 @@ void test_an_address_outside_the_prefix_is_ignored() {
     assert_ignored(int_message("/DeckBridge/Displayx/deck", 1));
 }
 
-void test_a_bundle_is_ignored() {
-    Bytes b;
-    put_string(b, "#bundle");
-    put_int(b, 0);
-    put_int(b, 1);
-    Bytes inner = int_message(prefix + "deck", 1);
-    put_int(b, static_cast<int32_t>(inner.size()));
-    b.insert(b.end(), inner.begin(), inner.end());
-    assert_ignored(b);
-}
-
 void test_text_that_is_not_utf8_is_ignored() {
     assert_ignored(string_message(prefix + "title", "Caf\xE9"));  // Latin-1, not UTF-8
     assert_ignored(string_message(prefix + "title", "\xC3"));  // a sequence cut short
@@ -536,6 +525,26 @@ void test_a_clipped_stream_after_boot_never_says_no_track_loaded() {
     TEST_ASSERT_EQUAL_STRING(deck_core::kNoTrack, deck_core::face(screen.last().view).title);
 }
 
+// #636: the feed sends each update tick and each full snapshot as one bundle, so a burst is one datagram.
+void test_a_bundle_applies_all_its_messages_as_one_arrival() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, bundle({int_message(prefix + "deck", 3), string_message(prefix + "title", "Night Drive"),
+                       string_message(prefix + "artist", "Example Artist"), float_message(prefix + "bpm", 126.0f)}),
+         1000);
+    core.render(screen, 1000);
+    TEST_ASSERT_EQUAL(1, screen.shown.size());
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_EQUAL(3, screen.last().deck);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", screen.last().title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Example Artist", screen.last().artist.c_str());
+    TEST_ASSERT_EQUAL_FLOAT(126.0f, screen.last().view.bpm);
+    core.render(screen, 3999);
+    TEST_ASSERT_FALSE(screen.last().waiting);  // the bundle's arrival keeps it alive 3 s
+    core.render(screen, 4000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -576,7 +585,6 @@ int main(int, char**) {
     RUN_TEST(test_more_than_one_value_is_ignored);
     RUN_TEST(test_a_length_that_is_not_a_multiple_of_4_is_ignored);
     RUN_TEST(test_an_address_outside_the_prefix_is_ignored);
-    RUN_TEST(test_a_bundle_is_ignored);
     RUN_TEST(test_text_that_is_not_utf8_is_ignored);
     RUN_TEST(test_a_deck_outside_1_to_4_is_ignored);
     RUN_TEST(test_3_seconds_without_the_feed_is_the_waiting_screen);
@@ -593,6 +601,7 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_a_bundle_applies_all_its_messages_as_one_arrival);
     RUN_TEST(test_a_clipped_stream_after_boot_never_says_no_track_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
