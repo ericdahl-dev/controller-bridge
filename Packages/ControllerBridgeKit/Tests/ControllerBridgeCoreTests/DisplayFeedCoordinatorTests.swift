@@ -8,8 +8,10 @@ import Testing
 struct DisplayFeedCoordinatorTests {
     static let on = DisplayFeedSettings(enabled: true, host: "192.168.1.40", port: 9100)
 
-    /// Turns the feed on as the app does: the setting, then its destination opening.
-    static func turnOn(_ rig: Rig, _ settings: DisplayFeedSettings = on) {
+    /// Turns the feed on as the app does: the setting, then its destination opening. `heard`: Syndicate's cue palette
+    /// came first (its factory deck colors), so the first snapshot doesn't wait for it.
+    static func turnOn(_ rig: Rig, _ settings: DisplayFeedSettings = on, heard: Bool = true) {
+        if heard { rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(0), .int(0)])) }
         rig.coordinator.setDisplayFeed(settings)
         rig.coordinator.displayFeedReady()
     }
@@ -69,12 +71,62 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(0), .int(0)]))
         rig.coordinator.setDisplayFeed(Self.on)
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
         for step in 1...10 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
         #expect(feed.sent == [])
         rig.coordinator.displayFeedReady()
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Nightfall", artist: "Bill Hamel, Jeremus"))
+    }
+
+    @Test("At launch, the first snapshot waits for Syndicate's answer: its deck colors and the deck in front, with its track, then goes once (#617's live check)")
+    func holdsForSyndicatesAnswer() throws {
+        let (rig, feed) = try Self.rig()
+        Self.layered(rig)
+        rig.midi.sources.removeAll { $0.id == Rig.lc6000.id }
+        rig.coordinator.devicesChanged()
+        Self.turnOn(rig, heard: false)
+        #expect(feed.sent == [])
+        // Syndicate answers the resend: its cue palette (deck 3 teal), then deck 3's load.
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(5), .int(0), .int(0xF5), .int(0xFF)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)]))
+        #expect(feed.sent == [])
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3, title: "Nightfall"))
+        #expect(feed.sent == Self.snapshot(deck: 3, color: 0x00F5FF, title: "Nightfall", artist: "Bill Hamel, Jeremus"))
+    }
+
+    @Test("The deck known but Syndicate's palette not yet: still held, then one snapshot in the palette's color")
+    func holdsForThePalette() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.turnOn(rig, heard: false)
+        Self.load(rig)
+        #expect(feed.sent == [])
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(0), .int(0xF5), .int(0xFF)]))
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0x00F5FF, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
+    }
+
+    @Test("With no answer from Syndicate, the first snapshot goes after a second anyway, with what's known")
+    func holdIsBounded() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.turnOn(rig, heard: false)
+        for step in 1...99 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
+        #expect(feed.sent == [])
+        rig.clock.now = 1
+        rig.coordinator.tick()
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000))
+    }
+
+    @Test("Turned on later, with Syndicate already heard, the snapshot goes at once; with DeckBridge's own colors, the palette isn't waited for")
+    func noHoldOnceHeard() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.setDeckColors(followSyndicate: false, custom: DeckColors.defaults)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
+        Self.turnOn(rig, heard: false)
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000))
     }
 
     @Test("Only changes go out: a new title sends the title alone; the same feedback again sends nothing")
@@ -190,6 +242,7 @@ struct DisplayFeedCoordinatorTests {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         Self.load(rig)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/ColorPalette", [.int(1), .int(255), .int(0), .int(0)]))
         let pipe = EventPipe()
         pipe.producer.send(.setDisplayFeed(Self.on))
         pipe.producer.send(.displayFeedReady)
@@ -205,6 +258,7 @@ struct DisplayFeedCoordinatorTests {
     func deckSetting() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         Self.turnOn(rig)
         feed.sent.removeAll()
         rig.coordinator.setDeck(2, controller: 0)
@@ -215,6 +269,7 @@ struct DisplayFeedCoordinatorTests {
     func loadedIsTheFlag() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         Self.turnOn(rig)
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000))
         feed.sent.removeAll()
@@ -306,6 +361,7 @@ struct DisplayFeedCoordinatorTests {
     func colorChange() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         Self.turnOn(rig)
         feed.sent.removeAll()
         // Cue palette slot 1, deck 1's color (#123), now blue.

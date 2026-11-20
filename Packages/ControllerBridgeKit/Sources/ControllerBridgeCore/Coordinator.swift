@@ -69,6 +69,8 @@ public final class Coordinator {
     private var capturing: MIDIEndpoint.ID?
     /// Deck colors from Syndicate's palette, the defaults until one arrives (#123).
     private var syndicateDeckColors = DeckColors.defaults
+    /// Syndicate has sent its cue palette, so `syndicateDeckColors` are its own, not the defaults (#617).
+    private var paletteHeard = false
     /// Settings' deck colors (#123): follow Syndicate, or the custom colors.
     private var followSyndicateDeckColors = true
     private var customDeckColors = DeckColors.defaults
@@ -288,7 +290,7 @@ public final class Coordinator {
 
     /// The display's destination opened: the full snapshot again, since what went before it was dropped.
     public func displayFeedReady() {
-        displayFeed.resend()
+        displayFeed.resend(at: clock.now)
         updateDisplayFeed()
     }
 
@@ -303,7 +305,14 @@ public final class Coordinator {
     private func updateDisplayFeed() {
         guard displayFeed.on else { return }
         let entries = jogEntries
-        let deck = JogDisplayController.front(entries, previewDeck: jogController.previewDeck).map { index in
+        let front = JogDisplayController.front(entries, previewDeck: jogController.previewDeck)
+        // Known once Syndicate has answered for it: its colors (unless DeckBridge's own are used) and whether the
+        // deck is loaded, with its track when it is.
+        let known = front.map { index in
+            let facts = entries[index].facts
+            return (paletteHeard || !followSyndicateDeckColors) && facts.loadedHeard && (!facts.loaded || facts.track != nil)
+        } ?? false
+        let deck = front.map { index in
             let facts = entries[index].facts
             let color = deckColors[facts.deck] ?? [255, 255, 255]
             // Not loaded is the empty state (#617): nothing of a track, even one TrackInfo named before Loaded.
@@ -317,7 +326,7 @@ public final class Coordinator {
                                     playing: facts.playing, cue: facts.cueHeld, sync: facts.synced, master: facts.master,
                                     loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0)
         }
-        displayFeed.update(deck)
+        displayFeed.update(deck, known: known, at: clock.now)
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -820,6 +829,7 @@ public final class Coordinator {
             for start in stride(from: 0, to: numbers.count - 3, by: 4) {
                 if let updated = colors.updated(byPalette: noteBlackSlot(Array(numbers[start..<(start + 4)]))) { colors = updated }
             }
+            paletteHeard = true
             if colors != syndicateDeckColors {
                 syndicateDeckColors = colors
                 applyDeckColors()

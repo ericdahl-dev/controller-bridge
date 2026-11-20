@@ -55,7 +55,7 @@ struct DisplayFeedExamplesTests {
             let sender = Rig.FakeOSC(), feed = DisplayFeed()
             feed.attach(sender)
             feed.set(DisplayFeedSettings(enabled: true, host: "192.168.1.40", port: 9100))
-            feed.resend()
+            feed.resend(at: 0)
             feed.update(Self.deck(example["state"] as! [String: Any]))
             #expect(sender.sent == expected.compactMap { $0 }, "\(name)")
             #expect(sender.sent.allSatisfy { $0.address.hasPrefix(DisplayFeed.prefix) && $0.arguments.count == 1 }, "\(name)")

@@ -19,6 +19,8 @@ struct DeckFacts: Equatable, Sendable {
     var deck: Int
     var playing = false
     var loaded = false
+    /// Syndicate has said whether it's loaded: `loaded` is its answer, not the default (#617).
+    var loadedHeard = false
     /// A quantized start is waiting (#459).
     var playPending = false
     /// Syndicate's Loop: a loop is on (#463).
@@ -46,7 +48,7 @@ struct DeckFacts: Equatable, Sendable {
 extension Bridge {
     var facts: DeckFacts {
         DeckFacts(
-            deck: mapping.deck.number, playing: playing, loaded: loaded, playPending: playPending, looping: looping,
+            deck: mapping.deck.number, playing: playing, loaded: loaded, loadedHeard: loadedHeard, playPending: playPending, looping: looping,
             cueHeld: cueDown, synced: synced, master: isMaster, loopSeconds: loopSeconds, bpm: bpm,
             track: track.map { DeckFacts.Track(title: $0.title, artist: $0.artist, key: $0.key, bpm: $0.bpm, playerType: $0.playerType) },
             duration: duration, position: cueMemory.position, barRamp: barRamp, phaseOffset: phaseOffset

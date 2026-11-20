@@ -4,7 +4,7 @@
 
 ## The contract
 
-Every address is under `/DeckBridge/Display/` and carries exactly one value, of the OSC type below. Only changes are sent. A full snapshot of every address goes out when the deck in front changes and each time the feed's destination opens. Turning the feed on or a new host or port sends nothing until the destination opens, then sends the snapshot once (#617).
+Every address is under `/DeckBridge/Display/` and carries exactly one value, of the OSC type below. Only changes are sent. A full snapshot of every address goes out when the deck in front changes and each time the feed's destination opens. Turning the feed on or a new host or port sends nothing until the destination opens, then sends the snapshot once (#617). The first snapshot after that waits until Syndicate has answered for the deck in front (its cue palette, unless DeckBridge's own deck colors are on, and whether the deck is loaded, with its track if it is), for at most a second, so a display never starts on a default color or an empty deck.
 
 | Address | Type | Value |
 |---|---|---|

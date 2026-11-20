@@ -60,6 +60,10 @@ final class DisplayFeed {
     /// The destination is open at the setting's address: turning the feed on or a new address waits for it, since
     /// until then a send would be dropped or reach the old address. The one snapshot goes when it opens (#617).
     private var open = false
+    /// Once the destination opens, the first snapshot waits until Syndicate's answer makes the deck known, at most
+    /// until this time, so a panel never flashes a default color or an empty deck at launch (#617).
+    private var holdUntil: Double?
+    static let holdSeconds = 1.0
     /// What each address carried last, as sent; empty means the next update is a full snapshot.
     private var sent: [String: [OSCArgument]] = [:]
     /// The deck number the last update was for: another deck in front is a full snapshot.
@@ -83,15 +87,21 @@ final class DisplayFeed {
     /// Turned on with somewhere to send: worth building the deck for.
     var on: Bool { settings.enabled && sender != nil }
 
-    /// The destination opened (or opened again, after a wake): the next update is a full snapshot.
-    func resend() {
+    /// The destination opened (or opened again, after a wake) at `now`: the next update is a full snapshot.
+    func resend(at now: Double) {
         sent = [:]
         open = true
+        holdUntil = now + Self.holdSeconds
     }
 
-    /// Sends what changed about the deck in front: everything when it's another deck.
-    func update(_ deck: Deck?) {
+    /// Sends what changed about the deck in front: everything when it's another deck. `known`: Syndicate has
+    /// answered for it (its color and its deck), which ends the hold on the first snapshot.
+    func update(_ deck: Deck?, known: Bool = true, at now: Double = 0) {
         guard settings.enabled, open, let sender, let deck else { return }
+        if let until = holdUntil {
+            guard known || now >= until else { return }
+            holdUntil = nil
+        }
         if deck.number != sentDeck { sent = [:] }
         sentDeck = deck.number
         for message in deck.messages where sent[message.address] != message.arguments {
