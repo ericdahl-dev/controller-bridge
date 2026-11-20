@@ -545,6 +545,41 @@ void test_a_bundle_applies_all_its_messages_as_one_arrival() {
     TEST_ASSERT_TRUE(screen.last().waiting);
 }
 
+// A bad message in a bundle is skipped and the rest kept; a bad element size (past the end, not a multiple of 4)
+// stops the bundle there, since nothing after it can be found, keeping what came before.
+void test_a_bad_element_does_not_lose_the_good_ones() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    Bytes wrong_type = int_message(prefix + "title", 7);
+    feed(core, bundle({int_message(prefix + "deck", 2), wrong_type, string_message(prefix + "artist", "Kept")}), 100);
+    core.render(screen, 100);
+    TEST_ASSERT_EQUAL(2, screen.last().deck);
+    TEST_ASSERT_EQUAL_STRING("Kept", screen.last().artist.c_str());
+
+    Bytes cut = bundle({int_message(prefix + "deck", 3), string_message(prefix + "title", "Lost")});
+    cut.resize(cut.size() - 4);  // the last element's size now runs past the end
+    feed(core, cut, 200);
+    Bytes odd = bundle({int_message(prefix + "deck", 4)});
+    odd[16 + 3] = 30;  // a size that isn't a multiple of 4
+    feed(core, odd, 200);
+    core.render(screen, 200);
+    TEST_ASSERT_EQUAL(3, screen.last().deck);  // the cut bundle's first element counted
+    TEST_ASSERT_EQUAL_STRING("", screen.last().title.c_str());
+}
+
+// The feed never nests bundles: one inside is skipped, its messages unread; the bundle's own messages still count.
+void test_a_nested_bundle_is_skipped() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, bundle({bundle({int_message(prefix + "deck", 4)}), int_message(prefix + "deck", 2)}), 100);
+    core.render(screen, 100);
+    TEST_ASSERT_EQUAL(2, screen.last().deck);
+    deck_core::DeckCore only_nested;
+    feed(only_nested, bundle({bundle({int_message(prefix + "deck", 4)})}), 100);
+    only_nested.render(screen, 100);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -602,6 +637,8 @@ int main(int, char**) {
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
     RUN_TEST(test_a_bundle_applies_all_its_messages_as_one_arrival);
+    RUN_TEST(test_a_bad_element_does_not_lose_the_good_ones);
+    RUN_TEST(test_a_nested_bundle_is_skipped);
     RUN_TEST(test_a_clipped_stream_after_boot_never_says_no_track_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
