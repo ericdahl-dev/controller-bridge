@@ -17,6 +17,25 @@ struct DisplayFeedDemoTests {
         let on = Mutex(false)
     }
 
+    /// The Engine run beside the test. The test touches the Coordinators only while the Engine waits on the pipe
+    /// (after `waitFor`) or after it returns, so handing it to the task is safe.
+    final class Running: @unchecked Sendable {
+        let engine: Engine, events: AsyncStream<PipeEvent>
+        init(engine: Engine, events: AsyncStream<PipeEvent>) { self.engine = engine; self.events = events }
+        func run() async { await engine.run(events) }
+    }
+
+    /// The status reports the demo once its event is done: the Engine then waits on the pipe. Bounded, so a
+    /// regression fails here instead of hanging.
+    static func waitFor(_ reported: DemoReported) async throws {
+        for _ in 0..<100_000 {
+            if reported.on.withLock({ $0 }) { return }
+            await Task.yield()
+        }
+        Issue.record("The Engine never reported the demo")
+        throw CancellationError()
+    }
+
     static func demoMaker(_ rig: Rig, _ made: Made) -> @Sendable (ControllerProfile) -> DemoSession {
         let clock = rig.clock, log = rig.log
         return { profile in
@@ -117,12 +136,12 @@ struct DisplayFeedDemoTests {
         let engine = Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { status in
             if status.demo { demoReported.on.withLock { $0 = true } }
         }, makeDemo: Self.demoMaker(rig, made))
-        let running = Task { await engine.run(pipe.events) }
+        let box = Running(engine: engine, events: pipe.events)
+        let running = Task { await box.run() }
         pipe.producer.send(.setDisplayFeed(DisplayFeedCoordinatorTests.on))
         pipe.producer.send(.displayFeedReady)
         pipe.producer.demo(on: true)
-        // The status reports the demo once its event is done: the Engine then waits on the pipe.
-        while !demoReported.on.withLock({ $0 }) { await Task.yield() }
+        try await Self.waitFor(demoReported)
         let session = try #require(made.session)
         for step in 1...110 { rig.clock.now = Double(step) * 0.01; session.tick() }
         #expect(Self.text(feed, "title").last == "Demo Track")
@@ -191,5 +210,34 @@ struct DisplayFeedDemoTests {
             $0.send(.setJogPreviewDeck(3))
         }
         #expect(!feed.sent.contains(OSCMessage("/DeckBridge/Display/deck", [.int(3)])))
+    }
+
+    @Test("Demo off after the demo has run a while: the real deck's full snapshot goes out at once, then only changes")
+    func demoOffAfterRunning() async throws {
+        let (rig, feed) = try Self.realRig()
+        let made = Made(), demoReported = DemoReported()
+        let pipe = EventPipe()
+        let engine = Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { status in
+            if status.demo { demoReported.on.withLock { $0 = true } }
+        }, makeDemo: Self.demoMaker(rig, made))
+        let box = Running(engine: engine, events: pipe.events)
+        let running = Task { await box.run() }
+        pipe.producer.send(.setDisplayFeed(DisplayFeedCoordinatorTests.on))
+        pipe.producer.send(.displayFeedReady)
+        pipe.producer.demo(on: true)
+        try await Self.waitFor(demoReported)
+        let session = try #require(made.session)
+        for step in 1...250 { rig.clock.now = Double(step) * 0.01; session.tick() }
+        #expect(Self.text(feed, "title").last == "Demo Track")
+        feed.sent.removeAll()
+        pipe.producer.demo(on: false)
+        pipe.producer.finish()
+        await running.value
+        let daybreak = DisplayFeedCoordinatorTests.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
+        #expect(feed.sent == daybreak)
+        feed.sent.removeAll()
+        // Under the next keepalive: nothing changed on the real deck.
+        for step in 251...400 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
+        #expect(feed.sent == [])
     }
 }
