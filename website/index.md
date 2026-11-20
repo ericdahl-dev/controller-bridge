@@ -95,7 +95,7 @@ No. The DeckBridge app collects no data: no account, no analytics, no tracking. 
 
 ## Privacy
 
-DeckBridge collects no data. There is no account, no analytics and no tracking. It sends OSC messages only to Syndicate, on this Mac by default or on your local network if you set it up that way. This website counts visits with PostHog, without cookies: an anonymous hash that changes every day, and it does not keep your IP address. Details: https://getdeckbridge.app/privacy/
+DeckBridge collects no data. There is no account, no analytics and no tracking. It sends OSC messages to Syndicate, on this Mac by default or on your local network if you set it up that way. If you turn on the display feed, it also sends the deck in front's state, including track title and artist, unencrypted to the one address you set on your local network. This website counts visits with PostHog, without cookies: an anonymous hash that changes every day, and it does not keep your IP address. Details: https://getdeckbridge.app/privacy/
 
 ## Contact
 
