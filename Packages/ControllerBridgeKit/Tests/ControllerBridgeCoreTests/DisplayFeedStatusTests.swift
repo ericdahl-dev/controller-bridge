@@ -24,4 +24,19 @@ struct DisplayFeedStatusTests {
         #expect(DisplayFeedStatus(Self.on, OSCDestinationTests.destination(Sinks(), Resolver())).text
             == "Connecting to 192.168.1.40:9100…")
     }
+
+    @Test("A name that can't be found, or a socket that won't open, is not sending, with the reason")
+    func connectFailure() async {
+        let sinks = Sinks()
+        let destination = OSCDestinationTests.destination(sinks, Resolver())
+        let named = DisplayFeedSettings(enabled: true, host: "deck-panel.local", port: 9100)
+        _ = await destination.connect(host: "deck-panel.local", port: 9100)
+        #expect(DisplayFeedStatus(named, destination) == .notSending("Can't find deck-panel.local on the network"))
+        #expect(DisplayFeedStatus(named, destination).text == "Not sending: Can't find deck-panel.local on the network")
+
+        sinks.refuse = ["192.168.1.40"]
+        let refused = OSCDestinationTests.destination(sinks, Resolver())
+        _ = await refused.connect(host: "192.168.1.40", port: 9100)
+        #expect(DisplayFeedStatus(Self.on, refused).text == "Not sending: Couldn't send OSC to 192.168.1.40:9100")
+    }
 }
