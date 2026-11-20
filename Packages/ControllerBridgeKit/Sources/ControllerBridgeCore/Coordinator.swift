@@ -335,34 +335,52 @@ public final class Coordinator {
     private func updateDisplayFeed() {
         guard displayFeed.on else { return }
         let entries = jogEntries
-        let front = JogDisplayController.front(entries, previewDeck: jogController.previewDeck)
-        // Known once Syndicate has answered for it: its colors (unless DeckBridge's own are used) and whether the
-        // deck is loaded, with its track when it is.
-        let known = front.map { index in
-            let facts = entries[index].facts
-            return (paletteHeard.contains(facts.deck) || !followSyndicateDeckColors) && facts.loadedHeard && (!facts.loaded || facts.track != nil)
-        } ?? false
-        // The master clock, as the ring's beat pulse: none once it's been quiet for the Bridge's timeout.
-        let beat = masterBeat.flatMap { clock.now - $0.at <= Bridge.clockTimeout ? $0.beat : nil } ?? 0
-        let deck = front.map { index in
-            let facts = entries[index].facts
-            let color = deckColors[facts.deck] ?? [255, 255, 255]
-            // Not loaded is the empty state (#617): nothing of a track, even one TrackInfo named before Loaded.
-            guard facts.loaded else { return DisplayFeed.Deck(number: facts.deck, color: color) }
-            let trackBPM = facts.track?.bpm ?? 0
-            let bpm = facts.bpm ?? (trackBPM > 0 ? trackBPM : 0)
-            return DisplayFeed.Deck(number: facts.deck, color: color, loaded: true,
-                                    title: facts.track?.title ?? "", artist: facts.track?.artist ?? "",
-                                    key: facts.track.map { jogController.keyDisplay.shown($0.key) } ?? "", bpm: bpm,
-                                    tempo: trackBPM > 0 && bpm > 0 ? (bpm / trackBPM - 1) * 100 : 0,
-                                    playing: facts.playing, cue: facts.cueHeld, sync: facts.synced, master: facts.master,
-                                    loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, trackBPM: trackBPM, liveBPM: bpm) : 0,
-                                    beat: beat, elapsed: Self.wholeSeconds(facts.position),
-                                    remaining: facts.duration == nil ? 0 : max(0, Self.wholeSeconds(facts.duration) - Self.wholeSeconds(facts.position)),
-                                    progress: Self.progress(facts), phase: feedPhase(facts),
-                                    level: jogController.meterLevel(facts.deck))
+        guard let front = JogDisplayController.front(entries, previewDeck: jogController.previewDeck) else {
+            displayFeed.update(nil, at: clock.now)
+            return
         }
-        displayFeed.update(deck, known: known, at: clock.now)
+        let facts = entries[front].facts
+        displayFeed.update(displayFeedDeck(facts), known: displayFeedKnown(facts), at: clock.now)
+    }
+
+    /// Syndicate has answered for the deck: its colors (unless DeckBridge's own are used) and whether it's loaded,
+    /// with its track when it is.
+    private func displayFeedKnown(_ facts: DeckFacts) -> Bool {
+        let colorKnown = paletteHeard.contains(facts.deck) || !followSyndicateDeckColors
+        let trackKnown = !facts.loaded || facts.track != nil
+        return colorKnown && facts.loadedHeard && trackKnown
+    }
+
+    /// What the display feed shows of a deck. Plain statements, not one expression: CI's type checker times out on
+    /// long nested ones.
+    private func displayFeedDeck(_ facts: DeckFacts) -> DisplayFeed.Deck {
+        var deck = DisplayFeed.Deck(number: facts.deck, color: deckColors[facts.deck] ?? [255, 255, 255])
+        // Not loaded is the empty state (#617): nothing of a track, even one TrackInfo named before Loaded.
+        guard facts.loaded else { return deck }
+        let trackBPM = facts.track?.bpm ?? 0
+        var bpm = 0.0
+        if let live = facts.bpm { bpm = live } else if trackBPM > 0 { bpm = trackBPM }
+        deck.loaded = true
+        deck.title = facts.track?.title ?? ""
+        deck.artist = facts.track?.artist ?? ""
+        if let track = facts.track { deck.key = jogController.keyDisplay.shown(track.key) }
+        deck.bpm = bpm
+        if trackBPM > 0, bpm > 0 { deck.tempo = (bpm / trackBPM - 1) * 100 }
+        deck.playing = facts.playing
+        deck.cue = facts.cueHeld
+        deck.sync = facts.synced
+        deck.master = facts.master
+        deck.loop = facts.looping
+        if facts.looping { deck.loopLength = Self.loopBeats(facts, trackBPM: trackBPM, liveBPM: bpm) }
+        // The master clock, as the ring's beat pulse: none once it's been quiet for the Bridge's timeout.
+        if let master = masterBeat, clock.now - master.at <= Bridge.clockTimeout { deck.beat = master.beat }
+        let elapsed = Self.wholeSeconds(facts.position)
+        deck.elapsed = elapsed
+        if facts.duration != nil { deck.remaining = max(0, Self.wholeSeconds(facts.duration) - elapsed) }
+        deck.progress = Self.progress(facts)
+        deck.phase = feedPhase(facts)
+        deck.level = jogController.meterLevel(facts.deck)
+        return deck
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
