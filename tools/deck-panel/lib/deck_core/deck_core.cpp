@@ -1,0 +1,235 @@
+#include "deck_core.h"
+
+#include <cstdio>
+#include <cstring>
+
+namespace deck_core {
+
+namespace {
+
+const char kPrefix[] = "/DeckBridge/Display/";
+
+/// `text` (valid UTF-8) into `out` at most `limit` characters: a longer one is cut between characters, spaces before
+/// the cut dropped, and ends in "…". `out` holds `limit` characters of 4 bytes and a NUL.
+/// A control character (a line break, a tab) as a space, so the board's one-line label stays one line.
+char shown(char c) {
+    auto byte = static_cast<uint8_t>(c);
+    return byte < 0x20 || byte == 0x7F ? ' ' : c;
+}
+
+void shorten(const char* text, size_t limit, char* out) {
+    size_t characters = 0, n = 0;
+    for (const char* p = text; *p; ++p) {
+        bool starts_character = (static_cast<uint8_t>(*p) & 0xC0) != 0x80;
+        if (starts_character && ++characters == limit) {
+            // The limit-th character: whole only if it is the last.
+            size_t rest = 0;
+            for (const char* q = p; *q; ++q) rest += (static_cast<uint8_t>(*q) & 0xC0) != 0x80;
+            if (rest == 1) {
+                while (*p) out[n++] = shown(*p++);
+            } else {
+                while (n > 0 && out[n - 1] == ' ') --n;
+                std::memcpy(out + n, "\xE2\x80\xA6", 3);
+                n += 3;
+            }
+            break;
+        }
+        out[n++] = shown(*p);
+    }
+    out[n] = 0;
+}
+
+/// One OSC message with one value, as the feed sends (ADR 0011).
+struct Message {
+    const char* name = nullptr;  ///< the address after the prefix
+    char type = 0;  ///< i, f or s
+    int32_t i = 0;
+    float f = 0;  ///< for the float rows #617 adds (bpm, tempo, progress, phase, level); negatives too
+    const char* s = nullptr;
+};
+
+/// Reads a padded OSC string at `at`; returns its length, or -1 if it doesn't fit.
+long read_string(const uint8_t* bytes, size_t length, size_t at) {
+    for (size_t i = at; i < length; ++i) {
+        if (bytes[i] == 0) return static_cast<long>(i - at);
+    }
+    return -1;
+}
+
+size_t padded(size_t n) { return (n + 4) & ~size_t(3); }
+
+/// Well-formed UTF-8: no stray, cut-short, overlong or surrogate sequences, nothing past U+10FFFF.
+bool valid_utf8(const char* text) {
+    const auto* p = reinterpret_cast<const uint8_t*>(text);
+    while (*p) {
+        uint8_t lead = *p++;
+        int more;
+        uint32_t code;
+        if (lead < 0x80) continue;
+        if (lead >= 0xC2 && lead <= 0xDF) { more = 1; code = lead & 0x1F; }
+        else if (lead >= 0xE0 && lead <= 0xEF) { more = 2; code = lead & 0x0F; }
+        else if (lead >= 0xF0 && lead <= 0xF4) { more = 3; code = lead & 0x07; }
+        else return false;
+        for (int i = 0; i < more; ++i, ++p) {
+            if ((*p & 0xC0) != 0x80) return false;
+            code = code << 6 | (*p & 0x3F);
+        }
+        if ((more == 2 && code < 0x800) || (more == 3 && code < 0x10000) || code > 0x10FFFF) return false;
+        if (code >= 0xD800 && code <= 0xDFFF) return false;
+    }
+    return true;
+}
+
+bool parse(const uint8_t* bytes, size_t length, Message& out) {
+    if (length % 4 != 0) return false;
+    long address_length = read_string(bytes, length, 0);
+    if (address_length < 0) return false;
+    const char* address = reinterpret_cast<const char*>(bytes);
+    if (std::strncmp(address, kPrefix, sizeof kPrefix - 1) != 0) return false;
+    size_t at = padded(static_cast<size_t>(address_length));
+    long tags_length = read_string(bytes, length, at);
+    if (tags_length != 2 || bytes[at] != ',') return false;
+    out.name = address + sizeof kPrefix - 1;
+    out.type = static_cast<char>(bytes[at + 1]);
+    at += padded(2);
+    switch (out.type) {
+        case 'i':
+        case 'f':
+            if (at + 4 > length) return false;
+            out.i = static_cast<int32_t>(uint32_t(bytes[at]) << 24 | uint32_t(bytes[at + 1]) << 16 |
+                                         uint32_t(bytes[at + 2]) << 8 | uint32_t(bytes[at + 3]));
+            std::memcpy(&out.f, &out.i, sizeof out.f);  // an f's 32 bits are an IEEE 754 float, big-endian like an i
+            return true;
+        case 's':
+            if (read_string(bytes, length, at) < 0) return false;
+            out.s = reinterpret_cast<const char*>(bytes + at);
+            return valid_utf8(out.s);
+        default:
+            return false;
+    }
+}
+
+/// A row that takes any value: stores it.
+template <typename T, typename V>
+bool set(T& field, V value) {
+    field = static_cast<T>(value);
+    return true;
+}
+
+/// The feed's addresses: one row each, its OSC type and what it sets (ADR 0011).
+struct Row {
+    const char* name;
+    char type;
+    /// Sets the value; false if it's out of range, which leaves the view as it was.
+    bool (*apply)(DeckView&, const Message&);
+};
+
+const Row kRows[] = {
+    {"deck", 'i',
+     [](DeckView& v, const Message& m) {
+         if (m.i < 1 || m.i > 4) return false;
+         v.deck = m.i;
+         return true;
+     }},
+    {"color", 'i',
+     [](DeckView& v, const Message& m) {
+         v.color = static_cast<uint32_t>(m.i) & 0xFFFFFF;
+         return true;
+     }},
+    {"title", 's',
+     [](DeckView& v, const Message& m) {
+         shorten(m.s, kTitleMax, v.title);
+         return true;
+     }},
+    {"artist", 's',
+     [](DeckView& v, const Message& m) {
+         shorten(m.s, kArtistMax, v.artist);
+         return true;
+     }},
+    // #617's fields.
+    {"loaded", 'i', [](DeckView& v, const Message& m) { return set(v.loaded, m.i != 0); }},
+    {"key", 's',
+     [](DeckView& v, const Message& m) {
+         shorten(m.s, kKeyMax, v.key);
+         return true;
+     }},
+    {"bpm", 'f', [](DeckView& v, const Message& m) { return set(v.bpm, m.f); }},
+    {"tempo", 'f', [](DeckView& v, const Message& m) { return set(v.tempo, m.f); }},
+    {"playing", 'i', [](DeckView& v, const Message& m) { return set(v.playing, m.i != 0); }},
+    {"cue", 'i', [](DeckView& v, const Message& m) { return set(v.cue, m.i != 0); }},
+    {"sync", 'i', [](DeckView& v, const Message& m) { return set(v.sync, m.i != 0); }},
+    {"master", 'i', [](DeckView& v, const Message& m) { return set(v.master, m.i != 0); }},
+    {"loop", 'i', [](DeckView& v, const Message& m) { return set(v.loop, m.i != 0); }},
+    {"loopLength", 'f', [](DeckView& v, const Message& m) { return set(v.loop_length, m.f); }},
+    {"beat", 'i', [](DeckView& v, const Message& m) { return set(v.beat, static_cast<int>(m.i)); }},
+    {"elapsed", 'i', [](DeckView& v, const Message& m) { return set(v.elapsed, m.i); }},
+    {"remaining", 'i', [](DeckView& v, const Message& m) { return set(v.remaining, m.i); }},
+    {"progress", 'f', [](DeckView& v, const Message& m) { return set(v.progress, m.f); }},
+    {"phase", 'f', [](DeckView& v, const Message& m) { return set(v.phase, m.f); }},
+    {"level", 'f', [](DeckView& v, const Message& m) { return set(v.level, m.f); }},
+};
+
+}  // namespace
+
+void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
+    Message message;
+    if (!parse(bytes, length, message)) return;
+    // An address this panel doesn't know is a newer DeckBridge's (ADR 0011): ignored, but the feed is alive.
+    bool alive = true;
+    for (const Row& row : kRows) {
+        if (std::strcmp(row.name, message.name) != 0) continue;
+        alive = row.type == message.type && row.apply(view_, message);
+    }
+    if (!alive) return;
+    heard_ = true;
+    last_heard_ms_ = now_ms;
+}
+
+void DeckCore::set_network(Network state, const char* ip) {
+    network_ = state;
+    std::snprintf(ip_, sizeof ip_, "%s", ip);
+}
+
+void DeckCore::render(Screen& screen, uint32_t now_ms) {
+    // The time since, signed: a clock that wraps round still counts it, and a render that read the clock a moment
+    // before the packet's time sees a little under 0, not 49 days.
+    const int32_t since = static_cast<int32_t>(now_ms - last_heard_ms_);
+    // Off Wi-Fi the feed can't be coming: waiting at once.
+    const bool waiting = !heard_ || since >= static_cast<int32_t>(kWaitAfterMs) || network_ != Network::connected;
+    // Waiting holds until the next message: the old deck never comes back by itself, even when the clock comes round.
+    if (waiting) heard_ = false;
+    if (waiting) {
+        const WaitingView view = waiting_view();
+        if (shown_ && shown_waiting_ && view == shown_waiting_view_) return;
+        screen.show_waiting(view);
+        shown_waiting_view_ = view;
+    } else {
+        if (shown_ && !shown_waiting_ && view_ == shown_view_) return;
+        screen.show_deck(view_);
+        shown_view_ = view_;
+    }
+    shown_ = true;
+    shown_waiting_ = waiting;
+}
+
+WaitingView DeckCore::waiting_view() const {
+    WaitingView view;
+    switch (network_) {
+        case Network::not_set:
+            std::snprintf(view.headline, sizeof view.headline, "Wi-Fi isn't set");
+            std::snprintf(view.detail, sizeof view.detail,
+                          "Build the panel with your Wi-Fi's name and password: see its README");
+            break;
+        case Network::joining:
+            std::snprintf(view.headline, sizeof view.headline, "Joining Wi-Fi\xE2\x80\xA6");
+            break;
+        case Network::connected:
+            // What to type into DeckBridge's Settings, Display feed: host and port.
+            std::snprintf(view.headline, sizeof view.headline, "Waiting for DeckBridge");
+            std::snprintf(view.detail, sizeof view.detail, "%s  port %u", ip_, unsigned(kFeedPort));
+            break;
+    }
+    return view;
+}
+
+}  // namespace deck_core

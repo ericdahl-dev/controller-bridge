@@ -65,7 +65,7 @@ jobs:
 
   deck-panel:
     name: Deck panel
-    # The deck panel's firmware (#615): the portable code's host tests, then the CrowPanel build. Only when
+    # The deck panel's firmware (#615, #620): the portable code's host tests, then the CrowPanel builds. Only when
     # tools/deck-panel or this workflow changes; not a required check. PlatformIO is pinned, and the pioarduino
     # platform it builds with takes Python 3.10-3.14.
     needs: changes
@@ -87,9 +87,14 @@ jobs:
       - name: PlatformIO
         run: pip install platformio==6.2.0
       - name: Deck panel host tests
-        run: pio test -d tools/deck-panel -e native
+        run: |
+          pio test -d tools/deck-panel -e native
+          python3 -I tools/deck-panel/test_wifi_secrets.py
+      # No Wi-Fi file here, so both build without credentials: the deck view says "Wi-Fi isn't set" (#620).
       - name: Deck panel firmware build
-        run: pio run -d tools/deck-panel -e crowpanel
+        run: |
+          pio run -d tools/deck-panel -e crowpanel
+          pio run -d tools/deck-panel -e crowpanel-test
 
   display-firmware:
     name: Display firmware
@@ -106,9 +111,16 @@ jobs:
       # and its entry shims run in unicorn against a synthetic flash. Still no vendor data.
       - name: Arm toolchain and emulator
         run: |
-          sudo apt-get update
+          # The mirror's download of the toolchain (67 MB) has stalled until the job timed out (#640): apt gives up on a
+          # transfer with no data for 30 s and retries it, and a whole attempt over 4 minutes is cut off and tried once more.
+          apt="-o Acquire::http::Timeout=30 -o Acquire::Retries=3"
           # The block is freestanding: no newlib or libstdc++, which add about 500 MB as recommended packages.
-          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi binutils-arm-none-eabi
+          for attempt in 1 2; do
+            timeout 240 sudo apt-get $apt update && timeout 240 sudo apt-get $apt install -y --no-install-recommends \
+              gcc-arm-none-eabi binutils-arm-none-eabi && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "Arm toolchain download attempt $attempt failed or stalled; trying once more"
+          done
           arm-none-eabi-gcc --version | head -1
           python3 -m venv "$RUNNER_TEMP/fw"
           # Pinned (#515): 2.1.4 skips instructions in code under a memory-read hook, which the block tests now avoid;
