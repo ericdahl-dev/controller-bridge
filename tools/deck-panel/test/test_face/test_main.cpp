@@ -76,11 +76,39 @@ void test_an_unknown_bpm_shows_neither_bpm_nor_tempo() {
     TEST_ASSERT_EQUAL_STRING("", deck_core::face(v).tempo);
 }
 
+void test_times_show_as_minutes_and_seconds_remaining_with_a_minus() {
+    DeckView v = loaded_deck();
+    TEST_ASSERT_EQUAL_STRING("1:35", deck_core::face(v).elapsed);
+    TEST_ASSERT_EQUAL_STRING("-3:32", deck_core::face(v).remaining);
+    v.elapsed = 0;
+    v.remaining = 5;
+    TEST_ASSERT_EQUAL_STRING("0:00", deck_core::face(v).elapsed);
+    TEST_ASSERT_EQUAL_STRING("-0:05", deck_core::face(v).remaining);
+}
+
+void test_past_an_hour_times_show_hours() {
+    DeckView v = loaded_deck();
+    v.elapsed = 3723;
+    v.remaining = 3600;
+    TEST_ASSERT_EQUAL_STRING("1:02:03", deck_core::face(v).elapsed);
+    TEST_ASSERT_EQUAL_STRING("-1:00:00", deck_core::face(v).remaining);
+}
+
+void test_with_no_known_length_remaining_is_blank() {
+    DeckView v = loaded_deck();
+    v.remaining = 0;
+    TEST_ASSERT_EQUAL_STRING("", deck_core::face(v).remaining);
+    TEST_ASSERT_EQUAL_STRING("1:35", deck_core::face(v).elapsed);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_empty_deck_shows_no_track_loaded_and_nothing_else);
     RUN_TEST(test_a_loaded_deck_shows_its_title_and_artist);
     RUN_TEST(test_bpm_and_tempo_show_at_2_decimals_tempo_signed);
     RUN_TEST(test_an_unknown_bpm_shows_neither_bpm_nor_tempo);
+    RUN_TEST(test_times_show_as_minutes_and_seconds_remaining_with_a_minus);
+    RUN_TEST(test_past_an_hour_times_show_hours);
+    RUN_TEST(test_with_no_known_length_remaining_is_blank);
     return UNITY_END();
 }

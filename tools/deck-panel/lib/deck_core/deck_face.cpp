@@ -11,6 +11,17 @@ void copy(char (&out)[N], const char* text) {
     std::snprintf(out, N, "%s", text);
 }
 
+/// Whole seconds as "m:ss", or "h:mm:ss" past an hour, after `sign`. Negative counts as 0.
+template <size_t N>
+void time_text(char (&out)[N], const char* sign, int32_t seconds) {
+    const long s = seconds < 0 ? 0 : seconds;
+    if (s >= 3600) {
+        std::snprintf(out, N, "%s%ld:%02ld:%02ld", sign, s / 3600, s / 60 % 60, s % 60);
+    } else {
+        std::snprintf(out, N, "%s%ld:%02ld", sign, s / 60, s % 60);
+    }
+}
+
 }  // namespace
 
 Face face(const DeckView& view) {
@@ -35,6 +46,9 @@ Face face(const DeckView& view) {
             std::snprintf(f.tempo, sizeof f.tempo, "%+.2f%%", static_cast<double>(view.tempo));
         }
     }
+    time_text(f.elapsed, "", view.elapsed);
+    // 0 is no known length.
+    if (view.remaining > 0) time_text(f.remaining, "-", view.remaining);
     return f;
 }
 
