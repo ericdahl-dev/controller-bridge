@@ -261,6 +261,30 @@ struct SettingsView: View {
                 hint("For Syndicate on another Mac. macOS asks once for local-network permission; allow it, or no feedback arrives.")
             }
         }
+        displayFeedSection(settings)
+    }
+
+    /// The display feed (#618): on/off, the deck panel's host and port, and what the feed is doing. Bad input is shown
+    /// under its field on Apply, as the Syndicate port's is.
+    @ViewBuilder
+    private func displayFeedSection(_ settings: Binding<BridgeSettings>) -> some View {
+        section("Display feed") {
+            hint("Sends the deck in front to a deck panel on your network.")
+            switchRow("Send the display feed", isOn: settings.displayFeed.enabled)
+            if settings.wrappedValue.displayFeed.enabled {
+                row("Host", hint: "The panel's IP address, shown on its waiting screen") {
+                    field(text: settings.displayFeed.host, width: 160, field: .displayFeedHost)
+                }
+                row("Port", hint: "The panel's port, shown on its waiting screen") {
+                    field(value: settings.displayFeed.port, field: .displayFeedPort)
+                }
+            }
+            // The applied setting's status, read again each second: a feed that can't send never fails silently.
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                let status = model.displayFeedStatus
+                note(status.text, color: status.isProblem ? Theme.error : Theme.caption)
+            }
+        }
     }
 
     @ViewBuilder

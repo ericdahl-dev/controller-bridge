@@ -21,15 +21,23 @@ struct DisplayFeedExamplesTests {
         let address = entry["address"] as! String
         switch entry["type"] as! String {
         case "i": return OSCMessage(address, [.int(Int32(entry["value"] as! Int))])
-        case "f": return OSCMessage(address, [.float(Float(entry["value"] as! Double))])
+        case "f": return OSCMessage(address, [.float((entry["value"] as! NSNumber).floatValue)])
         case "s": return OSCMessage(address, [.string(entry["value"] as! String)])
         default: return nil
         }
     }
 
     static func deck(_ state: [String: Any]) -> DisplayFeed.Deck {
-        DisplayFeed.Deck(number: state["deck"] as! Int, color: state["color"] as! [Int],
-                         title: state["title"] as? String ?? "", artist: state["artist"] as? String ?? "")
+        DisplayFeed.Deck(number: state["deck"] as! Int, color: state["color"] as! [Int], loaded: state["loaded"] as? Bool ?? false,
+                         title: state["title"] as? String ?? "", artist: state["artist"] as? String ?? "",
+                         key: state["key"] as? String ?? "", bpm: state["bpm"] as? Double ?? 0, tempo: state["tempo"] as? Double ?? 0,
+                         playing: state["playing"] as? Bool ?? false, cue: state["cue"] as? Bool ?? false,
+                         sync: state["sync"] as? Bool ?? false, master: state["master"] as? Bool ?? false,
+                         loop: state["loop"] as? Bool ?? false, loopLength: state["loopLength"] as? Double ?? 0,
+                         beat: state["beat"] as? Int ?? 0, elapsed: state["elapsed"] as? Int ?? 0,
+                         remaining: state["remaining"] as? Int ?? 0, progress: state["progress"] as? Double ?? 0,
+                         phase: state["phase"] as? Double ?? -1,
+                         level: state["level"] as? Double ?? 0)
     }
 
     @Test("The file's prefix is the feed's, and it has a loaded deck, an empty one and non-ASCII text")
@@ -51,6 +59,7 @@ struct DisplayFeedExamplesTests {
             let sender = Rig.FakeOSC(), feed = DisplayFeed()
             feed.attach(sender)
             feed.set(DisplayFeedSettings(enabled: true, host: "192.168.1.40", port: 9100))
+            feed.resend(at: 0)
             feed.update(Self.deck(example["state"] as! [String: Any]))
             #expect(sender.sent == expected.compactMap { $0 }, "\(name)")
             #expect(sender.sent.allSatisfy { $0.address.hasPrefix(DisplayFeed.prefix) && $0.arguments.count == 1 }, "\(name)")
