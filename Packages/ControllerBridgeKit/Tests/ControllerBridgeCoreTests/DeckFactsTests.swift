@@ -26,7 +26,7 @@ struct DeckFactsTests {
         Self.feed(bridge, "Position", [.float(30.5)])
         Self.feed(bridge, "BarRamp", [.float(0.25)])
         #expect(bridge.facts == DeckFacts(
-            deck: 1, playing: true, loaded: true, bpm: 124,
+            deck: 1, playing: true, loaded: true, loadedHeard: true, bpm: 124,
             track: DeckFacts.Track(title: "Song, Part 2", artist: "Artist", key: "8A", bpm: 123.5, playerType: "track"),
             duration: 200, position: 30.5, barRamp: DeckFacts.BarRamp(phase: 0.25, at: 0)
         ))

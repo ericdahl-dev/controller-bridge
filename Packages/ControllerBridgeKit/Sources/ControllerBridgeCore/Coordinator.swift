@@ -69,6 +69,13 @@ public final class Coordinator {
     private var capturing: MIDIEndpoint.ID?
     /// Deck colors from Syndicate's palette, the defaults until one arrives (#123).
     private var syndicateDeckColors = DeckColors.defaults
+    /// The decks whose palette slot Syndicate has sent, so their `syndicateDeckColors` are its own, not the defaults
+    /// (#617). Slots may come one per message.
+    private var paletteHeard: Set<Int> = []
+    /// Syndicate's last master clock beat, 1-4, and when it came: the display feed's beat (#617).
+    private var masterBeat: (beat: Int, at: Double)?
+    /// Each deck's phase rule for the display feed (#617), with its own in-phase and wrap memory.
+    private var feedPhase: [Int: DrawnPhase] = [:]
     /// Settings' deck colors (#123): follow Syndicate, or the custom colors.
     private var followSyndicateDeckColors = true
     private var customDeckColors = DeckColors.defaults
@@ -282,26 +289,116 @@ public final class Coordinator {
 
     /// Settings' display feed: on sends the deck in front at once.
     public func setDisplayFeed(_ settings: DisplayFeedSettings) {
-        displayFeed.set(settings)
+        displayFeed.set(settings, at: clock.now)
+        status.requiredSubscriptions = requiredSubscriptions
         updateDisplayFeed()
+    }
+
+    /// Takes the display feed and its setting from the real Coordinator, for the demo's while it runs (#625). The
+    /// destination is already open, so the first snapshot goes out once the demo's deck is known.
+    public func takeDisplayFeed(from real: Coordinator) {
+        guard let (sender, settings) = real.displayFeed.release() else { return }
+        displayFeed.attach(sender)
+        displayFeed.set(settings, at: clock.now)
+        status.requiredSubscriptions = requiredSubscriptions
+        displayFeedReady()
+    }
+
+    /// Takes the display feed back from the demo's Coordinator when it ends (#625), with a full snapshot. Its own
+    /// setting stays: a change made during the demo waited for the real Coordinator and is already applied.
+    public func takeBackDisplayFeed(from demo: Coordinator) {
+        guard let (sender, _) = demo.displayFeed.release() else { return }
+        displayFeed.attach(sender)
+        displayFeedReady()
     }
 
     /// The display's destination opened: the full snapshot again, since what went before it was dropped.
     public func displayFeedReady() {
-        displayFeed.resend()
+        displayFeed.resend(at: clock.now)
         updateDisplayFeed()
     }
 
     /// The feed's deck: the jog display's deck in front (the active layer; with no controller, the preview's deck),
     /// whether or not the jog display is on.
+    /// Whether LoopInfo's seconds are the track's (so its BPM gives the beats) or the deck's at its live tempo. No
+    /// capture settles it yet (#617): this one line flips it, and loopLengthAtShiftedTempo with it.
+    static let loopSecondsAreTrackTime = true
+
+    /// The loop's length in beats, unrounded: a display rounds for itself (#617).
+    private static func loopBeats(_ facts: DeckFacts, trackBPM: Double, liveBPM: Double) -> Double {
+        let bpm = loopSecondsAreTrackTime && trackBPM > 0 ? trackBPM : liveBPM
+        guard let seconds = facts.loopSeconds, bpm > 0 else { return 0 }
+        return seconds * bpm / 60
+    }
+
+    /// Whole seconds as the drawn display's time message counts them: down, 0 for none or below.
+    private static func wholeSeconds(_ value: Double?) -> Int {
+        guard let value, value > 0, value.isFinite else { return 0 }
+        return Int(min(value, Double(Int32.max)))
+    }
+
+    /// Where the deck is through its track, 0-1; 0 with no length known.
+    private static func progress(_ facts: DeckFacts) -> Double {
+        guard let duration = facts.duration, duration > 0, let position = facts.position, position.isFinite else { return 0 }
+        return min(max(position / duration, 0), 1)
+    }
+
+    /// The deck's phase as the drawn display's rule gives it (#462), on the feed's scale: 0.5 in phase, 0 a half beat
+    /// behind, 1 a half beat ahead; -1 unknown.
+    private func feedPhase(_ facts: DeckFacts) -> Double {
+        let value = feedPhase[facts.deck, default: DrawnPhase()].value(offset: facts.phaseOffset, playing: facts.playing)
+        return value == DrawnPhase.unknown ? -1 : 0.5 + Double(value) / 16384
+    }
+
     private func updateDisplayFeed() {
+        guard displayFeed.on else { return }
         let entries = jogEntries
-        let deck = JogDisplayController.front(entries, previewDeck: jogController.previewDeck).map { index in
-            let facts = entries[index].facts
-            return DisplayFeed.Deck(number: facts.deck, color: deckColors[facts.deck] ?? [255, 255, 255],
-                                    title: facts.track?.title ?? "", artist: facts.track?.artist ?? "")
+        guard let front = JogDisplayController.front(entries, previewDeck: jogController.previewDeck) else {
+            displayFeed.update(nil, at: clock.now)
+            return
         }
-        displayFeed.update(deck)
+        let facts = entries[front].facts
+        displayFeed.update(displayFeedDeck(facts), known: displayFeedKnown(facts), at: clock.now)
+    }
+
+    /// Syndicate has answered for the deck: its colors (unless DeckBridge's own are used) and whether it's loaded,
+    /// with its track when it is.
+    private func displayFeedKnown(_ facts: DeckFacts) -> Bool {
+        let colorKnown = paletteHeard.contains(facts.deck) || !followSyndicateDeckColors
+        let trackKnown = !facts.loaded || facts.track != nil
+        return colorKnown && facts.loadedHeard && trackKnown
+    }
+
+    /// What the display feed shows of a deck. Plain statements, not one expression: CI's type checker times out on
+    /// long nested ones.
+    private func displayFeedDeck(_ facts: DeckFacts) -> DisplayFeed.Deck {
+        var deck = DisplayFeed.Deck(number: facts.deck, color: deckColors[facts.deck] ?? [255, 255, 255])
+        // Not loaded is the empty state (#617): nothing of a track, even one TrackInfo named before Loaded.
+        guard facts.loaded else { return deck }
+        let trackBPM = facts.track?.bpm ?? 0
+        var bpm = 0.0
+        if let live = facts.bpm { bpm = live } else if trackBPM > 0 { bpm = trackBPM }
+        deck.loaded = true
+        deck.title = facts.track?.title ?? ""
+        deck.artist = facts.track?.artist ?? ""
+        if let track = facts.track { deck.key = jogController.keyDisplay.shown(track.key) }
+        deck.bpm = bpm
+        if trackBPM > 0, bpm > 0 { deck.tempo = (bpm / trackBPM - 1) * 100 }
+        deck.playing = facts.playing
+        deck.cue = facts.cueHeld
+        deck.sync = facts.synced
+        deck.master = facts.master
+        deck.loop = facts.looping
+        if facts.looping { deck.loopLength = Self.loopBeats(facts, trackBPM: trackBPM, liveBPM: bpm) }
+        // The master clock, as the ring's beat pulse: none once it's been quiet for the Bridge's timeout.
+        if let master = masterBeat, clock.now - master.at <= Bridge.clockTimeout { deck.beat = master.beat }
+        let elapsed = Self.wholeSeconds(facts.position)
+        deck.elapsed = elapsed
+        if facts.duration != nil { deck.remaining = max(0, Self.wholeSeconds(facts.duration) - elapsed) }
+        deck.progress = Self.progress(facts)
+        deck.phase = feedPhase(facts)
+        deck.level = jogController.meterLevel(facts.deck)
+        return deck
     }
 
     /// Opens each controller's ports, asks Syndicate for its state and paints the LEDs. Starting with no controller
@@ -636,6 +733,8 @@ public final class Coordinator {
             for notice in controllers[index].bridge.notices { log.log(notice) }
             controllers[index].bridge.notices.removeAll()
         }
+        // A held CUE is the feed's (#617).
+        updateDisplayFeed()
         disconnectFailedOutputs()
     }
 
@@ -800,12 +899,17 @@ public final class Coordinator {
             let numbers = message.arguments.compactMap(\.wholeNumber)
             var colors = syndicateDeckColors
             for start in stride(from: 0, to: numbers.count - 3, by: 4) {
+                if let deck = DeckColors.deck(forSlot: numbers[start]) { paletteHeard.insert(deck) }
                 if let updated = colors.updated(byPalette: noteBlackSlot(Array(numbers[start..<(start + 4)]))) { colors = updated }
             }
             if colors != syndicateDeckColors {
                 syndicateDeckColors = colors
                 applyDeckColors()
             }
+        }
+        if message.address.lowercased().hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber,
+           (1...4).contains(beat) {
+            masterBeat = (beat, clock.now)
         }
         diagnostics?(.oscIn(message))
         if let trace { traceOSC(.oscIn, message, trace) }
@@ -818,6 +922,8 @@ public final class Coordinator {
         if message.address.lowercased().hasSuffix("/trackinfo") || message.address.lowercased().hasSuffix("/loaded") {
             updateJogDisplay()
         }
+        // Any of the feed's fields may have changed; only what did goes out.
+        updateDisplayFeed()
         disconnectFailedOutputs()
     }
 
@@ -876,6 +982,8 @@ public final class Coordinator {
         if jogController.drawing { needed.insert(.mixerMeter) }
         // Its phase rule reads the deck's PhaseOffset (#462): asked for only while the unit draws.
         if jogController.drawing { needed.insert(.phaseOffset) }
+        // The display feed's level and phase read them too (#617).
+        if displayFeed.enabled { needed.formUnion([.mixerMeter, .phaseOffset]) }
         // Shift + Needle Drop's relative fader move starts from Syndicate's level (#609).
         if bridges.contains(where: { $0.stripFaderMode == .relative }) { needed.insert(.mixerVolume) }
         return Subscription.allCases.filter(needed.contains)

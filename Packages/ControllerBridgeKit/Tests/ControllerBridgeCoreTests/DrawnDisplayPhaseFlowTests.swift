@@ -150,9 +150,10 @@ struct DrawnDisplayPhaseSubscriptionTests {
         #expect(SubscriptionCheck(answer: with, required: required)?.missing == [])
     }
 
-    @Test("What it breaks names the jog display's phase rule")
+    @Test("What it breaks names the jog display's phase rule and the display feed's phase (#617)")
     func breaks() {
         #expect(Subscription.phaseOffset.syndicateName == "PhaseOffset")
-        #expect(Subscription.phaseOffset.breaks == "the jog display's rule doesn't show the deck's phase")
+        #expect(Subscription.phaseOffset.breaks
+            == "the jog display's rule doesn't show the deck's phase, and the display feed sends its phase as unknown")
     }
 }

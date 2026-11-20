@@ -152,6 +152,8 @@ final class Bridge {
     /// When any master clock beat last arrived, pulsed or not.
     var lastClockTime: Double?
     var loaded = false
+    /// Syndicate has said whether the deck is loaded (#617): until then `loaded` is only the default.
+    var loadedHeard = false
     var synced = false
     /// VINYL's mode (#540): on, a playing deck's jog seeks instead of bending. This deck's own; it starts off.
     var vinylSeek = false
@@ -366,6 +368,7 @@ final class Bridge {
             tempoReported(reported)
         case "loaded":
             loaded = value
+            loadedHeard = true
             if loaded { rearmPickup() }
             if !loaded {
                 forgetCues()
