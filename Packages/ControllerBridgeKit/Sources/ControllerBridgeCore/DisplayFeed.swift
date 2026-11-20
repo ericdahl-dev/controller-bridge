@@ -32,6 +32,8 @@ final class DisplayFeed {
         var loop = false
         /// The loop's length in beats, fractions too; 0 with no loop.
         var loopLength = 0.0
+        /// Syndicate's master clock beat, 1-4, the same on every deck; 0 for none.
+        var beat = 0
 
         /// The full snapshot, in the feed's order. #617 adds its fields here.
         var messages: [OSCMessage] {
@@ -51,6 +53,7 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "master", [.int(master ? 1 : 0)]),
                 OSCMessage(DisplayFeed.prefix + "loop", [.int(loop ? 1 : 0)]),
                 OSCMessage(DisplayFeed.prefix + "loopLength", [.float(Float(loopLength))]),
+                OSCMessage(DisplayFeed.prefix + "beat", [.int(Int32(beat))]),
             ]
         }
     }

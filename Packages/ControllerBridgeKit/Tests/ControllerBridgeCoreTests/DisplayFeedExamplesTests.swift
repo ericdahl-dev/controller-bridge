@@ -33,7 +33,8 @@ struct DisplayFeedExamplesTests {
                          key: state["key"] as? String ?? "", bpm: state["bpm"] as? Double ?? 0, tempo: state["tempo"] as? Double ?? 0,
                          playing: state["playing"] as? Bool ?? false, cue: state["cue"] as? Bool ?? false,
                          sync: state["sync"] as? Bool ?? false, master: state["master"] as? Bool ?? false,
-                         loop: state["loop"] as? Bool ?? false, loopLength: state["loopLength"] as? Double ?? 0)
+                         loop: state["loop"] as? Bool ?? false, loopLength: state["loopLength"] as? Double ?? 0,
+                         beat: state["beat"] as? Int ?? 0)
     }
 
     @Test("The file's prefix is the feed's, and it has a loaded deck, an empty one and non-ASCII text")

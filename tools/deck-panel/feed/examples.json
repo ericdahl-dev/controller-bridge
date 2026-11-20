@@ -4,7 +4,7 @@
   "cases": [
     {
       "name": "deck 1 loaded, in red",
-      "state": { "deck": 1, "color": [255, 0, 0], "loaded": true, "title": "Night Drive", "artist": "Example Artist", "key": "Am", "bpm": 126, "tempo": 0.8, "playing": true, "sync": true, "master": true, "loop": true, "loopLength": 0.5 },
+      "state": { "deck": 1, "color": [255, 0, 0], "loaded": true, "title": "Night Drive", "artist": "Example Artist", "key": "Am", "bpm": 126, "tempo": 0.8, "playing": true, "sync": true, "master": true, "loop": true, "loopLength": 0.5, "beat": 3 },
       "messages": [
         { "address": "/DeckBridge/Display/deck", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/color", "type": "i", "value": 16711680 },
@@ -19,7 +19,8 @@
         { "address": "/DeckBridge/Display/sync", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/master", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/loop", "type": "i", "value": 1 },
-        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0.5 }
+        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0.5 },
+        { "address": "/DeckBridge/Display/beat", "type": "i", "value": 3 }
       ]
     },
     {
@@ -39,7 +40,8 @@
         { "address": "/DeckBridge/Display/sync", "type": "i", "value": 0 },
         { "address": "/DeckBridge/Display/master", "type": "i", "value": 0 },
         { "address": "/DeckBridge/Display/loop", "type": "i", "value": 0 },
-        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0 }
+        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0 },
+        { "address": "/DeckBridge/Display/beat", "type": "i", "value": 0 }
       ]
     },
     {
@@ -59,7 +61,8 @@
         { "address": "/DeckBridge/Display/sync", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/master", "type": "i", "value": 0 },
         { "address": "/DeckBridge/Display/loop", "type": "i", "value": 0 },
-        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0 }
+        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0 },
+        { "address": "/DeckBridge/Display/beat", "type": "i", "value": 0 }
       ]
     }
   ]

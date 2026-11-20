@@ -71,6 +71,8 @@ public final class Coordinator {
     private var syndicateDeckColors = DeckColors.defaults
     /// Syndicate has sent its cue palette, so `syndicateDeckColors` are its own, not the defaults (#617).
     private var paletteHeard = false
+    /// Syndicate's last master clock beat, 1-4, and when it came: the display feed's beat (#617).
+    private var masterBeat: (beat: Int, at: Double)?
     /// Settings' deck colors (#123): follow Syndicate, or the custom colors.
     private var followSyndicateDeckColors = true
     private var customDeckColors = DeckColors.defaults
@@ -312,6 +314,8 @@ public final class Coordinator {
             let facts = entries[index].facts
             return (paletteHeard || !followSyndicateDeckColors) && facts.loadedHeard && (!facts.loaded || facts.track != nil)
         } ?? false
+        // The master clock, as the ring's beat pulse: none once it's been quiet for the Bridge's timeout.
+        let beat = masterBeat.flatMap { clock.now - $0.at <= Bridge.clockTimeout ? $0.beat : nil } ?? 0
         let deck = front.map { index in
             let facts = entries[index].facts
             let color = deckColors[facts.deck] ?? [255, 255, 255]
@@ -324,7 +328,8 @@ public final class Coordinator {
                                     key: facts.track.map { jogController.keyDisplay.shown($0.key) } ?? "", bpm: bpm,
                                     tempo: trackBPM > 0 && bpm > 0 ? (bpm / trackBPM - 1) * 100 : 0,
                                     playing: facts.playing, cue: facts.cueHeld, sync: facts.synced, master: facts.master,
-                                    loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0)
+                                    loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0,
+                                    beat: beat)
         }
         displayFeed.update(deck, known: known, at: clock.now)
     }
@@ -834,6 +839,10 @@ public final class Coordinator {
                 syndicateDeckColors = colors
                 applyDeckColors()
             }
+        }
+        if message.address.lowercased().hasSuffix("/header/clock"), let beat = message.arguments.first?.wholeNumber,
+           (1...4).contains(beat) {
+            masterBeat = (beat, clock.now)
         }
         diagnostics?(.oscIn(message))
         if let trace { traceOSC(.oscIn, message, trace) }

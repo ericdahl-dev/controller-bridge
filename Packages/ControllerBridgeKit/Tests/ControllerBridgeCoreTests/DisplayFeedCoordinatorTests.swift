@@ -44,6 +44,7 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/master", [.int(0)]),
             OSCMessage("/DeckBridge/Display/loop", [.int(0)]),
             OSCMessage("/DeckBridge/Display/loopLength", [.float(0)]),
+            OSCMessage("/DeckBridge/Display/beat", [.int(0)]),
         ]
     }
 
@@ -355,6 +356,37 @@ struct DisplayFeedCoordinatorTests {
         feed.sent.removeAll()
         MainCueTests.feed(rig, "Loop", 0)
         #expect(feed.sent == [Self.message("loop", Int32(0)), Self.message("loopLength", Float(0))])
+    }
+
+    @Test("beat is Syndicate's master clock, 1-4, as the jog ring shows it; 0 once the clock has been quiet for over 2 s")
+    func masterBeat() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        feed.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(1)]))
+        rig.clock.now = 0.5
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(2)]))
+        #expect(feed.sent == [Self.message("beat", Int32(1)), Self.message("beat", Int32(2))])
+        feed.sent.removeAll()
+        rig.clock.now = 2.5
+        rig.coordinator.tick()
+        #expect(feed.sent == [])
+        rig.clock.now = 2.51
+        rig.coordinator.tick()
+        #expect(feed.sent == [Self.message("beat", Int32(0))])
+    }
+
+    @Test("An empty deck sends beat 0 whatever the clock")
+    func emptyDeckBeat() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
+        Self.turnOn(rig)
+        feed.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(3)]))
+        #expect(feed.sent == [])
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")
