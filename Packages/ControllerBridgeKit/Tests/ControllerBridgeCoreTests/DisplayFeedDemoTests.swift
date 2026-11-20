@@ -1,5 +1,6 @@
 import Foundation
 @testable import ControllerBridgeCore
+import Synchronization
 import Testing
 
 /// The display feed during the demo (#625, #490 story 24): the Engine swaps in the demo's own Coordinator, and the
@@ -9,6 +10,11 @@ struct DisplayFeedDemoTests {
     /// Keeps the session the Engine makes, so a test can drive it after the pipe ends.
     final class Made: @unchecked Sendable {
         var session: DemoSession?
+    }
+
+    /// Set from the Engine's task when its status first reports the demo: the test's barrier, under a lock.
+    final class DemoReported: Sendable {
+        let on = Mutex(false)
     }
 
     static func demoMaker(_ rig: Rig, _ made: Made) -> @Sendable (ControllerProfile) -> DemoSession {
@@ -101,5 +107,32 @@ struct DisplayFeedDemoTests {
         let session = try #require(made.session)
         for step in 1...300 { rig.clock.now = Double(step) * 0.01; session.tick() }
         #expect(feed.sent == [])
+    }
+
+    @Test("The destination opening again during the demo (a wake): the demo's Coordinator sends the full snapshot again, not the real one")
+    func readyDuringDemo() async throws {
+        let (rig, feed) = try Self.realRig()
+        let made = Made(), demoReported = DemoReported()
+        let pipe = EventPipe()
+        let engine = Engine(coordinator: rig.coordinator, log: rig.log, onStatus: { status in
+            if status.demo { demoReported.on.withLock { $0 = true } }
+        }, makeDemo: Self.demoMaker(rig, made))
+        let running = Task { await engine.run(pipe.events) }
+        pipe.producer.send(.setDisplayFeed(DisplayFeedCoordinatorTests.on))
+        pipe.producer.send(.displayFeedReady)
+        pipe.producer.demo(on: true)
+        // The status reports the demo once its event is done: the Engine then waits on the pipe.
+        while !demoReported.on.withLock({ $0 }) { await Task.yield() }
+        let session = try #require(made.session)
+        for step in 1...110 { rig.clock.now = Double(step) * 0.01; session.tick() }
+        #expect(Self.text(feed, "title").last == "Demo Track")
+        feed.sent.removeAll()
+        pipe.producer.send(.displayFeedReady)
+        pipe.producer.finish()
+        await running.value
+        // Its snapshot waits the hold again (the demo's Syndicate sends no palette), well before the 2 s keepalive.
+        for step in 111...225 { rig.clock.now = Double(step) * 0.01; session.tick() }
+        #expect(Self.text(feed, "title") == ["Demo Track"])
+        #expect(!Self.text(feed, "title").contains("Daybreak"))
     }
 }

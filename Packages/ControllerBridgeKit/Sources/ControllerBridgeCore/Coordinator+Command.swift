@@ -69,9 +69,9 @@ extension Coordinator {
             switch self {
             // A real device is captured, so the real Coordinator pauses it, demo or not.
             // The meter capture (#582) records what Syndicate sends the real controller.
-            // The display feed's destination belongs to the real Coordinator.
-            case .setCapture, .portRecovered, .jogDisplayRecovered, .startMeterCapture, .displayFeedReady: .real
-            case .ledSweep, .stopLEDSweep: .active
+            case .setCapture, .portRecovered, .jogDisplayRecovered, .startMeterCapture: .real
+            // The display feed goes with whichever Coordinator runs (#625), so its destination opening does too.
+            case .ledSweep, .stopLEDSweep, .displayFeedReady: .active
             // The preview's deck (#221) holds for the real controller and the demo alike.
             case .setJogPreviewDeck: .realAndDemo
             case .setDeck, .setDevices, .setLEDs, .setDeckColors, .setRingColors, .setColorMessages, .setStripFader, .setLightBrightness, .resync, .setControllers, .setProfiles,
