@@ -594,6 +594,19 @@ struct DisplayFeedCoordinatorTests {
         #expect(feed.sent == [OSCMessage("/DeckBridge/Display/title", [.string("Nightfall")])])
     }
 
+    @Test("loopLength reads LoopInfo's seconds as the track's: at +3.125% (132 on a 128 track) 1.875 s is still 4 beats, not 4.125")
+    func loopLengthAtShiftedTempo() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(132)]))
+        Self.turnOn(rig)
+        feed.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/LoopInfo", [.int(1), .float(10), .float(11.875)]))
+        MainCueTests.feed(rig, "Loop", 1)
+        #expect(feed.sent.filter { $0.address.hasSuffix("/loopLength") } == [Self.message("loopLength", Float(4))])
+    }
+
     @Test("Syndicate changing the deck's color sends the color alone")
     func colorChange() throws {
         let (rig, feed) = try Self.rig()

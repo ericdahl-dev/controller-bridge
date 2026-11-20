@@ -301,8 +301,13 @@ public final class Coordinator {
 
     /// The feed's deck: the jog display's deck in front (the active layer; with no controller, the preview's deck),
     /// whether or not the jog display is on.
-    /// LoopInfo's seconds are the track's, so its BPM gives the beats; unrounded, a display rounds for itself (#617).
-    private static func loopBeats(_ facts: DeckFacts, bpm: Double) -> Double {
+    /// Whether LoopInfo's seconds are the track's (so its BPM gives the beats) or the deck's at its live tempo. No
+    /// capture settles it yet (#617): this one line flips it, and loopLengthAtShiftedTempo with it.
+    static let loopSecondsAreTrackTime = true
+
+    /// The loop's length in beats, unrounded: a display rounds for itself (#617).
+    private static func loopBeats(_ facts: DeckFacts, trackBPM: Double, liveBPM: Double) -> Double {
+        let bpm = loopSecondsAreTrackTime && trackBPM > 0 ? trackBPM : liveBPM
         guard let seconds = facts.loopSeconds, bpm > 0 else { return 0 }
         return seconds * bpm / 60
     }
@@ -350,7 +355,7 @@ public final class Coordinator {
                                     key: facts.track.map { jogController.keyDisplay.shown($0.key) } ?? "", bpm: bpm,
                                     tempo: trackBPM > 0 && bpm > 0 ? (bpm / trackBPM - 1) * 100 : 0,
                                     playing: facts.playing, cue: facts.cueHeld, sync: facts.synced, master: facts.master,
-                                    loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0,
+                                    loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, trackBPM: trackBPM, liveBPM: bpm) : 0,
                                     beat: beat, elapsed: Self.wholeSeconds(facts.position),
                                     remaining: facts.duration == nil ? 0 : max(0, Self.wholeSeconds(facts.duration) - Self.wholeSeconds(facts.position)),
                                     progress: Self.progress(facts), phase: feedPhase(facts),
