@@ -72,10 +72,14 @@ struct OSCDestinationTests {
 
     @Test("A sender with no bundle of its own sends a bundle's messages one by one")
     func bundleFallback() {
-        let fake = Rig.FakeOSC()
+        final class Plain: OSCSender, @unchecked Sendable {
+            var sent: [OSCMessage] = []
+            func send(_ message: OSCMessage) { sent.append(message) }
+        }
+        let plain = Plain()
         let messages = [OSCMessage("/a", [.int(1)]), OSCMessage("/b", [.int(2)])]
-        (fake as any OSCSender).send(bundle: messages)
-        #expect(fake.sent == messages)
+        plain.send(bundle: messages)
+        #expect(plain.sent == messages)
     }
 
     /// Holds each lookup until the test answers it, so the test can act while a name is resolving.

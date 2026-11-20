@@ -185,7 +185,7 @@ final class DisplayFeed {
         sentDeck = deck.number
         let snapshot = sent.isEmpty
         if snapshot { lastSnapshot = now }
-        var count = 0
+        var changes: [OSCMessage] = []
         for message in deck.messages where sent[message.address] != message.arguments {
             if Self.fastAddresses.contains(message.address) {
                 let due = fastDue[message.address]
@@ -193,10 +193,12 @@ final class DisplayFeed {
                 if !snapshot, let due, now < due - 1e-9 { continue }
                 fastDue[message.address] = (due.map { max($0, now - Self.fastInterval) } ?? now) + Self.fastInterval
             }
-            sender.send(message)
+            changes.append(message)
             sent[message.address] = message.arguments
-            count += 1
         }
+        // One datagram for the update (#636): a panel takes a few at a time, so a snapshot spread over 20 lost most.
+        if !changes.isEmpty { sender.send(bundle: changes) }
+        let count = changes.count
         if snapshot {
             say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", \(count) messages")
         }

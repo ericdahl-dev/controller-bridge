@@ -155,6 +155,23 @@ struct DisplayFeedCoordinatorTests {
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000))
     }
 
+    @Test("One datagram per update (#636): the opening snapshot is one bundle of all 20; a new title is a bundle of one; nothing changed sends nothing")
+    func bundlePerUpdate() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        #expect(feed.bundles == [Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")])
+        feed.bundles.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        #expect(feed.bundles == [[OSCMessage("/DeckBridge/Display/title", [.string("Nightfall")])]])
+        feed.bundles.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        rig.clock.now = 0.01
+        rig.coordinator.tick()
+        #expect(feed.bundles == [])
+    }
+
     @Test("Only changes go out: a new title sends the title alone; the same feedback again sends nothing")
     func changesOnly() throws {
         let (rig, feed) = try Self.rig()
@@ -613,8 +630,8 @@ struct DisplayFeedCoordinatorTests {
     func keepaliveHealsADrop() throws {
         let rig = try Rig()
         let display = Rig.FakeOSC(), worker = DisplayFeedQueueTests.Worker()
-        // Room for one snapshot (20 messages) and one more.
-        let queue = DisplayFeedQueue(display, backlog: 21) { worker.jobs.append($0) }
+        // Room for the snapshot's bundle and one more.
+        let queue = DisplayFeedQueue(display, backlog: 2) { worker.jobs.append($0) }
         rig.coordinator.attachDisplayFeed(queue)
         rig.coordinator.start()
         Self.load(rig)
