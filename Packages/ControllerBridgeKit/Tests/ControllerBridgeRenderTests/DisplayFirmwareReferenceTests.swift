@@ -36,7 +36,7 @@ struct DisplayFirmwareReferenceTests {
     @Test("The manifest lists every reference image, each once")
     func manifestListsEveryReference() throws {
         let files = try FileManager.default.contentsOfDirectory(atPath: Self.directory.path).filter { $0.hasSuffix(".ppm") }
-        #expect(Self.manifest.count == 46)
+        #expect(Self.manifest.count == 47)
         #expect(Set(Self.manifest.map(\.file)) == Set(files))
         #expect(Set(Self.manifest.map(\.file)).count == Self.manifest.count)
     }
