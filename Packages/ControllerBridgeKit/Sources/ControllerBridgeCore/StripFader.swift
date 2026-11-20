@@ -2,6 +2,18 @@
 /// fixed at touch-down. Relative: the fader moves from its level at touch-down by how far the finger travels, the
 /// strip's length being the fader's range, clamped at both ends. Jump: the fader goes to the finger and follows it, no
 /// level needed. Plain values in, the level to send out: the Bridge sends the OSC.
+/// Settings' choice for Shift + Needle Drop's fader (#609): each part nil keeps the profile's
+/// (`needle.shift_fader`, `needle.shift_fader_mode`).
+public struct StripFaderSetting: Equatable, Sendable, Codable {
+    public var enabled: Bool?
+    public var mode: Mapping.Needle.ShiftFaderMode?
+
+    public init(enabled: Bool? = nil, mode: Mapping.Needle.ShiftFaderMode? = nil) {
+        self.enabled = enabled
+        self.mode = mode
+    }
+}
+
 struct StripFader {
     /// The last level known for each mixer channel: Syndicate's report, or where a touch left the fader.
     private var levels: [Int: Double] = [:]

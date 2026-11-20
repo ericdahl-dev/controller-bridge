@@ -91,6 +91,7 @@ public final class Coordinator {
         bridge.ringColors = ringColors
         bridge.colorMessages = colorMessages
         bridge.lightBrightness = lightBrightness
+        bridge.stripFaderSetting = stripFaderSetting
         return bridge
     }
 
@@ -1074,6 +1075,15 @@ public final class Coordinator {
     }
 
     /// Settings (#530): exact RGB through Denon's color message, or the 64-color table; repainted at once.
+    /// Settings' choice for Shift + Needle Drop's fader (#609). Each touch reads it at touch-down; relative asks for
+    /// Syndicate's Volume.
+    private var stripFaderSetting = StripFaderSetting()
+    public func setStripFader(_ setting: StripFaderSetting) {
+        stripFaderSetting = setting
+        for bridge in bridges { bridge.stripFaderSetting = setting }
+        status.requiredSubscriptions = requiredSubscriptions
+    }
+
     public func setColorMessages(_ on: Bool) {
         colorMessages = on
         for bridge in bridges { bridge.setColorMessages(on) }

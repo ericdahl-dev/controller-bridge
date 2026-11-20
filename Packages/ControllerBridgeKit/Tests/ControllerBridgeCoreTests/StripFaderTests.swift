@@ -209,4 +209,36 @@ struct StripFaderTests {
         #expect(try !C.started(#"{ "needle": { "shift_fader": false } }"#).coordinator.status.requiredSubscriptions.contains(.mixerVolume))
         #expect(try !C.started(Self.jump).coordinator.status.requiredSubscriptions.contains(.mixerVolume))
     }
+
+    @Test("Settings' choice of jump applies from the next touch, with no relaunch; a touch already down keeps its mode")
+    func settingNextTouch() throws {
+        let rig = try C.started()
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        rig.coordinator.apply(.setStripFader(StripFaderSetting(mode: .jump)))
+        Self.at(rig, 4096)                    // still relative: 0.25 + a quarter
+        #expect(abs((Self.sentVolumes(rig).last ?? 0) - 0.5) < 0.001)
+        Self.touch(rig, false)
+        rig.osc.sent.removeAll()
+        Self.touch(rig, true)
+        Self.at(rig, 16383)                   // jump: straight to the top, no travel
+        #expect(Self.sentVolumes(rig) == [1.0])
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.mixerVolume))
+    }
+
+    @Test("Settings' off: Shift + the strip seeks, whatever the profile says, and Volume isn't asked for")
+    func settingOff() throws {
+        let rig = try C.started()
+        rig.coordinator.apply(.setStripFader(StripFaderSetting(enabled: false)))
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.at(rig, 8192)
+        #expect(Self.sentVolumes(rig).isEmpty)
+        #expect(!Self.seeks(rig).isEmpty)
+        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.mixerVolume))
+    }
 }

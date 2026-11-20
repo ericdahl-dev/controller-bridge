@@ -137,10 +137,11 @@ extension Bridge {
         applyJog(jogModule.needleLSB(value, needle: needle, playing: playing, now: clock.now))
     }
 
-    /// How Shift + the strip moves the channel fader (#609), or nil when it seeks as without Shift.
+    /// How Shift + the strip moves the channel fader (#609), or nil when it seeks as without Shift: Settings' choice,
+    /// else the profile's. Read at touch-down, so a change applies from the next touch.
     var stripFaderMode: Mapping.Needle.ShiftFaderMode? {
-        guard let needle = mapping.needle, needle.shiftFader, needle.requireTouch else { return nil }
-        return needle.shiftFaderMode
+        guard let needle = mapping.needle, needle.requireTouch, stripFaderSetting.enabled ?? needle.shiftFader else { return nil }
+        return stripFaderSetting.mode ?? needle.shiftFaderMode
     }
 
     /// With Shift held at touch-down, the touch moves the deck's channel fader until it lifts (#609).

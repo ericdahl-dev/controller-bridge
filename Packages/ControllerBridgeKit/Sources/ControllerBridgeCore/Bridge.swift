@@ -167,6 +167,7 @@ final class Bridge {
     var mixerModule = MixerModule()
     /// Shift + Needle Drop on the channel fader (#609).
     var stripFader = StripFader()
+    var stripFaderSetting = StripFaderSetting()
     /// The capture window is recording this controller (#186, #187): its LEDs are the LED test's, so the bridge paints
     /// none until the capture ends and it repaints.
     var ledsCaptured = false

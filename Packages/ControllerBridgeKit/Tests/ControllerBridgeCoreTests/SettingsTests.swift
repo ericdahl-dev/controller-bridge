@@ -326,6 +326,23 @@ struct SettingsTests {
         #expect(BridgeSettings.rebased(draft: exact, base: Self.defaults, onto: saved).ringColors == .exact)
     }
 
+    @Test("Shift + Needle Drop's fader (#609): old settings keep the profile's choice; a choice round-trips and survives a rebase")
+    func stripFaderSetting() {
+        let store = MemoryStore()
+        store.values[BridgeSettings.storageKey] = Data(#"""
+            {"controllers":[{"deck":1}],"syndicateHost":"127.0.0.1","syndicatePort":9090,"feedbackPort":9096,
+             "feedbackListen":"thisMac","ledsEnabled":true}
+            """#.utf8)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).stripFader == StripFaderSetting())
+        var jump = Self.defaults
+        jump.stripFader = StripFaderSetting(enabled: true, mode: .jump)
+        try? jump.save(to: store)
+        #expect(BridgeSettings.load(from: store, defaults: Self.defaults).stripFader == StripFaderSetting(enabled: true, mode: .jump))
+        var saved = Self.defaults
+        saved.controllers[0].deck = 2
+        #expect(BridgeSettings.rebased(draft: jump, base: Self.defaults, onto: saved).stripFader.mode == .jump)
+    }
+
     // #530: pads and ring in exact RGB through Denon's color message, or the 64-color table.
 
     @Test("The color message is on by default, also for old settings; the table (the way back) round-trips and survives a rebase")
