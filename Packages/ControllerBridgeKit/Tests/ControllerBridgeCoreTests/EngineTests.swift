@@ -247,6 +247,29 @@ struct EngineTests {
         ])
     }
 
+    @Test("Quit from the pipe leaves our logo on a drawing jog display (#600): no end; the demo turning on still ends it")
+    func quitLeavesTheLogo() async throws {
+        let end = DrawnDisplay.Message.end(version: 1).bytes
+        let (rig, port, _) = try DrawnDisplayHandshakeTests.rig(.custom)
+        rig.coordinator.jogDisplayReply(DrawnDisplayHandshakeTests.answer)
+        let pipe = EventPipe()
+        pipe.producer.stop()
+        await Engine(coordinator: rig.coordinator, log: rig.log).run(pipe.events)
+        #expect(!port.wd.contains(end))
+        #expect(port.controller.last == JogDisplay.goodbye)
+
+        let (demoRig, demoPort, _) = try DrawnDisplayHandshakeTests.rig(.custom)
+        demoRig.coordinator.jogDisplayReply(DrawnDisplayHandshakeTests.answer)
+        let demo = EventPipe()
+        demo.producer.demo(on: true)
+        demo.producer.finish()
+        let clock = demoRig.clock, log = demoRig.log
+        await Engine(coordinator: demoRig.coordinator, log: demoRig.log, makeDemo: { profile in
+            DemoSession(profile: profile, clock: clock, log: log, ledOutput: Rig.FakeOutput())
+        }).run(demo.events)
+        #expect(demoPort.wd.contains(end))
+    }
+
     /// A demo maker for the Engine, on the rig's clock, with its LED writes dropped.
     /// The demo runs the profile the Engine hands it: the one running now (#98).
     static func demoMaker(_ rig: Rig) -> @Sendable (ControllerProfile) -> DemoSession {

@@ -75,6 +75,11 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
         sends.async { self.send(bytes, hint: Self.controllerHint) }
     }
 
+    /// Quitting (#600): returns once every send queued here has been handed to CoreMIDI.
+    func flush() {
+        sends.sync {}
+    }
+
     func sendWD(_ bytes: [UInt8]) {
         sends.async {
             self.listen()

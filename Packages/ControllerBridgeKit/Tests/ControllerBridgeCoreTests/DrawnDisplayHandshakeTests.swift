@@ -13,6 +13,9 @@ struct DrawnDisplayHandshakeTests {
         var both: [[UInt8]] = []
         func sendController(_ bytes: [UInt8]) { controller.append(bytes); both.append(bytes) }
         func sendWD(_ bytes: [UInt8]) { wd.append(bytes); both.append(bytes) }
+        /// How many messages had been sent at each flush.
+        var flushes: [Int] = []
+        func flush() { flushes.append(both.count) }
     }
     static let ask = DrawnDisplay.Message.capability(version: DrawnDisplay.version).bytes
 
@@ -141,14 +144,77 @@ struct DrawnDisplayHandshakeTests {
         #expect(port.both == [Self.end, JogDisplay.goodbye])
     }
 
-    @Test("Quitting in drawn mode: end, then the goodbye")
-    func quitSendsEnd() throws {
+    @Test("Stopping without quitting (the demo turning on) in drawn mode: end, then the goodbye")
+    func stopSendsEnd() throws {
         let (rig, port, _) = try Self.rig(.custom)
         rig.coordinator.jogDisplayReply(Self.answer)
         port.both.removeAll()
         rig.coordinator.stop()
         #expect(port.both.suffix(2) == [Self.end, JogDisplay.goodbye])
         #expect(port.both.filter { $0 == Self.end }.count == 1)
+    }
+
+    @Test("Quitting the app in drawn mode leaves our logo (#600): the deck again on the icon's neutral hub, then stale, no end; then the goodbye")
+    func quitLeavesTheLogo() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        let deck = try #require(Self.drawn(port).last { $0[9] == 0x03 })
+        let state = try #require(Self.drawn(port).last { $0[9] == 0x07 })
+        port.both.removeAll()
+        rig.coordinator.quit()
+        var neutral = deck
+        neutral[11...16] = [0x01, 0x55, 0x01, 0x55, 0x01, 0x55]   // D5D5D5: 213 is 1, 0x55 in two 7-bit bytes
+        var stale = state
+        stale[10] |= 0x20
+        #expect(port.both == [neutral, stale, JogDisplay.goodbye])
+    }
+
+    /// The LC6000 as the app runs it: one entry per layer (#79), so quit drops two controllers, one at a time.
+    static func layeredRig(_ firmware: DisplayFirmware) throws -> (Rig, Port) {
+        let rig = try Rig(), port = Port()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1) { _ in [0, 0, 0, 255] })
+        rig.coordinator.setDisplayFirmware(firmware)
+        rig.coordinator.setJogDisplay(enabled: true)
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
+        ))
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        return (rig, port)
+    }
+
+    @Test("Quitting with both layers connected (#600): the logo for the deck in front and one goodbye, then nothing; on Denon's, the goodbye alone")
+    func quitWithLayers() throws {
+        let (rig, port) = try Self.layeredRig(.custom)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        let deck = try #require(Self.drawn(port).last { $0[9] == 0x03 })
+        #expect(deck[10] == 2)
+        let state = try #require(Self.drawn(port).last { $0[9] == 0x07 })
+        port.both.removeAll()
+        rig.coordinator.quit()
+        var neutral = deck
+        neutral[11...16] = [0x01, 0x55, 0x01, 0x55, 0x01, 0x55]
+        var stale = state
+        stale[10] |= 0x20
+        #expect(port.both == [neutral, stale, JogDisplay.goodbye])
+
+        let (denon, denonPort) = try Self.layeredRig(.denon)
+        denonPort.both.removeAll()
+        denon.coordinator.quit()
+        #expect(denonPort.both == [JogDisplay.goodbye])
+    }
+
+    @Test("Quitting flushes the port after the last message, drawn or not, so the app can't exit with them queued (#600)")
+    func quitFlushes() throws {
+        let (drawn, drawnPort, _) = try Self.rig(.custom)
+        drawn.coordinator.jogDisplayReply(Self.answer)
+        drawn.coordinator.quit()
+        #expect(drawnPort.flushes == [drawnPort.both.count])
+        #expect(drawnPort.both.last == JogDisplay.goodbye)
+
+        let (images, imagesPort, _) = try Self.rig(.denon)
+        images.coordinator.quit()
+        #expect(imagesPort.flushes == [imagesPort.both.count])
     }
 
     @Test("In image mode the goodbye goes alone, as today")
@@ -158,6 +224,24 @@ struct DrawnDisplayHandshakeTests {
         rig.coordinator.setJogDisplay(enabled: false)
         #expect(!port.both.contains(Self.end))
         #expect(port.both.last == JogDisplay.goodbye)
+    }
+
+    @Test("Quitting the app in image mode (stock firmware, or no drawn answer) sends the goodbye alone, as today (#600)")
+    func quitInImagesAsToday() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(JogDisplayDriverTests.refused)
+        port.both.removeAll()
+        port.wd.removeAll()
+        rig.coordinator.quit()
+        #expect(Self.drawn(port).isEmpty)
+        #expect(port.both.last == JogDisplay.goodbye)
+
+        let (denon, denonPort, _) = try Self.rig(.denon)
+        denonPort.both.removeAll()
+        denonPort.wd.removeAll()
+        denon.coordinator.quit()
+        #expect(Self.drawn(denonPort).isEmpty)
+        #expect(denonPort.both.last == JogDisplay.goodbye)
     }
 
     @Test("The status says which display firmware was found, for Settings: Denon, Custom (images), Custom (drawn display, protocol N)")

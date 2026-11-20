@@ -67,6 +67,16 @@ final class JogDisplayController {
         driver?.disconnect()
     }
 
+    /// The app is quitting (#600): our logo stays on a drawing unit.
+    func quit() {
+        driver?.quit()
+    }
+
+    /// Everything sent so far gone out, before the app exits (#600).
+    func flush() {
+        driver?.flush()
+    }
+
     /// Whether the driver has said hello to a unit.
     var connected: Bool { driver?.connected ?? false }
 
