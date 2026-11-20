@@ -107,6 +107,15 @@ final class DisplayFeed {
         sent = [:]
     }
 
+    /// Gives up the sender and the setting, for another Coordinator to take (the demo, #625); this one sends nothing
+    /// until it gets them back.
+    func release() -> (sender: any OSCSender, settings: DisplayFeedSettings)? {
+        guard let sender else { return nil }
+        self.sender = nil
+        sent = [:]
+        return (sender, settings)
+    }
+
     /// The setting. Turning it on, or a new host or port, waits for the destination to open.
     func set(_ new: DisplayFeedSettings, at now: Double = 0) {
         if new.enabled && (!settings.enabled || new.host != settings.host || new.port != settings.port) {
