@@ -40,7 +40,7 @@ struct MixerSubscriptionsTests {
         let volumeOnly = try Mapping.bundledDefault(overriddenBy: Data(#"{"mixer": {"volume": {"msb_cc": 19, "bits": 7}}}"#.utf8))
         #expect(Subscription.required(for: volumeOnly) == Subscription.always + [.mixerVolume])
         #expect(Subscription.mixerEQ.syndicateName == "Low and Mid and High")
-        #expect(Subscription.mixerMeter.breaks == "the VU meters stay dark")
+        #expect(Subscription.mixerMeter.breaks == "the VU meters stay dark, and the display feed's level stays at 0")
     }
 
     @Test("Every mixer value in the answer: nothing missing")

@@ -568,14 +568,16 @@ struct DisplayFeedCoordinatorTests {
     func subscriptions() throws {
         let (rig, _) = try Self.rig()
         rig.coordinator.start()
-        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.mixerMeter))
+        let before = rig.coordinator.status.requiredSubscriptions
+        #expect(!before.contains(.mixerMeter))
         Self.turnOn(rig)
         #expect(rig.coordinator.status.requiredSubscriptions.contains(.mixerMeter))
         #expect(rig.coordinator.status.requiredSubscriptions.contains(.phaseOffset))
         var off = Self.on
         off.enabled = false
         rig.coordinator.setDisplayFeed(off)
-        #expect(!rig.coordinator.status.requiredSubscriptions.contains(.phaseOffset))
+        // Off, nothing new is asked for, so nothing new is warned about.
+        #expect(rig.coordinator.status.requiredSubscriptions == before)
     }
 
     /// Ticks every 10 ms from `from` to `to` seconds.
