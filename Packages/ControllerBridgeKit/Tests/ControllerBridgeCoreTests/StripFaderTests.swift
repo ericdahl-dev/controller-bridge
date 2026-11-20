@@ -112,4 +112,32 @@ struct StripFaderTests {
         #expect(Self.sentVolumes(rig).isEmpty)
         #expect(Self.seeks(rig).count == 2)
     }
+
+    @Test("With no Volume from Syndicate the touch does nothing: no fader move, no seek")
+    func unknownLevel() throws {
+        let rig = try C.started()
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.at(rig, 8192)
+        #expect(Self.sentVolumes(rig).isEmpty)
+        #expect(Self.seeks(rig).isEmpty)
+    }
+
+    @Test("With no Volume from Syndicate, the next touch counts from the level the last one sent")
+    func fromLastSent() throws {
+        let rig = try C.started()
+        // Known once (a Resend), then the Volume box goes off: nothing more comes back.
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.at(rig, 4096)    // to 0.5
+        Self.touch(rig, false)
+        Self.touch(rig, true)
+        Self.at(rig, 8192)
+        Self.at(rig, 12288)   // a quarter more: 0.75
+        let sent = Self.sentVolumes(rig)
+        #expect(abs((sent.last ?? 0) - 0.75) < 0.001, "sent \(sent)")
+    }
 }

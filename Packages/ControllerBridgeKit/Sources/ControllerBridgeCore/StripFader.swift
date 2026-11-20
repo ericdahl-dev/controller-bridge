@@ -3,7 +3,7 @@
 /// strip's length being the fader's range, clamped at both ends. Plain values in, the level to send out: the Bridge
 /// sends the OSC.
 struct StripFader {
-    /// The last level known for each mixer channel: Syndicate's report.
+    /// The last level known for each mixer channel: Syndicate's report, or where a touch left the fader.
     private var levels: [Int: Double] = [:]
     private var touch: Touch?
 
@@ -28,7 +28,10 @@ struct StripFader {
         touch = Touch(channel: channel)
     }
 
+    /// The finger lifted: where it left the fader is the level the next touch starts from, until Syndicate says
+    /// otherwise (its Volume box may be off).
     mutating func touchUp() {
+        if let touch, let level = touch.level { levels[touch.channel] = level }
         touch = nil
     }
 
