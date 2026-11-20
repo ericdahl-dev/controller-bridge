@@ -56,9 +56,31 @@ void test_a_loaded_deck_shows_its_title_and_artist() {
     TEST_ASSERT_EQUAL_STRING("Am", f.key);
 }
 
+// BPM and tempo arrive at 2 decimals and show at 2, so the panel never rounds them differently from DeckBridge.
+void test_bpm_and_tempo_show_at_2_decimals_tempo_signed() {
+    DeckView v = loaded_deck();
+    TEST_ASSERT_EQUAL_STRING("126.00", deck_core::face(v).bpm);
+    TEST_ASSERT_EQUAL_STRING("+0.80%", deck_core::face(v).tempo);
+    v.bpm = 174.25f;
+    v.tempo = -2.5f;
+    TEST_ASSERT_EQUAL_STRING("174.25", deck_core::face(v).bpm);
+    TEST_ASSERT_EQUAL_STRING("-2.50%", deck_core::face(v).tempo);
+    v.tempo = 0;
+    TEST_ASSERT_EQUAL_STRING("0.00%", deck_core::face(v).tempo);
+}
+
+void test_an_unknown_bpm_shows_neither_bpm_nor_tempo() {
+    DeckView v = loaded_deck();
+    v.bpm = 0;
+    TEST_ASSERT_EQUAL_STRING("", deck_core::face(v).bpm);
+    TEST_ASSERT_EQUAL_STRING("", deck_core::face(v).tempo);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_empty_deck_shows_no_track_loaded_and_nothing_else);
     RUN_TEST(test_a_loaded_deck_shows_its_title_and_artist);
+    RUN_TEST(test_bpm_and_tempo_show_at_2_decimals_tempo_signed);
+    RUN_TEST(test_an_unknown_bpm_shows_neither_bpm_nor_tempo);
     return UNITY_END();
 }

@@ -25,6 +25,16 @@ Face face(const DeckView& view) {
     copy(f.title, view.title);
     copy(f.artist, view.artist);
     copy(f.key, view.key);
+    // Both arrive at 2 decimals; shown at 2, the panel never rounds them differently from DeckBridge. 0 BPM is
+    // unknown, and with it the tempo.
+    if (view.bpm > 0) {
+        std::snprintf(f.bpm, sizeof f.bpm, "%.2f", static_cast<double>(view.bpm));
+        if (view.tempo == 0) {
+            copy(f.tempo, "0.00%");
+        } else {
+            std::snprintf(f.tempo, sizeof f.tempo, "%+.2f%%", static_cast<double>(view.tempo));
+        }
+    }
     return f;
 }
 
