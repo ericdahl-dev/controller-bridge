@@ -219,6 +219,19 @@ struct DrawnDisplayHandshakeTests {
         #expect(Self.asksOver(100, rig, port, clock).isEmpty)
     }
 
+    @Test("Settings flipped to Denon while asking again (#604): no more questions, and a late answer draws nothing")
+    func flipToDenonEndsReasks() throws {
+        let (rig, port, clock) = try Self.rig(.custom)
+        clock.now = 0.5
+        rig.coordinator.tick()
+        rig.coordinator.setDisplayFirmware(.denon)
+        port.wd.removeAll()
+        #expect(Self.asksOver(100, rig, port, clock).isEmpty)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        #expect(Self.drawn(port).isEmpty)
+        #expect(rig.coordinator.status.displayFound?.label == "Denon")
+    }
+
     static let end = DrawnDisplay.Message.end(version: 1).bytes
 
     @Test("Turning the jog display off in drawn mode: end, then the goodbye")

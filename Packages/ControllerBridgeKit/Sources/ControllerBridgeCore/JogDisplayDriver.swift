@@ -598,6 +598,9 @@ public final class JogDisplayDriver {
             current = nil
         }
         mode = .images
+        // The asking starts over (#604): Denon's firmware is never asked, nor drawn on by a late answer.
+        asked = false
+        reasks = nil
         lastDeck = nil
         lastState = nil
         if displayFirmware == .custom {
