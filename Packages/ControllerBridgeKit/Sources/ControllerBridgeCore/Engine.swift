@@ -88,6 +88,8 @@ public struct Engine {
                     let session = makeDemo(coordinator.runningProfile)
                     setDiagnostics(session.coordinator, open: diagnosticsOpen)
                     session.start()
+                    // The deck panel follows the demo, as the preview does (#625).
+                    session.coordinator.takeDisplayFeed(from: coordinator)
                     demo = session
                 } else if !on, let session = demo {
                     session.stop()

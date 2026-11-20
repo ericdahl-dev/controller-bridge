@@ -294,6 +294,16 @@ public final class Coordinator {
         updateDisplayFeed()
     }
 
+    /// Takes the display feed from `other` (#625): the demo's Coordinator while the demo runs, and the real one back
+    /// when it ends. The destination is already open, so this one's first snapshot goes out once its deck is known.
+    public func takeDisplayFeed(from other: Coordinator) {
+        guard let (sender, settings) = other.displayFeed.release() else { return }
+        displayFeed.attach(sender)
+        displayFeed.set(settings, at: clock.now)
+        status.requiredSubscriptions = requiredSubscriptions
+        displayFeedReady()
+    }
+
     /// The display's destination opened: the full snapshot again, since what went before it was dropped.
     public func displayFeedReady() {
         displayFeed.resend(at: clock.now)
