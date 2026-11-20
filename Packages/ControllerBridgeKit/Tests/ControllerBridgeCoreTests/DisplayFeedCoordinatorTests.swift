@@ -108,4 +108,20 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.setDisplayFeed(Self.on)
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Nightfall", artist: "Bill Hamel, Jeremus"))
     }
+
+    @Test("No controller connected, jog display off and no WD port: the feed follows the deck the preview follows")
+    func noControllerFollowsPreview() throws {
+        let (rig, feed) = try Self.rig()
+        Self.layered(rig)
+        rig.midi.sources.removeAll { $0.id == Rig.lc6000.id }
+        rig.coordinator.devicesChanged()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Loaded", [.int(1)]))
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(deck: 3, title: "Nightfall"))
+        rig.coordinator.setDisplayFeed(Self.on)
+        // No pick: the first loaded deck.
+        #expect(feed.sent.first == OSCMessage("/DeckBridge/Display/deck", [.int(3)]))
+        feed.sent.removeAll()
+        rig.coordinator.setJogPreviewDeck(2)
+        #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00, title: "", artist: ""))
+    }
 }
