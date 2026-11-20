@@ -62,6 +62,8 @@ bool begin() {
     return true;
 }
 
+bool probe() { return present(); }
+
 int detectedRevision() { return g_revision; }
 
 bool backlightOn() { return backlightLevel(100); }

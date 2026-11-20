@@ -12,13 +12,17 @@
 #include <esp_system.h>
 #include <soc/lcd_cam_struct.h>
 
+#include "panel_mcu.h"
+
 LGFX display_lcd;
 
 namespace {
 
 lv_display_t* g_disp = nullptr;
 
-// Ten lines of partial rendering, two buffers. Full double buffering would be 1.5 MB and buys nothing here.
+// Ten lines of partial rendering, two buffers. Full double buffering would be 1.5 MB and buys nothing here. The flush
+// is a CPU copy into the framebuffer, so LVGL doesn't draw into one buffer while the other goes out yet: two cost
+// 16 KB and are kept for when the flush moves to DMA.
 constexpr int DRAW_LINES = 10;
 constexpr size_t DRAW_PIXELS = static_cast<size_t>(board::LCD_WIDTH) * DRAW_LINES;
 
@@ -95,7 +99,10 @@ namespace {
 
 // Runs inside every esp_restart(). The RGB panel's frame loop and its GDMA keep running through a software reset,
 // and the next boot then hung often enough for the RTC watchdog to reset it again (phrasedeck #150). Stop both first.
+// The backlight goes off first, so the stopped panel isn't seen. Only esp_restart() runs this: a panic, watchdog or
+// brownout reset doesn't.
 void stopLcdOnRestart() {
+    panel_mcu::backlightOff();
     LCD_CAM.lcd_user.lcd_start = 0;
     esp_rom_delay_us(50000);  // the frame in progress ends (one frame is about 26 ms)
     periph_module_reset(PERIPH_LCD_CAM_MODULE);
@@ -114,9 +121,9 @@ bool display_init() {
     lv_init();
     lv_tick_set_cb(tick_cb);
 
-    // The draw buffers go in internal DMA-capable RAM, not PSRAM: the panel scans its framebuffer out of PSRAM
-    // continuously, and a draw buffer there too competes with that scan-out and shows as jitter. Falls back to
-    // PSRAM if internal memory is short (without MALLOC_CAP_DMA: external RAM on the S3 is never DMA-capable).
+    // The draw buffers go in internal RAM, not PSRAM: the panel scans its framebuffer out of PSRAM continuously, and
+    // with the draw buffers there too LVGL's drawing and the flush's reads would add to that bus. Falls back to PSRAM
+    // if internal memory is short (without MALLOC_CAP_DMA: external RAM on the S3 is never DMA-capable).
     const size_t bytes = DRAW_PIXELS * sizeof(uint16_t);
     bool internal = true;
     void* buf1 = heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
