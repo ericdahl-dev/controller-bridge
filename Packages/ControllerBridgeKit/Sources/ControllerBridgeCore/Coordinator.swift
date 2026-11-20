@@ -14,6 +14,7 @@ public final class Coordinator {
         didSet {
             (osc as? OSCTap)?.onTrace = trace.map { sink in { [weak self] message in self?.traceOSC(.oscOut, message, sink) } }
             for index in controllers.indices { controllers[index].bridge.trace = trace }
+            displayFeed.trace = trace
         }
     }
     /// Streaming OSC, both ways, at most 5 a second per address in the trace.
