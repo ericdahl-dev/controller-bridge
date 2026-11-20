@@ -109,16 +109,17 @@ struct JogDisplayPowerCycleTests {
     typealias CoordinatorRig = ProfileMatchingTests.ProfileRig
 
     /// The LC6000 owning the display, its driver on a clock the test moves; the display on.
-    static func owned() throws -> (CoordinatorRig, Port, Rig.FakeClock) {
+    static func owned() throws -> (CoordinatorRig, Port, Rig.FakeClock, JogDisplayDriver) {
         let rig = ProfileMatchingTests.ProfileRig(profiles: try ControllerProfile.bundled(),
                                                   sources: [JogDisplayRingHoldTests.lc6000, JogDisplayRingHoldTests.wd])
         let port = Port(), clock = Rig.FakeClock()
-        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: clock, log: rig.log, size: 1,
-                                                          renderBeat: { _, beat in [UInt8(beat), 0, 0, 255] }) { _ in [0, 0, 0, 255] })
+        let driver = JogDisplayDriver(port: port, clock: clock, log: rig.log, size: 1,
+                                      renderBeat: { _, beat in [UInt8(beat), 0, 0, 255] }) { _ in [0, 0, 0, 255] }
+        rig.coordinator.attachJogDisplay(driver)
         rig.coordinator.start()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
         rig.coordinator.setJogDisplay(enabled: true)
-        return (rig, port, clock)
+        return (rig, port, clock, driver)
     }
 
     /// Hello pairs sent from `start` to `end`, ticking the Coordinator every 0.1 s.
@@ -141,7 +142,7 @@ struct JogDisplayPowerCycleTests {
                                        (.noteOn(channel: 0, note: 55, velocity: 127), lc6000, false),
                                        (.noteOn(channel: 15, note: 55, velocity: 0), lc6000, false),
                                        (.noteOn(channel: 15, note: 55, velocity: 127), iac, false)] {
-            let (rig, port, clock) = try Self.owned()
+            let (rig, port, clock, _) = try Self.owned()
             #expect(port.controller.contains(JogDisplay.hello[1]))
             clock.now = 0.2
             rig.coordinator.midi(event, source: source)
@@ -294,7 +295,7 @@ struct JogDisplayPowerCycleTests {
 
     @Test("A re-sent hello answered: every LED painted at start goes out again, once, and the trace says so")
     func repaintAfterLateAnswer() throws {
-        let (rig, port, clock) = try Self.owned()
+        let (rig, port, clock, _) = try Self.owned()
         final class Box: @unchecked Sendable { var list: [String] = [] }
         let lines = Box()
         rig.coordinator.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
@@ -312,11 +313,61 @@ struct JogDisplayPowerCycleTests {
 
     @Test("The first hello answered in time: no repaint beyond today's after-hello one")
     func noRepaintInTime() throws {
-        let (rig, _, clock) = try Self.owned()
+        let (rig, _, clock, _) = try Self.owned()
         clock.now = 0.02
         let before = JogDisplayHelloRepaintTests.sent(rig).count
         rig.coordinator.midi(Self.answer, source: JogDisplayRingHoldTests.lc6000.id)
         let painted = Set(JogDisplayHelloRepaintTests.sent(rig).prefix(before).map(\.note))
         #expect(JogDisplayHelloRepaintTests.sent(rig).count - before < painted.count)
+    }
+
+    // MARK: The pin: a power cycle through the Coordinator sends only what the app sent before #606.
+
+    @Test("A power cycle, end to end: only today's messages go out on either port and the LEDs; never 0F, 72, 78, 79, 7A, 7C or 7F")
+    func onlyTodaysBytes() throws {
+        let (rig, port, clock, driver) = try Self.owned()
+        let lc6000 = JogDisplayRingHoldTests.lc6000.id
+        let ledsAtStart = Set(JogDisplayHelloRepaintTests.sent(rig).map(\.note))
+        final class Box: @unchecked Sendable { var list: [String] = [] }
+        let lines = Box()
+        rig.coordinator.trace = { category, text in if category == .jogDisplay { lines.list.append(text) } }
+        driver.trace = rig.coordinator.trace
+        var wd: [[UInt8]] = [], controller: [[UInt8]] = []
+        var t = 0.0
+        while t <= 70 + 1e-9 {
+            clock.now = t
+            rig.clock.now = t
+            // The booting chip acks every upload message, answers no 10 until 22 s, and the top panel answers the third hello.
+            let acks = port.wd.filter { $0.count > 6 && [0x0C, 0x0D, 0x0E].contains($0[6]) }.count
+            wd += port.wd; controller += port.controller
+            port.wd.removeAll(); port.controller.removeAll()
+            for _ in 0..<acks { rig.coordinator.jogDisplayReply(JogDisplayDriverTests.accepted) }
+            if abs(t - 3.2) < 1e-6 { rig.coordinator.midi(Self.answer, source: lc6000) }
+            if abs(t - 22) < 1e-6 { rig.coordinator.jogDisplayReply(Self.ready) }
+            rig.coordinator.tick()
+            t += 0.1
+        }
+        wd += port.wd; controller += port.controller
+
+        let identity: [UInt8] = [0xF0, 0x7E, 0x00, 0x06, 0x01, 0xF7]
+        for message in wd {
+            if message.first == 0xF0, message != identity {
+                #expect(Array(message[1...5]) == [0x00, 0x02, 0x0B, 0x7F, 0x10])
+                #expect([0x0A, 0x0C, 0x0D, 0x0E, 0x10].contains(message[6]), "WD cmd \(message[6])")
+            } else if message.first != 0xF0 {
+                #expect(message.first == 0xE0 || Array(message.prefix(2)) == [0x90, 0x01], "WD \(message)")
+            }
+        }
+        for message in controller { #expect(JogDisplay.hello.contains(message) || message == JogDisplay.goodbye) }
+        #expect(controller.filter { $0 == JogDisplay.hello[1] }.count == 3, "the hello and two re-sends, then the answer")
+        let forbidden: Set<UInt8> = [0x0F, 0x72, 0x78, 0x79, 0x7A, 0x7C, 0x7F]
+        for message in wd + controller where message.first == 0xF0 && message.count > 6 && message[1...3] == [0x00, 0x02, 0x0B] {
+            #expect(!forbidden.contains(message[6]))
+        }
+        // The late repaint is today's LEDs again: no note the start didn't paint.
+        #expect(Set(JogDisplayHelloRepaintTests.sent(rig).map(\.note)).isSubset(of: ledsAtStart))
+        // Each new path ran: the re-sends, the late repaint, and the show after ready.
+        #expect(lines.list.contains("jog display: a re-sent hello was answered: the LEDs painted again"))
+        #expect(lines.list.contains { $0.hasPrefix("jog display: the display said ready") && !$0.contains("nothing shown") })
     }
 }
