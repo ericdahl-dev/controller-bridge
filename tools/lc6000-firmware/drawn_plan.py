@@ -262,7 +262,7 @@ def decide(plan):
     if step:
         return step
     # Step 2: the owner's image.
-    step = step_app(plan, dfu_path, app_state)
+    step = step_app(plan, dfu_path, app_state, current)
     if step:
         return step
     # Power cycle, and the stock look.
@@ -347,12 +347,7 @@ def step_upper(plan, dfu_path, upper_state):
     word = "REWRITE" if rewrite else "FLASH"
     written = fact(plan, "upper_written")
     if written is None:
-        typed = fact(plan, "word_upper")
-        if typed is None:
-            return ("type", "word_upper", word, f"This ERASES and WRITES the display chip's upper flash, from "
-                                                f"0x08080000 as far as block B reaches. Type {word} to write it.")
-        if typed.strip() != word:
-            return ("stop", f"You typed {typed.strip()!r}, not {word}. Nothing was written.")
+        # The file that is written, made before its word, so the screen shows exactly it (#603).
         image = files["upper"]
         if rewrite:
             image = out(plan, "wd-upper-rewrite") + ".dfu"
@@ -360,6 +355,14 @@ def step_upper(plan, dfu_path, upper_state):
                 ok, why = judged(drawn_flash.rewrite, upper=files["upper"], read=fact(plan, "upper_read"), output=image)
                 if not ok:
                     return ("stop", f"The rewrite file couldn't be made: {why}. Nothing was written.")
+        typed = fact(plan, "word_upper")
+        if typed is None:
+            end = build_upper_dfu.UPPER_BASE + len(dfupatch.parse(dfupatch.read(image)).element) - 1
+            return ("type", "word_upper", word, screen(
+                f"This ERASES and WRITES the display chip's upper flash, 0x08080000-0x{end:08X}, with block B.",
+                image, f"there now: {there_now(upper_state)}", word))
+        if typed.strip() != word:
+            return ("stop", f"You typed {typed.strip()!r}, not {word}. Nothing was written.")
         return ("write", "upper", dfu_path, image, "upper_written")
     if written != "0":
         return ("stop", "dfu-util reported an error writing block B. Don't retry blindly. Until the owner's image is "
@@ -425,7 +428,25 @@ def probe(plan):
            f"remember it by)", None
 
 
-def step_app(plan, dfu_path, app_state):
+def there_now(upper_state):
+    """drawn_flash's state line as the screen says it: "erased (nothing there yet)", or what's to be replaced."""
+    if not upper_state.startswith("replace"):
+        return upper_state
+    return upper_state[upper_state.index("(") + 1:].split(";")[0].rstrip(")")
+
+
+def screen(what, image, there, word, *more):
+    """A write's word screen (#603): what's written where, the file and its sha256 (the shell shows ▶ lines bold),
+    what's there now, then the checks only the owner can make."""
+    import hashlib
+    with open(image, "rb") as f:
+        digest = hashlib.sha256(f.read()).hexdigest()
+    return "\n".join((what, f"▶ file: {image}", f"▶ sha256: {digest}", f"  {there}", *more,
+                      "  Check: the LC6000 is on a direct cable (not a hub), and there's no gig today.",
+                      f"Type {word} to write it."))
+
+
+def step_app(plan, dfu_path, app_state, current):
     files = plan["files"]
     if app_state.startswith("holds"):
         if fact(plan, "app_step") is None:
@@ -444,8 +465,9 @@ def step_app(plan, dfu_path, app_state):
             return problem
         typed = fact(plan, "word_app")
         if typed is None:
-            return ("type", "word_app", "FLASH", "This ERASES and WRITES the display chip's app area "
-                                                 "(0x08008000-0x0807FFFF). Type FLASH to write it.\n" + probe_line)
+            return ("type", "word_app", "FLASH", screen(
+                "This ERASES and WRITES the display chip's app area, 0x08008000-0x0807FFFF, with the owner's image.",
+                files["owner"], f"there now: {current} (the way back)", "FLASH", probe_line))
         if typed.strip() != "FLASH":
             return ("stop", f"You typed {typed.strip()!r}, not FLASH. Nothing was written.")
         return ("write", "app", dfu_path, files["owner"], "app_written")

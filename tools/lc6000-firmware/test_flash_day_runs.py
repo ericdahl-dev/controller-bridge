@@ -309,6 +309,16 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("Is an ST-Link probe connected", result.stdout)
 
+    def test_each_write_word_screen_reaches_the_owner_with_the_file_and_its_hash(self):
+        import hashlib
+        self.unit_holds(self.current_element)
+        result = self.run_wizard(self.answers())
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        for path in (self.upper, self.owner):
+            with open(path, "rb") as f:
+                self.assertIn(f"▶ sha256: {hashlib.sha256(f.read()).hexdigest()}", result.stdout)
+        self.assertIn("▶ probe: yes (answered today at ", result.stdout)
+
     def test_a_wrong_word_writes_nothing(self):
         self.unit_holds(self.current_element)
         result = self.run_wizard(["", self.upper, self.owner, self.record, "UPDATE", "flash"])

@@ -573,7 +573,11 @@ while :; do
       if confirm "$(printf '%b' "$a2")"; then plan record "$PLAN" "$a1" y; else plan record "$PLAN" "$a1" n; fi
       ;;
     type)
-      printf '%b\n' "$a3" | sed 's/^/  /'
+      # The ▶ lines (the file, its hash, the probe) stand out (#603).
+      while IFS= read -r line; do
+        if [[ "$line" == "▶"* ]]; then printf '  %s%s%s%s\n' "$BOLD" "$YELLOW" "$line" "$RESET"
+        else printf '  %s\n' "$line"; fi
+      done < <(printf '%b\n' "$a3")
       printf '  %s? Type %s to go on, anything else to stop:%s ' "$YELLOW" "$a2" "$RESET"
       typed=""
       read -r typed || true

@@ -190,6 +190,44 @@ class RewriteTests(DrawnPlanTests):
 
 
 
+class WordScreenTests(DrawnPlanTests):
+    """Each write's typed word is shown with exactly what goes where (#603): the file, its sha256, the address range,
+    what's there now, and the checks only the owner can make."""
+
+    def screens(self, unit):
+        return {a[1]: a[3] for a in unit.log if a[0] == "type"}
+
+    def sha256(self, path):
+        import hashlib
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+
+    def test_a_fresh_flash_shows_each_file_its_hash_its_range_and_whats_there(self):
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        upper, app = self.screens(unit)["word_upper"], self.screens(unit)["word_app"]
+        end = UPPER + len(good_block()) - 1
+        for text, path in ((upper, self.upper), (app, self.owner)):
+            self.assertIn(f"▶ file: {path}", text)
+            self.assertIn(f"▶ sha256: {self.sha256(path)}", text)
+            self.assertIn("direct cable", text)
+        self.assertIn(f"0x08080000-0x{end:08X}", upper)
+        self.assertIn("there now: erased", upper)
+        self.assertIn("0x08008000-0x0807FFFF", app)
+        self.assertIn(f"there now: {self.current}", app)
+
+    def test_a_rewrite_shows_the_rewrite_file_that_is_written(self):
+        self.current = self.owner
+        old = RewriteTests.OLD_B + b"\xff" * (UPPER_SIZE - len(RewriteTests.OLD_B))
+        unit = FakeUnit(self.dir.name, self.owner_element, upper=old)
+        self.assertEqual(unit.run(self.plan()), ("done",))
+        written = [a[3] for a in unit.log if a[:2] == ("write", "upper")][0]
+        text = self.screens(unit)["word_upper"]
+        self.assertIn(f"▶ file: {written}", text)
+        self.assertIn(f"▶ sha256: {self.sha256(written)}", text)
+        self.assertIn("there now: another block B", text)
+
+
 class ProbeTests(DrawnPlanTests):
     """The probe question (#603): asked only when the owner's image is written, and remembered for the day and the
     unit (the DFU serial) in the work folder, shown on the image's word screen."""
