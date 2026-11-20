@@ -39,11 +39,16 @@ public:
     /// Feeds waiting datagrams to `core`, stamped `now_ms`, until the socket is empty or `clock` has run kBudgetMs;
     /// returns how many were fed. Without a clock, only kMaxPerFrame bounds it.
     int run(Socket& socket, deck_core::DeckCore& core, uint32_t now_ms, Clock clock = nullptr);
-    /// Datagrams dropped for being bigger than kMaxDatagram.
+    /// Since boot: datagrams seen on the socket, fed to the core, and dropped for being bigger than kMaxDatagram.
+    /// received - processed - too_big is always 0: what a frame leaves waits on the socket, unseen yet.
+    uint32_t received() const { return received_; }
+    uint32_t processed() const { return processed_; }
     uint32_t too_big() const { return too_big_; }
 
 private:
     uint8_t buffer_[kMaxDatagram];
+    uint32_t received_ = 0;
+    uint32_t processed_ = 0;
     uint32_t too_big_ = 0;
 };
 

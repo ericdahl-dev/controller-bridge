@@ -141,6 +141,22 @@ void test_a_1200_byte_bundle_gets_through_and_one_over_the_limit_does_not() {
     TEST_ASSERT_EQUAL(1, drain.too_big());
 }
 
+// For the perf env's line (#636): every datagram seen, those fed to the core, and those too big, since boot.
+void test_the_drain_counts_received_processed_and_too_big() {
+    FakeSocket socket;
+    std::vector<uint8_t> big = deck_message(4);
+    big.resize(feed_drain::kMaxDatagram + 4, 0);
+    socket.waiting = {deck_message(1), big, deck_message(2)};
+    deck_core::DeckCore core;
+    feed_drain::Drain drain;
+    drain.run(socket, core, 100);
+    socket.waiting = {deck_message(3)};
+    drain.run(socket, core, 110);
+    TEST_ASSERT_EQUAL(4, drain.received());
+    TEST_ASSERT_EQUAL(3, drain.processed());
+    TEST_ASSERT_EQUAL(1, drain.too_big());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_waiting_datagrams_go_to_the_core_in_order);
@@ -148,5 +164,6 @@ int main(int, char**) {
     RUN_TEST(test_a_frame_stops_at_its_time_budget);
     RUN_TEST(test_a_datagram_too_big_is_dropped_and_counted);
     RUN_TEST(test_a_1200_byte_bundle_gets_through_and_one_over_the_limit_does_not);
+    RUN_TEST(test_the_drain_counts_received_processed_and_too_big);
     return UNITY_END();
 }

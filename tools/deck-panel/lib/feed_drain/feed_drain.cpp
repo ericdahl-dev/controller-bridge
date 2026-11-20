@@ -10,6 +10,7 @@ int Drain::run(Socket& socket, deck_core::DeckCore& core, uint32_t now_ms, Clock
         if (turn > 0 && clock && clock() - start >= kBudgetMs) break;
         const size_t size = socket.next_size();
         if (size == 0) break;
+        ++received_;
         if (size > kMaxDatagram) {
             socket.skip();
             ++too_big_;
@@ -18,6 +19,7 @@ int Drain::run(Socket& socket, deck_core::DeckCore& core, uint32_t now_ms, Clock
         const size_t length = socket.read(buffer_, sizeof buffer_);
         core.feed(buffer_, length, now_ms);
         ++fed;
+        ++processed_;
     }
     return fed;
 }
