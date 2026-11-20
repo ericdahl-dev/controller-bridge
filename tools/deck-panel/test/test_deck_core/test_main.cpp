@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "deck_core.h"
+#include "deck_face.h"
 #include "json_mini.h"
 #include "osc_bytes.h"
 #include "screen_stub.h"
@@ -329,6 +330,36 @@ void test_each_shared_example_shows_its_deck_state() {
         std::string artist = state.has("artist") ? state["artist"].string : "";
         TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), screen.last().title.c_str(), name);
         TEST_ASSERT_EQUAL_STRING_MESSAGE(artist.c_str(), screen.last().artist.c_str(), name);
+        // #617's fields. A state leaves out what's off or 0; phase left out is -1, unknown.
+        const deck_core::DeckView& v = screen.last().view;
+        auto flag = [&](const char* key) { return state.has(key) && state[key].boolean; };
+        auto number = [&](const char* key, double otherwise) { return state.has(key) ? state[key].number : otherwise; };
+        TEST_ASSERT_EQUAL_MESSAGE(!state.has("loaded") || state["loaded"].boolean, v.loaded, name);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(state.has("key") ? state["key"].string.c_str() : "", v.key, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("bpm", 0)), v.bpm, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("tempo", 0)), v.tempo, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("playing"), v.playing, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("cue"), v.cue, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("sync"), v.sync, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("master"), v.master, name);
+        TEST_ASSERT_EQUAL_MESSAGE(flag("loop"), v.loop, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("loopLength", 0)), v.loop_length, name);
+        TEST_ASSERT_EQUAL_MESSAGE(static_cast<int>(number("beat", 0)), v.beat, name);
+        TEST_ASSERT_EQUAL_MESSAGE(static_cast<int32_t>(number("elapsed", 0)), v.elapsed, name);
+        TEST_ASSERT_EQUAL_MESSAGE(static_cast<int32_t>(number("remaining", 0)), v.remaining, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("progress", 0)), v.progress, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("phase", -1)), v.phase, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("level", 0)), v.level, name);
+        // The screen: an empty case shows "No track loaded" and nothing else; a loaded one its title.
+        const deck_core::Face f = deck_core::face(v);
+        if (!v.loaded) {
+            TEST_ASSERT_EQUAL_STRING_MESSAGE(deck_core::kNoTrack, f.title, name);
+            TEST_ASSERT_EQUAL_STRING_MESSAGE("", f.elapsed, name);
+            TEST_ASSERT_EQUAL_STRING_MESSAGE("", f.bpm, name);
+            TEST_ASSERT_FALSE_MESSAGE(f.phase_shown, name);
+        } else {
+            TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), f.title, name);
+        }
     }
     TEST_ASSERT_EQUAL(file["cases"].array.size(), walked);
     TEST_ASSERT_TRUE(walked >= 3);
