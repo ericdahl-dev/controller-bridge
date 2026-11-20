@@ -30,24 +30,27 @@ final class DisplayFeed {
 
     private var sender: (any OSCSender)?
     private var settings = DisplayFeedSettings()
-    /// The next update sends every address.
-    private var snapshotDue = false
+    /// What each address carried last, as sent; empty means the next update is a full snapshot.
+    private var sent: [String: [OSCArgument]] = [:]
 
     /// Where the feed's OSC goes. The app's sender is the display's own UDP destination, off the event path.
     func attach(_ sender: any OSCSender) {
         self.sender = sender
+        sent = [:]
     }
 
     /// The setting. Turning it on makes the next update a full snapshot.
     func set(_ new: DisplayFeedSettings) {
-        if new.enabled && !settings.enabled { snapshotDue = true }
+        if new.enabled && !settings.enabled { sent = [:] }
         settings = new
     }
 
-    /// Sends the deck in front.
+    /// Sends what changed about the deck in front.
     func update(_ deck: Deck?) {
-        guard settings.enabled, let sender, let deck, snapshotDue else { return }
-        snapshotDue = false
-        for message in deck.messages { sender.send(message) }
+        guard settings.enabled, let sender, let deck else { return }
+        for message in deck.messages where sent[message.address] != message.arguments {
+            sender.send(message)
+            sent[message.address] = message.arguments
+        }
     }
 }

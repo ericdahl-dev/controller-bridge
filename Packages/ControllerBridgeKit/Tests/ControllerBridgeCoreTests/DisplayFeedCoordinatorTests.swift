@@ -35,4 +35,19 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.setDisplayFeed(Self.on)
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
     }
+
+    @Test("Only changes go out: a new title sends the title alone; the same feedback again sends nothing")
+    func changesOnly() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.setDisplayFeed(Self.on)
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        feed.sent.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        #expect(feed.sent == [OSCMessage("/DeckBridge/Display/title", [.string("Nightfall")])])
+        feed.sent.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        for step in 1...10 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
+        #expect(feed.sent == [])
+    }
 }
