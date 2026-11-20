@@ -115,6 +115,28 @@ final class DisplayFeed {
         sent = [:]
     }
 
+    /// A bundle at most this many bytes (#636), well under Wi-Fi's MTU, so one never goes out in IP fragments.
+    static let bundleCeiling = 1200
+
+    /// The messages as bundles of at most `bundleCeiling` bytes each, in order. A message too long for one with
+    /// anything else (a very long title) goes alone in its own.
+    static func bundles(_ messages: [OSCMessage]) -> [[OSCMessage]] {
+        let header = 16, sizeField = 4
+        var out: [[OSCMessage]] = [], current: [OSCMessage] = [], size = header
+        for message in messages {
+            let added = sizeField + message.encoded().count
+            if !current.isEmpty, size + added > bundleCeiling {
+                out.append(current)
+                current = []
+                size = header
+            }
+            current.append(message)
+            size += added
+        }
+        if !current.isEmpty { out.append(current) }
+        return out
+    }
+
     /// Seconds as a trace line writes them: 1, not 1.0.
     private static func format(_ seconds: Double) -> String {
         seconds == seconds.rounded() ? String(Int(seconds)) : String(seconds)
@@ -197,7 +219,7 @@ final class DisplayFeed {
             sent[message.address] = message.arguments
         }
         // One datagram for the update (#636): a panel takes a few at a time, so a snapshot spread over 20 lost most.
-        if !changes.isEmpty { sender.send(bundle: changes) }
+        for bundle in Self.bundles(changes) { sender.send(bundle: bundle) }
         let count = changes.count
         if snapshot {
             say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", \(count) messages")

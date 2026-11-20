@@ -172,6 +172,24 @@ struct DisplayFeedCoordinatorTests {
         #expect(feed.bundles == [])
     }
 
+    @Test("A bundle that would be over 1200 bytes is split, in order, none over 1200; a message too long on its own goes alone")
+    func bundleCeiling() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        let long = String(repeating: "Long title ", count: 60), longer = String(repeating: "Artist ", count: 200)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/TrackInfo", [
+            .string(long), .string(longer), .string("A#m"), .float(128), .float(428.5), .int(229), .int(914), .string("track"),
+        ]))
+        Self.turnOn(rig)
+        let sizes = feed.bundles.map { OSCPacket.bundle($0).count }
+        #expect(feed.bundles.count > 1)
+        // The artist alone is over 1400 bytes: its bundle holds only it.
+        #expect(feed.bundles.contains { $0.count == 1 && $0[0].address.hasSuffix("/artist") })
+        #expect(zip(feed.bundles, sizes).allSatisfy { $0.0.count == 1 || $0.1 <= 1200 })
+        #expect(feed.bundles.flatMap { $0 } == Self.snapshot(deck: 1, color: 0xFF0000, title: long, artist: longer))
+    }
+
     @Test("Only changes go out: a new title sends the title alone; the same feedback again sends nothing")
     func changesOnly() throws {
         let (rig, feed) = try Self.rig()
