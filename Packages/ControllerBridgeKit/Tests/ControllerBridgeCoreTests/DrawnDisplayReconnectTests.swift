@@ -41,6 +41,25 @@ struct DrawnDisplayReconnectTests {
         #expect(!port.wd.contains(where: Handshake.isUpload))
     }
 
+    @Test("#604 replayed: power cycled while drawing (the controller, then WD, removed and back), no answer while the chip starts, then answers 7 s on: drawn again with no relaunch")
+    func powerCycleSlowChipDrawsAgain() throws {
+        let (rig, port, clock) = try Handshake.rig(.custom)
+        rig.coordinator.jogDisplayReply(Handshake.answer)
+        // Two CoreMIDI notifications, as in the owner's log at 04:28:44: the controller's endpoints, then WD's.
+        rig.coordinator.devicesChanged(removed: [JogDisplayRingHoldTests.lc6000.id])
+        rig.coordinator.devicesChanged(removed: [JogDisplayRingHoldTests.wd.id])
+        #expect(port.controller.suffix(2) == JogDisplay.hello)
+        for step in 1...700 {   // 7 s: the 0.5 s wait runs out, images, and the question again at 1.5 and 3.5 s
+            clock.now = Double(step) / 100
+            rig.coordinator.tick()
+        }
+        #expect(rig.coordinator.status.displayFound?.label == "Custom (images)")
+        port.wd.removeAll()
+        rig.coordinator.jogDisplayReply(Handshake.answer)   // the chip has started
+        #expect(Array(Self.ops(port).prefix(3)) == [0x01, 0x03, 0x07])
+        #expect(rig.coordinator.status.displayFound?.label == "Custom (drawn display, protocol 1)")
+    }
+
     @Test("Replugged on Denon's firmware (no answer): images after half a second, as on a first connect")
     func replugOnDenon() throws {
         let (rig, port, clock) = try Handshake.rig(.custom)
@@ -121,6 +140,7 @@ struct DrawnDisplayReconnectTests {
             clock.now = time
             rig.coordinator.tick()
         }
-        #expect(Self.ops(port).isEmpty)
+        // The capability question again (#604) is the only drawn op: no begin, no deck, no state.
+        #expect(Self.ops(port).allSatisfy { $0 == 0x00 })
     }
 }

@@ -17,9 +17,8 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
 
     private let output: MIDIPortRef
     private let input: MIDIPortRef
-    /// Every send goes out here, in order, off the Engine's loop (#422): a unit that stops reading mid-upload once held
-    /// a send for 4.4 s, which froze OSC and MIDI along with it.
-    private let sends = DispatchQueue(label: "dev.ericdahl.ControllerBridge.jog-display-send", qos: .userInitiated)
+    // Sends are made where they're called: on the MIDISendQueue's worker (#552), never the Engine's loop. A queue of
+    // its own here hid a wedged WD port from the send queue's stuck check and piled its SysEx up unbounded (#595).
     private static let logger = Logger(subsystem: "dev.ericdahl.ControllerBridge", category: "jog-display")
     /// A send slower than this is logged: what a stall looks like from here.
     private static let slowSend: Double = 0.1
@@ -72,19 +71,12 @@ final class CoreMIDIJogDisplay: JogDisplayPort {
     var isAttached: Bool { cachedFind(sources: false, hint: Self.wdHint) != nil }
 
     func sendController(_ bytes: [UInt8]) {
-        sends.async { self.send(bytes, hint: Self.controllerHint) }
-    }
-
-    /// Quitting (#600): returns once every send queued here has been handed to CoreMIDI.
-    func flush() {
-        sends.sync {}
+        send(bytes, hint: Self.controllerHint)
     }
 
     func sendWD(_ bytes: [UInt8]) {
-        sends.async {
-            self.listen()
-            self.send(bytes, hint: Self.wdHint)
-        }
+        listen()
+        send(bytes, hint: Self.wdHint)
     }
 
     private func send(_ bytes: [UInt8], hint: String) {
