@@ -24,6 +24,7 @@ make_app() {
     -c "Add :LSApplicationCategoryType string public.app-category.music" \
     -c "Add :LSUIElement bool true" \
     -c "Add :CFBundleDisplayName string DeckBridge" \
+    -c "Add :NSLocalNetworkUsageDescription string 'DeckBridge sends to a deck panel on your network.'" \
     -c "Add :CFBundleIconName string AppIcon" "$plist" >/dev/null
   cp App/PrivacyInfo.xcprivacy "$app/Contents/Resources/PrivacyInfo.xcprivacy"
   echo icon > "$app/Contents/Resources/Assets.car"
@@ -72,7 +73,7 @@ app=$(make_app bundleid); /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier de
 sign "$app" "$work/bundleid.entitlements"
 expect_fail "a bundle id App Store Connect doesn't know fails" "$app" "CFBundleIdentifier"
 
-for key in ITSAppUsesNonExemptEncryption LSApplicationCategoryType LSUIElement CFBundleDisplayName; do
+for key in ITSAppUsesNonExemptEncryption LSApplicationCategoryType LSUIElement CFBundleDisplayName NSLocalNetworkUsageDescription; do
   app=$(make_app "$key"); /usr/libexec/PlistBuddy -c "Delete :$key" "$app/Contents/Info.plist"
   sign "$app" "$work/$key.entitlements"
   expect_fail "a missing $key fails" "$app" "$key"
