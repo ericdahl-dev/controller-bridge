@@ -55,7 +55,7 @@ void build_screen() {
 #else
     g_screen.build();
     // The first frame says what's true before Wi-Fi starts: the core takes the network as up until told.
-    g_core.set_network(wifi_link::configured() ? deck_core::Network::joining : deck_core::Network::not_set, "");
+    g_core.set_network(wifi_link::configured() ? deck_core::Network::joining : deck_core::Network::setup, "");
     g_core.render(g_screen, millis());
 #endif
 }

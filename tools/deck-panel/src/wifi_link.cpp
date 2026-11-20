@@ -20,7 +20,7 @@ using deck_core::Network;
 constexpr uint32_t kKickAfterMs = 30000;
 constexpr uint32_t kAddressEveryMs = 500;
 
-Network g_state = Network::not_set;
+Network g_state = Network::setup;
 char g_ip[16] = "";
 uint32_t g_address = 0;
 uint32_t g_joins = 0;
@@ -72,7 +72,7 @@ void begin() {
 }
 
 void poll(uint32_t now_ms) {
-    if (g_state == Network::not_set) return;
+    if (g_state == Network::setup) return;
     if (!g_started) {
         if (now_ms - g_down_since_ms < kKickAfterMs) return;
         g_down_since_ms = now_ms;

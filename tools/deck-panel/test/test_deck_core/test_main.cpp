@@ -397,15 +397,18 @@ void test_control_characters_show_as_spaces() {
 void test_the_waiting_screen_says_why() {
     deck_core::DeckCore core;
     ScreenStub screen;
-    core.set_network(deck_core::Network::not_set, "");
+    // No saved Wi-Fi (#622): the panel's own setup network, and how to reach the page on it.
+    core.set_setup("DeckPanel-1A2B", "abcd2345");
+    core.set_network(deck_core::Network::setup, "192.168.4.1");
     core.render(screen, 0);
-    TEST_ASSERT_EQUAL_STRING("Wi-Fi isn't set", screen.last().headline.c_str());
-    TEST_ASSERT_EQUAL_STRING("Build the panel with your Wi-Fi's name and password: see its README",
+    TEST_ASSERT_EQUAL_STRING("Set up the panel's Wi-Fi", screen.last().headline.c_str());
+    TEST_ASSERT_EQUAL_STRING("Join DeckPanel-1A2B, password abcd2345, then open 192.168.4.1",
                              screen.last().detail.c_str());
     core.set_network(deck_core::Network::joining, "");
     core.render(screen, 0);
     TEST_ASSERT_EQUAL_STRING("Joining Wi-Fi…", screen.last().headline.c_str());
-    TEST_ASSERT_EQUAL_STRING("", screen.last().detail.c_str());
+    // A wrong password looks like joining forever: the way out is on the screen.
+    TEST_ASSERT_EQUAL_STRING("Hold the screen 5 s to set up Wi-Fi again", screen.last().detail.c_str());
     core.set_network(deck_core::Network::connected, "192.168.1.40");
     core.render(screen, 0);
     TEST_ASSERT_EQUAL_STRING("Waiting for DeckBridge", screen.last().headline.c_str());
@@ -431,6 +434,23 @@ void test_losing_wifi_is_the_waiting_screen_at_once() {
     core.render(screen, 1300);
     TEST_ASSERT_FALSE(screen.last().waiting);
     TEST_ASSERT_EQUAL(2, screen.last().deck);
+}
+
+// What the last render showed, for hold-to-reset (#622): the waiting screen (joining and setup too), not the deck.
+void test_waiting_says_what_the_last_render_showed() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    TEST_ASSERT_TRUE(core.waiting());  // nothing heard yet
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    core.render(screen, 1000);
+    TEST_ASSERT_FALSE(core.waiting());
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 1100);
+    TEST_ASSERT_TRUE(core.waiting());
+    core.set_network(deck_core::Network::setup, "192.168.4.1");
+    core.render(screen, 1200);
+    TEST_ASSERT_TRUE(core.waiting());
 }
 
 // #617's fields (ADR 0011): one address-table row each.
@@ -558,6 +578,7 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_waiting_says_what_the_last_render_showed);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
     RUN_TEST(test_a_fast_field_change_is_one_redraw_and_the_same_value_none);
