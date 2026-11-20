@@ -283,4 +283,22 @@ struct StripFaderTests {
         #expect(Self.sentVolumes(rig).isEmpty)
         #expect(!Self.seeks(rig).isEmpty)
     }
+
+    @Test("On the unit's layer 2 (its own channel), Shift + the strip moves channel 2 from channel 2's level; channel 1 gets nothing")
+    func unitLayer() throws {
+        let rig = try LayersTests.layered()
+        Self.volume(rig, channel: 1, 0.25)
+        Self.volume(rig, channel: 2, 0.5)
+        let ch2: UInt8 = 1
+        func cc(_ controller: UInt8, _ value: UInt8) {
+            rig.coordinator.midi(.controlChange(channel: ch2, controller: controller, value: value), source: Rig.lc6000.id)
+        }
+        rig.coordinator.midi(.noteOn(channel: ch2, note: 26, velocity: 127), source: Rig.lc6000.id)   // Shift
+        rig.coordinator.midi(.noteOn(channel: ch2, note: 70, velocity: 127), source: Rig.lc6000.id)   // touch
+        cc(64, 0); cc(65, 0)
+        cc(64, 32); cc(65, 0)    // 4096: a quarter of the strip
+        let sent = Self.sentVolumes(rig, channel: 2)
+        #expect(abs((sent.last ?? 0) - 0.75) < 0.001, "sent \(sent)")
+        #expect(Self.sentVolumes(rig, channel: 1).isEmpty)
+    }
 }
