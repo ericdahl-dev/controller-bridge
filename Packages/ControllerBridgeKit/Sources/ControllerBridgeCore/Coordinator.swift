@@ -22,6 +22,12 @@ public final class Coordinator {
     public var meterCaptureSink: (@Sendable (String) -> Void)?
     /// The meter capture running, if any.
     var meterCapture: MeterCapture?
+    /// The jog display's last restart after a port took data again (#595), and a restart held back until the back-off
+    /// ends; the back-off said once a stretch.
+    private var jogRestartedAt: Double?
+    private var jogRestartDue: Double?
+    private var jogBackoffSaid = false
+    static let jogRestartBackoff = 3.0
     private var controllers: [Controller]
     /// The controller profiles a device can match.
     private var profiles: [ControllerProfile]
@@ -530,6 +536,7 @@ public final class Coordinator {
     /// Runs timers, such as releasing a jog nudge after the wheel stops. The app calls it about every 10 ms.
     public func tick() {
         finishMeterCapture()
+        if let due = jogRestartDue, clock.now >= due - 1e-9 { restartJogDisplay() }
         settleLayer()
         runSweep()
         for bridge in bridges { bridge.tick() }
@@ -1023,6 +1030,31 @@ public final class Coordinator {
             controller.bridge.repaintLEDs()
         }
         disconnectFailedOutputs()
+    }
+
+    /// A jog display port takes data again (#595): start the display over, as after a replug; what was dropped
+    /// meanwhile is worthless. A port that wedges again at once is restarted at most every `jogRestartBackoff`.
+    func jogDisplayRecovered() {
+        if let last = jogRestartedAt, clock.now - last < Self.jogRestartBackoff - 1e-9 {
+            jogRestartDue = last + Self.jogRestartBackoff
+            if !jogBackoffSaid {
+                jogBackoffSaid = true
+                let text = "jog display port took data again within \(Self.jogRestartBackoff) s of a restart: " +
+                    "restarting it at most every \(Self.jogRestartBackoff) s"
+                log.log(text)
+                trace?(.jogDisplay, text)
+            }
+            return
+        }
+        jogBackoffSaid = false
+        restartJogDisplay()
+    }
+
+    private func restartJogDisplay() {
+        jogRestartedAt = clock.now
+        jogRestartDue = nil
+        jogController.disconnect()
+        updateJogDisplay()
     }
 
     /// Asks Syndicate to resend its state (#84): the OSC destination opened late, so what was sent before was dropped.
