@@ -271,7 +271,7 @@ public final class JogDisplayDriver {
         lastMarker = nil
         lastPlayLight = nil
         for message in JogDisplay.hello { sendController(message) }
-        helloResends = (0, clock.now + Self.helloAgainFirst)
+        hello = (at: clock.now, resent: 0, due: clock.now + Self.helloAgainFirst, said: false)
         // Custom firmware may draw the screen itself (#456): ask. Denon's is never asked.
         mode = .images
         lastDeck = nil
@@ -294,7 +294,8 @@ public final class JogDisplayDriver {
         mode = .images
         asked = false
         reasks = nil
-        helloResends = nil
+        if hello?.said == true { trace?(.jogDisplay, "jog display: hello re-sends stop: goodbye") }
+        hello = nil
         connected = false
         upload = nil
         lastMarker = nil
@@ -509,15 +510,48 @@ public final class JogDisplayDriver {
 
     /// The hello again while the top panel hasn't answered it (#606): after a power cycle it can miss the first. The
     /// same pair, `helloAgainLimit` times, the first `helloAgainFirst` s after the hello and each gap twice the last (1,
-    /// 3, 7, 15, 31 s), then never until the next connect.
-    static let helloAgainFirst = 1.0, helloAgainLimit = 5
-    private var helloResends: (done: Int, due: Double)?
+    /// 3, 7, 15, 31 s), then never until the next connect. An answer is due within `helloAnswerTime` of a hello.
+    static let helloAgainFirst = 1.0, helloAgainLimit = 5, helloAnswerTime = 0.5
+    /// The hello awaiting the top panel's answer: when it first went, how many re-sends, the next one's time (nil
+    /// after the last), and whether the trace said it wasn't answered. Nil once answered, given up on, or gone.
+    private var hello: (at: Double, resent: Int, due: Double?, said: Bool)?
 
     private func helloAgainIfDue() {
-        guard connected, let pending = helloResends, clock.now >= pending.due - 1e-9 else { return }
-        for message in JogDisplay.hello { sendController(message) }
-        let done = pending.done + 1
-        helloResends = done < Self.helloAgainLimit ? (done, pending.due + Self.helloAgainFirst * Double(1 << done)) : nil
+        guard connected, var waiting = hello else { return }
+        let now = clock.now
+        if !waiting.said, now >= waiting.at + Self.helloAnswerTime - 1e-9 {
+            waiting.said = true
+            trace?(.jogDisplay, "jog display: no answer to the hello in 0.5 s: sending it again at 1, 3, 7, 15, 31 s")
+        }
+        if let due = waiting.due, now >= due - 1e-9 {
+            for message in JogDisplay.hello { sendController(message) }
+            waiting.resent += 1
+            trace?(.jogDisplay, "jog display: hello again (\(waiting.resent) of \(Self.helloAgainLimit))")
+            waiting.due = waiting.resent < Self.helloAgainLimit ? due + Self.helloAgainFirst * Double(1 << waiting.resent) : nil
+            if waiting.due == nil { lastHelloAt = due }
+        } else if waiting.due == nil, let last = lastHelloAt, now >= last + Self.helloAnswerTime - 1e-9 {
+            let text = String(format: "the top panel never answered the hello (%d re-sends, %.1f s): no more",
+                              waiting.resent, now - waiting.at)
+            log.log("The jog display: " + text)
+            trace?(.jogDisplay, "jog display: " + text)
+            hello = nil
+            return
+        }
+        hello = waiting
+    }
+    private var lastHelloAt: Double?
+
+    /// The top panel answered the hello (#606): ch16 note 55 on (`9F 37 7F`). Shift + deck select sends the same, and
+    /// stops the re-sends too. Whether a re-sent hello was the one answered.
+    @discardableResult
+    public func helloAnswered() -> Bool {
+        guard connected, let waiting = hello else { return false }
+        hello = nil
+        if waiting.said {
+            trace?(.jogDisplay, String(format: "jog display: the top panel answered the hello %.1f s after it: no more re-sends",
+                                       clock.now - waiting.at))
+        }
+        return waiting.resent > 0
     }
 
     /// A message from the WD port.

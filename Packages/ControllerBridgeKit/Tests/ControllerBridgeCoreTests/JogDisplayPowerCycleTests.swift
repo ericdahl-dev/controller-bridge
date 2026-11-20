@@ -32,4 +32,74 @@ struct JogDisplayPowerCycleTests {
         rig.driver.connect()
         #expect(Self.run(rig, until: 120) == [1, 3, 7, 15, 31])
     }
+
+    @Test("The top panel answers (after the 1 s hello): no more; a goodbye stops them too, and a reconnect starts over")
+    func answerStops() {
+        let rig = DriverRig()
+        rig.driver.connect()
+        #expect(Self.run(rig, until: 2) == [1])
+        rig.driver.helloAnswered()
+        #expect(Self.run(rig, from: 2.1, until: 60).isEmpty)
+
+        let other = DriverRig()
+        other.driver.connect()
+        _ = Self.run(other, until: 2)
+        other.driver.disconnect()
+        #expect(Self.run(other, from: 2.1, until: 60).isEmpty)
+        other.port.controller.removeAll()
+        other.driver.connect()
+        #expect(Self.run(other, from: 60, until: 120) == [61, 63, 67, 75, 91])
+    }
+
+    final class Lines: @unchecked Sendable { var list: [String] = [] }
+
+    static func traced(_ rig: DriverRig) -> Lines {
+        let lines = Lines()
+        rig.driver.trace = { _, text in if !text.hasPrefix("CTL out") && !text.hasPrefix("WD") && !text.hasPrefix("event") { lines.list.append(text) } }
+        return lines
+    }
+
+    @Test("The trace says when the hello wasn't answered, each re-send, and what stopped them")
+    func helloTrace() {
+        let rig = DriverRig()
+        let lines = Self.traced(rig)
+        rig.driver.connect()
+        _ = Self.run(rig, until: 3.5)
+        rig.driver.helloAnswered()
+        rig.driver.helloAnswered()
+        #expect(lines.list == [
+            "jog display: no answer to the hello in 0.5 s: sending it again at 1, 3, 7, 15, 31 s",
+            "jog display: hello again (1 of 5)",
+            "jog display: hello again (2 of 5)",
+            "jog display: the top panel answered the hello 3.5 s after it: no more re-sends",
+        ])
+
+        let gone = DriverRig()
+        let goneLines = Self.traced(gone)
+        gone.driver.connect()
+        _ = Self.run(gone, until: 1.5)
+        gone.driver.disconnect()
+        #expect(goneLines.list.last == "jog display: hello re-sends stop: goodbye")
+
+        let silent = DriverRig()
+        let silentLines = Self.traced(silent)
+        silent.driver.connect()
+        _ = Self.run(silent, until: 120)
+        #expect(silentLines.list.suffix(2) == [
+            "jog display: hello again (5 of 5)",
+            "jog display: the top panel never answered the hello (5 re-sends, 31.5 s): no more",
+        ])
+        #expect(silent.log.lines.filter { $0.contains("never answered the hello") }.count == 1)
+    }
+
+    @Test("Answered in time: no trace line about the hello at all")
+    func answeredInTime() {
+        let rig = DriverRig()
+        let lines = Self.traced(rig)
+        rig.driver.connect()
+        rig.clock.now = 0.02
+        rig.driver.helloAnswered()
+        _ = Self.run(rig, from: 0.1, until: 60)
+        #expect(lines.list.isEmpty)
+    }
 }
