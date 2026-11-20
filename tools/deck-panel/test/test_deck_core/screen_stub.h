@@ -15,6 +15,7 @@ struct ScreenStub : deck_core::Screen {
         std::string artist;
         std::string headline;  ///< the waiting screen's
         std::string detail;
+        deck_core::DeckView view;  ///< the whole deck view, as shown
     };
     std::vector<Shown> shown;
 
@@ -31,6 +32,7 @@ struct ScreenStub : deck_core::Screen {
         s.color = view.color;
         s.title = view.title;
         s.artist = view.artist;
+        s.view = view;
         shown.push_back(s);
     }
     const Shown& last() const { return shown.back(); }
