@@ -322,6 +322,24 @@ reboot_check() {
   printf '  %s✓%s the display chip booted: its MIDI port is back\n' "$GREEN" "$RESET"
 }
 
+# wait_for_quit NAME PATTERN WHY waits for an app to quit, with no key to press (#603), and refuses when it's still
+# running after LC6000_APP_WAIT seconds (60 by default). The drawn wizard's; the stock wizard keeps its pause.
+wait_for_quit() {
+  local name="$1" pattern="$2" why="$3" waited=0 limit="${LC6000_APP_WAIT:-60}"
+  pgrep -f "$pattern" >/dev/null 2>&1 || return 0
+  warn "$name is running. Quit it now: $why."
+  say "Waiting for $name to quit (up to $limit s)…"
+  while pgrep -f "$pattern" >/dev/null 2>&1; do
+    waited=$((waited + 1))
+    if (( waited > limit )); then
+      warn "$name is still running after $limit s. Nothing was sent."
+      exit 1
+    fi
+    sleep 1
+  done
+  printf '  %s✓%s %s quit\n' "$GREEN" "$RESET" "$name"
+}
+
 run_wizard() {
 
 TOTAL_STAGES=8
@@ -507,10 +525,7 @@ write_env OWNER_DFU "$OWNER_DFU"
 say "Building the update-mode tool…"
 swiftc -O -swift-version 5 "$HERE/enter-update-mode.swift" -o "$WORK/enter-update-mode"
 "$WORK/enter-update-mode" selftest
-if pgrep -f "ControllerBridge.app/Contents/MacOS" >/dev/null 2>&1; then
-  warn "DeckBridge is running. Quit it first: it talks to the display."
-  pause "Press Enter once DeckBridge is quit"
-fi
+wait_for_quit "DeckBridge" "ControllerBridge.app/Contents/MacOS" "it talks to the display"
 
 stage "The drawn flash"
 PLAN="$WORK/drawn-plan-$STAMP.json"

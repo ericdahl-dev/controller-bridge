@@ -93,7 +93,17 @@ class FlashDayRunTests(unittest.TestCase):
         with open(update_mode, "w") as f:
             f.write(FAKE_UPDATE_MODE)
         self.stub("swiftc", f'#!/bin/sh\nwhile [ "$1" != "-o" ]; do shift; done\ncp "{update_mode}" "$2"\nchmod +x "$2"\n')
-        self.stub("pgrep", "#!/bin/sh\nexit 1\n")   # DeckBridge isn't running
+        # pgrep: an app is running while $FAKE_UNIT/running holds a count above 0 (each look takes one) or "always".
+        self.stub("pgrep", textwrap.dedent('''\
+            #!/bin/sh
+            f="$FAKE_UNIT/running"
+            [ -e "$f" ] || exit 1
+            n=$(cat "$f")
+            [ "$n" = always ] && exit 0
+            [ "$n" -gt 0 ] || exit 1
+            echo $((n - 1)) > "$f"
+            exit 0
+            '''))
         self.stub("python3", f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
         self.current_element, self.owner_element = full_wd_element(), stock_like_element()
         self.current = self.file("current.dfu", dfuse_file(self.current_element))
@@ -101,7 +111,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.upper = self.file("upper.dfu", build_upper_dfu.dfuse(good_block()))
         self.record = write_record(os.path.join(self.dir.name, "build.json"), self.owner, self.upper)
         self.env = {"PATH": f"{self.stubs}:/usr/bin:/bin", "HOME": self.home, "LC6000_WORK": self.work,
-                    "FAKE_UNIT": self.unit, "TERM": "dumb"}
+                    "FAKE_UNIT": self.unit, "TERM": "dumb", "LC6000_APP_WAIT": "3"}
 
     def stub(self, name, text):
         path = os.path.join(self.stubs, name)
@@ -216,6 +226,28 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertEqual(self.memory("app.bin"), self.owner_element)
         block = good_block()
         self.assertEqual(self.memory("upper.bin")[:len(block)], block)
+
+    def app_running(self, looks):
+        with open(os.path.join(self.unit, "running"), "w") as f:
+            f.write(str(looks))
+
+    def test_deckbridge_quit_while_the_wizard_waits_needs_no_key(self):
+        # #603: the wizard waits for DeckBridge to quit, so no Enter is asked for.
+        self.unit_holds(self.current_element)
+        self.app_running(2)
+        result = self.run_wizard(self.answers())
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertIn("Waiting for DeckBridge to quit", result.stdout)
+        self.assertEqual(len(self.downloads()), 2)
+
+    def test_deckbridge_still_running_refuses_before_anything_is_sent(self):
+        # Today's pause went on after Enter whether DeckBridge had quit or not (#603).
+        self.unit_holds(self.current_element)
+        self.app_running("always")
+        result = self.run_wizard(self.answers(), entered=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DeckBridge is still running", result.stdout)
+        self.assertEqual(self.calls(), [])
 
     def test_a_wrong_word_writes_nothing(self):
         self.unit_holds(self.current_element)
