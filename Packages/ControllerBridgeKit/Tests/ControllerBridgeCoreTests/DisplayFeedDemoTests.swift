@@ -155,4 +155,41 @@ struct DisplayFeedDemoTests {
         for step in 1...300 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
         #expect(feed.sent == [])
     }
+
+    @Test("Demo on sends nothing of the real controller's: stopping it (layer 2's empty deck in front, deck 1 loaded) doesn't put deck 1 on the panel")
+    func demoOnSendsNoStrayDeck() async throws {
+        let (rig, feed) = try DisplayFeedCoordinatorTests.rig()
+        DisplayFeedCoordinatorTests.layered(rig)
+        DisplayFeedCoordinatorTests.load(rig, deck: 1)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/2/Loaded", [.int(0)]))
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        rig.coordinator.feedback(DisplayFeedCoordinatorTests.factoryPalette)
+        let made = Made()
+        await Self.run(rig, made) {
+            $0.send(.setDisplayFeed(DisplayFeedCoordinatorTests.on))
+            $0.send(.displayFeedReady)
+            $0.demo(on: true)
+        }
+        #expect(feed.sent == DisplayFeedCoordinatorTests.snapshot(deck: 2, color: 0xFFFF00))
+    }
+
+    @Test("During the demo the real Coordinator sends nothing: the preview's deck (sent to both) moves only the demo's")
+    func realSilentDuringDemo() async throws {
+        // No controller connected, so the real deck in front follows the preview's deck.
+        let (rig, feed) = try DisplayFeedCoordinatorTests.rig()
+        DisplayFeedCoordinatorTests.layered(rig)
+        rig.midi.sources.removeAll { $0.id == Rig.lc6000.id }
+        rig.coordinator.devicesChanged()
+        DisplayFeedCoordinatorTests.load(rig, deck: 1)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/3/Loaded", [.int(0)]))
+        rig.coordinator.feedback(DisplayFeedCoordinatorTests.factoryPalette)
+        let made = Made()
+        await Self.run(rig, made) {
+            $0.send(.setDisplayFeed(DisplayFeedCoordinatorTests.on))
+            $0.send(.displayFeedReady)
+            $0.demo(on: true)
+            $0.send(.setJogPreviewDeck(3))
+        }
+        #expect(!feed.sent.contains(OSCMessage("/DeckBridge/Display/deck", [.int(3)])))
+    }
 }
