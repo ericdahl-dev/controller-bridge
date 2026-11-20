@@ -104,6 +104,18 @@ class BuildRecordTests(unittest.TestCase):
         owner, upper = self.files()
         self.assertRefused(self.check(record, upper, owner))
 
+    def test_the_record_says_which_commit_and_when_it_was_built(self):
+        # #603: the wizard picks the newest build and shows its commit and time on the word screen.
+        import subprocess, time
+        before = time.time()
+        with open(self.record()) as f:
+            record = json.load(f)
+        here = os.path.dirname(os.path.realpath(build_record.__file__))
+        head = subprocess.run(["git", "-C", here, "rev-parse", "--short=12", "HEAD"], capture_output=True,
+                              text=True).stdout.strip()
+        self.assertTrue(record["commit"].startswith(head), record["commit"])
+        self.assertLessEqual(abs(record["built"] - before), 5)
+
     def test_judge_hands_back_the_record_for_the_plan(self):
         owner, upper = self.files()
         judged = build_record.judge(self.record(), owner, upper)

@@ -126,7 +126,8 @@ class DrawnPathTests(unittest.TestCase):
         return self.loop[start:start + 1 + following.start()] if following else self.loop[start:]
 
     def test_the_drawn_path_runs_only_when_asked_for(self):
-        self.assertIn('if [[ "${1:-}" == "drawn" ]]; then run_drawn; else run_wizard "$@"; fi', self.stages)
+        dispatch = self.stages[self.stages.index('if [[ "${1:-}" == "drawn" ]]; then'):]
+        self.assertLess(dispatch.index("run_drawn"), dispatch.index("else\n  run_wizard \"$@\""))
 
     def test_it_never_does_a_stock_flash(self):
         self.assertNotIn('flash "$STOCK_WD"', self.drawn)

@@ -233,7 +233,8 @@ dfu_paths() {
   dfu-util -l 2>/dev/null | grep -i 'Found DFU: \[0483:df11\]' | sed -E 's/.*path="([^"]*)".*/\1/' | sort -u
 }
 
-# enter_update_mode sends the one SysEx to the display chip and waits for it to come back as a DFU device.
+# enter_update_mode sends the one SysEx to the display chip and waits for it to come back as a DFU device. The drawn
+# wizard passes "typed": the owner types UPDATE (#603), not y/N; the stock wizard keeps its y/N.
 enter_update_mode() {
   say "The display chip has no buttons. One MIDI message on its own port restarts it into update mode."
   note "This writes nothing to its firmware, but it stays in update mode until it's flashed or power-cycled."
@@ -241,7 +242,15 @@ enter_update_mode() {
     warn "The display's MIDI port isn't there (or there are two). Is the LC6000 on, on a direct cable?"
     way_back
   fi
-  confirm "Send the update-mode message to the display chip now?" || way_back
+  if [[ "${1:-}" == "typed" ]]; then
+    local typed=""
+    printf '  %s? Type UPDATE to send the update-mode message to the display chip now, anything else to stop:%s ' \
+      "$YELLOW" "$RESET"
+    read -r typed || true
+    [[ "$typed" == "UPDATE" ]] || { warn "You typed '$typed', not UPDATE. Nothing was sent."; way_back; }
+  else
+    confirm "Send the update-mode message to the display chip now?" || way_back
+  fi
   "$WORK/enter-update-mode" send --yes-enter-update-mode || way_back
   say "Waiting for the chip to come back as a DFU device (up to 20 s)…"
   local tries=0
@@ -259,13 +268,12 @@ enter_update_mode() {
 # look lists the DFU devices and remembers the display chip's path: drawn_plan.py judges the list (#567), exactly one
 # device and the display chip (not the top panel chip), the same judgment as the drawn wizard's.
 look() {
-  local listing="$WORK/dfu-list-$STAMP-$1.txt" kind="" path="" why=""
+  local listing="$WORK/dfu-list-$STAMP-$1.txt" kind="" path=""
   dfu-util -l > "$listing" 2>&1 || true
   grep -i 'Found DFU' "$listing" | sed 's/^/    /' || true
-  IFS=$'\t' read -r kind path why < <(plan devices "$listing") || true
+  IFS=$'\t' read -r kind path < <(plan devices "$listing") || true
   case "$kind" in
     one) ;;
-    ask) warn "$why"; confirm "Go on anyway?" || way_back ;;
     *) [[ -n "$path" ]] && warn "$path" || warn "The device list could not be judged."; way_back ;;
   esac
   DFU_PATH="$path"
@@ -315,6 +323,54 @@ reboot_check() {
     if (( tries > 30 )); then
       warn "The display's MIDI port didn't come back in 30 s."
       if [[ -n "$(dfu_paths)" ]]; then note "It's still in update mode: the bootloader didn't start the app."; fi
+      way_back
+    fi
+    sleep 1
+  done
+  printf '  %s✓%s the display chip booted: its MIDI port is back\n' "$GREEN" "$RESET"
+}
+
+# wait_for_quit NAME PATTERN WHY waits for an app to quit, with no key to press (#603), and refuses when it's still
+# running after LC6000_APP_WAIT seconds (60 by default). The drawn wizard's; the stock wizard keeps its pause.
+wait_for_quit() {
+  local name="$1" pattern="$2" why="$3" waited=0 limit="${LC6000_APP_WAIT:-60}"
+  pgrep -f "$pattern" >/dev/null 2>&1 || return 0
+  warn "$name is running. Quit it now: $why."
+  say "Waiting for $name to quit (up to $limit s)…"
+  while pgrep -f "$pattern" >/dev/null 2>&1; do
+    waited=$((waited + 1))
+    if (( waited > limit )); then
+      warn "$name is still running after $limit s. Nothing was sent."
+      exit 1
+    fi
+    sleep 1
+  done
+  printf '  %s✓%s %s quit\n' "$GREEN" "$RESET" "$name"
+}
+
+# power_cycle_wait has the owner power-cycle and watches USB, with no key to press (#603): the DFU device leaves,
+# then the display's MIDI port comes back. LC6000_POWER_WAIT seconds (120 by default) for each; a timeout is never
+# taken as success. The drawn wizard's; the stock wizard keeps reboot_check.
+power_cycle_wait() {
+  local limit="${LC6000_POWER_WAIT:-120}" waited=0
+  step "Power the LC6000 off, wait 5 seconds, power it on. No buttons held. The wizard watches USB for it."
+  until [[ -z "$(dfu_paths)" ]]; do
+    waited=$((waited + 1))
+    if (( waited > limit )); then
+      warn "The display chip is still in update mode after $limit s: the power cycle wasn't seen."
+      note "Check: was the power switched off for 5 s, not just the USB cable pulled? Is it on the same cable?"
+      way_back
+    fi
+    sleep 1
+  done
+  printf '  %s✓%s the chip left update mode\n' "$GREEN" "$RESET"
+  waited=0
+  until "$WORK/enter-update-mode" check >/dev/null 2>&1; do
+    waited=$((waited + 1))
+    if (( waited > limit )); then
+      warn "The display's MIDI port didn't come back in $limit s."
+      if [[ -n "$(dfu_paths)" ]]; then note "It's back in update mode: the bootloader didn't start the app."; fi
+      note "Check: is the LC6000 on and its screens lit? Is it on a direct cable? Is the jog display dark?"
       way_back
     fi
     sleep 1
@@ -472,7 +528,10 @@ TOTAL_STAGES=3
 mkdir -p "$WORK"
 ENV_FILE="$WORK/flash-day.env"
 
-banner "LC6000 display chip: the drawn flash"
+# The library's banner waits for Enter; the drawn wizard's doesn't (#603).
+_clear
+printf '\n%s%s  %s%s\n' "$BOLD" "$BLUE" "LC6000 display chip: the drawn flash" "$RESET"
+note "It stops only for what it can't find out itself: a typed word before each send or write. Ctrl-C stops it."
 
 stage "Ready check (drawn display)"
 say "Nothing is sent to the LC6000 in this stage."
@@ -482,39 +541,82 @@ for tool in dfu-util swiftc python3; do
     exit 1
   fi
 done
-say "Three files, all outside the repo (such as $WORK):"
-step "the .dfu the display chip runs now: the stock 00.50 file, the slot 16 image (#425), or the owner's image"
-step "block B's .dfu, from build_upper_dfu.py with --proof (the README's read-only checks come first)"
-step "the owner's image, from build_owner_image.py"
-ask CURRENT_WD "Path to the .dfu the chip runs now:"
-CURRENT_WD="${CURRENT_WD/#\~/$HOME}"
-ask UPPER_DFU "Path to block B's .dfu:"
-UPPER_DFU="${UPPER_DFU/#\~/$HOME}"
-ask OWNER_DFU "Path to the owner's image .dfu:"
-OWNER_DFU="${OWNER_DFU/#\~/$HOME}"
-# The blocks' build record (#593): the kit tools leave a copy beside each .dfu; ask only without exactly one.
-IFS=$'\t' read -r found RECORD < <(plan find-record "$UPPER_DFU" "$OWNER_DFU") || true
-if [[ "$found" == "one" ]]; then
-  say "Build record: $RECORD"
+# The image the chip runs now (#603): found from the app read, among the owner's image, the last run's and each .dfu
+# in $WORK. --current PATH names it instead, for a file kept elsewhere.
+CURRENT_WD="$DRAWN_CURRENT"
+REMEMBERED_WD="$(_existing CURRENT_WD || true)"
+if [[ -n "$CURRENT_WD" ]]; then
+  say "The image the chip runs now: $CURRENT_WD (--current)"
 else
-  say "${RECORD:-No build record found.}"
-  ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
-  RECORD="${RECORD/#\~/$HOME}"
+  note "The image the chip runs now is found from the read: the owner's image, the last run's, or a .dfu in $WORK."
 fi
-write_env CURRENT_WD "$CURRENT_WD"
+# Block B and the owner's image (#603): --upper and --owner, or the newest build the kit tools left in $WORK, or the
+# remembered pair, each with its build record beside it. Asked only when none is there; the word screens show the
+# build written and last run's when it differs.
+found="" UPPER_DFU="" OWNER_DFU="" RECORD="" LAST_RECORD=""
+if [[ -n "$DRAWN_UPPER" ]]; then
+  UPPER_DFU="$DRAWN_UPPER" OWNER_DFU="$DRAWN_OWNER"
+  say "Block B: $UPPER_DFU (--upper)"
+  say "The owner's image: $OWNER_DFU (--owner)"
+  IFS=$'\t' read -r found RECORD < <(plan find-record "$UPPER_DFU" "$OWNER_DFU") || true
+  if [[ "$found" == "one" ]]; then
+    say "Build record: $RECORD"
+  else
+    say "${RECORD:-No build record found.}"
+    ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
+    RECORD="${RECORD/#\~/$HOME}"
+  fi
+  found="named"
+else
+  IFS=$'\t' read -r found UPPER_DFU OWNER_DFU RECORD LAST_RECORD \
+    < <(plan find-files "$WORK" "$(_existing UPPER_DFU || true)" "$(_existing OWNER_DFU || true)") || true
+fi
+if [[ "$found" == "named" ]]; then
+  :
+elif [[ "$found" == "one" ]]; then
+  say "Block B: $UPPER_DFU"
+  say "The owner's image: $OWNER_DFU"
+  say "Build record: $RECORD"
+  [[ -n "$LAST_RECORD" ]] && note "The last run used another build ($LAST_RECORD): this is the newest."
+else
+  say "${UPPER_DFU:-Block B and the owner's image weren't found.}"
+  ask UPPER_DFU "Path to block B's .dfu:"
+  UPPER_DFU="${UPPER_DFU/#\~/$HOME}"
+  ask OWNER_DFU "Path to the owner's image .dfu:"
+  OWNER_DFU="${OWNER_DFU/#\~/$HOME}"
+  # The blocks' build record (#593): the kit tools leave a copy beside each .dfu; ask only without exactly one.
+  IFS=$'\t' read -r found RECORD < <(plan find-record "$UPPER_DFU" "$OWNER_DFU") || true
+  if [[ "$found" == "one" ]]; then
+    say "Build record: $RECORD"
+  else
+    say "${RECORD:-No build record found.}"
+    ask RECORD "Path to the blocks' build record (build.json, written by make arm next to them):"
+    RECORD="${RECORD/#\~/$HOME}"
+  fi
+fi
+[[ -n "$CURRENT_WD" ]] && write_env CURRENT_WD "$CURRENT_WD"
 write_env UPPER_DFU "$UPPER_DFU"
 write_env OWNER_DFU "$OWNER_DFU"
 say "Building the update-mode tool…"
 swiftc -O -swift-version 5 "$HERE/enter-update-mode.swift" -o "$WORK/enter-update-mode"
 "$WORK/enter-update-mode" selftest
-if pgrep -f "ControllerBridge.app/Contents/MacOS" >/dev/null 2>&1; then
-  warn "DeckBridge is running. Quit it first: it talks to the display."
-  pause "Press Enter once DeckBridge is quit"
-fi
+# Every app that opens the LC6000's MIDI or USB is waited for, then refused (#603). Syndicate isn't one: DeckBridge
+# sits between it and the unit.
+wait_for_quit "DeckBridge" "ControllerBridge.app/Contents/MacOS" "it talks to the display"
+wait_for_quit "djay Pro" "djay Pro.app/Contents/MacOS/djay Pro" "it ships an LC6000 mapping and opens its MIDI ports"
+wait_for_quit "Engine DJ" "Engine DJ.app/Contents/MacOS/Engine DJ" "it knows the LC6000 as a controller"
+wait_for_quit "Denon's updater" "Firmware Updater.app/Contents/MacOS/FirmwareUpdater" \
+  "it flashes a chip in update mode by itself"
+note "Check: the LC6000 is on a direct cable to the Mac (not a hub), running normally, and there's no gig today."
 
 stage "The drawn flash"
+# The probe answer is kept for today and this unit (#603); --probe-again forgets it, so it's asked once more.
+if (( PROBE_AGAIN )) && [[ -e "$WORK/probe.json" ]]; then
+  rm -f "$WORK/probe.json"
+  note "The probe answer from earlier today is forgotten: it's asked again before the owner's image."
+fi
 PLAN="$WORK/drawn-plan-$STAMP.json"
-plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK"
+plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK" "$REMEMBERED_WD" "$LAST_RECORD"
 while :; do
   action="" a1="" a2="" a3="" a4=""
   IFS=$'\t' read -r action a1 a2 a3 a4 < <(plan next "$PLAN") || true
@@ -523,14 +625,23 @@ while :; do
       if confirm "$(printf '%b' "$a2")"; then plan record "$PLAN" "$a1" y; else plan record "$PLAN" "$a1" n; fi
       ;;
     type)
-      printf '%b\n' "$a3" | sed 's/^/  /'
+      # The ▶ lines (the file, its hash, the probe) stand out (#603).
+      while IFS= read -r line; do
+        if [[ "$line" == "▶"* ]]; then printf '  %s%s%s%s\n' "$BOLD" "$YELLOW" "$line" "$RESET"
+        else printf '  %s\n' "$line"; fi
+      done < <(printf '%b\n' "$a3")
       printf '  %s? Type %s to go on, anything else to stop:%s ' "$YELLOW" "$a2" "$RESET"
       typed=""
       read -r typed || true
       plan record "$PLAN" "$a1" "$typed"
       ;;
     update-mode)
-      enter_update_mode
+      # A chip left in update mode by an earlier stop has no MIDI port to send to (#603): it's listed, so send nothing.
+      if [[ -n "$(dfu_paths)" ]]; then
+        printf '  %s✓%s a DFU device is listed: the chip is already in update mode, so nothing is sent\n' "$GREEN" "$RESET"
+      else
+        enter_update_mode typed
+      fi
       plan record "$PLAN" update_mode ok
       ;;
     list)
@@ -556,7 +667,7 @@ while :; do
       plan record "$PLAN" "$a4" "$rc"
       ;;
     power-cycle)
-      reboot_check
+      power_cycle_wait
       plan record "$PLAN" power_cycle ok
       ;;
     skip)
@@ -576,10 +687,10 @@ while :; do
       ;;
   esac
 done
+say "Check: with no host talking to it, the display should look exactly like stock. If it doesn't, note it on #468."
 say "Open DeckBridge with drawn mode on: after its hello and begin, the deck chip is drawn by our code."
 say "Its end (quit DeckBridge) brings back stock images; a power cycle returns to the app."
 note "Whatever you see, write it on #468."
-pause
 
 stage "Way back, for the record"
 say "If anything looks wrong later:"
@@ -589,9 +700,29 @@ step "Denon's image has no slot 16 (#425). To get it back, use that wizard's las
 step "If the display chip never shows up in update mode: ST-Link (#433). Don't keep trying USB."
 note "Logs, reads and the plan from today: $WORK"
 say "Please note on #468 what happened at each stage."
-pause
 
 finish
 }
 
-if [[ "${1:-}" == "drawn" ]]; then run_drawn; else run_wizard "$@"; fi; exit
+# flash-day.sh drawn [--current PATH] [--upper PATH --owner PATH] [--probe-again]
+DRAWN_CURRENT="" DRAWN_UPPER="" DRAWN_OWNER="" PROBE_AGAIN=0
+if [[ "${1:-}" == "drawn" ]]; then
+  shift
+  while (( $# )); do
+    case "$1" in
+      --current) [[ -n "${2:-}" ]] || { warn "--current needs a path."; exit 2; }; DRAWN_CURRENT="${2/#\~/$HOME}"; shift 2 ;;
+      --upper) [[ -n "${2:-}" ]] || { warn "--upper needs a path."; exit 2; }; DRAWN_UPPER="${2/#\~/$HOME}"; shift 2 ;;
+      --owner) [[ -n "${2:-}" ]] || { warn "--owner needs a path."; exit 2; }; DRAWN_OWNER="${2/#\~/$HOME}"; shift 2 ;;
+      --probe-again) PROBE_AGAIN=1; shift ;;
+      *) warn "Unknown option: $1 (flash-day.sh drawn [--current PATH] [--upper PATH --owner PATH] [--probe-again])"
+         exit 2 ;;
+    esac
+  done
+  if { [[ -n "$DRAWN_UPPER" ]] && [[ -z "$DRAWN_OWNER" ]]; } || { [[ -z "$DRAWN_UPPER" ]] && [[ -n "$DRAWN_OWNER" ]]; }; then
+    warn "--upper and --owner go together: name both files of one build, or neither."
+    exit 2
+  fi
+  run_drawn
+else
+  run_wizard "$@"
+fi; exit
