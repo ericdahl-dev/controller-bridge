@@ -10,6 +10,12 @@ const char kPrefix[] = "/DeckBridge/Display/";
 
 /// `text` (valid UTF-8) into `out` at most `limit` characters: a longer one is cut between characters, spaces before
 /// the cut dropped, and ends in "…". `out` holds `limit` characters of 4 bytes and a NUL.
+/// A control character (a line break, a tab) as a space, so the board's one-line label stays one line.
+char shown(char c) {
+    auto byte = static_cast<uint8_t>(c);
+    return byte < 0x20 || byte == 0x7F ? ' ' : c;
+}
+
 void shorten(const char* text, size_t limit, char* out) {
     size_t characters = 0, n = 0;
     for (const char* p = text; *p; ++p) {
@@ -19,7 +25,7 @@ void shorten(const char* text, size_t limit, char* out) {
             size_t rest = 0;
             for (const char* q = p; *q; ++q) rest += (static_cast<uint8_t>(*q) & 0xC0) != 0x80;
             if (rest == 1) {
-                while (*p) out[n++] = *p++;
+                while (*p) out[n++] = shown(*p++);
             } else {
                 while (n > 0 && out[n - 1] == ' ') --n;
                 std::memcpy(out + n, "\xE2\x80\xA6", 3);
@@ -27,7 +33,7 @@ void shorten(const char* text, size_t limit, char* out) {
             }
             break;
         }
-        out[n++] = *p;
+        out[n++] = shown(*p);
     }
     out[n] = 0;
 }

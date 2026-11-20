@@ -356,6 +356,12 @@ void test_once_waiting_the_old_deck_does_not_come_back_without_a_message() {
     TEST_ASSERT_TRUE(screen.last().waiting);
 }
 
+// A line break or tab in a title would make the board's label two lines or jagged: control characters show as spaces.
+void test_control_characters_show_as_spaces() {
+    TEST_ASSERT_EQUAL_STRING("Night Drive  mix", title_shown("Night\nDrive\t\x7Fmix").c_str());
+    TEST_ASSERT_EQUAL_STRING("A B", artist_shown("A\rB").c_str());
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -413,6 +419,7 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_control_characters_show_as_spaces);
     RUN_TEST(test_a_render_a_moment_before_the_last_packet_still_shows_the_deck);
     RUN_TEST(test_once_waiting_the_old_deck_does_not_come_back_without_a_message);
     return UNITY_END();
