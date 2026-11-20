@@ -508,12 +508,15 @@ for tool in dfu-util swiftc python3; do
     exit 1
   fi
 done
-say "Three files, all outside the repo (such as $WORK):"
-step "the .dfu the display chip runs now: the stock 00.50 file, the slot 16 image (#425), or the owner's image"
-step "block B's .dfu, from build_upper_dfu.py with --proof (the README's read-only checks come first)"
-step "the owner's image, from build_owner_image.py"
-ask CURRENT_WD "Path to the .dfu the chip runs now:"
-CURRENT_WD="${CURRENT_WD/#\~/$HOME}"
+# The image the chip runs now (#603): found from the app read, among the owner's image, the last run's and each .dfu
+# in $WORK. --current PATH names it instead, for a file kept elsewhere.
+CURRENT_WD="$DRAWN_CURRENT"
+REMEMBERED_WD="$(_existing CURRENT_WD || true)"
+if [[ -n "$CURRENT_WD" ]]; then
+  say "The image the chip runs now: $CURRENT_WD (--current)"
+else
+  note "The image the chip runs now is found from the read: the owner's image, the last run's, or a .dfu in $WORK."
+fi
 # Block B and the owner's image (#603): the remembered pair, or the one pair the kit tools left in $WORK, each with
 # its build record beside it. Asked only when neither is there; the typed words show what's written.
 found="" UPPER_DFU="" OWNER_DFU="" RECORD=""
@@ -539,7 +542,7 @@ else
     RECORD="${RECORD/#\~/$HOME}"
   fi
 fi
-write_env CURRENT_WD "$CURRENT_WD"
+[[ -n "$CURRENT_WD" ]] && write_env CURRENT_WD "$CURRENT_WD"
 write_env UPPER_DFU "$UPPER_DFU"
 write_env OWNER_DFU "$OWNER_DFU"
 say "Building the update-mode tool…"
@@ -549,7 +552,7 @@ wait_for_quit "DeckBridge" "ControllerBridge.app/Contents/MacOS" "it talks to th
 
 stage "The drawn flash"
 PLAN="$WORK/drawn-plan-$STAMP.json"
-plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK"
+plan begin "$PLAN" "$CURRENT_WD" "$UPPER_DFU" "$OWNER_DFU" "$RECORD" "$WORK" "$REMEMBERED_WD"
 while :; do
   action="" a1="" a2="" a3="" a4=""
   IFS=$'\t' read -r action a1 a2 a3 a4 < <(plan next "$PLAN") || true
@@ -634,4 +637,17 @@ pause
 finish
 }
 
-if [[ "${1:-}" == "drawn" ]]; then run_drawn; else run_wizard "$@"; fi; exit
+# flash-day.sh drawn [--current PATH]
+DRAWN_CURRENT=""
+if [[ "${1:-}" == "drawn" ]]; then
+  shift
+  while (( $# )); do
+    case "$1" in
+      --current) [[ -n "${2:-}" ]] || { warn "--current needs a path."; exit 2; }; DRAWN_CURRENT="${2/#\~/$HOME}"; shift 2 ;;
+      *) warn "Unknown option: $1 (flash-day.sh drawn [--current PATH])"; exit 2 ;;
+    esac
+  done
+  run_drawn
+else
+  run_wizard "$@"
+fi; exit

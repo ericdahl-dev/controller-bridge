@@ -340,6 +340,49 @@ class BuildRecordTests(DrawnPlanTests):
         self.assertEqual(len(unit.log), 1)
 
 
+class FoundCurrentTests(DrawnPlanTests):
+    """The image the chip runs now, found from the read instead of asked (#603): the owner's image, the remembered
+    file, or a .dfu in the work folder that verifies and matches the read byte for byte. It's the way back, so a read
+    that matches none of them refuses."""
+
+    def found_plan(self, remembered=""):
+        path = os.path.join(self.dir.name, "plan.json")
+        drawn_plan.begin(path, current="", upper=self.upper, owner=self.owner, record=self.record,
+                         work=self.dir.name, remembered=remembered)
+        return path
+
+    def test_a_dfu_in_the_work_folder_that_matches_the_read_is_the_one_it_runs(self):
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.found_plan()), ("done",))
+        said = [a[2] for a in unit.log if a[:2] == ("skip", "current_found")]
+        self.assertEqual(len(said), 1)
+        self.assertIn(self.current, said[0])
+        self.assertEqual(unit.writes, ["upper", "app"])
+
+    def test_the_owners_image_on_the_chip_is_found_and_the_app_area_isnt_written(self):
+        unit = FakeUnit(self.dir.name, self.owner_element)
+        self.assertEqual(unit.run(self.found_plan()), ("done",))
+        self.assertEqual(unit.writes, ["upper"])
+
+    def test_the_remembered_file_outside_the_work_folder_is_a_candidate(self):
+        os.makedirs(os.path.join(self.dir.name, "elsewhere"))
+        remembered = os.path.join(self.dir.name, "elsewhere", "slot16.dfu")
+        os.rename(self.current, remembered)
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.found_plan(remembered)), ("done",))
+        self.assertIn(remembered, [a[2] for a in unit.log if a[:2] == ("skip", "current_found")][0])
+
+    def test_a_read_that_matches_no_file_refuses_before_any_write(self):
+        other = bytearray(self.current_element)
+        other[0x100] ^= 1
+        unit = FakeUnit(self.dir.name, bytes(other))
+        end = unit.run(self.found_plan())
+        self.assertEqual(end[0], "stop")
+        self.assertIn("matches none", end[1])
+        self.assertIn("--current", end[1])
+        self.assertEqual(unit.writes, [])
+
+
 class FindRecordTests(unittest.TestCase):
     """`drawn_plan.py find-record UPPER.dfu OWNER.dfu` (#593): the record each kit tool left beside its .dfu, so the owner
     types no fourth path. Exactly one record, or ask."""

@@ -2,7 +2,8 @@
 """The drawn wizard's plan (#567): every decision of `flash-day.sh drawn` in one place. The facts so far in, the next
 step out; the shell only does what it's told (dfu-util, the keyboard) and records the result.
 
-  python3 -I drawn_plan.py begin PLAN.json CURRENT.dfu UPPER.dfu OWNER.dfu RECORD.json WORK
+  python3 -I drawn_plan.py begin PLAN.json CURRENT.dfu UPPER.dfu OWNER.dfu RECORD.json WORK [REMEMBERED.dfu]
+                                                  CURRENT empty: found from the app read (#603)
   python3 -I drawn_plan.py next PLAN.json         one action, its fields separated by tabs
   python3 -I drawn_plan.py record PLAN.json KEY VALUE
   python3 -I drawn_plan.py devices LISTING        the stock wizard's look: one PATH, or stop WHY
@@ -42,11 +43,12 @@ TOP_PANEL_LAYOUT = "/0x08000000/04*016Kg,01*064Kg,01*128Kg"  # 256 KB: the top p
 
 # MARK: the plan file
 
-def begin(path, current, upper, owner, record, work):
+def begin(path, current, upper, owner, record, work, remembered=""):
     """A new run: the owner's files and the blocks' build record (#593), and no facts. A plan file from an earlier run
-    is replaced, never continued."""
+    is replaced, never continued. CURRENT empty: the image the chip runs now is found from the read (#603), and
+    REMEMBERED (the last run's) is one of the candidates."""
     plan = {"run": uuid.uuid4().hex[:12],
-            "files": {"current": current, "upper": upper, "owner": owner, "record": record},
+            "files": {"current": current, "upper": upper, "owner": owner, "record": record, "remembered": remembered},
             "work": work, "seq": 0, "facts": {}}
     save(path, plan)
 
@@ -196,6 +198,8 @@ def decide(plan):
     files = plan["files"]
     # Ready check: nothing sent.
     for label, image in (("the image the chip runs now", files["current"]), ("the owner's image", files["owner"])):
+        if not image:
+            continue   # found from the read, after update mode (#603)
         ok, why = checked(plan, "verify", dfupatch.verify, {"input": image})
         if not ok:
             return ("stop", f"{label} doesn't verify: {why}. Nothing was sent.")
@@ -238,7 +242,17 @@ def decide(plan):
         return unreadable(plan, "app_read")
     if not fresh(plan, "app_read"):
         return ("read", "app", dfu_path, out(plan, "wd-app-before"), "app_read")
-    ok, why = checked(plan, "compare", dfupatch.compare, {"input": files["current"], "readback": fact(plan, "app_read")})
+    current = files["current"]
+    if not current:
+        current = found_current(plan)
+        if current is None:
+            return ("stop", f"The app area matches none of the images the wizard knows: the owner's image, the one from "
+                            f"the last run, or a .dfu in {plan['work']}. That file is the way back, so it must be known. "
+                            f"Run again with --current PATH. Nothing was written.")
+        if fact(plan, "current_found") is None:
+            return ("skip", "current_found", f"The chip runs {current} now: the read matches it byte for byte. It's "
+                                             f"the way back.")
+    ok, why = checked(plan, "compare", dfupatch.compare, {"input": current, "readback": fact(plan, "app_read")})
     if not ok:
         return ("stop", f"The chip doesn't hold the image it runs now ({why}). Nothing was written.")
     ok, app_state = checked(plan, "app", drawn_flash.app, {"owner": files["owner"], "read": fact(plan, "app_read")})
@@ -279,6 +293,23 @@ def decide(plan):
     if look != "y":
         return ("stop", "The display doesn't look like stock with no host.")
     return ("done",)
+
+
+def found_current(plan):
+    """The first candidate that verifies as a wd image and matches this run's app read byte for byte: the owner's
+    image, the remembered file, then each .dfu in the work folder by name. None when none does."""
+    files, work = plan["files"], plan["work"]
+    candidates = [files["owner"], files.get("remembered", "")]
+    candidates += [os.path.join(work, n) for n in sorted(os.listdir(work)) if n.endswith(".dfu")]
+    seen = set()
+    for path in candidates:
+        if not path or os.path.realpath(path) in seen or not os.path.isfile(path):
+            continue
+        seen.add(os.path.realpath(path))
+        if checked(plan, "verify", dfupatch.verify, {"input": path})[0] and \
+                checked(plan, "compare", dfupatch.compare, {"input": path, "readback": fact(plan, "app_read")})[0]:
+            return path
+    return None
 
 
 WHAT = {"app_read": "the app area", "options_read": "the option bytes", "upper_read": "the flash above the image",
@@ -398,8 +429,9 @@ def step_app(plan, dfu_path, app_state):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     command = argv[0] if argv else ""
-    if command == "begin" and len(argv) == 7:
-        begin(argv[1], current=argv[2], upper=argv[3], owner=argv[4], record=argv[5], work=argv[6])
+    if command == "begin" and len(argv) in (7, 8):
+        begin(argv[1], current=argv[2], upper=argv[3], owner=argv[4], record=argv[5], work=argv[6],
+              remembered=argv[7] if len(argv) == 8 else "")
     elif command == "next" and len(argv) == 2:
         # One line, fields separated by tabs; a field's own line breaks as \\n (the shell prints them with %b).
         print("\t".join(field.replace("\\", "\\\\").replace("\n", "\\n") for field in next_action(argv[1])))
