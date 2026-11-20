@@ -537,8 +537,9 @@ public final class JogDisplayDriver {
             for message in JogDisplay.hello { sendController(message) }
             waiting.resent += 1
             trace?(.jogDisplay, "jog display: hello again (\(waiting.resent) of \(Self.helloAgainLimit))")
-            waiting.due = waiting.resent < Self.helloAgainLimit ? due + Self.helloAgainFirst * Double(1 << waiting.resent) : nil
-            if waiting.due == nil { lastHelloAt = due }
+            // From now, not from when it was due: a stalled tick sends one pair, not the missed ones in a burst.
+            waiting.due = waiting.resent < Self.helloAgainLimit ? now + Self.helloAgainFirst * Double(1 << waiting.resent) : nil
+            if waiting.due == nil { lastHelloAt = now }
         } else if waiting.due == nil, let last = lastHelloAt, now >= last + Self.helloAnswerTime - 1e-9 {
             let text = String(format: "the top panel never answered the hello (%d re-sends, %.1f s): no more",
                               waiting.resent, now - waiting.at)

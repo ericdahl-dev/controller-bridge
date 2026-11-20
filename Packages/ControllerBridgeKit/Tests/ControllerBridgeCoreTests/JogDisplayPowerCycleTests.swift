@@ -33,6 +33,14 @@ struct JogDisplayPowerCycleTests {
         #expect(Self.run(rig, until: 120) == [1, 3, 7, 15, 31])
     }
 
+    @Test("A stalled tick (the Mac asleep) sends one hello pair, not the missed ones in a burst; the gaps go on from it")
+    func noCatchUpBurst() {
+        let rig = DriverRig()
+        rig.driver.connect()
+        #expect(Self.run(rig, until: 0.5).isEmpty)
+        #expect(Self.run(rig, from: 10, until: 40) == [10, 12, 16, 24, 40])
+    }
+
     @Test("The top panel answers (after the 1 s hello): no more; a goodbye stops them too, and a reconnect starts over")
     func answerStops() {
         let rig = DriverRig()
