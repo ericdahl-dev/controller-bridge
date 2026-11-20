@@ -17,7 +17,7 @@ The board layer comes from the owner's phrasedeck firmware. Its board settings f
 
 ## Build and test
 
-You need PlatformIO 6.2.0 running on Python 3.10-3.14: the pioarduino ESP32 platform refuses newer Pythons. Homebrew's `platformio` runs on Python 3.15, so install PlatformIO from PyPI on a supported Python:
+You need PlatformIO 6.2.0 running on Python 3.10-3.14: the pioarduino ESP32 platform refuses newer Pythons. Homebrew's `platformio` runs on Python 3.15 and is refused ("Python version must be 3.10 … 3.14"), so install PlatformIO from PyPI on a supported Python. A venv on Python 3.13 builds and uploads at the ini's 921,600 baud:
 
 ```sh
 python3.13 -m venv ~/.venvs/pio && ~/.venvs/pio/bin/pip install platformio==6.2.0
@@ -39,6 +39,8 @@ The panel's USB serial chip is a CH340K (1A86:7522), and the Mac needs WCH's CH3
 ```sh
 pio run -d tools/deck-panel -e crowpanel -t upload --upload-port /dev/cu.wchusbserial210
 ```
+
+**If the port fails with `tcsetattr: Invalid argument`**, WCH's driver is stuck. This happens after the panel re-enumerates, for example after the Mac sleeps or another USB device is replugged. Unplug the panel and plug it back in, then upload again.
 
 This writes the bootloader, the partition table (Arduino's stock `default_16MB` layout, `partitions.csv`), `boot_app0` and the app.
 
