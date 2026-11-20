@@ -66,8 +66,9 @@ jobs:
   deck-panel:
     name: Deck panel
     # The deck panel's firmware (#615, #620): the portable code's host tests, then the CrowPanel builds. Only when
-    # tools/deck-panel or this workflow changes; not a required check. PlatformIO is pinned, and the pioarduino
-    # platform it builds with takes Python 3.10-3.14.
+    # tools/deck-panel or this workflow changes. Skipped by its job-level `if`, it counts as passed, as Kit tests does,
+    # so it can be a required check without holding up unrelated PRs (#643: #633 merged with it red). PlatformIO is
+    # pinned, and the pioarduino platform it builds with takes Python 3.10-3.14.
     needs: changes
     if: needs.changes.outputs.deck_panel == 'true'
     runs-on: ubuntu-latest
