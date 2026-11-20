@@ -56,4 +56,17 @@ struct StripFaderTests {
         #expect(Self.sentVolumes(rig).isEmpty)
         #expect(!Self.seeks(rig).isEmpty)
     }
+
+    @Test("A touch with no travel sends nothing, even when the strip repeats where the finger is")
+    func noTravel() throws {
+        let rig = try C.started()
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 4000)
+        Self.at(rig, 4000)
+        Self.touch(rig, false)
+        #expect(Self.sentVolumes(rig).isEmpty)
+        #expect(Self.seeks(rig).isEmpty)
+    }
 }

@@ -10,6 +10,8 @@ struct StripFader {
         let channel: Int
         /// The level and strip position the travel counts from; nil until the first position after touch-down.
         var start: (level: Double, position: Double)?
+        /// The fader's level as this touch last left it: an unchanged level isn't sent again.
+        var level: Double?
     }
 
     /// Whether a touch is moving the fader now.
@@ -34,9 +36,15 @@ struct StripFader {
         guard var touch else { return nil }
         defer { self.touch = touch }
         guard let start = touch.start else {
-            if let level = levels[touch.channel] { touch.start = (level, position) }
+            if let level = levels[touch.channel] {
+                touch.start = (level, position)
+                touch.level = level
+            }
             return nil
         }
-        return (touch.channel, start.level + position - start.position)
+        let level = start.level + position - start.position
+        guard level != touch.level else { return nil }
+        touch.level = level
+        return (touch.channel, level)
     }
 }
