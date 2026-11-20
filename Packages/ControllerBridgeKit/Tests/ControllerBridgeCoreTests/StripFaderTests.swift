@@ -86,4 +86,30 @@ struct StripFaderTests {
         Self.at(rig, 0)
         #expect(abs((Self.sentVolumes(rig).last ?? -1) - 0.25) < 0.001)
     }
+
+    @Test("The mode is fixed at touch-down: Shift let go mid-touch stays a fader move, with no track jump under the finger")
+    func shiftLetGo() throws {
+        let rig = try C.started()
+        Self.volume(rig, 0.25)
+        Self.shift(rig, true)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.shift(rig, false)
+        Self.at(rig, 4096)
+        Self.touch(rig, false)
+        #expect(Self.sentVolumes(rig).count == 1)
+        #expect(Self.seeks(rig).isEmpty)
+    }
+
+    @Test("The mode is fixed at touch-down: Shift pressed mid-touch leaves the touch a seek, and moves no fader")
+    func shiftPressedMidTouch() throws {
+        let rig = try C.started()
+        Self.volume(rig, 0.25)
+        Self.touch(rig, true)
+        Self.at(rig, 0)
+        Self.shift(rig, true)
+        Self.at(rig, 4096)
+        #expect(Self.sentVolumes(rig).isEmpty)
+        #expect(Self.seeks(rig).count == 2)
+    }
 }
