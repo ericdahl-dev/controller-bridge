@@ -501,6 +501,41 @@ void test_a_fast_field_change_is_one_redraw_and_the_same_value_none() {
     TEST_ASSERT_EQUAL(before + 6 + 9 + 1, screen.shown.size());
 }
 
+// #636: what a fresh panel shows from a clipped stream after boot (a playing deck's fast fields, a keepalive burst cut
+// to its first messages). "No track loaded" comes only from a received loaded 0, never from what's missing.
+void test_a_clipped_stream_after_boot_never_says_no_track_loaded() {
+    const Bytes fast[] = {
+        float_message(prefix + "level", 0.6f), float_message(prefix + "progress", 0.4f),
+        float_message(prefix + "phase", 0.5f), float_message(prefix + "bpm", 126.0f),
+        float_message(prefix + "tempo", 0.8f), int_message(prefix + "beat", 2),
+        int_message(prefix + "elapsed", 95), int_message(prefix + "remaining", 212),
+    };
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    for (const Bytes& m : fast) feed(core, m, 1000);
+    core.render(screen, 1000);
+    deck_core::Face f = deck_core::face(screen.last().view);
+    TEST_ASSERT_EQUAL_STRING("", f.deck);  // no deck yet
+    TEST_ASSERT_EQUAL_STRING("", f.title);
+    TEST_ASSERT_EQUAL_STRING("126.0", f.bpm);
+
+    feed(core, int_message(prefix + "deck", 1), 1010);
+    feed(core, int_message(prefix + "color", 0xFF0000), 1010);
+    core.render(screen, 1010);
+    f = deck_core::face(screen.last().view);
+    TEST_ASSERT_EQUAL_STRING("1", f.deck);
+    TEST_ASSERT_EQUAL_STRING("", f.title);
+
+    feed(core, int_message(prefix + "loaded", 1), 1020);
+    core.render(screen, 1020);
+    f = deck_core::face(screen.last().view);
+    TEST_ASSERT_EQUAL_STRING("", f.title);  // blank until a title arrives, not "No track loaded"
+
+    feed(core, int_message(prefix + "loaded", 0), 1030);
+    core.render(screen, 1030);
+    TEST_ASSERT_EQUAL_STRING(deck_core::kNoTrack, deck_core::face(screen.last().view).title);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -558,6 +593,7 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_a_clipped_stream_after_boot_never_says_no_track_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
     RUN_TEST(test_a_fast_field_change_is_one_redraw_and_the_same_value_none);
