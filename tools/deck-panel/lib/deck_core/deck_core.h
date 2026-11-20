@@ -9,6 +9,10 @@
 
 namespace deck_core {
 
+/// The longest title and artist shown, in characters; longer ones are cut and end in "…" (#490).
+constexpr size_t kTitleMax = 40;
+constexpr size_t kArtistMax = 40;
+
 /// What the deck screen shows.
 struct DeckView {
     int deck = 0;  ///< 1-4; 0 until the feed says

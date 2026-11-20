@@ -208,6 +208,59 @@ void test_the_screen_hears_only_of_changes() {
     TEST_ASSERT_FALSE(screen.last().waiting);
 }
 
+static std::string repeat(const std::string& piece, size_t times) {
+    std::string out;
+    for (size_t i = 0; i < times; ++i) out += piece;
+    return out;
+}
+
+static std::string title_shown(const std::string& title) {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, string_message(prefix + "title", title), 100);
+    core.render(screen, 100);
+    return screen.last().title;
+}
+
+static std::string artist_shown(const std::string& artist) {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, string_message(prefix + "artist", artist), 100);
+    core.render(screen, 100);
+    return screen.last().artist;
+}
+
+static const std::string ellipsis = "\xE2\x80\xA6";  // …
+
+void test_a_title_that_fits_is_shown_whole() {
+    std::string fits = repeat("a", deck_core::kTitleMax);
+    TEST_ASSERT_EQUAL_STRING(fits.c_str(), title_shown(fits).c_str());
+}
+
+void test_a_long_title_is_cut_with_an_ellipsis_to_the_limit() {
+    std::string want = repeat("a", deck_core::kTitleMax - 1) + ellipsis;
+    TEST_ASSERT_EQUAL_STRING(want.c_str(), title_shown(repeat("a", deck_core::kTitleMax + 1)).c_str());
+}
+
+void test_a_long_artist_is_cut_too() {
+    std::string want = repeat("b", deck_core::kArtistMax - 1) + ellipsis;
+    TEST_ASSERT_EQUAL_STRING(want.c_str(), artist_shown(repeat("b", deck_core::kArtistMax + 5)).c_str());
+}
+
+void test_the_cut_counts_characters_not_bytes_and_never_splits_one() {
+    // é is 2 bytes, the emoji 4: the limit is in characters, and the cut lands between them.
+    std::string fits = repeat("\xC3\xA9", deck_core::kTitleMax);
+    TEST_ASSERT_EQUAL_STRING(fits.c_str(), title_shown(fits).c_str());
+    std::string want = repeat("\xF0\x9F\x8E\xB5", deck_core::kTitleMax - 1) + ellipsis;
+    TEST_ASSERT_EQUAL_STRING(want.c_str(), title_shown(repeat("\xF0\x9F\x8E\xB5", deck_core::kTitleMax + 1)).c_str());
+}
+
+void test_spaces_before_the_ellipsis_are_dropped() {
+    std::string words = repeat("a", deck_core::kTitleMax - 3) + "   " + "tail";
+    std::string want = repeat("a", deck_core::kTitleMax - 3) + ellipsis;
+    TEST_ASSERT_EQUAL_STRING(want.c_str(), title_shown(words).c_str());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -230,5 +283,10 @@ int main(int, char**) {
     RUN_TEST(test_a_bad_packet_does_not_keep_the_feed_alive);
     RUN_TEST(test_the_clock_wrapping_round_does_not_end_the_wait_early_or_late);
     RUN_TEST(test_the_screen_hears_only_of_changes);
+    RUN_TEST(test_a_title_that_fits_is_shown_whole);
+    RUN_TEST(test_a_long_title_is_cut_with_an_ellipsis_to_the_limit);
+    RUN_TEST(test_a_long_artist_is_cut_too);
+    RUN_TEST(test_the_cut_counts_characters_not_bytes_and_never_splits_one);
+    RUN_TEST(test_spaces_before_the_ellipsis_are_dropped);
     return UNITY_END();
 }

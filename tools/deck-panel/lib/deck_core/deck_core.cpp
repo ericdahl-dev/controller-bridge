@@ -8,6 +8,26 @@ namespace {
 
 const char kPrefix[] = "/DeckBridge/Display/";
 
+/// `text` (valid UTF-8) at most `limit` characters: a longer one is cut between characters, spaces before the cut
+/// dropped, and ends in "…".
+std::string shorten(const char* text, size_t limit) {
+    std::string out;
+    size_t characters = 0;
+    for (const char* p = text; *p; ++p) {
+        bool starts_character = (static_cast<uint8_t>(*p) & 0xC0) != 0x80;
+        if (starts_character && ++characters == limit) {
+            // The limit-th character: whole only if it is the last.
+            size_t rest = 0;
+            for (const char* q = p; *q; ++q) rest += (static_cast<uint8_t>(*q) & 0xC0) != 0x80;
+            if (rest == 1) return out + p;
+            while (!out.empty() && out.back() == ' ') out.pop_back();
+            return out + "\xE2\x80\xA6";
+        }
+        out += *p;
+    }
+    return out;
+}
+
 /// One OSC message with one value, as the feed sends (ADR 0011).
 struct Message {
     const char* name = nullptr;  ///< the address after the prefix
@@ -98,12 +118,12 @@ const Row kRows[] = {
      }},
     {"title", 's',
      [](DeckView& v, const Message& m) {
-         v.title = m.s;
+         v.title = shorten(m.s, kTitleMax);
          return true;
      }},
     {"artist", 's',
      [](DeckView& v, const Message& m) {
-         v.artist = m.s;
+         v.artist = shorten(m.s, kArtistMax);
          return true;
      }},
 };
