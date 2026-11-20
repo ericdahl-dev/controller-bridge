@@ -10,10 +10,26 @@ Every address is under `/DeckBridge/Display/` and carries exactly one value, of 
 |---|---|---|
 | `deck` | `i` | The deck in front, 1-4 |
 | `color` | `i` | Its deck color as `0xRRGGBB`, the ring's and the app badge's |
-| `title` | `s` | The track's title; `""` while the deck is empty |
-| `artist` | `s` | The track's artist; `""` while the deck is empty |
+| `loaded` | `i` | 1 with a track loaded. **0 is the empty state**: every other field below is then `""`, 0 or, for `phase`, -1 |
+| `title` | `s` | The track's title |
+| `artist` | `s` | The track's artist |
+| `key` | `s` | The track's key, in Settings' key notation (traditional or Camelot), as the jog display writes it |
+| `bpm` | `f` | The deck's live BPM, else the track's; 0 unknown |
+| `tempo` | `f` | The change from the track's BPM in percent: (live / track - 1) × 100; 0 when the track's BPM is unknown |
+| `playing` | `i` | 0 or 1 |
+| `cue` | `i` | 1 while the deck's CUE button is held |
+| `sync` | `i` | 0 or 1 |
+| `master` | `i` | 1 when the deck is Syndicate's tempo master (synced, its tempo slider enabled), as the Master LED shows it |
+| `loop` | `i` | 0 or 1 |
+| `loopLength` | `f` | The loop's length in beats, fractions too (0.5, 0.25 …), unrounded; 0 with no loop |
+| `beat` | `i` | Syndicate's master clock beat, 1-4, the same whichever deck is in front, as the jog ring shows it; 0 once the clock has been quiet for over 2 s |
+| `elapsed` | `i` | Whole seconds into the track, counted down from the exact time as the drawn display does |
+| `remaining` | `i` | Whole seconds left: the whole length less `elapsed`; 0 with no known length |
+| `progress` | `f` | Through the track, 0-1 |
+| `phase` | `f` | Against the master, 0-1: 0.5 in phase, below behind, above ahead (a half beat at the ends), by the drawn display's phase rule. **-1 is unknown** (the deck stopped, or no offset since it loaded): the one value outside its range |
+| `level` | `f` | The deck's mixer meter, 0-1, on the drawn meter's dB scale (-36 to +16 dB) and ballistics |
 
-Names reserved for #617, which fixes them: `loaded`, `key`, `bpm`, `tempo` (percent), `elapsed` and `remaining` (seconds), `progress` (0-1), `beat` (1-4, 0 for none), `playing`, `cue`, `sync`, `master`, `loop` (0 or 1), `loopLength` (beats), `phase` (0-1, 0.5 in phase) and `level` (0-1).
+`progress`, `phase` and `level` change fast, so each goes out at most about 30 times a second, the latest value winning; nothing is queued. A full snapshot also goes out every 2 seconds as a keepalive, so a message lost on Wi-Fi or dropped while DeckBridge's sender was behind is fixed within 2 s. While the feed is on, DeckBridge asks Syndicate for its Meter and PhaseOffset feedback.
 
 **A display must ignore an address it doesn't know**, and a message whose type isn't the one above. That way a newer DeckBridge can add addresses without breaking an older display.
 
