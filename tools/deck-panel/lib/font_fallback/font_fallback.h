@@ -1,6 +1,6 @@
-// Text fitted to the panel's font (#620): LVGL's built-in Montserrat has printable ASCII only, so anything else would
-// draw as an empty box. Until #621's fonts with Latin coverage, accented Latin letters lose their accents, "…" is
-// "...", and any other character is "?".
+// Text fitted to the panel's fonts (#620, #621): Geist, converted with printable ASCII, Latin-1 Supplement (U+00A0-
+// U+00FF), Latin Extended-A (U+0100-U+017F) and "…". Any other character would draw as an empty box, so it is "?".
+// The conversion's ranges (tools/deck-panel/fonts/) and these must match.
 #pragma once
 
 #include <cstddef>

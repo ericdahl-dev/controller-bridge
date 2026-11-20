@@ -7,14 +7,6 @@ namespace font_fallback {
 
 namespace {
 
-/// U+00C0 to U+00FF, Latin-1's letters, without their accents; "?" for the signs among them (× ÷) and þ Þ.
-const char* const kLatin1[64] = {
-    "A", "A", "A", "A", "A", "A", "AE", "C", "E", "E", "E", "E", "I", "I", "I", "I",   // C0-CF
-    "D", "N", "O", "O", "O", "O", "O", "?", "O", "U", "U", "U", "U", "Y", "?", "ss",   // D0-DF
-    "a", "a", "a", "a", "a", "a", "ae", "c", "e", "e", "e", "e", "i", "i", "i", "i",   // E0-EF
-    "d", "n", "o", "o", "o", "o", "o", "?", "o", "u", "u", "u", "u", "y", "?", "y",   // F0-FF
-};
-
 /// The next character of valid UTF-8 at `p`: its code point, and how many bytes it took.
 uint32_t next(const char* p, size_t& bytes) {
     const auto lead = static_cast<uint8_t>(p[0]);
@@ -28,28 +20,20 @@ uint32_t next(const char* p, size_t& bytes) {
     return code;
 }
 
+/// In the fonts: printable ASCII, U+00A0-U+017F, and "…".
+bool drawn(uint32_t code) { return (code >= 0x20 && code < 0x7F) || (code >= 0xA0 && code <= 0x17F) || code == 0x2026; }
+
 }  // namespace
 
 void fit(const char* text, char* out, size_t size) {
     if (size == 0) return;
     size_t n = 0;
-    char ascii[2] = {0, 0};
     for (const char* p = text; *p;) {
         size_t bytes;
         const uint32_t code = next(p, bytes);
+        const char* shown = drawn(code) ? p : "?";
+        const size_t length = drawn(code) ? bytes : 1;
         p += bytes;
-        const char* shown;
-        if (code >= 0x20 && code < 0x7F) {
-            ascii[0] = static_cast<char>(code);
-            shown = ascii;
-        } else if (code >= 0xC0 && code <= 0xFF) {
-            shown = kLatin1[code - 0xC0];
-        } else if (code == 0x2026) {
-            shown = "...";
-        } else {
-            shown = "?";
-        }
-        const size_t length = std::strlen(shown);
         if (n + length > size - 1) break;  // whole or not at all
         std::memcpy(out + n, shown, length);
         n += length;
