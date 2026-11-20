@@ -54,4 +54,5 @@ public final class SnapshotJogDisplayPort: JogDisplayPort, @unchecked Sendable {
     public var isAttached: Bool { lock.withLock { attached } }
     public func sendController(_ bytes: [UInt8]) { inner.sendController(bytes) }
     public func sendWD(_ bytes: [UInt8]) { inner.sendWD(bytes) }
+    public func flush() { inner.flush() }
 }

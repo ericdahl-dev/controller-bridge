@@ -84,6 +84,8 @@ struct MIDISnapshotTests {
         private var blocked = false
         private(set) var waited = 0
         var wd: [[UInt8]] = []
+        private(set) var flushed = 0
+        func flush() { flushed += 1 }
         init(attached: Bool) { self.attached = attached }
         func set(attached: Bool) { lock.withLock { self.attached = attached } }
         func block(_ on: Bool) { lock.withLock { blocked = on } }
@@ -112,5 +114,13 @@ struct MIDISnapshotTests {
         #expect(!port.isAttached)
         port.sendWD([1, 2])
         #expect(inner.wd == [[1, 2]])
+    }
+
+    @Test("Quitting flushes through the snapshot to the port under it (#600)")
+    func flushPassesThrough() {
+        let inner = BlockingJogPort(attached: true)
+        let port = SnapshotJogDisplayPort(inner: inner)
+        port.flush()
+        #expect(inner.flushed == 1)
     }
 }
