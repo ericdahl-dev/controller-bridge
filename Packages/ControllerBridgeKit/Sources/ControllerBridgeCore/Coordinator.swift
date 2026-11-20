@@ -294,6 +294,12 @@ public final class Coordinator {
 
     /// The feed's deck: the jog display's deck in front (the active layer; with no controller, the preview's deck),
     /// whether or not the jog display is on.
+    /// LoopInfo's seconds are the track's, so its BPM gives the beats; unrounded, a display rounds for itself (#617).
+    private static func loopBeats(_ facts: DeckFacts, bpm: Double) -> Double {
+        guard let seconds = facts.loopSeconds, bpm > 0 else { return 0 }
+        return seconds * bpm / 60
+    }
+
     private func updateDisplayFeed() {
         guard displayFeed.on else { return }
         let entries = jogEntries
@@ -307,7 +313,9 @@ public final class Coordinator {
             return DisplayFeed.Deck(number: facts.deck, color: color, loaded: true,
                                     title: facts.track?.title ?? "", artist: facts.track?.artist ?? "",
                                     key: facts.track.map { jogController.keyDisplay.shown($0.key) } ?? "", bpm: bpm,
-                                    tempo: trackBPM > 0 && bpm > 0 ? (bpm / trackBPM - 1) * 100 : 0)
+                                    tempo: trackBPM > 0 && bpm > 0 ? (bpm / trackBPM - 1) * 100 : 0,
+                                    playing: facts.playing, cue: facts.cueHeld, sync: facts.synced, master: facts.master,
+                                    loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0)
         }
         displayFeed.update(deck)
     }
@@ -644,6 +652,8 @@ public final class Coordinator {
             for notice in controllers[index].bridge.notices { log.log(notice) }
             controllers[index].bridge.notices.removeAll()
         }
+        // A held CUE is the feed's (#617).
+        updateDisplayFeed()
         disconnectFailedOutputs()
     }
 

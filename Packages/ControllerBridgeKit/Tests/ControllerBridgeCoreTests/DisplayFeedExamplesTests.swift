@@ -30,7 +30,10 @@ struct DisplayFeedExamplesTests {
     static func deck(_ state: [String: Any]) -> DisplayFeed.Deck {
         DisplayFeed.Deck(number: state["deck"] as! Int, color: state["color"] as! [Int], loaded: state["loaded"] as? Bool ?? false,
                          title: state["title"] as? String ?? "", artist: state["artist"] as? String ?? "",
-                         key: state["key"] as? String ?? "", bpm: state["bpm"] as? Double ?? 0, tempo: state["tempo"] as? Double ?? 0)
+                         key: state["key"] as? String ?? "", bpm: state["bpm"] as? Double ?? 0, tempo: state["tempo"] as? Double ?? 0,
+                         playing: state["playing"] as? Bool ?? false, cue: state["cue"] as? Bool ?? false,
+                         sync: state["sync"] as? Bool ?? false, master: state["master"] as? Bool ?? false,
+                         loop: state["loop"] as? Bool ?? false, loopLength: state["loopLength"] as? Double ?? 0)
     }
 
     @Test("The file's prefix is the feed's, and it has a loaded deck, an empty one and non-ASCII text")

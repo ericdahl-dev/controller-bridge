@@ -4,7 +4,7 @@
   "cases": [
     {
       "name": "deck 1 loaded, in red",
-      "state": { "deck": 1, "color": [255, 0, 0], "loaded": true, "title": "Night Drive", "artist": "Example Artist", "key": "Am", "bpm": 126, "tempo": 0.8 },
+      "state": { "deck": 1, "color": [255, 0, 0], "loaded": true, "title": "Night Drive", "artist": "Example Artist", "key": "Am", "bpm": 126, "tempo": 0.8, "playing": true, "sync": true, "master": true, "loop": true, "loopLength": 0.5 },
       "messages": [
         { "address": "/DeckBridge/Display/deck", "type": "i", "value": 1 },
         { "address": "/DeckBridge/Display/color", "type": "i", "value": 16711680 },
@@ -13,7 +13,13 @@
         { "address": "/DeckBridge/Display/artist", "type": "s", "value": "Example Artist" },
         { "address": "/DeckBridge/Display/key", "type": "s", "value": "Am" },
         { "address": "/DeckBridge/Display/bpm", "type": "f", "value": 126 },
-        { "address": "/DeckBridge/Display/tempo", "type": "f", "value": 0.8 }
+        { "address": "/DeckBridge/Display/tempo", "type": "f", "value": 0.8 },
+        { "address": "/DeckBridge/Display/playing", "type": "i", "value": 1 },
+        { "address": "/DeckBridge/Display/cue", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/sync", "type": "i", "value": 1 },
+        { "address": "/DeckBridge/Display/master", "type": "i", "value": 1 },
+        { "address": "/DeckBridge/Display/loop", "type": "i", "value": 1 },
+        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0.5 }
       ]
     },
     {
@@ -27,12 +33,18 @@
         { "address": "/DeckBridge/Display/artist", "type": "s", "value": "" },
         { "address": "/DeckBridge/Display/key", "type": "s", "value": "" },
         { "address": "/DeckBridge/Display/bpm", "type": "f", "value": 0 },
-        { "address": "/DeckBridge/Display/tempo", "type": "f", "value": 0 }
+        { "address": "/DeckBridge/Display/tempo", "type": "f", "value": 0 },
+        { "address": "/DeckBridge/Display/playing", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/cue", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/sync", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/master", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/loop", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0 }
       ]
     },
     {
       "name": "deck 4 in a custom color, with non-ASCII text",
-      "state": { "deck": 4, "color": [18, 52, 86], "loaded": true, "title": "Café Ångström", "artist": "Señor Ünïcode", "key": "11B", "bpm": 174, "tempo": -2.5 },
+      "state": { "deck": 4, "color": [18, 52, 86], "loaded": true, "title": "Café Ångström", "artist": "Señor Ünïcode", "key": "11B", "bpm": 174, "tempo": -2.5, "cue": true, "sync": true },
       "messages": [
         { "address": "/DeckBridge/Display/deck", "type": "i", "value": 4 },
         { "address": "/DeckBridge/Display/color", "type": "i", "value": 1193046 },
@@ -41,7 +53,13 @@
         { "address": "/DeckBridge/Display/artist", "type": "s", "value": "Señor Ünïcode" },
         { "address": "/DeckBridge/Display/key", "type": "s", "value": "11B" },
         { "address": "/DeckBridge/Display/bpm", "type": "f", "value": 174 },
-        { "address": "/DeckBridge/Display/tempo", "type": "f", "value": -2.5 }
+        { "address": "/DeckBridge/Display/tempo", "type": "f", "value": -2.5 },
+        { "address": "/DeckBridge/Display/playing", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/cue", "type": "i", "value": 1 },
+        { "address": "/DeckBridge/Display/sync", "type": "i", "value": 1 },
+        { "address": "/DeckBridge/Display/master", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/loop", "type": "i", "value": 0 },
+        { "address": "/DeckBridge/Display/loopLength", "type": "f", "value": 0 }
       ]
     }
   ]

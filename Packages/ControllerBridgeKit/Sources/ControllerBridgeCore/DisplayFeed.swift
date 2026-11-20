@@ -23,6 +23,15 @@ final class DisplayFeed {
         var bpm = 0.0
         /// The change from the track's BPM, in percent; 0 when the track's is unknown.
         var tempo = 0.0
+        var playing = false
+        /// The deck's CUE button is held.
+        var cue = false
+        var sync = false
+        /// Syndicate's tempo master: synced, with its tempo slider enabled, as the Master LED shows it.
+        var master = false
+        var loop = false
+        /// The loop's length in beats, fractions too; 0 with no loop.
+        var loopLength = 0.0
 
         /// The full snapshot, in the feed's order. #617 adds its fields here.
         var messages: [OSCMessage] {
@@ -36,6 +45,12 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "key", [.string(key)]),
                 OSCMessage(DisplayFeed.prefix + "bpm", [.float(Float(bpm))]),
                 OSCMessage(DisplayFeed.prefix + "tempo", [.float(Float(tempo))]),
+                OSCMessage(DisplayFeed.prefix + "playing", [.int(playing ? 1 : 0)]),
+                OSCMessage(DisplayFeed.prefix + "cue", [.int(cue ? 1 : 0)]),
+                OSCMessage(DisplayFeed.prefix + "sync", [.int(sync ? 1 : 0)]),
+                OSCMessage(DisplayFeed.prefix + "master", [.int(master ? 1 : 0)]),
+                OSCMessage(DisplayFeed.prefix + "loop", [.int(loop ? 1 : 0)]),
+                OSCMessage(DisplayFeed.prefix + "loopLength", [.float(Float(loopLength))]),
             ]
         }
     }

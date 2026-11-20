@@ -30,8 +30,17 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/key", [.string(loaded ? key : "")]),
             OSCMessage("/DeckBridge/Display/bpm", [.float(loaded ? bpm : 0)]),
             OSCMessage("/DeckBridge/Display/tempo", [.float(loaded ? tempo : 0)]),
+            OSCMessage("/DeckBridge/Display/playing", [.int(0)]),
+            OSCMessage("/DeckBridge/Display/cue", [.int(0)]),
+            OSCMessage("/DeckBridge/Display/sync", [.int(0)]),
+            OSCMessage("/DeckBridge/Display/master", [.int(0)]),
+            OSCMessage("/DeckBridge/Display/loop", [.int(0)]),
+            OSCMessage("/DeckBridge/Display/loopLength", [.float(0)]),
         ]
     }
+
+    static func message(_ name: String, _ value: Int32) -> OSCMessage { OSCMessage("/DeckBridge/Display/" + name, [.int(value)]) }
+    static func message(_ name: String, _ value: Float) -> OSCMessage { OSCMessage("/DeckBridge/Display/" + name, [.float(value)]) }
 
     /// Syndicate loads a track on `deck`: Loaded, then its TrackInfo.
     static func load(_ rig: Rig, deck: Int = 1, title: String = "Daybreak") {
@@ -188,9 +197,8 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
         #expect(feed.sent == [])
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
-        // Everything but the deck, its color and the 0% tempo, which the empty state already sent.
-        #expect(feed.sent == Array(Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
-            .dropFirst(2).dropLast()))
+        // loaded through bpm: the deck, its color, the 0% tempo and the flags were already the empty state's.
+        #expect(feed.sent == Array(Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")[2..<7]))
     }
 
     @Test("The deck's live BPM sends bpm and tempo, the change from the track's BPM in percent: 132 on a 128 track is +3.125%")
@@ -227,6 +235,47 @@ struct DisplayFeedCoordinatorTests {
         feed.sent.removeAll()
         rig.coordinator.setKeyDisplay(.camelot)
         #expect(feed.sent == [OSCMessage("/DeckBridge/Display/key", [.string("3A")])])
+    }
+
+    @Test("Play, CUE held, sync and master each send their 0/1 as they change; master is synced with the tempo slider enabled")
+    func transportFlags() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        rig.coordinator.setDisplayFeed(Self.on)
+        feed.sent.removeAll()
+        MainCueTests.feed(rig, "Playing", 1)
+        #expect(feed.sent == [Self.message("playing", Int32(1))])
+        feed.sent.removeAll()
+        TransportTests.press(rig, 2)
+        #expect(feed.sent == [Self.message("cue", Int32(1))])
+        feed.sent.removeAll()
+        TransportTests.release(rig, 2)
+        #expect(feed.sent == [Self.message("cue", Int32(0))])
+        feed.sent.removeAll()
+        MainCueTests.feed(rig, "Sync", 1)
+        #expect(feed.sent == [Self.message("sync", Int32(1)), Self.message("master", Int32(1))])
+        feed.sent.removeAll()
+        MainCueTests.feed(rig, "TempoSliderEnabled", 0)
+        #expect(feed.sent == [Self.message("master", Int32(0))])
+    }
+
+    @Test("A loop sends loop 1 and its length in beats at the track's BPM, fractions too: 1.875 s at 128 is 4, 0.234375 s is 0.5")
+    func loopAndLength() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        rig.coordinator.setDisplayFeed(Self.on)
+        feed.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/LoopInfo", [.int(1), .float(10), .float(11.875)]))
+        MainCueTests.feed(rig, "Loop", 1)
+        #expect(feed.sent == [Self.message("loop", Int32(1)), Self.message("loopLength", Float(4))])
+        feed.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/LoopInfo", [.int(1), .float(10), .float(10.234375)]))
+        #expect(feed.sent == [Self.message("loopLength", Float(0.5))])
+        feed.sent.removeAll()
+        MainCueTests.feed(rig, "Loop", 0)
+        #expect(feed.sent == [Self.message("loop", Int32(0)), Self.message("loopLength", Float(0))])
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")

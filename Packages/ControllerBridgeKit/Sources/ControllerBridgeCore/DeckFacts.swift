@@ -25,6 +25,11 @@ struct DeckFacts: Equatable, Sendable {
     var looping = false
     /// The deck's CUE button is held (#463).
     var cueHeld = false
+    /// Syndicate's Sync, and whether the deck is its tempo master (synced, with its tempo slider enabled) (#617).
+    var synced = false
+    var master = false
+    /// The loop's length in track seconds, from LoopInfo; nil with none reported (#617).
+    var loopSeconds: Double?
     /// The live tempo, from the deck's BPM.
     var bpm: Double?
     var track: Track?
@@ -42,7 +47,7 @@ extension Bridge {
     var facts: DeckFacts {
         DeckFacts(
             deck: mapping.deck.number, playing: playing, loaded: loaded, playPending: playPending, looping: looping,
-            cueHeld: cueDown, bpm: bpm,
+            cueHeld: cueDown, synced: synced, master: isMaster, loopSeconds: loopSeconds, bpm: bpm,
             track: track.map { DeckFacts.Track(title: $0.title, artist: $0.artist, key: $0.key, bpm: $0.bpm, playerType: $0.playerType) },
             duration: duration, position: cueMemory.position, barRamp: barRamp, phaseOffset: phaseOffset
         )
