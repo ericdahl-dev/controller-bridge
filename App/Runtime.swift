@@ -36,7 +36,8 @@ enum BridgeHost {
         driver.trace = DebugTrace.shared.sink
         let trace = DebugTrace.shared.sink
         driver.onEvent = { event in
-            trace(.jogDisplay, "event \(event)")
+            // Not the preview's per-tick events (#605): they filled the trace file in about a minute.
+            if let line = event.traceLine { trace(.jogDisplay, line) }
             jogEvents(event)
         }
         #else

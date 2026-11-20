@@ -21,15 +21,17 @@ final class JogDisplayController {
     /// When the next live update is due: a schedule 1/`liveRate` apart (#558), so a send that lands late on a tick
     /// doesn't push the next one back. After a stall it restarts from now, with no burst to catch up.
     private var nextLiveDue: Double?
-    /// The live cadence (#592): the needle, the meter and the phase go together, 25 times a second, every 40 ms. 40 ms
-    /// is four of the app's 10 ms ticks, so every step is the same (30 a second beat against the tick into 30 and 40 ms
-    /// steps, which read as judder), and together they cost the chip one redraw (dfw_tick parses what's waiting, then
-    /// draws once). 50 a second (#592) stalled the unit's USB within a minute.
-    static let liveRate = 25.0
-    /// The chip's redraw budget (#592): each redraw takes ~14 ms of its superloop (#563), and stock must keep servicing
-    /// USB, so redraws stay under ~45% of its time: 0.45 / 0.014 = 32 a second. The live cadence (25) plus the master
-    /// beat (at most 3 a second at 180 BPM) and the time (1 a second, when the shown second changes) is 29: 41%.
-    static let redrawBudget = 32
+    /// The live cadence (#592, #605): the needle, the meter and the phase go together, 50 times a second, every 20 ms.
+    /// 20 ms is two of the app's 10 ms ticks, so every step is the same (a rate that beats against the tick reads as
+    /// judder), and together they cost the chip one redraw (dfw_tick parses what's waiting, then draws once). #592's
+    /// stall at this rate was the unit's power, not the rate: with the adapter in, 2 min 37 s at 50 a second had no
+    /// gap and no disconnect (#605).
+    static let liveRate = 50.0
+    /// The chip's redraw budget (#592, #605): what the cadence asks of it at most, at ~14 ms a redraw (#563). The live
+    /// cadence (50) plus the master beat (at most 3 a second at 180 BPM) and the time (1 a second, when the shown second
+    /// changes) is 54: 54 × 0.014 = 76% of the chip's time. The chip's USB control path runs in its own interrupt, so
+    /// drawing can't starve it. Nothing enforces this; the redraw test checks the cadence keeps to it.
+    static let redrawBudget = 54
     /// Each mixer channel's meter (#461), through its ballistics (#582): what the drawn meter and the preview show.
     private var meters: [Int: MeterBallistics] = [:]
     /// The deck whose meter went out last: a switch sends the new one's at once.
