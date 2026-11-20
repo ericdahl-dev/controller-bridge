@@ -365,6 +365,26 @@ static void three_silent_seconds_present_the_logo(void) {
     CHECK(stale_matches());
 }
 
+/// The quit look (#600): the app leaves our logo, the last deck's number on a neutral hub (the icon's own, D5D5D5),
+/// by sending that deck again with the neutral color, then the state with stale, and no end. The reference is the
+/// Swift renderer's (test/ref/quit-deck2.ppm), compared over the whole frame as the waiting look.
+#define QUIT_REF "test/ref/quit-deck2.ppm"
+
+static void the_quit_bytes_leave_the_logo_on_a_neutral_hub(void) {
+    fresh(&unit, &rec);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 01 01 F7");                         // begin
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 7F 00 00 00 00 01 F7");    // deck 2, red, track
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 03 F7");                         // loaded, playing
+    dfw_tick(&unit, 0);
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 09 03 02 01 55 01 55 01 55 01 F7");    // deck 2, D5D5D5, track
+    feed(&unit, "F0 00 02 0B 7F 10 20 00 02 07 23 F7");                         // loaded, playing, stale
+    dfw_tick(&unit, 40);
+    CHECK(rec.presents == 2);
+    CHECK(load_reference(QUIT_REF));
+    memcpy(frame, rec.last, sizeof frame);
+    CHECK(stale_matches());
+}
+
 /// Which pixels of the hub's middle (the number's box) are the number's ink: near the ground, not the hub's color.
 static void number_ink(const dfw_pixel *drawn, uint8_t *ink) {
     for (int y = 0; y < 24; y++)
@@ -465,6 +485,7 @@ const test_case draw_tests[] = {
     { "a dark deck's hub number is white", a_dark_decks_hub_number_is_white },
     { "the linear channel table is WCAG's", the_linear_channel_table_is_wcags },
     { "three silent seconds present the logo", three_silent_seconds_present_the_logo },
+    { "the quit bytes leave the logo on a neutral hub", the_quit_bytes_leave_the_logo_on_a_neutral_hub },
     { "the stale flag draws the logo and fresh feedback clears it",
       the_stale_flag_draws_the_logo_and_fresh_feedback_clears_it },
     { 0, 0 },

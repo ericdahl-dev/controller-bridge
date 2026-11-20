@@ -89,6 +89,7 @@ void a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored(void);
 
 void begin_while_drawing_changes_nothing(void);
 void a_deck_clears_the_deck_flags_but_not_stale(void);
+void a_relaunch_after_a_quit_brings_the_deck_back(void);
 void an_unchanged_heartbeat_presents_nothing(void);
 void the_first_meter_at_silence_presents(void);
 void a_changed_meter_presents(void);
@@ -143,6 +144,7 @@ const test_case all_tests[] = {
       a_state_with_the_reserved_bit_or_a_wrong_length_is_ignored },
     { "begin while drawing changes nothing", begin_while_drawing_changes_nothing },
     { "a deck clears the deck flags but not stale", a_deck_clears_the_deck_flags_but_not_stale },
+    { "a relaunch after a quit brings the deck back", a_relaunch_after_a_quit_brings_the_deck_back },
     { "an unchanged heartbeat presents nothing", an_unchanged_heartbeat_presents_nothing },
     { "the first meter at silence presents", the_first_meter_at_silence_presents },
     { "a changed meter presents", a_changed_meter_presents },

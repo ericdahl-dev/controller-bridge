@@ -22,22 +22,22 @@ struct DrawnDisplayMeterTests {
         return (rig, port)
     }
 
-    @Test("Drawing: the front deck's channel level goes out as op 0A (−36..+16 dB → 0-127, #582), at most 30 a second, only on change")
+    @Test("Drawing: the front deck's channel level goes out as op 0A (−36..+16 dB → 0-127, #582), on the 40 ms live cadence (#592), only on change")
     func meterFromFeedback() throws {
         let (rig, port) = try Self.drawing()
+        rig.clock.now = 0.04   // the next live tick after the one at 0
         Self.level(rig, 0.5)
         Self.level(rig, channel: 2, 1.0)   // another deck's channel: not shown
-        rig.clock.now = 0.01
         rig.coordinator.tick()
         // 0.5 is −6.0 dB: (−6.02 + 36) / 52 of 127, 73.
         #expect(Self.meters(port) == [DrawnDisplay.Message.meter(level: 73, peak: 73).bytes])
         port.wd.removeAll()
         for step in 2...100 {
             rig.clock.now = Double(step) * 0.01
-            Self.level(rig, Float(step % 2 == 0 ? 0.25 : 0.75))
+            Self.level(rig, Float(step) / 100)
             rig.coordinator.tick()
         }
-        #expect(Self.meters(port).count <= 31 && Self.meters(port).count >= 20)
+        #expect(Self.meters(port).count <= 26 && Self.meters(port).count >= 20)
         port.wd.removeAll()
         rig.clock.now = 2
         rig.coordinator.tick()
@@ -49,17 +49,20 @@ struct DrawnDisplayMeterTests {
         #expect(Self.meters(port).count == settled)   // nothing new: nothing sent
     }
 
-    /// #582: a send schedule 1/30 s apart, as the needle's (#561): a send that lands late on a 10 ms tick doesn't push
-    /// the next one back. It was 25 a second.
-    @Test("A second of 10 ms ticks with the level changing every tick sends the meter 30 times")
+    /// #582, #592: the meter goes on the needle's shared live cadence, 40 ms, so the chip draws both in one redraw.
+    @Test("The meter goes only on live ticks, every 40 ms with the needle: over a second of rising level, at most 25, all on multiples of four ticks")
     func fullRate() throws {
         let (rig, port) = try Self.drawing()
+        var sentAt: [Int] = []
         for step in 0..<100 {
             rig.clock.now = 1 + Double(step) * 0.01
-            Self.level(rig, Float(step % 2 == 0 ? 0.2 : 0.9))
+            Self.level(rig, 0.1 + Float(step) / 100)   // above the −36 dB floor from the start
+            let before = Self.meters(port).count
             rig.coordinator.tick()
+            if Self.meters(port).count > before { sentAt.append(step) }
         }
-        #expect(Self.meters(port).count == 30)
+        #expect((23...25).contains(sentAt.count))
+        #expect(sentAt.allSatisfy { $0 % 4 == 0 })
     }
 
     /// #582: the ballistics (MeterBallistics). The level falls from full to empty in 0.5 s rather than dropping to the

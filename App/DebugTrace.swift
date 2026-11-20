@@ -16,6 +16,9 @@ final class DebugTrace: @unchecked Sendable {
     private let loggers: [TraceCategory: Logger]
     /// The last status summary written, so only changes are logged.
     private var lastStatus = ""
+    /// A line every 0.5 s from a timer that isn't the engine (#595): a silent stretch with beats in it is the engine
+    /// stalled; one without is the whole process.
+    private var heartbeat: TraceHeartbeat?
 
     private init() {
         let logs = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
@@ -29,6 +32,7 @@ final class DebugTrace: @unchecked Sendable {
         let path = fileURL.path
         loggers[.coordinator]?.notice("Debug trace file: \(path, privacy: .public)")
         file.append(TraceLine.format(at: .now, .coordinator, "Debug trace started; file \(path)"))
+        heartbeat = TraceHeartbeat(every: 0.5, sink: sink)
     }
 
     /// Where the Kit's trace goes: os_log at once, the file on a background queue.

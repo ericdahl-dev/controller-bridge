@@ -3,11 +3,14 @@ and swiftc on a PATH that holds only them and /usr/bin:/bin, with HOME and the w
 real dfu-util, the real update-mode tool in ~/lc6000 and MIDI are out of reach, and each test checks that first: the
 owner's unit may be plugged in while these run.
 Run from the repo root: python3 -I -m unittest discover tools/lc6000-firmware"""
-import os, shutil, subprocess, sys, tempfile, textwrap, unittest
+import contextlib, io, json, os, shutil, subprocess, sys, tempfile, textwrap, unittest
 
+import build_owner_image
+import build_record
 import build_upper_dfu
 import dfupatch
-from test_build_owner_image import stock_like_element
+from test_drawn_plan import write_record
+from test_build_owner_image import stock_like_element, synthetic_block
 from test_build_upper_dfu import good_block
 from test_dfupatch import dfuse_file, full_wd_element
 
@@ -83,6 +86,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.current = self.file("current.dfu", dfuse_file(self.current_element))
         self.owner = self.file("owner.dfu", dfuse_file(self.owner_element))
         self.upper = self.file("upper.dfu", build_upper_dfu.dfuse(good_block()))
+        self.record = write_record(os.path.join(self.dir.name, "build.json"), self.owner, self.upper)
         self.env = {"PATH": f"{self.stubs}:/usr/bin:/bin", "HOME": self.home, "LC6000_WORK": self.work,
                     "FAKE_UNIT": self.unit, "TERM": "dumb"}
 
@@ -125,27 +129,36 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertNotEqual(self.env["HOME"], os.path.expanduser("~"))
         self.assertFalse(self.env["LC6000_WORK"].startswith(os.path.expanduser("~/lc6000")))
 
-    def run_wizard(self, answers):
+    def run_wizard(self, answers, entered=True):
         self.assert_isolated()
         result = subprocess.run(["/bin/bash", WIZARD, "drawn"], input="\n".join(answers) + "\n", env=self.env,
                                 cwd=self.dir.name, capture_output=True, text=True, timeout=300)
-        # The update-mode tool that ran was the stand-in, never the real one.
+        # The update-mode tool that ran was the stand-in, never the real one; a run stopped in the ready check never
+        # sends the update-mode message at all.
         with open(os.path.join(self.unit, "update-mode.log")) as f:
-            self.assertIn("send --yes-enter-update-mode", f.read())
+            (self.assertIn if entered else self.assertNotIn)("send --yes-enter-update-mode", f.read())
         return result
 
     def memory(self, name):
         with open(os.path.join(self.unit, name), "rb") as f:
             return f.read()
 
+    def calls(self):
+        """Every dfu-util call the run made; none when it never ran."""
+        log = os.path.join(self.unit, "calls.log")
+        if not os.path.exists(log):
+            return []
+        with open(log) as f:
+            return f.read().splitlines()
+
     def downloads(self):
-        with open(os.path.join(self.unit, "calls.log")) as f:
-            return [line for line in f.read().splitlines() if " -D " in f" {line} "]
+        return [line for line in self.calls() if " -D " in f" {line} "]
 
     def test_a_fresh_flash_writes_b_and_the_owners_image(self):
         self.unit_holds(self.current_element)
         answers = ["", self.current, self.upper, self.owner,   # banner; the three paths
-                   "y", "y", "y",                               # both true, all true, the probe
+                   self.record,                                 # the build record
+                   "y", "y",                                    # all true, the probe
                    "y",                                         # send the update-mode message
                    "FLASH", "FLASH",                            # block B, then the owner's image
                    "",                                          # power cycle: back on
@@ -161,7 +174,7 @@ class FlashDayRunTests(unittest.TestCase):
     def test_a_b_only_rewrite_leaves_the_app_area_alone(self):
         old_b = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
         self.unit_holds(self.owner_element, upper=old_b + b"\xff" * (0x80000 - len(old_b)))
-        answers = ["", self.owner, self.upper, self.owner, "y", "y", "y", "y", "REWRITE", "", "y", "", ""]
+        answers = ["", self.owner, self.upper, self.owner, self.record, "y", "y", "y", "REWRITE", "", "y", "", ""]
         result = self.run_wizard(answers)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertEqual(len(self.downloads()), 1)
@@ -172,16 +185,17 @@ class FlashDayRunTests(unittest.TestCase):
 
     def test_a_wrong_word_writes_nothing(self):
         self.unit_holds(self.current_element)
-        result = self.run_wizard(["", self.current, self.upper, self.owner, "y", "y", "y", "y", "flash"])
+        result = self.run_wizard(["", self.current, self.upper, self.owner, self.record, "y", "y", "y", "flash"])
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.downloads(), [])
         self.assertEqual(self.memory("app.bin"), self.current_element)
 
 
-    FRESH = ["", "{current}", "{upper}", "{owner}", "y", "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+    FRESH = ["", "{current}", "{upper}", "{owner}", "{record}", "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
 
     def answers(self):
-        return [a.format(current=self.current, upper=self.upper, owner=self.owner) for a in self.FRESH]
+        return [a.format(current=self.current, upper=self.upper, owner=self.owner, record=self.record)
+                for a in self.FRESH]
 
     def assert_stopped_with_the_way_back(self, result, reason):
         self.assertNotEqual(result.returncode, 0)
@@ -210,6 +224,66 @@ class FlashDayRunTests(unittest.TestCase):
                 result = self.run_wizard(self.answers())
                 self.assert_stopped_with_the_way_back(result, "couldn't be read")
                 self.assertEqual(self.downloads(), [])
+
+
+    def test_built_by_the_kit_the_record_is_found_and_never_asked_for(self):
+        # make arm's folder, then the two kit tools into the owner's folder, as the README says (#593).
+        arm, kit = os.path.join(self.dir.name, "arm"), os.path.join(self.dir.name, "lc6000")
+        os.makedirs(arm), os.makedirs(kit)
+        block, upper = os.path.join(arm, "block.bin"), os.path.join(arm, "upper.bin")
+        with open(block, "wb") as f:
+            f.write(synthetic_block())
+        with open(upper, "wb") as f:
+            f.write(good_block())
+        with open(os.path.join(arm, "build.json"), "w") as f:
+            json.dump(build_record.record_of(synthetic_block(), good_block(), "1", "1"), f)
+        stock, proof = self.file("stock.dfu", dfuse_file(self.owner_element)), self.file("proof.bin", b"\xff" * 0x80000)
+        self.upper, self.owner = os.path.join(kit, "wd-upper-drawing.dfu"), os.path.join(kit, "wd-owner.dfu")
+        for tool, argv in ((build_upper_dfu, [upper, self.upper, "--proof", proof]),
+                           (build_owner_image, [stock, block, self.owner, "--no-show-slot-16"])):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(tool.main(argv), 0)
+        self.unit_holds(self.current_element)
+        answers = ["", self.current, self.upper, self.owner,   # no record path: it's found
+                   "y", "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+        result = self.run_wizard(answers)
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertIn("Build record: " + os.path.join(kit, "wd-upper-drawing.build.json"), result.stdout)
+        self.assertEqual(len(self.downloads()), 2)
+        self.assertEqual(self.memory("upper.bin")[:len(good_block())], good_block())
+
+
+    def refused_by_the_record(self, record, *reasons):
+        self.unit_holds(self.current_element)
+        result = self.run_wizard(["", self.current, self.upper, self.owner, record, "y", "y", "y", "FLASH", "FLASH"],
+                                 entered=False)
+        self.assertNotEqual(result.returncode, 0)
+        for reason in ("Nothing was sent", *reasons):
+            self.assertIn(reason, result.stdout)
+        self.assertEqual(self.calls(), [], "dfu-util never runs: the record stops the ready check")
+        self.assertEqual(self.memory("app.bin"), self.current_element)
+        self.assertEqual(set(self.memory("upper.bin")), {0xFF})
+
+    def other_record(self, name, a=None, b=None, proven="1"):
+        """A record as make arm writes it, for these blocks (by default the ones in the owner's files)."""
+        start = dfupatch.PAD_START - APP
+        a = a if a is not None else self.owner_element[start:start + dfupatch.PAD_END - dfupatch.PAD_START]
+        with open(os.path.join(self.dir.name, name), "w") as f:
+            json.dump(build_record.record_of(a, b if b is not None else good_block(), "1", proven), f)
+        return os.path.join(self.dir.name, name)
+
+    def test_no_record_stops_in_the_ready_check(self):
+        self.refused_by_the_record(os.path.join(self.dir.name, "nowhere.json"), "no build record")
+
+    def test_files_from_another_build_stop_and_say_which_to_rebuild(self):
+        other_a = synthetic_block()
+        self.refused_by_the_record(self.other_record("other-a.json", a=other_a),
+                                   "block A in the owner's image", "Rebuild the owner's image")
+        other_b = build_upper_dfu.upper_header.build(b"another build", 0x1A2B3C4D, 0x0808001D, 0x0808001F)
+        self.refused_by_the_record(self.other_record("other-b.json", b=other_b), "block B in " + self.upper)
+
+    def test_a_block_built_without_the_proof_switch_stops(self):
+        self.refused_by_the_record(self.other_record("unproven.json", proven="0"), "ARM_UPPER_PROVEN=0")
 
 
 if __name__ == "__main__":

@@ -141,6 +141,30 @@ struct MIDISendQueueTests {
         init(_ log: UnitLog) { self.log = log }
         func sendController(_ bytes: [UInt8]) { log.add("controller \(bytes.count)") }
         func sendWD(_ bytes: [UInt8]) { log.add("wd \(bytes.count)") }
+        func flush() { log.add("flush") }
+    }
+
+    @Test("Flushing the jog display's port waits for everything queued, LEDs too, then flushes the port under it (#600)")
+    func flushWaits() throws {
+        final class SlowOutput: MIDIOutput, @unchecked Sendable {
+            let log: UnitLog
+            init(_ log: UnitLog) { self.log = log }
+            func send(_ event: MIDIEvent) throws {
+                Thread.sleep(forTimeInterval: 0.02)
+                if case .noteOn(_, let note, let velocity) = event { log.add("led \(note)=\(velocity)") }
+            }
+            func send(color: LEDColorMessage) throws {}
+            func close() {}
+        }
+        let log = UnitLog()
+        let queue = MIDISendQueue(label: "test")
+        let leds = queue.output(SlowOutput(log), name: "LC6000")
+        let jog = queue.jogDisplayPort(LoggingJogPort(log))
+        for note in 0..<3 { try leds.send(.noteOn(channel: 0, note: UInt8(note), velocity: 0)) }   // the releases
+        jog.sendWD([0xF0, 0xF7])
+        jog.sendController([0xF0, 0x00, 0xF7])   // the goodbye
+        jog.flush()
+        #expect(log.lock.withLock { log.lines } == ["led 0=0", "led 1=0", "led 2=0", "wd 2", "controller 3", "flush"])
     }
 
     @Test("The jog display's ports go through the same queue: the ring's hold reaches the unit before the upload starts (#422)")

@@ -9,10 +9,13 @@ public protocol JogDisplayPort: AnyObject, Sendable {
     func sendWD(_ bytes: [UInt8])
     /// Whether the unit's WD port is there now (#305). Without it there's no display to say hello to.
     var isAttached: Bool { get }
+    /// Returns once everything sent so far has gone out (#600): the app is about to exit.
+    func flush()
 }
 
 extension JogDisplayPort {
     public var isAttached: Bool { true }
+    public func flush() {}
 }
 
 /// What the display shows for the deck in front (#165). Two of these that are equal draw the same image.
@@ -271,8 +274,10 @@ public final class JogDisplayDriver {
     /// The unit is going away, or the app is quitting: goodbye, so it returns to standalone.
     public func disconnect() {
         guard connected else { return }
-        // Drawn mode ends first, so the unit's own screen comes back (#456).
-        if case .drawn(let version) = mode { endDrawing(version) }
+        // Drawn mode ends first, so the unit's own screen comes back (#456); unless the app is quitting (#600).
+        if case .drawn(let version) = mode {
+            if quitting, let leaving { leaveLogo(leaving) } else { endDrawing(version) }
+        }
         mode = .images
         connected = false
         upload = nil
@@ -283,15 +288,42 @@ public final class JogDisplayDriver {
         onEvent?(.disconnected)
     }
 
+    /// The hub of our logo when the app quits (#600): the app icon's own hub, a neutral gray from the logo's palette.
+    static let quitHub = [0xD5, 0xD5, 0xD5]
+
+    /// The app is quitting (#600): from now on no new content goes to the unit, and the disconnect
+    /// to come, as the controllers drop one by one, leaves our logo up in drawn mode, not Denon's screen. The deck in
+    /// front now is the one it shows.
+    private var quitting = false, leaving: JogDisplayContent?
+    public func quit() {
+        quitting = true
+        if case .drawn = mode { leaving = current }
+    }
+
+    /// The deck again with the neutral hub, then its state with stale, and no end, so the chip keeps drawing the waiting
+    /// look (the deck's number in the hub) after the app is gone (#600).
+    private func leaveLogo(_ content: JogDisplayContent) {
+        sendWD(DrawnDisplay.Message.deck(number: content.deck, color: Self.quitHub,
+                                         player: DrawnDisplay.Player(playerType: content.playerType)).bytes)
+        drawnState.insert(.stale)
+        sendWD(DrawnDisplay.Message.state(drawnState).bytes)
+    }
+
+    /// Returns once everything sent so far has gone out (#600): the app is about to exit.
+    public func flush() {
+        port?.flush()
+    }
+
     /// Asks for `content` on the display. Equal content sends nothing; while an upload runs, only the newest waits.
     public func show(_ content: JogDisplayContent) {
+        guard !quitting else { return }
         wanted = content
         if upload == nil { next() }
     }
 
     /// Another deck's content, kept on the unit in that deck's slots (#424), after the front deck's. Beat mode only.
     public func keep(_ content: JogDisplayContent) {
-        guard renderBeat != nil, content.deck != (wanted ?? current)?.deck, contents[content.deck] != content else { return }
+        guard !quitting, renderBeat != nil, content.deck != (wanted ?? current)?.deck, contents[content.deck] != content else { return }
         contents[content.deck] = content
         forgetFailures(deck: content.deck)
         if upload == nil { next() }

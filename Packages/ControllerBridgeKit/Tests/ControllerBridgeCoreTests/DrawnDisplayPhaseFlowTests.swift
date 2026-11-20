@@ -63,7 +63,7 @@ struct DrawnDisplayPhaseFlowTests {
         #expect(Self.phases(port) == [DrawnDisplay.Message.phase(-8192).bytes])
     }
 
-    @Test("A nudge (Syndicate sends about 45 a second): at most 30 a second, and the last value goes once due")
+    @Test("A nudge (Syndicate sends about 45 a second): at most 25 a second (the live cadence, #592), and the last value goes once due")
     func rateLimited() throws {
         let (rig, port, clock) = try Self.drawing()
         for step in 0..<45 {
@@ -71,7 +71,7 @@ struct DrawnDisplayPhaseFlowTests {
             rig.coordinator.feedback(Self.offset(-0.01 - Float(step) * 0.001))
             rig.coordinator.tick()
         }
-        #expect(Self.phases(port).count <= 31)
+        #expect(Self.phases(port).count <= 26)
         // The last offset, -0.054 beat, is -885 on the wire: sent by the end of the nudge or on the next due tick.
         clock.now = 3.1
         rig.coordinator.tick()
