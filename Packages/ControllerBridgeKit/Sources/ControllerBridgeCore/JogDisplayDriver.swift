@@ -76,6 +76,18 @@ public enum JogDisplayEvent: Equatable, Sendable {
     case drawnPreviewsEnded
 }
 
+extension JogDisplayEvent {
+    /// The event's line in the Debug trace (#605); nil for the in-app preview's per-tick events (each deck's drawn state
+    /// and needle), which at the live cadence filled a 20 MB file in about a minute. What the unit gets is in the WD out
+    /// lines; mode changes have their own.
+    public var traceLine: String? {
+        switch self {
+        case .drawnPreview, .deckMarker: nil
+        default: "event \(self)"
+        }
+    }
+}
+
 public final class JogDisplayDriver {
     /// Called with each thing the driver does (#221).
     public var onEvent: ((JogDisplayEvent) -> Void)?
@@ -718,6 +730,11 @@ public final class JogDisplayDriver {
 
     /// Syndicate's feedback stopped or came back (#464): drawn mode shows the waiting look while stale.
     public func setStale(_ stale: Bool) {
+        // Its own trace line (#605): the preview's events, which carried it, aren't traced any more.
+        if stale != drawnState.contains(.stale) {
+            trace?(.jogDisplay, stale ? "jog display: Syndicate's feedback stale: the waiting look"
+                                      : "jog display: Syndicate's feedback fresh: stale ends")
+        }
         if stale { drawnState.insert(.stale) } else { drawnState.remove(.stale) }
         sendState()
         reportPreviewsIfStaleChanged()
