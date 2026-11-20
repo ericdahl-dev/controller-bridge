@@ -481,6 +481,12 @@ class FoundCurrentTests(DrawnPlanTests):
         self.assertEqual(unit.run(self.found_plan(remembered)), ("done",))
         self.assertIn(remembered, [a[2] for a in unit.log if a[:2] == ("skip", "current_found")][0])
 
+    def test_a_garbage_dfu_in_the_work_folder_is_passed_over(self):
+        self.write("aaa-garbage.dfu", b"not a dfu at all")
+        self.write("aab-empty.dfu", b"")
+        unit = FakeUnit(self.dir.name, self.current_element)
+        self.assertEqual(unit.run(self.found_plan()), ("done",))
+
     def test_a_read_that_matches_no_file_refuses_before_any_write(self):
         other = bytearray(self.current_element)
         other[0x100] ^= 1

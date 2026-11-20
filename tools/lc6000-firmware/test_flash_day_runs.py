@@ -126,8 +126,8 @@ class FlashDayRunTests(unittest.TestCase):
         self.upper = self.file("upper.dfu", build_upper_dfu.dfuse(good_block()))
         self.record = write_record(os.path.join(self.dir.name, "build.json"), self.owner, self.upper)
         self.env = {"PATH": f"{self.stubs}:/usr/bin:/bin", "HOME": self.home, "LC6000_WORK": self.work,
-                    "FAKE_UNIT": self.unit, "TERM": "dumb", "LC6000_APP_WAIT": "3",
-                    "LC6000_POWER_WAIT": "3"}
+                    "FAKE_UNIT": self.unit, "TERM": "dumb", "LC6000_APP_WAIT": "1",
+                    "LC6000_POWER_WAIT": "1"}
 
     def stub(self, name, text):
         path = os.path.join(self.stubs, name)
@@ -176,10 +176,21 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertNotEqual(self.env["HOME"], os.path.expanduser("~"))
         self.assertFalse(self.env["LC6000_WORK"].startswith(os.path.expanduser("~/lc6000")))
 
-    def run_wizard(self, answers, entered=True, sent=None, args=()):
+    def run_wizard(self, answers, entered=True, sent=None, args=(), left=None):
+        """LEFT: a list that gets what the run didn't read of its input (a regular file, so bash seeks back to just
+        past each line it reads, and the offset left is exactly where reading stopped)."""
         self.assert_isolated()
-        result = subprocess.run(["/bin/bash", WIZARD, "drawn", *args], input="\n".join(answers) + "\n", env=self.env,
-                                cwd=self.dir.name, capture_output=True, text=True, timeout=300)
+        text = "\n".join(answers) + "\n"
+        with tempfile.TemporaryFile("w+") as stdin:
+            stdin.write(text + ("UNREAD\n" if left is not None else ""))
+            stdin.flush()
+            stdin.seek(0)
+            result = subprocess.run(["/bin/bash", WIZARD, "drawn", *args], stdin=stdin, env=self.env,
+                                    cwd=self.dir.name, capture_output=True, text=True, timeout=300)
+            if left is not None:
+                at = os.lseek(stdin.fileno(), 0, os.SEEK_CUR)
+                stdin.seek(at)
+                left.append(stdin.read())
         # The update-mode tool that ran was the stand-in, never the real one; a run stopped in the ready check never
         # sends the update-mode message at all.
         with open(os.path.join(self.unit, "update-mode.log")) as f:
@@ -339,7 +350,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.unit_holds(self.current_element)
         open(os.path.join(self.unit, "stuck-in-update-mode"), "w").close()
         result = self.run_wizard(self.answers())
-        self.assert_stopped_with_the_way_back(result, "still in update mode after 3 s")
+        self.assert_stopped_with_the_way_back(result, "still in update mode after 1 s")
         self.assertIn("Check: was the power switched off", result.stdout)
         self.assertNotIn("booted", result.stdout)
 
@@ -347,7 +358,7 @@ class FlashDayRunTests(unittest.TestCase):
         self.unit_holds(self.current_element)
         open(os.path.join(self.unit, "no-midi"), "w").close()
         result = self.run_wizard(self.answers())
-        self.assert_stopped_with_the_way_back(result, "MIDI port didn't come back in 3 s")
+        self.assert_stopped_with_the_way_back(result, "MIDI port didn't come back in 1 s")
         self.assertIn("Check:", result.stdout)
         self.assertNotIn("booted", result.stdout)
 
@@ -490,8 +501,11 @@ class FlashDayRunTests(unittest.TestCase):
         if os.path.dirname(self.upper) != self.work:
             self.upper, self.owner = self.kit_pair_in(self.work)
         self.unit_holds(app, upper=upper, in_update_mode=in_update_mode)
-        result = self.run_wizard(answers, sent=0 if in_update_mode else 1, args=args)
+        left = []
+        result = self.run_wizard(answers, sent=0 if in_update_mode else 1, args=args, left=left)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        # Every read of the keyboard took exactly one answer, pauses included: only the line after them is left.
+        self.assertEqual(left, ["UNREAD\n"])
         self.assertEqual(result.stdout.count("  ? "), len(answers), result.stdout)
         return result
 
