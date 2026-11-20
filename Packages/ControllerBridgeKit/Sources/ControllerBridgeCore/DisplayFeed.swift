@@ -41,9 +41,9 @@ final class DisplayFeed {
         sent = [:]
     }
 
-    /// The setting. Turning it on makes the next update a full snapshot.
+    /// The setting. Turning it on, or a new host or port, makes the next update a full snapshot.
     func set(_ new: DisplayFeedSettings) {
-        if new.enabled && !settings.enabled { sent = [:] }
+        if new.enabled && (!settings.enabled || new.host != settings.host || new.port != settings.port) { sent = [:] }
         settings = new
     }
 

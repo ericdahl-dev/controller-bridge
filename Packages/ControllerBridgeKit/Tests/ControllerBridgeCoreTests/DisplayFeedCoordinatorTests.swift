@@ -71,4 +71,41 @@ struct DisplayFeedCoordinatorTests {
         LayersTests.switchLayer(rig, from: 1, to: 2)
         #expect(feed.sent == Self.snapshot(deck: 2, color: 0xFFFF00, title: "Daybreak", artist: "Bill Hamel, Jeremus"))
     }
+
+    @Test("A new host or port sends the full snapshot at once; the same setting again sends nothing")
+    func addressChangeSnapshot() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        rig.coordinator.setDisplayFeed(Self.on)
+        let daybreak = Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")
+        feed.sent.removeAll()
+        rig.coordinator.setDisplayFeed(Self.on)
+        #expect(feed.sent == [])
+        var moved = Self.on
+        moved.host = "deck-panel.local"
+        rig.coordinator.setDisplayFeed(moved)
+        #expect(feed.sent == daybreak)
+        feed.sent.removeAll()
+        moved.port = 9200
+        rig.coordinator.setDisplayFeed(moved)
+        #expect(feed.sent == daybreak)
+    }
+
+    @Test("Off: nothing goes out through loads and ticks; on again: the full snapshot, with what changed meanwhile")
+    func offAndOnAgain() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
+        rig.coordinator.setDisplayFeed(Self.on)
+        var off = Self.on
+        off.enabled = false
+        rig.coordinator.setDisplayFeed(off)
+        feed.sent.removeAll()
+        rig.coordinator.feedback(JogDisplayContentTests.trackInfo(title: "Nightfall"))
+        for step in 1...10 { rig.clock.now = Double(step) * 0.01; rig.coordinator.tick() }
+        #expect(feed.sent == [])
+        rig.coordinator.setDisplayFeed(Self.on)
+        #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000, title: "Nightfall", artist: "Bill Hamel, Jeremus"))
+    }
 }
