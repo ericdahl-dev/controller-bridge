@@ -45,6 +45,8 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/loop", [.int(0)]),
             OSCMessage("/DeckBridge/Display/loopLength", [.float(0)]),
             OSCMessage("/DeckBridge/Display/beat", [.int(0)]),
+            OSCMessage("/DeckBridge/Display/elapsed", [.int(0)]),
+            OSCMessage("/DeckBridge/Display/remaining", [.int(loaded ? 428 : 0)]),
         ]
     }
 
@@ -235,6 +237,7 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/artist", [.string("")]),
             OSCMessage("/DeckBridge/Display/key", [.string("")]),
             OSCMessage("/DeckBridge/Display/bpm", [.float(0)]),
+            OSCMessage("/DeckBridge/Display/remaining", [.int(0)]),
         ])
     }
 
@@ -277,8 +280,9 @@ struct DisplayFeedCoordinatorTests {
         rig.coordinator.feedback(JogDisplayContentTests.trackInfo())
         #expect(feed.sent == [])
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(1)]))
-        // loaded through bpm: the deck, its color, the 0% tempo and the flags were already the empty state's.
-        #expect(feed.sent == Array(Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")[2..<7]))
+        // loaded through bpm, and the time left: the rest (0% tempo, the flags, 0 s gone) were already the empty state's.
+        #expect(feed.sent == Array(Self.snapshot(deck: 1, color: 0xFF0000, title: "Daybreak", artist: "Bill Hamel, Jeremus")[2..<7])
+            + [Self.message("remaining", Int32(428))])
     }
 
     @Test("The deck's live BPM sends bpm and tempo, the change from the track's BPM in percent: 132 on a 128 track is +3.125%")
@@ -387,6 +391,22 @@ struct DisplayFeedCoordinatorTests {
         feed.sent.removeAll()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(3)]))
         #expect(feed.sent == [])
+    }
+
+    @Test("elapsed and remaining in whole seconds, as the drawn display counts them: they change once a second, not with every Position")
+    func trackTime() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        feed.sent.removeAll()
+        MainCueTests.position(rig, 30.7)
+        #expect(feed.sent == [Self.message("elapsed", Int32(30)), Self.message("remaining", Int32(398))])
+        feed.sent.removeAll()
+        MainCueTests.position(rig, 30.9)
+        #expect(feed.sent == [])
+        MainCueTests.position(rig, 31.0)
+        #expect(feed.sent == [Self.message("elapsed", Int32(31)), Self.message("remaining", Int32(397))])
     }
 
     @Test("Syndicate changing the deck's color sends the color alone")

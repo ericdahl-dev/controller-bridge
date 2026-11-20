@@ -304,6 +304,12 @@ public final class Coordinator {
         return seconds * bpm / 60
     }
 
+    /// Whole seconds as the drawn display's time message counts them: down, 0 for none or below.
+    private static func wholeSeconds(_ value: Double?) -> Int {
+        guard let value, value > 0, value.isFinite else { return 0 }
+        return Int(min(value, Double(Int32.max)))
+    }
+
     private func updateDisplayFeed() {
         guard displayFeed.on else { return }
         let entries = jogEntries
@@ -329,7 +335,8 @@ public final class Coordinator {
                                     tempo: trackBPM > 0 && bpm > 0 ? (bpm / trackBPM - 1) * 100 : 0,
                                     playing: facts.playing, cue: facts.cueHeld, sync: facts.synced, master: facts.master,
                                     loop: facts.looping, loopLength: facts.looping ? Self.loopBeats(facts, bpm: trackBPM > 0 ? trackBPM : bpm) : 0,
-                                    beat: beat)
+                                    beat: beat, elapsed: Self.wholeSeconds(facts.position),
+                                    remaining: facts.duration == nil ? 0 : max(0, Self.wholeSeconds(facts.duration) - Self.wholeSeconds(facts.position)))
         }
         displayFeed.update(deck, known: known, at: clock.now)
     }
