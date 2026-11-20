@@ -63,4 +63,24 @@ struct DisplayFeedDemoTests {
         #expect(Self.text(feed, "key").first == "Am")
         #expect(feed.sent.filter { $0.address.hasSuffix("/deck") }.count == 1)
     }
+
+    @Test("As the demo plays, the feed follows it, changes only: the master beat moves, the track isn't sent again")
+    func demoPlays() async throws {
+        let (rig, feed) = try Self.realRig()
+        let made = Made()
+        await Self.run(rig, made) {
+            $0.send(.setDisplayFeed(DisplayFeedCoordinatorTests.on))
+            $0.send(.displayFeedReady)
+            $0.demo(on: true)
+        }
+        let session = try #require(made.session)
+        for step in 1...110 { rig.clock.now = Double(step) * 0.01; session.tick() }
+        feed.sent.removeAll()
+        // Under the 2 s keepalive, so only changes.
+        for step in 111...190 { rig.clock.now = Double(step) * 0.01; session.tick() }
+        let beats = feed.sent.filter { $0.address.hasSuffix("/beat") }
+        // The demo plays from 0.5 s, a beat every 0.5 s: the one at 1.5 s falls here.
+        #expect(beats.count == 1)
+        #expect(Self.text(feed, "title").isEmpty)
+    }
 }
