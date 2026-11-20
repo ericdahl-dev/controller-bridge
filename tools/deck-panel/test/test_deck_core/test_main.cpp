@@ -311,8 +311,11 @@ void test_each_shared_example_shows_its_deck_state() {
         TEST_ASSERT_FALSE_MESSAGE(screen.last().waiting, name);
         TEST_ASSERT_EQUAL_MESSAGE(static_cast<int>(state["deck"].number), screen.last().deck, name);
         TEST_ASSERT_EQUAL_HEX32_MESSAGE(color, screen.last().color, name);
-        TEST_ASSERT_EQUAL_STRING_MESSAGE(state["title"].string.c_str(), screen.last().title.c_str(), name);
-        TEST_ASSERT_EQUAL_STRING_MESSAGE(state["artist"].string.c_str(), screen.last().artist.c_str(), name);
+        // A missing title or artist is "", as in the Swift walker.
+        std::string title = state.has("title") ? state["title"].string : "";
+        std::string artist = state.has("artist") ? state["artist"].string : "";
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), screen.last().title.c_str(), name);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(artist.c_str(), screen.last().artist.c_str(), name);
     }
     TEST_ASSERT_EQUAL(file["cases"].array.size(), walked);
     TEST_ASSERT_TRUE(walked >= 3);
