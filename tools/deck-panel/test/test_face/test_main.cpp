@@ -158,6 +158,31 @@ void test_the_loop_length_shows_whole_beats_or_fractions() {
     }
 }
 
+// Phase -1 is unknown (the deck stopped, or no offset since it loaded): no marker, never one parked in the middle.
+void test_the_phase_marker_hides_while_unknown_and_stays_on_the_bar() {
+    DeckView v = loaded_deck();
+    Face f = deck_core::face(v);
+    TEST_ASSERT_TRUE(f.phase_shown);
+    TEST_ASSERT_EQUAL_FLOAT(0.5f, f.phase);
+    v.phase = 0.2f;
+    TEST_ASSERT_EQUAL_FLOAT(0.2f, deck_core::face(v).phase);
+    v.phase = 1.3f;
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).phase);
+    v.phase = -1;
+    TEST_ASSERT_FALSE(deck_core::face(v).phase_shown);
+    v.phase = -0.5f;  // any value below 0 is unknown
+    TEST_ASSERT_FALSE(deck_core::face(v).phase_shown);
+}
+
+void test_the_level_meter_is_clamped_to_0_1() {
+    DeckView v = loaded_deck();
+    TEST_ASSERT_EQUAL_FLOAT(0.75f, deck_core::face(v).level);
+    v.level = 2;
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).level);
+    v.level = -1;
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, deck_core::face(v).level);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_empty_deck_shows_no_track_loaded_and_nothing_else);
@@ -172,5 +197,7 @@ int main(int, char**) {
     RUN_TEST(test_the_beat_lights_its_block_and_none_outside_1_to_4);
     RUN_TEST(test_the_lamps_follow_play_cue_sync_master_and_loop);
     RUN_TEST(test_the_loop_length_shows_whole_beats_or_fractions);
+    RUN_TEST(test_the_phase_marker_hides_while_unknown_and_stays_on_the_bar);
+    RUN_TEST(test_the_level_meter_is_clamped_to_0_1);
     return UNITY_END();
 }

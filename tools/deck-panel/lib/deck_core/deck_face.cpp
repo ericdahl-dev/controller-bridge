@@ -79,6 +79,10 @@ Face face(const DeckView& view) {
     f.master = view.master;
     f.loop = view.loop;
     loop_text(f.loop_length, view.loop_length);
+    // Below 0 is unknown (-1): no marker, never one parked in the middle as if in phase.
+    f.phase_shown = view.phase >= 0;
+    if (f.phase_shown) f.phase = clamp01(view.phase);
+    f.level = clamp01(view.level);
     return f;
 }
 
