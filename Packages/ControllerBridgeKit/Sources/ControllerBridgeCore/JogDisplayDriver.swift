@@ -283,6 +283,23 @@ public final class JogDisplayDriver {
         onEvent?(.disconnected)
     }
 
+    /// The hub of our logo when the app quits (#600): the app icon's own hub, a neutral grey from the logo's palette.
+    static let quitHub = [0xD5, 0xD5, 0xD5]
+
+    /// The app is quitting (#600): drawn mode leaves our logo up, not Denon's screen. The deck in front again with the
+    /// neutral hub, then its state with stale, and no end, so the chip keeps drawing the waiting look (the deck's number
+    /// in the hub) after the app is gone; then the goodbye. Otherwise as disconnect.
+    public func quit() {
+        if connected, case .drawn = mode, let content = current {
+            sendWD(DrawnDisplay.Message.deck(number: content.deck, color: Self.quitHub,
+                                             player: DrawnDisplay.Player(playerType: content.playerType)).bytes)
+            drawnState.insert(.stale)
+            sendWD(DrawnDisplay.Message.state(drawnState).bytes)
+            mode = .images
+        }
+        disconnect()
+    }
+
     /// Asks for `content` on the display. Equal content sends nothing; while an upload runs, only the newest waits.
     public func show(_ content: JogDisplayContent) {
         wanted = content

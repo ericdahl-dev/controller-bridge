@@ -507,6 +507,12 @@ public final class Coordinator {
         }
     }
 
+    /// The app is quitting (#600): as stop, but a drawing jog display keeps our logo rather than Denon's screen.
+    public func quit() {
+        jogController.quit()
+        stop()
+    }
+
     /// The Mac is about to sleep: release everything held, since the controller may be gone on wake.
     public func willSleep() {
         for bridge in bridges { bridge.releaseAll() }

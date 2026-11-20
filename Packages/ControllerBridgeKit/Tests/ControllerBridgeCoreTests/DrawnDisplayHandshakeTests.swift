@@ -141,14 +141,29 @@ struct DrawnDisplayHandshakeTests {
         #expect(port.both == [Self.end, JogDisplay.goodbye])
     }
 
-    @Test("Quitting in drawn mode: end, then the goodbye")
-    func quitSendsEnd() throws {
+    @Test("Stopping without quitting (the demo turning on) in drawn mode: end, then the goodbye")
+    func stopSendsEnd() throws {
         let (rig, port, _) = try Self.rig(.custom)
         rig.coordinator.jogDisplayReply(Self.answer)
         port.both.removeAll()
         rig.coordinator.stop()
         #expect(port.both.suffix(2) == [Self.end, JogDisplay.goodbye])
         #expect(port.both.filter { $0 == Self.end }.count == 1)
+    }
+
+    @Test("Quitting the app in drawn mode leaves our logo (#600): the deck again on the icon's neutral hub, then stale, no end; then the goodbye")
+    func quitLeavesTheLogo() throws {
+        let (rig, port, _) = try Self.rig(.custom)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        let deck = try #require(Self.drawn(port).last { $0[9] == 0x03 })
+        let state = try #require(Self.drawn(port).last { $0[9] == 0x07 })
+        port.both.removeAll()
+        rig.coordinator.quit()
+        var neutral = deck
+        neutral[11...16] = [0x01, 0x55, 0x01, 0x55, 0x01, 0x55]   // D5D5D5: 213 is 1, 0x55 in two 7-bit bytes
+        var stale = state
+        stale[10] |= 0x20
+        #expect(port.both == [neutral, stale, JogDisplay.goodbye])
     }
 
     @Test("In image mode the goodbye goes alone, as today")
