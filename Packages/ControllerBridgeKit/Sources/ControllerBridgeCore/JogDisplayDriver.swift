@@ -600,7 +600,7 @@ public final class JogDisplayDriver {
         guard readyPending else { return }
         if sent {
             readyPending = false
-            return trace?(.jogDisplay, Self.readySaid + "the upload's show went out, nothing sent again") ?? ()
+            return trace?(.jogDisplay, Self.readySaid + "a show went out after it, nothing sent again") ?? ()
         }
         guard upload == nil else { return }
         readyPending = false

@@ -205,7 +205,7 @@ struct JogDisplayPowerCycleTests {
         JogDisplayDriverTests.complete(rig, acks: second.expectedAcks)
         #expect(rig.port.wd == second.finish + [second.show])
         #expect(lines.list == ["jog display: the display said ready (its first 10 reply since the hello): "
-                               + "the upload's show went out, nothing sent again"])
+                               + "a show went out after it, nothing sent again"])
     }
 
     @Test("Ready mid-upload, and the upload then fails: the last show goes again once it's over")
