@@ -530,7 +530,12 @@ while :; do
       plan record "$PLAN" "$a1" "$typed"
       ;;
     update-mode)
-      enter_update_mode
+      # A chip left in update mode by an earlier stop has no MIDI port to send to (#603): it's listed, so send nothing.
+      if [[ -n "$(dfu_paths)" ]]; then
+        printf '  %s✓%s a DFU device is listed: the chip is already in update mode, so nothing is sent\n' "$GREEN" "$RESET"
+      else
+        enter_update_mode
+      fi
       plan record "$PLAN" update_mode ok
       ;;
     list)

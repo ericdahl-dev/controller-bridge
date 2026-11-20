@@ -33,7 +33,9 @@ FAKE_DFU_UTIL = textwrap.dedent('''\
     def opt(flag):
         return args[args.index(flag) + 1] if flag in args else None
     if "-l" in args:
-        sys.stdout.write(open(os.path.join(unit, "listing.txt")).read())
+        # Only a chip in update mode is listed (#603): the update-mode stand-in's send puts it there.
+        if os.path.exists(os.path.join(unit, "in-update-mode")):
+            sys.stdout.write(open(os.path.join(unit, "listing.txt")).read())
         sys.exit(0)
     fail = open(os.path.join(unit, "fail.txt")).read().split() if os.path.exists(os.path.join(unit, "fail.txt")) else []
     if opt("-U"):
@@ -63,8 +65,19 @@ FAKE_DFU_UTIL = textwrap.dedent('''\
         sys.exit(0)
     sys.exit("fake dfu-util: unexpected " + " ".join(args))
     ''')
-# The update-mode tool's stand-in, which the fake swiftc "builds": it sends nothing, and logs each call.
-FAKE_UPDATE_MODE = '#!/bin/sh\necho "$@" >> "$FAKE_UNIT/update-mode.log"\nexit 0\n'
+# The update-mode tool's stand-in, which the fake swiftc "builds": it sends nothing, and logs each call. Its send
+# puts the fake chip in update mode; its check finds the display's MIDI port only while the chip isn't (#603). The
+# wizard checks for the port while the chip is in update mode only when it waits for the owner's power cycle: the
+# fake owner power-cycles then, so the chip leaves update mode and the port is back on the next check.
+FAKE_UPDATE_MODE = textwrap.dedent('''\
+    #!/bin/sh
+    echo "$@" >> "$FAKE_UNIT/update-mode.log"
+    case "$1" in
+      send) touch "$FAKE_UNIT/in-update-mode" ;;
+      check) [ ! -e "$FAKE_UNIT/in-update-mode" ] || { rm "$FAKE_UNIT/in-update-mode"; exit 1; } ;;
+    esac
+    exit 0
+    ''')
 
 
 class FlashDayRunTests(unittest.TestCase):
@@ -107,7 +120,15 @@ class FlashDayRunTests(unittest.TestCase):
         with open(os.path.join(self.unit, "fail.txt"), "w") as f:
             f.write(" ".join(what))
 
-    def unit_holds(self, app, upper=None, devices=(("2-1.2", DISPLAY_LAYOUT),)):
+    def unit_holds(self, app, upper=None, devices=(("2-1.2", DISPLAY_LAYOUT),), in_update_mode=False):
+        for log in ("calls.log", "update-mode.log"):   # a fresh unit for each subtest
+            if os.path.exists(os.path.join(self.unit, log)):
+                os.remove(os.path.join(self.unit, log))
+        flag = os.path.join(self.unit, "in-update-mode")
+        if in_update_mode:
+            open(flag, "w").close()
+        elif os.path.exists(flag):
+            os.remove(flag)
         with open(os.path.join(self.unit, "app.bin"), "wb") as f:
             f.write(app)
         with open(os.path.join(self.unit, "upper.bin"), "wb") as f:
@@ -129,14 +150,17 @@ class FlashDayRunTests(unittest.TestCase):
         self.assertNotEqual(self.env["HOME"], os.path.expanduser("~"))
         self.assertFalse(self.env["LC6000_WORK"].startswith(os.path.expanduser("~/lc6000")))
 
-    def run_wizard(self, answers, entered=True):
+    def run_wizard(self, answers, entered=True, sent=None):
         self.assert_isolated()
         result = subprocess.run(["/bin/bash", WIZARD, "drawn"], input="\n".join(answers) + "\n", env=self.env,
                                 cwd=self.dir.name, capture_output=True, text=True, timeout=300)
         # The update-mode tool that ran was the stand-in, never the real one; a run stopped in the ready check never
         # sends the update-mode message at all.
         with open(os.path.join(self.unit, "update-mode.log")) as f:
-            (self.assertIn if entered else self.assertNotIn)("send --yes-enter-update-mode", f.read())
+            calls = f.read().splitlines()
+        self.assertIn("selftest", calls)
+        sends = calls.count("send --yes-enter-update-mode")
+        self.assertEqual(sends, (1 if entered else 0) if sent is None else sent)
         return result
 
     def memory(self, name):
@@ -170,6 +194,16 @@ class FlashDayRunTests(unittest.TestCase):
         block = good_block()
         self.assertEqual(self.memory("upper.bin")[:len(block)], block)
         self.assertEqual(self.memory("app.bin"), self.owner_element)
+
+    def test_a_chip_already_in_update_mode_is_flashed_with_no_update_mode_message(self):
+        # A re-run after a stop that left the chip in update mode (#603): the display's MIDI port is gone, so the
+        # port check would fail. The wizard sees the DFU device instead, says so, and sends nothing.
+        self.unit_holds(self.current_element, in_update_mode=True)
+        answers = ["", self.current, self.upper, self.owner, self.record, "y", "y", "FLASH", "FLASH", "", "y", "", ""]
+        result = self.run_wizard(answers, sent=0)
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
+        self.assertIn("already in update mode", result.stdout)
+        self.assertEqual(len(self.downloads()), 2)
 
     def test_a_b_only_rewrite_leaves_the_app_area_alone(self):
         old_b = bytes.fromhex("44465742" "02000000" "1d000000" "72dfb522" "15000808") + b"123456789"
