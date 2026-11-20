@@ -169,6 +169,41 @@ struct DrawnDisplayHandshakeTests {
         #expect(port.both == [neutral, stale, JogDisplay.goodbye])
     }
 
+    /// The LC6000 as the app runs it: one entry per layer (#79), so quit drops two controllers, one at a time.
+    static func layeredRig(_ firmware: DisplayFirmware) throws -> (Rig, Port) {
+        let rig = try Rig(), port = Port()
+        rig.coordinator.attachJogDisplay(JogDisplayDriver(port: port, clock: rig.clock, log: rig.log, size: 1) { _ in [0, 0, 0, 255] })
+        rig.coordinator.setDisplayFirmware(firmware)
+        rig.coordinator.setJogDisplay(enabled: true)
+        rig.coordinator.start()
+        rig.coordinator.setControllers(ControllerSettings.expanded(
+            [ControllerSettings(deck: 1, input: Rig.lc6000, output: Rig.lc6000Out)], layers: LayersTests.lc6000Layers
+        ))
+        LayersTests.switchLayer(rig, from: 1, to: 2)
+        return (rig, port)
+    }
+
+    @Test("Quitting with both layers connected (#600): the logo for the deck in front and one goodbye, then nothing; on Denon's, the goodbye alone")
+    func quitWithLayers() throws {
+        let (rig, port) = try Self.layeredRig(.custom)
+        rig.coordinator.jogDisplayReply(Self.answer)
+        let deck = try #require(Self.drawn(port).last { $0[9] == 0x03 })
+        #expect(deck[10] == 2)
+        let state = try #require(Self.drawn(port).last { $0[9] == 0x07 })
+        port.both.removeAll()
+        rig.coordinator.quit()
+        var neutral = deck
+        neutral[11...16] = [0x01, 0x55, 0x01, 0x55, 0x01, 0x55]
+        var stale = state
+        stale[10] |= 0x20
+        #expect(port.both == [neutral, stale, JogDisplay.goodbye])
+
+        let (denon, denonPort) = try Self.layeredRig(.denon)
+        denonPort.both.removeAll()
+        denon.coordinator.quit()
+        #expect(denonPort.both == [JogDisplay.goodbye])
+    }
+
     @Test("Quitting flushes the port after the last message, drawn or not, so the app can't exit with them queued (#600)")
     func quitFlushes() throws {
         let (drawn, drawnPort, _) = try Self.rig(.custom)

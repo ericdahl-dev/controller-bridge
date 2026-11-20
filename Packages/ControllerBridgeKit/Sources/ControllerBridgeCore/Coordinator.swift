@@ -512,6 +512,8 @@ public final class Coordinator {
     public func quit() {
         jogController.quit()
         stop()
+        // Every controller gone says the goodbye already; this covers a display with none connected.
+        jogController.disconnect()
         jogController.flush()
     }
 
