@@ -33,6 +33,7 @@ struct Message {
     const char* name = nullptr;  ///< the address after the prefix
     char type = 0;  ///< i, f or s
     int32_t i = 0;
+    float f = 0;  ///< for the float rows #617 adds (bpm, tempo, progress, phase, level); negatives too
     const char* s = nullptr;
 };
 
@@ -86,6 +87,7 @@ bool parse(const uint8_t* bytes, size_t length, Message& out) {
             if (at + 4 > length) return false;
             out.i = static_cast<int32_t>(uint32_t(bytes[at]) << 24 | uint32_t(bytes[at + 1]) << 16 |
                                          uint32_t(bytes[at + 2]) << 8 | uint32_t(bytes[at + 3]));
+            std::memcpy(&out.f, &out.i, sizeof out.f);  // an f's 32 bits are an IEEE 754 float, big-endian like an i
             return true;
         case 's':
             if (read_string(bytes, length, at) < 0) return false;
