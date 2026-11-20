@@ -1,7 +1,11 @@
 // The deck panel's portable core (#619): display feed bytes in, the screen's decisions out. Built and run on the Mac.
 #include <unity.h>
 
+#include <fstream>
+#include <sstream>
+
 #include "deck_core.h"
+#include "json_mini.h"
 #include "osc_bytes.h"
 #include "screen_stub.h"
 
@@ -261,6 +265,59 @@ void test_spaces_before_the_ellipsis_are_dropped() {
     TEST_ASSERT_EQUAL_STRING(want.c_str(), title_shown(words).c_str());
 }
 
+// The shared examples (#490 seam 3): feed/examples.json says, for each deck state, the messages DeckBridge sends. Its
+// Swift test (DisplayFeedExamplesTests) checks DeckBridge sends them; this checks the panel shows that state from them.
+static json_mini::Value examples() {
+    std::string here = __FILE__;
+    std::string path = here.substr(0, here.rfind('/')) + "/../../feed/examples.json";
+    std::ifstream file(path);
+    TEST_ASSERT_TRUE_MESSAGE(file.good(), ("can't open " + path).c_str());
+    std::stringstream text;
+    text << file.rdbuf();
+    return json_mini::parse(text.str());
+}
+
+static Bytes example_message(const json_mini::Value& m) {
+    const std::string& address = m["address"].string;
+    const std::string& type = m["type"].string;
+    if (type == "i") return int_message(address, static_cast<int32_t>(m["value"].number));
+    if (type == "f") return float_message(address, static_cast<float>(m["value"].number));
+    if (type == "s") return string_message(address, m["value"].string);
+    TEST_FAIL_MESSAGE(("a type that isn't i, f or s: " + type).c_str());
+    return {};
+}
+
+void test_the_shared_examples_prefix_is_the_panels() {
+    const json_mini::Value file = examples();
+    TEST_ASSERT_EQUAL_STRING(prefix.c_str(), file["prefix"].string.c_str());
+    TEST_ASSERT_TRUE(file["cases"].array.size() >= 3);
+}
+
+void test_each_shared_example_shows_its_deck_state() {
+    const json_mini::Value file = examples();  // held here: a range-for over examples()["cases"] would dangle
+    size_t walked = 0;
+    for (const json_mini::Value& example : file["cases"].array) {
+        ++walked;
+        const char* name = example["name"].string.c_str();
+        deck_core::DeckCore core;
+        ScreenStub screen;
+        for (const json_mini::Value& m : example["messages"].array) feed(core, example_message(m), 100);
+        core.render(screen, 100);
+        // A key this walker doesn't know (a later field, #617) is left for its own test.
+        const json_mini::Value& state = example["state"];
+        const auto& rgb = state["color"].array;
+        uint32_t color = static_cast<uint32_t>(rgb[0].number) << 16 | static_cast<uint32_t>(rgb[1].number) << 8 |
+                         static_cast<uint32_t>(rgb[2].number);
+        TEST_ASSERT_FALSE_MESSAGE(screen.last().waiting, name);
+        TEST_ASSERT_EQUAL_MESSAGE(static_cast<int>(state["deck"].number), screen.last().deck, name);
+        TEST_ASSERT_EQUAL_HEX32_MESSAGE(color, screen.last().color, name);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(state["title"].string.c_str(), screen.last().title.c_str(), name);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(state["artist"].string.c_str(), screen.last().artist.c_str(), name);
+    }
+    TEST_ASSERT_EQUAL(file["cases"].array.size(), walked);
+    TEST_ASSERT_TRUE(walked >= 3);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -288,5 +345,7 @@ int main(int, char**) {
     RUN_TEST(test_a_long_artist_is_cut_too);
     RUN_TEST(test_the_cut_counts_characters_not_bytes_and_never_splits_one);
     RUN_TEST(test_spaces_before_the_ellipsis_are_dropped);
+    RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
+    RUN_TEST(test_each_shared_example_shows_its_deck_state);
     return UNITY_END();
 }
