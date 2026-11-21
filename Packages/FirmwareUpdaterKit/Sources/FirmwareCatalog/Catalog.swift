@@ -123,3 +123,10 @@ extension Catalog {
         lc6000.first { $0.firmware == firmware }
     }
 }
+
+extension Catalog {
+    /// The catalog the app ships with, from its own resources.
+    public static func builtIn() throws -> Catalog {
+        try Catalog(directory: Bundle.module.resourceURL!.appending(path: "Resources"))
+    }
+}
