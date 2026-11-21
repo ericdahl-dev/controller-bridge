@@ -135,3 +135,12 @@ func aReleaseNotNewerThanTheBuiltInIsNotUsed(version: String) async throws {
     #expect(outcome.refusal == nil)
     #expect(outcome.catalog.patchSet(for: LC6000Firmware(wd: "00.50", tp: "00.31"))?.entries.count == 1)
 }
+
+/// ADR 0012: a signed manifest sets the lowest panel version a device may go back to; the Wi-Fi update (#690) uses it.
+@Test func aUsedReleaseCarriesItsLowestAllowedPanelVersion() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary, lowestAllowed: "1.0.5")
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.lowestAllowedPanel == FirmwareVersion("1.0.5"))
+}

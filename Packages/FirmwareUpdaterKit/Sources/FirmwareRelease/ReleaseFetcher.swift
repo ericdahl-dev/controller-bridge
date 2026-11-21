@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import FirmwareCatalog
+import FirmwareModel
 
 /// Where releases are published: this project's GitHub releases, or a fake in tests.
 public protocol ReleaseFeed: Sendable {
@@ -44,6 +45,8 @@ public struct FetchOutcome: Sendable {
     public let catalog: Catalog
     /// Why the fetched release wasn't used, or nil if it was.
     public var refusal: Refusal? = nil
+    /// The lowest panel version the used release lets a panel go back to, or nil (the built-in catalog sets none).
+    public var lowestAllowedPanel: FirmwareVersion? = nil
 }
 
 public struct ReleaseFetcher: Sendable {
@@ -59,7 +62,8 @@ public struct ReleaseFetcher: Sendable {
 
     public func fetch(over builtIn: Catalog) async -> FetchOutcome {
         do {
-            return FetchOutcome(catalog: try await fetched(over: builtIn))
+            let (catalog, lowest) = try await fetched(over: builtIn)
+            return FetchOutcome(catalog: catalog, lowestAllowedPanel: lowest)
         } catch let refusal as Refusal {
             return FetchOutcome(catalog: builtIn, refusal: refusal)
         } catch {
@@ -67,7 +71,7 @@ public struct ReleaseFetcher: Sendable {
         }
     }
 
-    private func fetched(over builtIn: Catalog) async throws -> Catalog {
+    private func fetched(over builtIn: Catalog) async throws -> (Catalog, FirmwareVersion?) {
         let published = try await reach { try await feed.latest() }
         // Nothing in the manifest is used before its signature checks out, except the name of the key to check it with.
         guard let claimed = try? JSONDecoder().decode(KeyName.self, from: published.manifest).key else {
@@ -99,7 +103,7 @@ public struct ReleaseFetcher: Sendable {
         // Newer means a newer panel image than the app carries; LC6000 patch sets ride along with it.
         guard let offered = catalog.newestPanel()?.version,
               builtIn.newestPanel().map({ $0.version < offered }) ?? true else { throw Refusal.notNewer }
-        return catalog
+        return (catalog, manifest.lowestAllowed["deck-panel"].flatMap(FirmwareVersion.init))
     }
 
     private struct KeyName: Decodable { let key: String }
