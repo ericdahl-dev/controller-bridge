@@ -122,4 +122,27 @@ struct UpdaterScreenTests {
         #expect(open.lc6000.warning == nil)
         #expect(open.lc6000.status == "LC6000 found")
     }
+
+    @Test("The log says what was found, and leaves out serial numbers, MAC addresses and Wi-Fi details")
+    func logLeavesOutPrivateDetails() async {
+        let rig = Rig()
+        // A driver that names the port after the chip's serial number, as FTDI's and Apple's do.
+        let port = "/dev/cu.usbserial-AB12CD34"
+        rig.usb.plugged = [USBDevice(vendor: Self.ch340k.vendor, product: Self.ch340k.product, name: "USB Serial", serialPort: port)]
+        rig.serial.lines[port] = [
+            "deck panel: boot, build 1d0683f",
+            "wifi: joined \"HomeNet-5G\" password hunter22",
+            "wifi: mac 24:6F:28:AA:BB:CC, address 192.168.1.42",
+        ]
+        rig.midi.ports = ["LC6000 PRIME Controller"]
+        _ = await rig.finder.find()
+        let log = rig.log.text
+        #expect(log.contains("deck panel"))
+        #expect(log.contains("1A86:7522"))
+        #expect(log.contains("build 1d0683f"))
+        #expect(log.contains("LC6000"))
+        for secret in ["AB12CD34", "HomeNet", "hunter22", "24:6F:28", "AA:BB:CC", "192.168"] {
+            #expect(!log.contains(secret), "log has \(secret)")
+        }
+    }
 }

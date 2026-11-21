@@ -1,3 +1,4 @@
+import Foundation
 import FirmwareModel
 
 /// A deck panel the finder saw on USB.
@@ -53,22 +54,35 @@ public struct DeviceFinder: Sendable {
         self.log = log
     }
 
+    /// What is plugged in now. The log gets one line per device found, made only from fixed words, USB ids and the
+    /// checked build: never a port path (some drivers name it after the chip's serial number) or a line the panel
+    /// printed (it may carry Wi-Fi names, MAC or IP addresses).
     public func find() async -> Found {
         let devices = await usb.devices()
         var found = Found()
         if let chip = devices.first(where: { $0.vendor == Self.panelChip.vendor && $0.product == Self.panelChip.product }) {
+            let usbID = Self.hex(chip)
             if let port = chip.serialPort {
-                found.panel = .onSerial(build: Self.build(in: await serial.listen(on: port, for: Self.listenSeconds)))
+                let build = Self.build(in: await serial.listen(on: port, for: Self.listenSeconds))
+                found.panel = .onSerial(build: build)
+                log.log("deck panel: on USB \(usbID), serial port present, " + (build.map { "build \($0.sha)" } ?? "build not read"))
             } else {
                 found.panel = .driverMissing
+                log.log("deck panel: on USB \(usbID), no serial port (driver missing)")
             }
         }
         if await midi.names().contains(where: { $0.contains(Self.lc6000Ports) }) {
             found.lc6000 = .onMIDI
-        } else if devices.contains(where: { $0.vendor == Self.stBootloader.vendor && $0.product == Self.stBootloader.product }) {
+            log.log("LC6000: MIDI ports present, firmware not checked")
+        } else if let st = devices.first(where: { $0.vendor == Self.stBootloader.vendor && $0.product == Self.stBootloader.product }) {
             found.lc6000 = .updateMode
+            log.log("LC6000: a device in update mode on USB \(Self.hex(st))")
         }
         return found
+    }
+
+    static func hex(_ device: USBDevice) -> String {
+        String(format: "%04X:%04X", device.vendor, device.product)
     }
 
     /// The build from the panel's boot line, "deck panel: boot, build <sha>": a git short SHA, lowercase hex of 7 to
