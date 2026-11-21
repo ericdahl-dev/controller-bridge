@@ -91,7 +91,8 @@ bool Scan::wait_vsync_after(const Latches& latch, uint32_t timeout_ms) {
         panel_.lock();
         const uint64_t vsync_us = vsync_us_;
         panel_.unlock();
-        if (vsync_us > latch.us) return true;
+        // Without bounce buffers the latch is this vsync, the same stamp: at or after.
+        if (vsync_us > latch.us || (config_.bounce_px == 0 && vsync_us == latch.us)) return true;
         const uint64_t now = panel_.now();
         if (now >= until) return false;
         if (!panel_.take(Signal::vsync, static_cast<uint32_t>((until - now + 999) / 1000))) return false;

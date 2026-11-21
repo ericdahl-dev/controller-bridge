@@ -334,6 +334,19 @@ void test_interrupts_during_start_see_the_config() {
     TEST_ASSERT_EQUAL(0, scan.latches().count);
 }
 
+// Without bounce buffers the latch is the vsync, one interrupt: the vsync after it has come with it, not a frame later.
+void test_without_bounce_buffers_the_vsync_after_a_latch_is_the_latch() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners(0));
+    panel.script = {{33333, Irq::vsync}, {66666, Irq::vsync}};
+    Latches l;
+    TEST_ASSERT_TRUE(scan.wait_next_frame(70, l));
+    TEST_ASSERT_TRUE(scan.wait_vsync_after(l, 70));
+    TEST_ASSERT_EQUAL(33333, panel.now_us);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
@@ -357,5 +370,6 @@ int main(int, char**) {
     RUN_TEST(test_a_frame_end_that_jumps_is_a_resync);
     RUN_TEST(test_late_copies_are_counted_where_they_fell);
     RUN_TEST(test_interrupts_during_start_see_the_config);
+    RUN_TEST(test_without_bounce_buffers_the_vsync_after_a_latch_is_the_latch);
     return UNITY_END();
 }

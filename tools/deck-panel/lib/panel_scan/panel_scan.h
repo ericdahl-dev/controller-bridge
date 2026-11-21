@@ -88,7 +88,8 @@ class Scan {
     /// The frame clock's wait (#663): until a latch newer than the one current on entry, so a give left from before the
     /// call never starts a frame. False after `timeout_ms` with none.
     bool wait_next_frame(uint32_t timeout_ms, Latches& latch);
-    /// The other wake (#679): until the vsync after `latch`, at once if it came already. False after `timeout_ms`.
+    /// The other wake (#679): until the vsync after `latch`, at once if it came already (without bounce buffers the
+    /// latch is a vsync, so at once). False after `timeout_ms`.
     bool wait_vsync_after(const Latches& latch, uint32_t timeout_ms);
     /// The latch stamp, for any task.
     Latches latches() const;
