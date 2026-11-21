@@ -92,6 +92,7 @@ jobs:
           pio test -d tools/deck-panel -e native
           python3 -I tools/deck-panel/test_secret_logs.py
           python3 -I tools/deck-panel/check_secret_logs.py
+          python3 -I tools/deck-panel/test_deck_logo.py
       # The panel keeps its Wi-Fi in NVS, set from a phone (#622): nothing to build in.
       - name: Deck panel firmware build
         run: |

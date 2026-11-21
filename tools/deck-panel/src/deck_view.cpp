@@ -8,6 +8,8 @@ LV_FONT_DECLARE(geist_semibold_36)
 LV_FONT_DECLARE(geist_regular_24)
 LV_FONT_DECLARE(geist_mono_medium_32)
 LV_FONT_DECLARE(geist_mono_semibold_64)
+// The logo (#651), made from the icon's SVG by deck_logo.py into src/deck_logo.c.
+LV_IMAGE_DECLARE(deck_logo);
 
 namespace {
 
@@ -152,13 +154,19 @@ void DeckScreen::build() {
     level_fill_ = box(meter, 0, 0, kMeterW, 0, lv_color_hex(palette::kLevel));
     lv_obj_set_align(level_fill_, LV_ALIGN_BOTTOM_LEFT);
 
-    // Waiting: why, and what to do, in the middle.
+    // Waiting: the logo, then why and what to do, in the middle. The logo is opaque RGB565 at its own size and
+    // untransformed, so LVGL copies it from flash with no layer and no decoded copy. 184 wide by 198 high: stretched
+    // down for the panel's short pixels (README, "Round things"), and with two headline lines (2x44), three detail
+    // lines (3x30) and two 12 px gaps the column is exactly the 400 px between the margins.
     waiting_page_ = page(screen);
     lv_obj_set_style_pad_all(waiting_page_, kMargin, 0);
     lv_obj_set_style_pad_row(waiting_page_, 12, 0);
     lv_obj_set_flex_flow(waiting_page_, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(waiting_page_, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     const int waiting_w = board::LCD_WIDTH - 2 * kMargin;
+    logo_ = lv_image_create(waiting_page_);
+    lv_image_set_src(logo_, &deck_logo);
+    lv_obj_add_flag(logo_, LV_OBJ_FLAG_HIDDEN);
     headline_ = label(waiting_page_, waiting_w, &geist_semibold_36, lv_color_white(), LV_TEXT_ALIGN_CENTER, 2);
     detail_ = label(waiting_page_, waiting_w, &geist_regular_24, kGray, LV_TEXT_ALIGN_CENTER, 3);
 }
@@ -167,6 +175,7 @@ void DeckScreen::show_waiting(const deck_core::WaitingView& view, const deck_cor
     // The view is the core's and stays put until the next call: the labels point at its texts.
     if (changes.headline) lv_label_set_text_static(headline_, view.headline);
     if (changes.detail) lv_label_set_text_static(detail_, view.detail);
+    if (changes.logo) set_hidden(logo_, !view.logo);
     set_hidden(deck_page_, true);
     set_hidden(waiting_page_, false);
 }
