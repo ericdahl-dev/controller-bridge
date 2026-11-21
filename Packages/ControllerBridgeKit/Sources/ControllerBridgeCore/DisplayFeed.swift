@@ -155,6 +155,28 @@ final class DisplayFeed {
         return out
     }
 
+    /// The goodbye (#651): DeckBridge is quitting or the feed was turned off; a display shows its own idle look.
+    static let goodbye = OSCMessage(prefix + "goodbye", [.int(1)])
+    /// A datagram has gone out since the destination opened: there's a display to say goodbye to.
+    private var greeted = false
+
+    /// Says goodbye, as the last datagram, if anything went out since the destination opened; nothing follows it until
+    /// the destination opens again or the feed is turned on.
+    func goodbye() {
+        guard greeted, let sender else { return }
+        sender.send(bundle: [Self.goodbye])
+        say("goodbye")
+        greeted = false
+        open = false
+        sent = [:]
+        lastSnapshot = .greatestFiniteMagnitude
+    }
+
+    /// Waits for the sends to leave (the app exits after a quit).
+    func flush() {
+        (sender as? any OSCFlushing)?.flush(timeout: 0.5)
+    }
+
     /// Seconds as a trace line writes them: 1, not 1.0.
     private static func format(_ seconds: Double) -> String {
         seconds == seconds.rounded() ? String(Int(seconds)) : String(seconds)
@@ -162,11 +184,17 @@ final class DisplayFeed {
 
     /// Gives up the sender and the setting, for another Coordinator to take (the demo, #625); this one sends nothing
     /// until it gets them back.
-    func release() -> (sender: any OSCSender, settings: DisplayFeedSettings)? {
+    func release() -> (sender: any OSCSender, settings: DisplayFeedSettings, greeted: Bool)? {
         guard let sender else { return nil }
         self.sender = nil
         sent = [:]
-        return (sender, settings)
+        defer { greeted = false }
+        return (sender, settings, greeted)
+    }
+
+    /// The display heard from whoever had the feed before (#651): it gets the goodbye even if this one sent nothing yet.
+    func carryGreeting(_ greeted: Bool) {
+        self.greeted = self.greeted || greeted
     }
 
     /// The setting. Turning it on, or a new host or port, waits for the destination to open.
@@ -178,6 +206,7 @@ final class DisplayFeed {
             say("on: \(new.host):\(new.port), waiting for its destination")
         } else if !new.enabled && settings.enabled {
             say("off")
+            goodbye()
         }
         settings = new
     }
@@ -242,6 +271,7 @@ final class DisplayFeed {
         if fastSent { fastDue = (fastDue.map { max($0, now - Self.fastInterval) } ?? now) + Self.fastInterval }
         let bundles = Self.bundles(changes)
         for bundle in bundles { sender.send(bundle: bundle) }
+        if !bundles.isEmpty { greeted = true }
         let count = changes.count
         if snapshot {
             say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", \(count) messages in \(bundles.count) bundle\(bundles.count == 1 ? "" : "s")")

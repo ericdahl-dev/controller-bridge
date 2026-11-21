@@ -48,6 +48,11 @@ public protocol OSCSender: Sendable {
     func send(bundle messages: [OSCMessage])
 }
 
+/// A sender whose sends leave later, on a queue of its own (#651): `flush` waits for them.
+public protocol OSCFlushing {
+    func flush(timeout: Double)
+}
+
 extension OSCSender {
     /// A sender with no bundles of its own sends the messages one by one.
     public func send(bundle messages: [OSCMessage]) {
