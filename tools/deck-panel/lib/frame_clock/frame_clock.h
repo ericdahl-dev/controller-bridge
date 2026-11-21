@@ -21,6 +21,12 @@ struct Board {
     virtual void chores(uint32_t until_us) = 0;
 };
 
+struct Report {
+    uint32_t frames = 0;  // frames run
+    uint32_t late = 0;    // frames whose draw ran past the next latch
+    uint32_t missed = 0;  // latches that went by with no frame started on them
+};
+
 class Clock {
   public:
     /// `period_us`: one scan-out. `guard_us`: how long before the next latch the chores must be done.
@@ -28,10 +34,15 @@ class Clock {
 
     /// One frame: waits for a latch, then reads, renders, refreshes, and runs the chores.
     void step(Board& board);
+    /// The counts since the last take(), and a fresh window.
+    Report take();
 
   private:
     uint32_t period_us_;
     uint32_t guard_us_;
+    bool started_ = false;
+    uint32_t last_count_ = 0;  // the latch the last frame woke on
+    Report report_;
 };
 
 }  // namespace frame_clock

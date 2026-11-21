@@ -1,6 +1,7 @@
 // The one frame clock (#663): the panel's latch drives read, render, refresh, then the chores.
 #include <unity.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -16,11 +17,13 @@ struct FakeBoard : frame_clock::Board {
     std::vector<std::string> log;
     uint32_t latch_count = 0;
     uint32_t latch_us = 0;
+    uint32_t skip_next = 0;  // latches the next refresh runs past
 
     bool wait_latch(uint32_t& count, uint32_t& us) override {
         log.push_back("wait");
-        ++latch_count;
-        latch_us += 33400;
+        latch_count += 1 + skip_next;
+        latch_us += 33400 * (1 + skip_next);
+        skip_next = 0;
         count = latch_count;
         us = latch_us;
         return true;
@@ -53,9 +56,26 @@ void test_the_chores_must_end_a_guard_before_the_next_latch() {
     TEST_ASSERT_EQUAL_UINT32(63800, board.chores_until_us);  // 33400 + 33400 - 3000
 }
 
+void test_a_draw_that_runs_past_the_next_latch_is_late_and_the_next_frame_takes_the_newest_latch() {
+    FakeBoard board;
+    frame_clock::Clock clock(33400, 3000);
+    clock.step(board);   // latch 1
+    board.skip_next = 1;
+    clock.step(board);   // latch 2, its draw runs past latch 3
+    clock.step(board);   // so the board's next latch is 4: no backlog of missed frames to run
+    const frame_clock::Report r = clock.take();
+    TEST_ASSERT_EQUAL_UINT32(3, r.frames);
+    TEST_ASSERT_EQUAL_UINT32(1, r.late);
+    TEST_ASSERT_EQUAL_UINT32(1, r.missed);
+    TEST_ASSERT_EQUAL_UINT32(4, board.latch_count);
+    TEST_ASSERT_EQUAL(3, std::count(board.log.begin(), board.log.end(), std::string("wait")));  // not four
+    TEST_ASSERT_EQUAL_UINT32(0, clock.take().frames);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_a_frame_waits_for_the_latch_then_reads_renders_refreshes_and_does_the_chores);
     RUN_TEST(test_the_chores_must_end_a_guard_before_the_next_latch);
+    RUN_TEST(test_a_draw_that_runs_past_the_next_latch_is_late_and_the_next_frame_takes_the_newest_latch);
     return UNITY_END();
 }
