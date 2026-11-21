@@ -107,6 +107,19 @@ void test_a_read_whose_refresh_drew_nothing_is_no_frame_and_not_a_skip() {
     TEST_ASSERT_EQUAL_UINT32(20000, r.lag_worst_us);
 }
 
+void test_a_window_with_more_frames_than_the_store_still_counts_them_all_and_its_worst() {
+    frame_ledger::Ledger ledger;
+    uint32_t t = 0;
+    for (int i = 0; i < 300; ++i) {
+        frame(ledger, t, i == 280 ? 90000 : 20000);  // the worst comes after the store is full
+        t += 100000;
+    }
+    const frame_ledger::Report r = ledger.take();
+    TEST_ASSERT_EQUAL_UINT32(300, r.frames);
+    TEST_ASSERT_EQUAL_UINT32(90000, r.lag_worst_us);
+    TEST_ASSERT_EQUAL_UINT32(20000, r.lag_typical_us);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_a_read_swapped_and_shown_at_the_next_vsync_is_one_frame_with_its_lag);
@@ -116,5 +129,6 @@ int main() {
     RUN_TEST(test_a_vsync_between_arrival_and_read_marks_the_frame_skipped);
     RUN_TEST(test_the_typical_lag_is_the_median_of_the_window_and_take_starts_a_new_one);
     RUN_TEST(test_a_read_whose_refresh_drew_nothing_is_no_frame_and_not_a_skip);
+    RUN_TEST(test_a_window_with_more_frames_than_the_store_still_counts_them_all_and_its_worst);
     return UNITY_END();
 }
