@@ -4,7 +4,7 @@ import Synchronization
 /// The display feed's sender (#490, #616): every send is handed to a worker, so the Coordinator's event path never
 /// waits on the network. Once the worker is `backlog` sends behind, later sends are dropped and counted, never queued:
 /// the feed must not slow DeckBridge however fast Syndicate's feedback comes (#490 story 25).
-public final class DisplayFeedQueue: OSCSender {
+public final class DisplayFeedQueue: OSCSender, OSCFlushing {
     /// Runs a job on the worker.
     public typealias Run = @Sendable (@escaping @Sendable () -> Void) -> Void
 
@@ -37,6 +37,14 @@ public final class DisplayFeedQueue: OSCSender {
     public var trace: TraceSink? {
         get { state.withLock { $0.trace } }
         set { state.withLock { $0.trace = newValue } }
+    }
+
+    /// Waits until every send queued before it has gone to the destination, at most `timeout` seconds (#651): the
+    /// goodbye leaves before the app exits.
+    public func flush(timeout: Double) {
+        let done = DispatchSemaphore(value: 0)
+        run { done.signal() }
+        _ = done.wait(timeout: .now() + timeout)
     }
 
     /// Sends dropped because the worker was behind.

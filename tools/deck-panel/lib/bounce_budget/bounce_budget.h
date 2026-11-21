@@ -1,0 +1,35 @@
+// The bounce copy's budget (#635): while the DMA sends one bounce buffer, the interrupt copies the next chunk out of
+// PSRAM into the other, and it has to finish before the DMA comes back. This meters how close it runs, so an underrun
+// shows on the perf line instead of only as stale rows on the glass. Kept free of Arduino so it's host-tested.
+#pragma once
+
+#include <cstdint>
+
+#include "frame_pacing.h"
+
+namespace bounce_budget {
+
+// How long the DMA takes to send one chunk of bounce_px pixels, in ns: the copy's deadline.
+uint32_t chunk_ns(const frame_pacing::Timing& timing, uint32_t bounce_px);
+
+struct Report {
+    uint32_t chunks = 0;    // copies timed
+    uint32_t worst_us = 0;  // the longest
+    int32_t margin_us = 0;  // the budget less the longest; below 0 is an underrun
+    uint32_t late = 0;      // copies longer than the budget
+};
+
+class Meter {
+  public:
+    explicit Meter(uint32_t budget_ns) : budget_ns_(budget_ns) {}
+    // One chunk's copy took this long.
+    void copied(uint32_t took_us);
+    // This window's numbers, and a new window.
+    Report take();
+
+  private:
+    uint32_t budget_ns_;
+    Report window_;
+};
+
+}  // namespace bounce_budget
