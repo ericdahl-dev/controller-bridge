@@ -44,7 +44,15 @@ constexpr int kPhases = 8;
 enum class Mark : uint8_t { wait, read, render, refresh, wifi, udp, touch, lvgl, perf, other, count };
 constexpr int kMarks = static_cast<int>(Mark::count);
 
+// One late copy: its start after the latch, its length, and the loop's step (a Mark).
+struct LateCopy {
+    uint32_t start_us;
+    uint32_t took_us;
+    uint8_t mark;
+};
+
 struct CopySpread {
+    static constexpr int kKept = 8;  // late copies kept per window, the first ones
     uint32_t copies_by_phase[kPhases] = {};
     uint32_t late_by_phase[kPhases] = {};
     uint32_t copies_by_mark[kMarks] = {};
@@ -52,6 +60,8 @@ struct CopySpread {
     // Not the panel interrupt's: in none of the above.
     uint32_t outside_isr = 0;
     uint32_t late_outside_isr = 0;
+    LateCopy lates[kKept] = {};
+    int kept = 0;
 };
 
 // The eighth of a `period_us` scan-out that `since_latch_us` falls in; one period or more is the last.

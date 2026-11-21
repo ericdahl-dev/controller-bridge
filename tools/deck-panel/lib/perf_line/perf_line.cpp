@@ -75,6 +75,14 @@ std::string format_copy(const CopySpread& c) {
     snprintf(part, sizeof part, "; outside an interrupt %u/%u", static_cast<unsigned>(c.late_outside_isr),
              static_cast<unsigned>(c.outside_isr));
     line += part;
+    if (c.kept <= 0) return line + "; no late copies";
+    line += "; late at";
+    for (int i = 0; i < c.kept && i < CopySpread::kKept; ++i) {
+        const uint8_t m = c.lates[i].mark;
+        snprintf(part, sizeof part, "%s +%u %u us %s", i > 0 ? "," : "", static_cast<unsigned>(c.lates[i].start_us),
+                 static_cast<unsigned>(c.lates[i].took_us), m < kMarks ? kNames[m] : "?");
+        line += part;
+    }
     return line;
 }
 

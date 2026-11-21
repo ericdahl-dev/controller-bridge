@@ -158,7 +158,7 @@ void test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step() {
     TEST_ASSERT_EQUAL_STRING(
         "perf copy: late/copies by eighth after the latch 0/300 0/301 0/302 2/303 0/304 0/305 0/306 0/307; "
         "by loop step wait 1/6000 read 0/0 render 0/0 refresh 0/900 wifi 0/0 udp 0/0 touch 0/0 lvgl 0/0 perf 1/40 "
-        "other 0/0; outside an interrupt 0/0",
+        "other 0/0; outside an interrupt 0/0; no late copies",
         perf_line::format_copy(c).c_str());
 }
 
@@ -169,6 +169,20 @@ void test_the_copy_line_counts_copies_outside_an_interrupt_apart() {
     c.outside_isr = 12;
     c.late_outside_isr = 3;
     TEST_ASSERT_TRUE(perf_line::format_copy(c).find("other 0/0; outside an interrupt 3/12") != std::string::npos);
+}
+
+// Each late copy, a few per window (#663): when it started after the latch, how long it took and the loop's step, so
+// the phase is read to the microsecond, not to an eighth.
+void test_the_copy_line_lists_the_late_copies_it_kept() {
+    perf_line::CopySpread c;
+    c.kept = 2;
+    c.lates[0] = {3120, 702, static_cast<uint8_t>(perf_line::Mark::read)};
+    c.lates[1] = {15004, 851, static_cast<uint8_t>(perf_line::Mark::wait)};
+    TEST_ASSERT_TRUE(perf_line::format_copy(c).find("outside an interrupt 0/0; late at +3120 702 us read, "
+                                                    "+15004 851 us wait") != std::string::npos);
+    perf_line::CopySpread none;
+    TEST_ASSERT_TRUE(perf_line::format_copy(none).find("outside an interrupt 0/0; no late copies") !=
+                     std::string::npos);
 }
 
 int main() {
@@ -184,5 +198,6 @@ int main() {
     RUN_TEST(test_a_copy_falls_in_the_eighth_of_the_scan_out_since_the_latch);
     RUN_TEST(test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step);
     RUN_TEST(test_the_copy_line_counts_copies_outside_an_interrupt_apart);
+    RUN_TEST(test_the_copy_line_lists_the_late_copies_it_kept);
     return UNITY_END();
 }
