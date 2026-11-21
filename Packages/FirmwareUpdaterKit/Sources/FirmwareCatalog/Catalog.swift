@@ -12,6 +12,7 @@ public enum CatalogError: Error, Equatable {
     case badVersion(String)
     case notAPatchDescription(String)
     case unnamedFile(String)
+    case missingBuiltIn
 }
 
 /// The firmware the app ships with, read from a folder holding `catalog.json` and the files it names. No network.
@@ -147,8 +148,12 @@ extension Catalog {
 }
 
 extension Catalog {
-    /// The catalog the app ships with, from its own resources.
+    /// The catalog the app ships with, from its own resources. Looked up by name: where SwiftPM puts a copied folder
+    /// differs between a flat bundle and a macOS one.
     public static func builtIn() throws -> Catalog {
-        try Catalog(directory: Bundle.module.resourceURL!.appending(path: "Resources"))
+        guard let folder = Bundle.module.url(forResource: "Catalog", withExtension: nil) else {
+            throw CatalogError.missingBuiltIn
+        }
+        return try Catalog(directory: folder)
     }
 }

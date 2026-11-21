@@ -15,7 +15,7 @@ let package = Package(
         .target(name: "FirmwareModel"),
         // The firmware the app ships with (#686): the deck panel image and the LC6000 patch descriptions, with the
         // rules for what applies to what. Built-in resources only; no network.
-        .target(name: "FirmwareCatalog", dependencies: ["FirmwareModel"], resources: [.copy("Resources")]),
+        .target(name: "FirmwareCatalog", dependencies: ["FirmwareModel"], resources: [.copy("Catalog")]),
         .testTarget(name: "FirmwareCatalogTests", dependencies: ["FirmwareCatalog", "FirmwareModel"], resources: [.copy("Fixtures")]),
     ]
 )

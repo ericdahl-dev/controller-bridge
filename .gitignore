@@ -25,4 +25,4 @@ docs/research/*.pdf
 tools/deck-panel/src/wifi_secrets.h
 
 # Deck panel images the updater carries (#686): added at release by add_panel_image.py, never committed
-Packages/FirmwareUpdaterKit/Sources/FirmwareCatalog/Resources/panel/
+Packages/FirmwareUpdaterKit/Sources/FirmwareCatalog/Catalog/panel/

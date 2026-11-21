@@ -17,7 +17,7 @@ import sys
 
 ESP_IMAGE_MAGIC = 0xE9  # the first byte of every ESP32 app image (esp_image_header_t.magic)
 
-DEFAULT_CATALOG = pathlib.Path(__file__).resolve().parent.parent / "Sources/FirmwareCatalog/Resources"
+DEFAULT_CATALOG = pathlib.Path(__file__).resolve().parent.parent / "Sources/FirmwareCatalog/Catalog"
 
 
 def main(argv):
