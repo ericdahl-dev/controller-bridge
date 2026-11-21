@@ -93,9 +93,11 @@ extension Catalog {
         return shipped.version < newest.version ? .update(newest) : .upToDate
     }
 
-    /// Short and long forms of one SHA name the same build: the shorter must start the longer.
+    /// Short and long forms of one SHA name the same build: the shorter must start the longer. Only plain hex SHAs
+    /// match, so a "<sha>-dirty" build (uncommitted changes) is never the shipped one.
     static func sameBuild(_ a: String, _ b: String) -> Bool {
         let a = a.lowercased(), b = b.lowercased()
+        guard [a, b].allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isHexDigit) }) else { return false }
         return a.count <= b.count ? b.hasPrefix(a) : a.hasPrefix(b)
     }
 }

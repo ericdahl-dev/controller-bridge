@@ -47,3 +47,10 @@ func fixture(_ name: String) throws -> URL {
     #expect(catalog.offer(for: PanelBuild(sha: "1234567", version: FirmwareVersion("1.10.0"))) == .upToDate)
     #expect(catalog.offer(for: PanelBuild(sha: "ccccccc", version: FirmwareVersion("2.0"))) == .upToDate)
 }
+
+/// tools/deck-panel/git_sha.py stamps "<sha>-dirty" on a build with uncommitted changes: not the shipped build.
+@Test func aDirtyBuildOfAShippedShaIsUnknown() throws {
+    let catalog = try Catalog(directory: fixture("one-panel"))
+    let newest = try #require(catalog.newestPanel())
+    #expect(catalog.offer(for: PanelBuild(sha: "bbbbbbb-dirty")) == .unknownBuild(newest))
+}
