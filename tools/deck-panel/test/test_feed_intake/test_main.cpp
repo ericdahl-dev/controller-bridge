@@ -43,7 +43,7 @@ void test_the_core_gets_each_datagram_at_its_arrival_not_its_read() {
     TEST_ASSERT_TRUE(intake.push(m.data(), m.size(), 1000000));
     deck_core::DeckCore core;
     connect(core);
-    TEST_ASSERT_EQUAL(1, intake.drain(core));
+    TEST_ASSERT_EQUAL(1, intake.drain(core).count);
     Last screen;
     core.render(screen, 3999);
     TEST_ASSERT_FALSE(screen.waiting);
@@ -52,8 +52,30 @@ void test_the_core_gets_each_datagram_at_its_arrival_not_its_read() {
     TEST_ASSERT_TRUE(screen.waiting);
 }
 
+// What came between two frames goes in order, each at its own time; the frame learns the newest arrival, for the
+// ledger's lag (#662).
+void test_a_frame_takes_everything_since_the_last_in_order_and_knows_the_newest() {
+    feed_intake::Intake intake;
+    const auto one = deck_message(1), three = deck_message(3);
+    intake.push(one.data(), one.size(), 1000000);
+    intake.push(three.data(), three.size(), 1010500);
+    deck_core::DeckCore core;
+    connect(core);
+    const feed_intake::Drained got = intake.drain(core);
+    TEST_ASSERT_EQUAL(2, got.count);
+    TEST_ASSERT_EQUAL_UINT64(1010500, got.newest_us);
+    Last screen;
+    core.render(screen, 4009);
+    TEST_ASSERT_EQUAL(3, screen.deck);
+    core.render(screen, 4010);
+    TEST_ASSERT_TRUE(screen.waiting);
+    // Nothing since: the next frame takes nothing.
+    TEST_ASSERT_EQUAL(0, intake.drain(core).count);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_the_core_gets_each_datagram_at_its_arrival_not_its_read);
+    RUN_TEST(test_a_frame_takes_everything_since_the_last_in_order_and_knows_the_newest);
     return UNITY_END();
 }

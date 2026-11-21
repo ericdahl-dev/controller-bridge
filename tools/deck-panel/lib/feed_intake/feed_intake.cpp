@@ -13,15 +13,16 @@ bool Intake::push(const uint8_t* bytes, size_t length, uint64_t at_us) {
     return true;
 }
 
-int Intake::drain(deck_core::DeckCore& core) {
-    int fed = 0;
+Drained Intake::drain(deck_core::DeckCore& core) {
+    Drained got;
     while (head_ != tail_) {
         const Slot& slot = slots_[head_ % kSlots];
         core.feed(slot.bytes, slot.length, static_cast<uint32_t>(slot.at_us / 1000));
+        got.newest_us = slot.at_us;
         ++head_;
-        ++fed;
+        ++got.count;
     }
-    return fed;
+    return got;
 }
 
 }  // namespace feed_intake

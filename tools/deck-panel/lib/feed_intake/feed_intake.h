@@ -14,12 +14,18 @@ constexpr size_t kMaxDatagram = 1472;
 /// Datagrams held between frames.
 constexpr size_t kSlots = 8;
 
+/// What a frame took: how many datagrams, and when the newest of them arrived (0 if none).
+struct Drained {
+    int count = 0;
+    uint64_t newest_us = 0;
+};
+
 class Intake {
 public:
     /// Queues a datagram that arrived at `at_us` (microseconds, esp_timer's clock). False if it wasn't kept.
     bool push(const uint8_t* bytes, size_t length, uint64_t at_us);
-    /// Feeds the core every datagram queued, oldest first, each at its arrival (in ms, millis' clock); returns how many.
-    int drain(deck_core::DeckCore& core);
+    /// Feeds the core every datagram queued, oldest first, each at its arrival (in ms, millis' clock).
+    Drained drain(deck_core::DeckCore& core);
 
 private:
     struct Slot {
