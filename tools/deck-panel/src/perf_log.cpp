@@ -113,7 +113,10 @@ void tick(uint32_t now_ms, int datagrams, uint32_t too_big, bool may_print, fram
     w.internal_free = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     w.scan = display_take_scan();
     w.copy_budget_us = display_copy_budget_us();
-    w.copy = display_take_copy();
+    DisplayCopyLate where = {};
+    w.copy = display_take_copy(&where);
+    w.copy_late_drawing = where.drawing;
+    w.copy_late_turn = where.turn;
     w.ledger = g_ledger.take();
     w.clock = clock.take();
     Serial.println(perf_line::format(w).c_str());

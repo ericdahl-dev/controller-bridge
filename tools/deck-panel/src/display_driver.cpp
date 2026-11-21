@@ -69,6 +69,16 @@ static_assert(PANEL_BOUNCE_PX == 0 || ((800 * 480) / PANEL_BOUNCE_PX) % 2 == 0,
 #ifndef PANEL_ISR_CORE
 #define PANEL_ISR_CORE 1
 #endif
+// When the frame clock's frame starts (#663). 1: at the vsync after the latch that released the swap, about 1.9 ms
+// later in bounce mode (vsync period less scan lag). 0: at the latch itself. The owner's run of 37cef427 (latch wake)
+// had 72 late copies in 305 s, against 0 in 75 s before. Suspected, not proven: the loop's first PSRAM burst (LVGL's
+// copy of last frame's areas, then the draw) lands on the frame turn's copies with the cache full of dirty lines. That
+// the driver's vsync restart refills both bounce buffers, and calls on_vsync before it, is from memory of IDF's
+// esp_lcd_panel_rgb.c, not read here. The perf line's "at the turn" count tells. Without bounce buffers the latch and
+// the vsync are one interrupt.
+#ifndef PANEL_WAKE_AT_VSYNC
+#define PANEL_WAKE_AT_VSYNC 1
+#endif
 
 namespace {
 
@@ -91,6 +101,12 @@ constexpr frame_pacing::Timing TIMING = {
 // times the copies of one bounce chunk out of PSRAM, esp_lcd's fill. Every other memcpy pays one compare.
 bounce_budget::Meter g_copy(bounce_budget::chunk_ns(TIMING, PANEL_BOUNCE_PX));
 portMUX_TYPE g_copy_lock = portMUX_INITIALIZER_UNLOCKED;
+// Where the late copies fell (#663), under g_copy_lock: during display_refresh(), and within kTurnUs after a latch.
+constexpr uint32_t kTurnUs = 3000;
+const uint32_t g_chunk_ns = bounce_budget::chunk_ns(TIMING, PANEL_BOUNCE_PX);  // once, not per copy
+volatile bool g_drawing = false;  // set by the loop around its LVGL refresh, read by the copy
+uint32_t g_copy_late_drawing = 0;
+uint32_t g_copy_late_turn = 0;
 #endif
 
 lv_display_t* g_disp = nullptr;
@@ -141,18 +157,23 @@ bool IRAM_ATTR release_swap() {
 #endif
     portEXIT_CRITICAL_ISR(&g_scan_lock);
     if (released) xSemaphoreGiveFromISR(g_vsync_sem, &woke);
-    BaseType_t woke_loop = pdFALSE;
-    xSemaphoreGiveFromISR(g_latch_sem, &woke_loop);
-    return woke == pdTRUE || woke_loop == pdTRUE;
+    if (!PANEL_WAKE_AT_VSYNC) xSemaphoreGiveFromISR(g_latch_sem, &woke);
+    return woke == pdTRUE;
 }
 
-// Without bounce buffers the next frame reads the new buffer from this vsync on, so it releases the swap.
+// Without bounce buffers the next frame reads the new buffer from this vsync on, so it releases the swap. Wakes the
+// frame clock (PANEL_WAKE_AT_VSYNC). On the loop's core, so the loop runs only after this interrupt ends, the
+// driver's vsync work included (a restart refill, if it does one there: unverified).
 bool IRAM_ATTR on_vsync(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void*) {
     g_vsyncs = g_vsyncs + 1;
     portENTER_CRITICAL_ISR(&g_scan_lock);
     g_scan.vsync(static_cast<uint32_t>(esp_timer_get_time()));
     portEXIT_CRITICAL_ISR(&g_scan_lock);
-    return PANEL_BOUNCE_PX == 0 && release_swap();
+    // Without bounce buffers the latch first, so the frame this wakes sees its count.
+    const bool woke_by_release = PANEL_BOUNCE_PX == 0 && release_swap();
+    BaseType_t woke = pdFALSE;
+    if (PANEL_WAKE_AT_VSYNC) xSemaphoreGiveFromISR(g_latch_sem, &woke);
+    return woke_by_release || woke == pdTRUE;
 }
 
 // With bounce buffers the driver picks the next frame's buffer here, when it has copied the last of this one, not at
@@ -408,20 +429,30 @@ bool display_wait_latch(uint32_t timeout_ms, DisplayLatch& latch) {
 void display_refresh() {
     // lv_refr_now() refreshes only through the display's refresh timer, deleted in display_init(); this is the same
     // refresh, on the default display (the only one).
+#ifdef PANEL_PERF_LOG
+    g_drawing = true;
+#endif
     _lv_display_refr_timer(nullptr);
+#ifdef PANEL_PERF_LOG
+    g_drawing = false;
+#endif
 }
 
 uint32_t display_frame_us() { return frame_pacing::frame_us(TIMING); }
 
 uint32_t display_copy_budget_us() { return bounce_budget::chunk_ns(TIMING, PANEL_BOUNCE_PX) / 1000u; }
 
-bounce_budget::Report display_take_copy() {
+bounce_budget::Report display_take_copy(DisplayCopyLate* where) {
 #ifdef PANEL_PERF_LOG
     portENTER_CRITICAL(&g_copy_lock);
     const bounce_budget::Report r = g_copy.take();
+    if (where != nullptr) *where = {g_copy_late_drawing, g_copy_late_turn};
+    g_copy_late_drawing = 0;
+    g_copy_late_turn = 0;
     portEXIT_CRITICAL(&g_copy_lock);
     return r;
 #else
+    if (where != nullptr) *where = {};
     return {};
 #endif
 }
@@ -455,8 +486,13 @@ extern "C" IRAM_ATTR void* __wrap_memcpy(void* to, const void* from, size_t n) {
     const uint32_t start = esp_cpu_get_cycle_count();
     void* result = __real_memcpy(to, from, n);
     const uint32_t took_us = (esp_cpu_get_cycle_count() - start) / esp_rom_get_cpu_ticks_per_us();
+    // Late as the meter counts it: longer than the chunk's deadline. The latch time is one aligned word.
+    const bool late = static_cast<uint64_t>(took_us) * 1000u > g_chunk_ns;
+    const bool turn = late && static_cast<uint32_t>(esp_timer_get_time()) - g_latch_us < kTurnUs;
     portENTER_CRITICAL_SAFE(&g_copy_lock);
     g_copy.copied(took_us);
+    if (late && g_drawing) ++g_copy_late_drawing;
+    if (turn) ++g_copy_late_turn;
     portEXIT_CRITICAL_SAFE(&g_copy_lock);
     return result;
 }

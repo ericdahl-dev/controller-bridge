@@ -3,9 +3,10 @@
 // the UDP socket is polled here, never read from a callback. Built with DECK_PANEL_TEST_SCREEN (env crowpanel-test),
 // it shows the test screen (#615) instead, with no Wi-Fi.
 //
-// One frame clock (#663, lib/frame_clock): loop() is one frame. It waits for the panel's latch, reads the feed that
-// came since, renders, refreshes once (draw and swap), then does the chores (Wi-Fi, touch, serial) until a guard
-// before the next latch. A datagram read after latch N is swapped before N+1 and on glass from N+1: one scan-out.
+// One frame clock (#663, lib/frame_clock): loop() is one frame. It waits for the panel's latch (and, by default, the
+// vsync after it, about 1.9 ms later: PANEL_WAKE_AT_VSYNC in display_driver.cpp), reads the feed that came since,
+// renders, refreshes once (draw and swap), then does the chores (Wi-Fi, touch, serial) until a guard before the next
+// latch. A datagram read after latch N is swapped before N+1 and on glass from N+1: under one scan-out.
 #include <Arduino.h>
 #include <Wire.h>
 #include <esp_heap_caps.h>
@@ -40,7 +41,11 @@ namespace {
 // millisecond), so no print waits for the wire unless the buffer is full. IDF's TX ring doesn't split an item and
 // takes a write in chunks of up to half its size, each with a header, so it holds less than its size: 2 KB keeps the
 // perf line (under 640 B), the health line and a few more with room.
-constexpr size_t kSerialTxBytes = 2048;
+// -DPANEL_SERIAL_TX_BYTES=0 goes back to no buffer, to try on the panel.
+#ifndef PANEL_SERIAL_TX_BYTES
+#define PANEL_SERIAL_TX_BYTES 2048
+#endif
+constexpr size_t kSerialTxBytes = PANEL_SERIAL_TX_BYTES;
 // The chores end this long before the next latch, so the frame's wait starts before it.
 constexpr uint32_t kGuardUs = 3000;
 
@@ -105,7 +110,8 @@ class PanelBoard : public frame_clock::Board {
 
     void read_feed() override {
 #ifndef DECK_PANEL_TEST_SCREEN
-        // Right after the latch: until the socket is empty, within the drain's time budget (#636).
+        // At the frame's start (the vsync after the latch, by default): until the socket is empty, within the
+        // drain's time budget (#636).
         g_read = g_drain.run(g_udp, g_core, millis(), [] { return static_cast<uint32_t>(millis()); });
 #endif
     }
@@ -159,7 +165,7 @@ PanelBoard g_board;
 
 void setup() {
     // Before begin(): the buffer can't be set after.
-    const bool tx_buffered = Serial.setTxBufferSize(kSerialTxBytes) == kSerialTxBytes;
+    const bool tx_buffered = kSerialTxBytes == 0 || Serial.setTxBufferSize(kSerialTxBytes) == kSerialTxBytes;
     Serial.begin(115200);
     if (!tx_buffered) Serial.println("deck panel: no serial TX buffer; prints may hold a frame");
     Serial.printf("deck panel: boot, build %s\n", DECK_PANEL_SHA);

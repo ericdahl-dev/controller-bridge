@@ -48,7 +48,12 @@ scan_watch::Report display_take_scan();
 // A bounce chunk's deadline, and (perf build only) the copies timed against it since the last call; no chunks
 // otherwise.
 uint32_t display_copy_budget_us();
-bounce_budget::Report display_take_copy();
+// Of the late copies (#663): those during display_refresh(), and those within 3 ms after a latch (the frame turn).
+struct DisplayCopyLate {
+    uint32_t drawing;
+    uint32_t turn;
+};
+bounce_budget::Report display_take_copy(DisplayCopyLate* where = nullptr);
 
 // Latches so far, where the panel takes the next frame's buffer (frame end in bounce mode, vsync without), and the
 // last one's time in esp_timer microseconds (low 32 bits). The frame clock's boundary (#663) and the frame ledger's
@@ -59,7 +64,8 @@ struct DisplayLatch {
 };
 DisplayLatch display_latch();
 
-// The frame clock's wait (#663), loop task only: blocks until a latch newer than the one current on entry, and
+// The frame clock's wait (#663), loop task only: blocks until a latch newer than the one current on entry (and, with
+// PANEL_WAKE_AT_VSYNC, the vsync after it, about 1.9 ms later in bounce mode), and
 // returns the newest (several since the last call count as one), or false after `timeout_ms` with none. A latch
 // left over from before the call never ends it, so a frame always starts just after a latch, and a swap handed over
 // before the call is always released by the latch that ends it.
