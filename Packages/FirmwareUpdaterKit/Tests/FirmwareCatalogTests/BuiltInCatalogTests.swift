@@ -30,3 +30,20 @@ let kitPatches = URL(filePath: #filePath).deletingLastPathComponent()
         #expect(FileManager.default.isReadableFile(atPath: url.path(percentEncoded: false)), "\(url) is not on disk")
     }
 }
+
+/// The catalog reads the kit's patch format: every patch description in the kit loads as one, so the two readers
+/// can't drift apart unnoticed. Built in a temporary folder, as the catalog would hold them.
+@Test func everyPatchDescriptionInTheKitLoadsAsOne() throws {
+    let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let names = try FileManager.default.contentsOfDirectory(atPath: kitPatches.path(percentEncoded: false))
+        .filter { $0.hasSuffix(".patch") }.sorted()
+    #expect(names.count == 4)
+    for name in names { try FileManager.default.copyItem(at: kitPatches.appending(path: name), to: folder.appending(path: name)) }
+    let entries = names.map { #"{ "kind": "patch", "chip": "\#($0.prefix(2))", "file": "\#($0)" }"# }
+    let json = #"{ "panel": [], "lc6000": [{ "wd": "x", "tp": "y", "entries": [\#(entries.joined(separator: ","))] }] }"#
+    try Data(json.utf8).write(to: folder.appending(path: "catalog.json"))
+    let set = try #require(try Catalog(directory: folder).patchSet(for: LC6000Firmware(wd: "x", tp: "y")))
+    #expect(set.entries.map(\.edits.count) == [1, 2, 1, 1])
+}
