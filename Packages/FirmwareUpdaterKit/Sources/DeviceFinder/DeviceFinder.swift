@@ -51,10 +51,13 @@ public struct DeviceFinder: Sendable {
         return found
     }
 
-    /// The build from the panel's boot line, "deck panel: boot, build <sha>".
+    /// The build from the panel's boot line, "deck panel: boot, build <sha>": a git short SHA, lowercase hex of 7 to
+    /// 40 digits. "unknown" (a build made outside git) or anything else is no build.
     static func build(in lines: [String]) -> PanelBuild? {
         for line in lines where line.hasPrefix(bootLine) {
-            return PanelBuild(sha: String(line.dropFirst(bootLine.count)))
+            let sha = line.dropFirst(bootLine.count)
+            guard (7...40).contains(sha.count), sha.allSatisfy({ "0123456789abcdef".contains($0) }) else { return nil }
+            return PanelBuild(sha: String(sha))
         }
         return nil
     }

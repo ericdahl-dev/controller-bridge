@@ -41,4 +41,20 @@ struct UpdaterScreenTests {
         #expect(screen.panel.status == "Deck panel found")
         #expect(screen.panel.detail == "Build 1d0683f")
     }
+
+    @Test("A panel that didn't boot while the app listened, or gave no real build: unplug and replug to read it",
+          arguments: [
+              [],
+              ["deck panel: waiting"],
+              ["deck panel: boot, build unknown"],
+              ["deck panel: boot, build 1d06"],
+              ["deck panel: boot, build 1D0683Z"],
+          ])
+    func panelBuildNotRead(lines: [String]) async {
+        let rig = Rig()
+        Self.panel(rig, printing: lines)
+        let screen = await rig.screen()
+        #expect(screen.panel.status == "Deck panel found")
+        #expect(screen.panel.detail == "Build not read: unplug the panel and plug it back in to read it")
+    }
 }

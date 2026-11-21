@@ -21,7 +21,9 @@ public struct UpdaterScreen: Sendable, Equatable {
         case nil: panel = Section(status: "Nothing connected")
         case .driverMissing: panel = Section(status: "Deck panel found", detail: "The USB driver for its chip is missing")
         case .onSerial(let build?): panel = Section(status: "Deck panel found", detail: "Build \(build.sha)")
-        case .onSerial(nil): panel = Section(status: "Deck panel found")
+        case .onSerial(nil):
+            panel = Section(status: "Deck panel found",
+                            detail: "Build not read: unplug the panel and plug it back in to read it")
         }
         lc6000 = Section(status: "Nothing connected")
     }
