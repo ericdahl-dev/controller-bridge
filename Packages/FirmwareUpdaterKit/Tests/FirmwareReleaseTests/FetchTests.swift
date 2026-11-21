@@ -104,3 +104,14 @@ func aReleaseNotNewerThanTheBuiltInIsNotUsed(version: String) async throws {
     #expect(outcome.refusal == .notNewer)
     #expect(outcome.catalog.newestPanel()?.sha == "aaaaaaa")
 }
+
+/// Works offline (#684, story 21): with no network the built-in firmware stays, and the app can say why.
+@Test func withNoNetworkTheBuiltInStaysAndTheReasonIsUnreachable() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary)
+    feed.unreachable = true
+    let builtIn = try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa")
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder()).fetch(over: builtIn)
+    #expect(outcome.refusal == .unreachable)
+    #expect(outcome.catalog.newestPanel()?.sha == "aaaaaaa")
+}

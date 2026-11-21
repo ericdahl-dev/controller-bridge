@@ -33,6 +33,8 @@ public enum Refusal: Error, Sendable, Equatable {
     case unsafeFileName(String)
     /// Checked and sound, but no newer than the firmware the app already carries.
     case notNewer
+    /// The feed couldn't be reached, or a file couldn't be fetched.
+    case unreachable
 }
 
 public struct FetchOutcome: Sendable {
@@ -64,7 +66,7 @@ public struct ReleaseFetcher: Sendable {
     }
 
     private func fetched(over builtIn: Catalog) async throws -> Catalog {
-        let published = try await feed.latest()
+        let published = try await reach { try await feed.latest() }
         // Nothing in the manifest is used before its signature checks out, except the name of the key to check it with.
         guard let claimed = try? JSONDecoder().decode(KeyName.self, from: published.manifest).key else {
             throw Refusal.unreadableManifest
@@ -83,7 +85,7 @@ public struct ReleaseFetcher: Sendable {
         for file in manifest.files {
             let target = folder.appending(path: file.name)
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let data = try await feed.file(file.name)
+            let data = try await reach { try await feed.file(file.name) }
             guard data.count == file.size, sha256Hex(data) == file.sha256.lowercased() else {
                 throw Refusal.fileMismatch(file.name)
             }
@@ -98,6 +100,11 @@ public struct ReleaseFetcher: Sendable {
     }
 
     private struct KeyName: Decodable { let key: String }
+
+    /// Any failure talking to the feed is the network's, whatever the feed threw.
+    private func reach<T>(_ call: () async throws -> T) async throws -> T {
+        do { return try await call() } catch { throw Refusal.unreachable }
+    }
 
     /// A plain relative path: no leading "/", no "." or ".." parts, no empty parts, no backslashes.
     static func staysInside(_ name: String) -> Bool {
