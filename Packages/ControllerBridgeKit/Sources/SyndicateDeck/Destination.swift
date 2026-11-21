@@ -8,11 +8,13 @@ public struct Destination: Equatable, Sendable {
 
     public var host: String
     public var port: Int
+    /// Where Syndicate sends its feedback: DeckBridge's port, which the tool can listen on only while it's free.
+    public var feedbackPort: Int
     /// Where the host and port came from, for the line the tool prints.
     public var from: Source
 
     /// Syndicate's own defaults, on this Mac (as DeckBridge's bundled profile has them).
-    public static let defaultHost = "127.0.0.1", defaultPort = 9090
+    public static let defaultHost = "127.0.0.1", defaultPort = 9090, defaultFeedbackPort = 9096
 
     /// DeckBridge's preferences: the sandboxed app keeps them in its container.
     public static func preferencesPath(home: String) -> String {
@@ -25,7 +27,8 @@ public struct Destination: Equatable, Sendable {
         let saved = preferences.flatMap(settings(in:))
         let from: Source = host != nil || port != nil ? .commandLine : saved != nil ? .settings : .defaults
         return Destination(host: host ?? saved?.syndicateHost ?? defaultHost,
-                           port: port ?? saved?.syndicatePort ?? defaultPort, from: from)
+                           port: port ?? saved?.syndicatePort ?? defaultPort,
+                           feedbackPort: saved?.feedbackPort ?? defaultFeedbackPort, from: from)
     }
 
     static func settings(in preferences: Data) -> BridgeSettings? {
