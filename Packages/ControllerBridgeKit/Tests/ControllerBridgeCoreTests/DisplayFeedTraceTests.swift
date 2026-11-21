@@ -42,7 +42,7 @@ struct DisplayFeedTraceTests {
         var off = DisplayFeedCoordinatorTests.on
         off.enabled = false
         rig.coordinator.setDisplayFeed(off)
-        #expect(lines.of(.displayFeed) == ["off"])
+        #expect(lines.of(.displayFeed) == ["off", "goodbye"])
     }
 
     @Test("The hold, and an empty deck's snapshot: what the panel was told is in the line")
