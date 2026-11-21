@@ -360,6 +360,28 @@ void test_a_late_copy_is_placed_by_its_start() {
     TEST_ASSERT_EQUAL(1, scan.take_health().copy_late_turn);
 }
 
+// The perf line looks at the health in three parts (the counts, the scan, the copy), one after another. They share one
+// window: each part comes from it once, and looking at a part again takes a new window.
+void test_the_health_is_looked_at_in_parts_of_one_window() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{0, Irq::vsync}, {31400, Irq::frame_complete}, {33333, Irq::vsync}, {65733, Irq::frame_complete}};
+    panel.run_until(70000);
+    scan.copied(700, 70000, false);
+    panel_scan::HealthLooks looks;
+    using Part = panel_scan::HealthLooks::Part;
+    TEST_ASSERT_EQUAL(2, looks.look(scan, Part::counts).vsyncs);
+    TEST_ASSERT_EQUAL(1, looks.look(scan, Part::scan).scan.resyncs);
+    TEST_ASSERT_EQUAL(1, looks.look(scan, Part::copy).copy.chunks);
+    panel.script.push_back({99999, Irq::vsync});
+    panel.run_until(100000);
+    const panel_scan::Health& next = looks.look(scan, Part::counts);
+    TEST_ASSERT_EQUAL(1, next.vsyncs);
+    TEST_ASSERT_EQUAL(0, next.copy.chunks);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
@@ -385,5 +407,6 @@ int main(int, char**) {
     RUN_TEST(test_interrupts_during_start_see_the_config);
     RUN_TEST(test_without_bounce_buffers_the_vsync_after_a_latch_is_the_latch);
     RUN_TEST(test_a_late_copy_is_placed_by_its_start);
+    RUN_TEST(test_the_health_is_looked_at_in_parts_of_one_window);
     return UNITY_END();
 }

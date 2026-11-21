@@ -128,4 +128,17 @@ class Scan {
     uint32_t copy_budget_ns_ = 0;
 };
 
+/// One health window looked at in parts (#666): the perf line takes the counts, the scan and the copy one after another,
+/// each through its own driver call. Each part comes from the window once; looking at a part again takes a new window,
+/// and what of the old one wasn't looked at is gone. Loop only.
+class HealthLooks {
+  public:
+    enum class Part { counts = 0, scan = 1, copy = 2 };
+    const Health& look(Scan& scan, Part part);
+
+  private:
+    Health health_;
+    bool looked_[3] = {true, true, true};
+};
+
 }  // namespace panel_scan

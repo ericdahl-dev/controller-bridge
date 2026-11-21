@@ -136,4 +136,14 @@ Health Scan::take_health() {
     return h;
 }
 
+const Health& HealthLooks::look(Scan& scan, Part part) {
+    const int i = static_cast<int>(part);
+    if (looked_[i]) {
+        health_ = scan.take_health();
+        looked_[0] = looked_[1] = looked_[2] = false;
+    }
+    looked_[i] = true;
+    return health_;
+}
+
 }  // namespace panel_scan
