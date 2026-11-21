@@ -36,16 +36,20 @@
 
 namespace {
 
-// Serial's TX ring buffer: a print lands in it and the UART drains it in the background, so no print waits for the
-// wire unless the buffer is full. Room for the perf line (under 640 B), the health line and a few more.
-constexpr size_t kSerialTxBytes = 1024;
+// Serial's TX ring buffer: a print lands in it and the UART drains it in the background (115200 baud, about 11.5 B a
+// millisecond), so no print waits for the wire unless the buffer is full. IDF's TX ring doesn't split an item and
+// takes a write in chunks of up to half its size, each with a header, so it holds less than its size: 2 KB keeps the
+// perf line (under 640 B), the health line and a few more with room.
+constexpr size_t kSerialTxBytes = 2048;
 // The chores end this long before the next latch, so the frame's wait starts before it.
 constexpr uint32_t kGuardUs = 3000;
 
 uint32_t now_us() { return static_cast<uint32_t>(esp_timer_get_time()); }
 
+#ifndef DECK_PANEL_TEST_SCREEN
 /// Whether `until_us` is still ahead; esp_timer's low 32 bits wrap every 71 minutes.
 bool time_left(uint32_t until_us) { return static_cast<int32_t>(until_us - now_us()) > 0; }
+#endif
 
 frame_clock::Clock g_clock(display_frame_us(), kGuardUs);
 

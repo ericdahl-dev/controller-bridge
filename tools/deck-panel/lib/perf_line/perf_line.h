@@ -16,7 +16,7 @@ namespace perf_line {
 struct Window {
     uint32_t ms = 0;                // how long the window was
     uint32_t frames = 0;            // LVGL refreshes in it that drew something
-    uint64_t frame_us = 0;          // their time, start to end, the swap wait included
+    uint64_t frame_us = 0;          // their time, start to end (a release still outstanding waits inside, #663)
     uint32_t frame_max_us = 0;
     uint32_t vsyncs = 0;            // the panel's (39 a second at 16 MHz, drawing or not)
     uint32_t swaps = 0;             // frames handed to the panel
