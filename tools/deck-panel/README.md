@@ -8,9 +8,9 @@ The default firmware is the deck view (#620): it joins Wi-Fi (set up from a phon
 
 | Path | What | Built for |
 |---|---|---|
-| `lib/` | Portable code: no Arduino, no LVGL. `deck_core` (reads the feed, decides the screen), `feed_drain` (datagrams into the core), `font_fallback` (text the font can draw), `test_pattern` (the test screen's bars), `backlight` (the companion chip's bytes per board revision), `gt911` (touch decoding) | The Mac (tests) and the panel |
+| `lib/` | Portable code: no Arduino, no LVGL. `deck_core` (reads the feed, decides the screen down to the pixel and says which parts changed; the layout is `deck_layout.h`), `feed_drain` (datagrams into the core), `font_fallback` (text the font can draw), `test_pattern` (the test screen's bars), `backlight` (the companion chip's bytes per board revision), `gt911` (touch decoding) | The Mac (tests) and the panel |
 | `test/` | Host tests for `lib/`, with Unity | The Mac |
-| `src/` | The board layer: pins, the companion chip, the RGB panel with LVGL, touch, LVGL's heap in PSRAM, Wi-Fi (`wifi_link`), the feed's UDP socket (`feed_udp`), the deck and waiting screens (`deck_view`), the test screen and `main.cpp` | The panel only |
+| `src/` | The board layer: pins, the companion chip, the RGB panel with LVGL, touch, LVGL's heap in PSRAM, Wi-Fi (`wifi_link`), the feed's UDP socket (`feed_udp`), the deck and waiting screens (`deck_view`, which sets only what the core says changed and keeps no copy), the test screen and `main.cpp` | The panel only |
 | `check_secret_logs.py` | Fails if any `src/` line logs or prints the Wi-Fi password; `test_secret_logs.py` tests it | The Mac |
 | `feed/` | The display feed's example messages, shared with DeckBridge's tests | — |
 | `fonts/` | `make_fonts.sh`, which converts Geist into `src/fonts/` | The Mac |
@@ -96,7 +96,7 @@ esptool.py --port /dev/cu.wchusbserial210 write_flash 0 <the backup file>
 
 ## The deck screen
 
-800×480, black, every object at a fixed place and size (`src/deck_view.cpp`):
+800×480, black, every object at a fixed place and size (`lib/deck_core/deck_layout.h`, drawn by `src/deck_view.cpp`):
 
 | Where (x, y, px) | What |
 |---|---|
