@@ -21,7 +21,10 @@ class Ledger {
     void read(uint32_t us);
     // The frame was handed to the panel.
     void swapped(uint32_t us);
-    // The vsync that released the swap: the frame is on the glass.
+    // Every vsync, drawing or not.
+    void vsync(uint32_t us);
+    // The swap's release: the start of the scan-out that shows the frame. "On glass" means that moment; a row further
+    // down shows later by a constant (the deck's beat row about 22 ms), so a camera's numbers differ by that much.
     void on_glass(uint32_t us);
     // The report since the last take(), and a fresh window.
     Report take();
@@ -30,9 +33,11 @@ class Ledger {
     // Read, waiting for a frame to be handed over.
     bool waiting_ = false;
     uint32_t waiting_us_ = 0;
+    bool waiting_late_ = false;  // a vsync passed while it waited
     // In the frame handed over, waiting for the glass.
     bool in_flight_ = false;
     uint32_t in_flight_us_ = 0;
+    bool in_flight_late_ = false;
     Report report_;
 };
 

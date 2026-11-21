@@ -3,6 +3,7 @@
 namespace frame_ledger {
 
 void Ledger::read(uint32_t us) {
+    if (!waiting_) waiting_late_ = false;
     waiting_ = true;
     waiting_us_ = us;
 }
@@ -12,6 +13,11 @@ void Ledger::swapped(uint32_t) {
     waiting_ = false;
     in_flight_ = true;
     in_flight_us_ = waiting_us_;
+    in_flight_late_ = waiting_late_;
+}
+
+void Ledger::vsync(uint32_t) {
+    if (waiting_) waiting_late_ = true;
 }
 
 void Ledger::on_glass(uint32_t us) {
@@ -19,6 +25,7 @@ void Ledger::on_glass(uint32_t us) {
     in_flight_ = false;
     const uint32_t lag = us - in_flight_us_;
     ++report_.frames;
+    if (in_flight_late_) ++report_.skipped;
     report_.lag_typical_us = lag;
     if (lag > report_.lag_worst_us) report_.lag_worst_us = lag;
 }
