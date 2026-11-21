@@ -58,9 +58,11 @@ public struct Catalog: Sendable {
         }
     }
 
-    /// The highest panel version in the catalog, or nil if it carries none.
+    /// The highest panel version whose image the app carries, or nil if it carries none. Entries without their
+    /// image are builds shipped before: they still tell an older panel from an unknown one.
     public func newestPanel() -> PanelFirmware? {
-        panel.max { $0.version < $1.version }
+        panel.filter { FileManager.default.fileExists(atPath: $0.image.path(percentEncoded: false)) }
+            .max { $0.version < $1.version }
     }
 
     private struct File: Decodable {

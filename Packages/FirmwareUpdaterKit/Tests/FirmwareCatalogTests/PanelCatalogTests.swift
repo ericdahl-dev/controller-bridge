@@ -54,3 +54,17 @@ func fixture(_ name: String) throws -> URL {
     let newest = try #require(catalog.newestPanel())
     #expect(catalog.offer(for: PanelBuild(sha: "bbbbbbb-dirty")) == .unknownBuild(newest))
 }
+
+/// The catalog lists every panel build ever shipped, but the app carries only the images beside it (a build from
+/// the repo carries none): the newest offered is the newest carried, and a panel on a later shipped build is current.
+@Test func onlyACarriedImageIsOfferedAndLaterShippedBuildsAreUpToDate() throws {
+    let catalog = try Catalog(directory: fixture("history"))
+    let carried = try #require(catalog.newestPanel())
+    #expect(carried.sha == "ccccccc")
+    #expect(catalog.offer(for: PanelBuild(sha: "aaaaaaa")) == .update(carried))
+    #expect(catalog.offer(for: PanelBuild(sha: "bbbbbbb")) == .upToDate)
+}
+
+@Test func theBuiltInCatalogFromTheRepoCarriesNoPanelImage() throws {
+    #expect(try Catalog.builtIn().offer(for: PanelBuild(sha: "1234567")) == .nothing)
+}
