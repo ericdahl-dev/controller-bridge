@@ -26,6 +26,8 @@ void Ledger::swapped(uint32_t) {
     in_flight_late_ = waiting_late_;
 }
 
+void Ledger::nothing_drawn() { waiting_ = false; }
+
 void Ledger::vsync(uint32_t) {
     if (arrived_) arrived_late_ = true;
     if (waiting_) waiting_late_ = true;

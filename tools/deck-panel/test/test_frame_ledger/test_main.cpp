@@ -92,6 +92,21 @@ void test_the_typical_lag_is_the_median_of_the_window_and_take_starts_a_new_one(
     TEST_ASSERT_EQUAL_UINT32(0, next.lag_worst_us);
 }
 
+void test_a_read_whose_refresh_drew_nothing_is_no_frame_and_not_a_skip() {
+    frame_ledger::Ledger ledger;
+    ledger.read(1000);      // e.g. the same bpm again: nothing on screen changes
+    ledger.nothing_drawn();
+    ledger.vsync(26000);    // nothing waits, so this boundary missed nothing
+    ledger.read(30000);
+    ledger.swapped(35000);
+    ledger.vsync(50000);
+    ledger.on_glass(50000);
+    const frame_ledger::Report r = ledger.take();
+    TEST_ASSERT_EQUAL_UINT32(1, r.frames);
+    TEST_ASSERT_EQUAL_UINT32(0, r.skipped);
+    TEST_ASSERT_EQUAL_UINT32(20000, r.lag_worst_us);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_a_read_swapped_and_shown_at_the_next_vsync_is_one_frame_with_its_lag);
@@ -100,5 +115,6 @@ int main() {
     RUN_TEST(test_lag_counts_from_the_newest_arrival_before_the_read);
     RUN_TEST(test_a_vsync_between_arrival_and_read_marks_the_frame_skipped);
     RUN_TEST(test_the_typical_lag_is_the_median_of_the_window_and_take_starts_a_new_one);
+    RUN_TEST(test_a_read_whose_refresh_drew_nothing_is_no_frame_and_not_a_skip);
     return UNITY_END();
 }

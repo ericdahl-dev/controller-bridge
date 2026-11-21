@@ -26,6 +26,8 @@ class Ledger {
     void read(uint32_t us);
     // The frame was handed to the panel.
     void swapped(uint32_t us);
+    // A refresh after the read drew nothing: what was read changed nothing on screen, so it waits for no frame.
+    void nothing_drawn();
     // Every vsync, drawing or not.
     void vsync(uint32_t us);
     // The swap's release: the start of the scan-out that shows the frame. "On glass" means that moment; a row further
