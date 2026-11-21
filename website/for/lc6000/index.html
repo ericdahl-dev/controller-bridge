@@ -212,20 +212,26 @@
       <dl class="db-map db-map--cols">
           <div><dt>Pitch fader</dt><dd>Tempo at full 14-bit resolution, with pickup so the tempo never jumps</dd></div>
           <div><dt>Jog wheel, playing</dt><dd>Phase bend, released 80 ms after the wheel stops</dd></div>
+          <div><dt>VINYL</dt><dd>Switches the playing jog between bending (off, the default) and seeking (on), for each deck layer; its light is full while seeking</dd></div>
           <div><dt>Jog wheel, paused</dt><dd>Seeks through the track</dd></div>
-          <div><dt>Needle Drop strip</dt><dd>Seeks while you touch it</dd></div>
-          <div><dt>Play, Cue, Sync, Master</dt><dd>Play/pause, cue (hold), tempo sync, tempo master</dd></div>
+          <div><dt>Needle Drop strip</dt><dd>Seeks while you touch it; on a paused deck, exactly where you touch</dd></div>
+          <div><dt>Shift + Needle Drop strip</dt><dd>Moves the deck’s channel fader in Syndicate, from where it is (Relative) or straight to where you touch (Jump), set in Settings › Controller; on by default</dd></div>
+          <div><dt>Play, Cue, Sync, Master</dt><dd>Play/pause, cue (hold), tempo sync, tempo master. PLAY while CUE is held keeps the deck playing; Shift + CUE goes back to the cue point and stops</dd></div>
+          <div><dt>Shift + Sync (OFF)</dt><dd>Turns sync off on a synced deck; it never turns sync on</dd></div>
           <div><dt>Pads: Hot Cue mode</dt><dd>Hot cues 1 to 8, press and hold</dd></div>
           <div><dt>Shift + pad, Hot Cue mode</dt><dd>On a stopped deck, goes to that cue without playing, at once. The first press on each cue blips once while DeckBridge learns where it is. For the jump it turns the deck’s quantize off in Syndicate, then sets it to Use Global</dd></div>
           <div><dt>Pads: Roll mode</dt><dd>Slip loops from 1/32 to 4 beats, while held</dd></div>
           <div><dt>Pads: Loop mode</dt><dd>Saved cue loops</dd></div>
-          <div><dt>Loop In, Loop Out, Auto Loop</dt><dd>Loop in, loop out, loop; turning the Auto Loop knob halves or doubles it</dd></div>
+          <div><dt>Loop In, Loop Out, Auto Loop</dt><dd>Loop in, loop out, loop; turning the Auto Loop knob halves or doubles it, and Shift + turn moves the loop by its own length</dd></div>
           <div><dt>Beat Jump ◀ ▶</dt><dd>Skip a beat back or forward; with Shift, a bar</dd></div>
           <div><dt>Censor</dt><dd>Reverse while held; Shift + Censor latches it</dd></div>
-          <div><dt>Key Lock, Slip</dt><dd>Pitch preserve, slip cue; Shift + Key Lock resets the tempo to 0</dd></div>
+          <div><dt>Key Lock</dt><dd>Pitch preserve; Shift + Key Lock resets the tempo to 0</dd></div>
+          <div><dt>Deck select (printed Slip)</dt><dd>Steps to the next deck layer; Shift + deck select steps the unit’s own layer, and DeckBridge follows</dd></div>
           <div><dt>Pitch Bend − +</dt><dd>Nudges the tempo while held</dd></div>
+          <div><dt>Shift + Pitch Bend − +</dt><dd>Transposes the deck down or up a semitone, turning its key lock on first, as Syndicate needs</dd></div>
           <div><dt>Param ◀ ▶</dt><dd>Skip a beat back or forward</dd></div>
           <div><dt>Browse knob, Back, Forward, Track ◀ ▶</dt><dd>Moves through the library; press to load (Shift + press: Enter)</dd></div>
+          <div><dt>Shift + browse knob (ZOOM)</dt><dd>Zooms the deck in front’s waveform, one step per click</dd></div>
         </dl>
     </div>
   </section>
