@@ -5,7 +5,7 @@
 namespace perf_line {
 
 std::string format(const Window& w) {
-    char line[480];
+    char line[560];
     const double seconds = w.ms > 0 ? w.ms / 1000.0 : 1.0;
     char copy[96];
     if (w.copy.chunks == 0) {
@@ -15,14 +15,22 @@ std::string format(const Window& w) {
                  static_cast<unsigned>(w.copy_budget_us), static_cast<int>(w.copy.margin_us),
                  static_cast<unsigned>(w.copy.late));
     }
-    char tail[320];
+    char lag[80];
+    if (w.ledger.frames == 0) {
+        snprintf(lag, sizeof lag, "no feed frames");
+    } else {
+        snprintf(lag, sizeof lag, "lag %.1f worst %.1f ms, %u of %u frames skipped", w.ledger.lag_typical_us / 1000.0,
+                 w.ledger.lag_worst_us / 1000.0, static_cast<unsigned>(w.ledger.skipped),
+                 static_cast<unsigned>(w.ledger.frames));
+    }
+    char tail[400];
     snprintf(tail, sizeof tail,
              "%.1f vsyncs/s, %u swap timeouts, scan lag %.1f-%.1f ms, vsync %.1f-%.1f ms, %u resyncs, %s, "
-             "feed %u datagrams %u too big, internal free %u",
+             "feed %u datagrams %u too big, %s, internal free %u",
              w.vsyncs / seconds, static_cast<unsigned>(w.swap_timeouts), w.scan.lag_min_us / 1000.0,
              w.scan.lag_max_us / 1000.0, w.scan.vsync_min_us / 1000.0, w.scan.vsync_max_us / 1000.0,
              static_cast<unsigned>(w.scan.resyncs), copy, static_cast<unsigned>(w.datagrams),
-             static_cast<unsigned>(w.too_big), static_cast<unsigned>(w.internal_free));
+             static_cast<unsigned>(w.too_big), lag, static_cast<unsigned>(w.internal_free));
     if (w.frames == 0) {
         // LVGL doesn't refresh while nothing is invalid: a still screen has no frames to time.
         snprintf(line, sizeof line, "perf: no frames (nothing changed), %s", tail);
