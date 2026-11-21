@@ -45,6 +45,7 @@ private:
     lv_obj_t* level_fill_ = nullptr;
     Lamp play_, cue_, sync_, master_, loop_;
     lv_obj_t* waiting_page_ = nullptr;
+    lv_obj_t* logo_ = nullptr;  ///< above the headline, shown when the view asks for it
     lv_obj_t* headline_ = nullptr;
     lv_obj_t* detail_ = nullptr;
 
