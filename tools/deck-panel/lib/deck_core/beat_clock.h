@@ -24,6 +24,8 @@ class BeatClock {
     void edge(int beat, uint32_t at_ms);
     /// The beat to show at `now_ms`, 1-4; 0 for none.
     int beat_at(uint32_t now_ms) const;
+    /// The master stopped: show the beat heard, nothing ahead, until beats come again.
+    void stop() { period_ms_ = 0; }
 
     /// The lock (#660): arrivals jitter by a few ms (Wi-Fi, the sender), so each edge moves the clock only part of
     /// the way: kPhaseGain of its error, and the tempo kTempoGain of it, each error clipped to kMaxErrorMs so one late

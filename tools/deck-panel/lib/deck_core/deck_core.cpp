@@ -207,6 +207,9 @@ bool DeckCore::apply(const uint8_t* bytes, size_t length, uint32_t now_ms) {
     }
     // The master clock's beat also sets the panel's beat clock (#660), at the time it arrived.
     if (alive && std::strcmp(message.name, "beat") == 0) clock_.edge(view_.beat, now_ms);
+    // The deck in front is the master and stopped: so did the master clock, at once (#660). Another deck's pause
+    // says nothing about it.
+    if (alive && std::strcmp(message.name, "playing") == 0 && view_.master && !view_.playing) clock_.stop();
     return alive;
 }
 
