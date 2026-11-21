@@ -3,12 +3,14 @@
 namespace frame_ledger {
 
 void Ledger::arrived(uint32_t us) {
+    if (!arrived_) arrived_late_ = false;
     arrived_ = true;
     arrived_us_ = us;
 }
 
 void Ledger::read(uint32_t us) {
     if (!waiting_) waiting_late_ = false;
+    if (arrived_ && arrived_late_) waiting_late_ = true;
     waiting_ = true;
     waiting_us_ = arrived_ ? arrived_us_ : us;
     arrived_ = false;
@@ -23,6 +25,7 @@ void Ledger::swapped(uint32_t) {
 }
 
 void Ledger::vsync(uint32_t) {
+    if (arrived_) arrived_late_ = true;
     if (waiting_) waiting_late_ = true;
 }
 

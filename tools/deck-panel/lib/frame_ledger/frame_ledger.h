@@ -35,6 +35,7 @@ class Ledger {
     // Seen on the socket, not read yet: the newest.
     bool arrived_ = false;
     uint32_t arrived_us_ = 0;
+    bool arrived_late_ = false;  // a vsync passed since the first of them arrived
     // Read, waiting for a frame to be handed over.
     bool waiting_ = false;
     uint32_t waiting_us_ = 0;
