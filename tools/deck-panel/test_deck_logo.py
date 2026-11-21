@@ -28,9 +28,9 @@ NEEDLE_AND_HUB, INNER_DISC, HOLE, BLACK = 0xD6BA, 0x18E3, 0x10A2, 0x0000
 def at(logo, radius, degrees):
     """The pixel `radius` SVG units from the middle, at `degrees` (0 is right, 90 is down: the SVG's y is down)."""
     import math
-    x = logo.size / 2 + radius * logo.scale * math.cos(math.radians(degrees))
-    y = logo.size / 2 + radius * logo.scale * math.sin(math.radians(degrees))
-    return logo.pixels[int(y) * logo.size + int(x)]
+    x = logo.width / 2 + radius * logo.scale_x * math.cos(math.radians(degrees))
+    y = logo.height / 2 + radius * logo.scale_y * math.sin(math.radians(degrees))
+    return logo.pixels[int(y) * logo.width + int(x)]
 
 
 class DeckLogoTests(unittest.TestCase):
@@ -40,28 +40,44 @@ class DeckLogoTests(unittest.TestCase):
         self.assertEqual(committed, gen.c_source(LOGO),
                          "src/deck_logo.c is stale: run python3 -I tools/deck-panel/deck_logo.py")
 
-    def test_it_is_192_px_square_opaque_rgb565_in_flash(self):
-        self.assertEqual(LOGO.size, 192)
-        self.assertEqual(len(LOGO.pixels), 192 * 192)
+    def test_it_is_184_wide_198_high_opaque_rgb565_in_flash(self):
+        # 198 high: the most the waiting column has left over two headline and three detail lines (deck_view.cpp).
+        self.assertEqual((LOGO.width, LOGO.height), (184, 198))
+        self.assertEqual(len(LOGO.pixels), 184 * 198)
         with open(C_FILE) as f:
             text = f.read()
         self.assertIn(".cf = LV_COLOR_FORMAT_RGB565,", text)
         self.assertIn(".magic = LV_IMAGE_HEADER_MAGIC,", text)
-        self.assertIn(".w = 192,", text)
-        self.assertIn(".h = 192,", text)
-        self.assertIn(".stride = 384,", text)
-        self.assertIn(".data_size = 73728,", text)
-        self.assertIn("static const uint8_t deck_logo_map[73728]", text)
+        self.assertIn(".w = 184,", text)
+        self.assertIn(".h = 198,", text)
+        self.assertIn(".stride = 368,", text)
+        self.assertIn(".data_size = 72864,", text)
+        self.assertIn("static const uint8_t deck_logo_map[72864]", text)
         self.assertIn("const lv_image_dsc_t deck_logo = {", text)
-        self.assertEqual(len(re.findall(r"0x[0-9a-f]{2},", text)), 73728)
+        self.assertEqual(len(re.findall(r"0x[0-9a-f]{2},", text)), 72864)
 
     def test_the_whole_logo_fits_with_black_corners(self):
         # The needle's tip reaches 310 units out, past the arcs (300): the crop is the farthest shape.
         self.assertEqual(LOGO.pixels[0], BLACK)
         self.assertEqual(LOGO.pixels[-1], BLACK)
-        edge = [LOGO.pixels[i] for i in range(LOGO.size)] + [LOGO.pixels[i * LOGO.size] for i in range(LOGO.size)]
+        w, h = LOGO.width, LOGO.height
+        edge = [LOGO.pixels[i] for i in range(w)] + [LOGO.pixels[i * w] for i in range(h)]
         self.assertEqual(set(edge), {BLACK}, "a shape touches the top or left edge: it is cut off")
-        self.assertAlmostEqual(LOGO.scale, 192 / 620, places=9)
+        self.assertAlmostEqual(LOGO.scale_x, 184 / 620, places=9)
+
+    def test_it_is_stretched_down_so_it_is_round_on_the_glass(self):
+        # The panel's pixels are shorter than wide: Elecrow's active area is 156 x 87 mm for 800 x 480, so 0.195 mm
+        # across and 0.18125 mm down. Round on the glass takes 0.195 / 0.18125 = 1.0759 rows per column, by hand.
+        # The content's box, counting a pixel as the logo's at half the dimmest arc's brightness or more (gray,
+        # 0x6C+0x72+0x77 = 341, so 170): the edge at half coverage, not the faint antialiased fringe.
+        def lit(x, y):
+            p = LOGO.pixels[y * LOGO.width + x]
+            return (p >> 11 << 3) + ((p >> 5 & 0x3F) << 2) + ((p & 0x1F) << 3) >= 170
+
+        rows = [y for y in range(LOGO.height) if any(lit(x, y) for x in range(LOGO.width))]
+        cols = [x for x in range(LOGO.width) if any(lit(x, y) for y in range(LOGO.height))]
+        content_w, content_h = cols[-1] - cols[0] + 1, rows[-1] - rows[0] + 1
+        self.assertLessEqual(abs(content_h - content_w * 1.0759), 1, (content_w, content_h))
 
     def test_the_four_arcs_are_the_svgs_colors_clockwise_from_top_right(self):
         self.assertEqual(at(LOGO, 262, -30), GRAY_ARC)

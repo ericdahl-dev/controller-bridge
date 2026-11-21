@@ -183,8 +183,9 @@ void DeckScreen::build() {
     lv_obj_set_align(level_fill_, LV_ALIGN_BOTTOM_LEFT);
 
     // Waiting: the logo, then why and what to do, in the middle. The logo is opaque RGB565 at its own size and
-    // untransformed, so LVGL copies it from flash with no layer and no decoded copy. 192 px: with two headline lines
-    // (2x44), three detail lines (3x30) and two 12 px gaps, the column is 394 of the 400 px between the margins.
+    // untransformed, so LVGL copies it from flash with no layer and no decoded copy. 184 wide by 198 high: stretched
+    // down for the panel's short pixels (README, "Round things"), and with two headline lines (2x44), three detail
+    // lines (3x30) and two 12 px gaps the column is exactly the 400 px between the margins.
     waiting_page_ = page(screen);
     lv_obj_set_style_pad_all(waiting_page_, kMargin, 0);
     lv_obj_set_style_pad_row(waiting_page_, 12, 0);
