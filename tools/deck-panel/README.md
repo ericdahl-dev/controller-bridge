@@ -52,7 +52,7 @@ The panel is set up from a phone (#622). No network name or password goes into t
 
 A bad form (no network, a name over 32 bytes, a password that isn't 8 to 63 characters or 64 hex digits) shows the page again with the reason. The password field is never filled back in.
 
-**Where it's kept:** in the panel's flash (NVS, namespace `deckpanel`, key `wifi`), not in the firmware image, so flashing a new build keeps it. A full flash erase loses it.
+**Where it's kept:** in the panel's flash (NVS, namespace `deckpanel`, key `wifi`), not in the firmware image, so flashing a new build keeps it. A full flash erase loses it. NVS isn't encrypted here: anyone with the panel and a USB cable can read the password out of flash.
 
 **To set up again** (a new network, a wrong password): on the "Joining Wi-Fi…" or "Waiting for DeckBridge" screen, hold the screen for 5 s. The panel forgets the network and restarts into setup. A wrong password leaves the panel at "Joining Wi-Fi…" forever, so this is the way out; the screen says so.
 

@@ -2,6 +2,8 @@
 
 #include <cstring>
 
+#include "wipe.h"
+
 namespace wifi_setup {
 namespace {
 
@@ -14,6 +16,7 @@ constexpr size_t kMaxRecord = 3 + 32 + 64;
 
 bool save(KeyValue& store, const Credentials& credentials) {
     uint8_t record[kMaxRecord];
+    const WipeOnExit wipe_record(record, sizeof record);
     const size_t ssid = std::strlen(credentials.ssid), password = std::strlen(credentials.password);
     if (ssid == 0 || ssid > 32 || password > 64) return false;
     size_t n = 0;
@@ -29,6 +32,7 @@ bool save(KeyValue& store, const Credentials& credentials) {
 
 bool load(KeyValue& store, Credentials& credentials) {
     uint8_t record[kMaxRecord];
+    const WipeOnExit wipe_record(record, sizeof record);
     size_t length = 0;
     if (!store.get(kKey, record, sizeof record, length)) return false;
     if (length < 3 || record[0] != kVersion) return false;
@@ -37,6 +41,7 @@ bool load(KeyValue& store, Credentials& credentials) {
     const size_t password = record[2 + ssid];
     if (password > 64 || 3 + ssid + password != length) return false;
     Credentials c;
+    const WipeOnExit wipe_copy(&c, sizeof c);
     std::memcpy(c.ssid, record + 2, ssid);
     c.ssid[ssid] = 0;
     std::memcpy(c.password, record + 3 + ssid, password);

@@ -17,6 +17,7 @@
 #include "wifi_form.h"
 #include "wifi_page.h"
 #include "wifi_store.h"
+#include "wipe.h"
 
 namespace wifi_link {
 
@@ -333,14 +334,14 @@ void handle_save() {
     }
     const bool saved = wifi_setup::save(g_store, form.credentials);
     if (!saved) {
-        std::memset(&form.credentials, 0, sizeof form.credentials);
+        wifi_setup::wipe(&form.credentials, sizeof form.credentials);
         g_error = "The panel couldn't save that. Try again.";
         Serial.println("deck panel: Wi-Fi save failed");
         send_page(g_error);
         return;
     }
     std::snprintf(g_saved.ssid, sizeof g_saved.ssid, "%s", form.credentials.ssid);  // the name only, for the page
-    std::memset(&form.credentials, 0, sizeof form.credentials);
+    wifi_setup::wipe(&form.credentials, sizeof form.credentials);
     g_server.send(200, "text/html; charset=utf-8", wifi_setup::saved_page(g_saved.ssid).c_str());
     Serial.printf("deck panel: Wi-Fi \"%s\" saved, restarting\n", g_saved.ssid);
     g_restart_pending = true;

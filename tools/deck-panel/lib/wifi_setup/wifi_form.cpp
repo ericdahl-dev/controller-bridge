@@ -2,6 +2,8 @@
 
 #include <cstring>
 
+#include "wipe.h"
+
 namespace wifi_setup {
 namespace {
 
@@ -48,6 +50,7 @@ FormResult parse_form(const char* body, size_t length) {
     const char* garbled = "The page sent something garbled; try again";
     // One byte more than each field takes, so "too long" can be told from "fits".
     char ssid[34] = "", other[34] = "", password[66] = "";
+    const WipeOnExit wipe_password(password, sizeof password);
     bool ssid_long = false, other_long = false, password_long = false;
     const char* end = body + length;
     for (const char* field = body; field < end;) {
