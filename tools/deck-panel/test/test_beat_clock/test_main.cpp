@@ -98,6 +98,29 @@ void test_one_late_message_barely_moves_the_next_beat() {
     TEST_ASSERT_UINT32_WITHIN(10, next_due, first_shows(clock, beat, 4600, 4900));
 }
 
+
+// A quiet feed: the clock holds, never more than kPredictBeats past the last edge.
+void test_a_quiet_feed_holds_and_never_runs_on() {
+    BeatClock clock;
+    clock.edge(1, 1000);
+    clock.edge(2, 1469);
+    for (uint32_t t = 1469; t < 20000; t += 50) TEST_ASSERT_TRUE(clock.beat_at(t) == 2 || clock.beat_at(t) == 3);
+}
+
+// Beats coming back after a gap start the clock over: the gap is no beat length, and the first beat back shows as
+// heard, not run on from before the gap.
+void test_beats_after_a_gap_start_over() {
+    BeatClock clock;
+    clock.edge(1, 1000);
+    clock.edge(2, 1469);
+    clock.edge(3, 6000);  // the next value, but 4.5 s on
+    TEST_ASSERT_EQUAL(3, clock.beat_at(6000));
+    TEST_ASSERT_EQUAL(3, clock.beat_at(6400));
+    TEST_ASSERT_EQUAL(3, clock.beat_at(7000));  // no tempo yet: one edge back
+    clock.edge(4, 6469);
+    TEST_ASSERT_EQUAL(1, clock.beat_at(6938));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_beat_heard_is_none);
@@ -108,5 +131,7 @@ int main(int, char**) {
     RUN_TEST(test_the_same_beat_again_is_no_edge);
     RUN_TEST(test_jittered_edges_lock_to_the_true_beat);
     RUN_TEST(test_one_late_message_barely_moves_the_next_beat);
+    RUN_TEST(test_a_quiet_feed_holds_and_never_runs_on);
+    RUN_TEST(test_beats_after_a_gap_start_over);
     return UNITY_END();
 }

@@ -32,6 +32,8 @@ class BeatClock {
     /// percentile.
     static constexpr float kPhaseGain = 0.25f, kTempoGain = 0.05f, kMaxErrorMs = 10;
     static constexpr int kAveragedEdges = 4;
+    /// An edge more than this many beats after the last starts the clock over: a gap, not a beat.
+    static constexpr float kGapBeats = 1.5f;
 
   private:
     int beat_ = 0;              ///< the last beat heard

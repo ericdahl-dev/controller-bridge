@@ -17,7 +17,11 @@ void BeatClock::edge(int beat, uint32_t at_ms) {
         return;
     }
     if (beat == beat_) return;  // a keepalive
-    if (beat_ == 0 || beat != next(beat_)) {
+    // Unsigned difference: the clock wrapping is no jump.
+    const float since_last = static_cast<float>(at_ms - edge_ms_);
+    // Too long since the last for one beat: a gap (the master stopped, or the feed went quiet), not a beat length.
+    const bool gap = since_last > (period_ms_ > 0 ? kGapBeats * period_ms_ : static_cast<float>(kLongestBeatMs));
+    if (beat_ == 0 || beat != next(beat_) || gap) {
         // A first beat, or not the next one: a new run starts here.
         beat_ = beat;
         edge_ms_ = first_ms_ = at_ms;
@@ -27,8 +31,6 @@ void BeatClock::edge(int beat, uint32_t at_ms) {
     }
     beat_ = beat;
     ++edges_;
-    // Unsigned differences: the clock wrapping is no jump.
-    const float since_last = static_cast<float>(at_ms - edge_ms_);
     if (period_ms_ == 0) {
         if (since_last >= kShortestBeatMs && since_last <= kLongestBeatMs) period_ms_ = since_last;
         edge_ms_ = at_ms;
