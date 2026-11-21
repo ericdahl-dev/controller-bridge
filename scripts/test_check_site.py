@@ -548,6 +548,17 @@ class CheckSiteTests(unittest.TestCase):
                 self.assertIn(word, rows[row], row)
         self.assertNotIn("Key Lock, Slip", rows)
 
+    def test_the_support_page_explains_firmware_and_the_display_feed(self):
+        # #647: release builds show the jog display's Firmware choice and the Display feed to everyone; Support says what
+        # they are, worded as the CHANGELOG (#648) words them.
+        page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "website", "support", "index.html")
+        with open(page, encoding="utf-8") as f:
+            text = check_site.plain_words(f.read())
+        for words in ["settings › controller › firmware (shown with the jog display on): leave it on denon unless your unit runs custom firmware",
+                      "settings › controller › key display", "settings › syndicate › display feed", "off by default",
+                      "unencrypted to the one address you set", "relative needs syndicate's volume feedback"]:
+            self.assertIn(words, text)
+
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
         self.assertEqual(check_site.problems(root), ["img/Syndicate_logo.png: looks like another company's logo",
