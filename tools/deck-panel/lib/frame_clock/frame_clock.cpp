@@ -5,7 +5,11 @@ namespace frame_clock {
 void Clock::step(Board& board) {
     uint32_t count = 0;
     uint32_t us = 0;
-    board.wait_latch(count, us);
+    if (!board.wait_latch(count, us)) {
+        ++report_.no_latch;
+        board.chores(us + period_us_ - guard_us_);
+        return;
+    }
     if (started_ && count - last_count_ > 1) {
         // The last frame's draw ran past a latch: the board hands the newest one, so nothing queues up behind it.
         ++report_.late;

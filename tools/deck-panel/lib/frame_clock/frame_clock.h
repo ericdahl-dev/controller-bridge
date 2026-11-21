@@ -11,7 +11,8 @@ namespace frame_clock {
 /// The board, as the clock sees it. Faked in the tests.
 struct Board {
     virtual ~Board() = default;
-    /// Blocks until the next latch; false if none came in time. `count` is the running latch count, `us` its time.
+    /// Blocks until the next latch; false if none came in time. `count` is the running latch count, `us` its time
+    /// (on a timeout, the time the wait gave up).
     virtual bool wait_latch(uint32_t& count, uint32_t& us) = 0;
     virtual void read_feed() = 0;
     virtual void render() = 0;
@@ -25,6 +26,7 @@ struct Report {
     uint32_t frames = 0;  // frames run
     uint32_t late = 0;    // frames whose draw ran past the next latch
     uint32_t missed = 0;  // latches that went by with no frame started on them
+    uint32_t no_latch = 0;  // waits that timed out: no frame, chores only
 };
 
 class Clock {
