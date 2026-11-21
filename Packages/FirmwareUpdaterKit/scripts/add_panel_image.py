@@ -3,7 +3,8 @@
 The image is an input file, built elsewhere (the panel's own PlatformIO build, or a release); this step never
 builds or flashes anything. It copies the image to <catalog>/panel/ and lists it in <catalog>/catalog.json with
 its version and the build SHA the panel prints at boot. Commit the catalog.json change with the release; the
-images themselves stay out of git (see .gitignore), so a build from the repo carries none.
+images themselves stay out of git (see .gitignore), so a build from the repo carries none. In a tree where this
+has run, the package test theBuiltInCatalogFromTheRepoCarriesNoPanelImage fails, as it should: it pins the repo.
 
     python3 -I Packages/FirmwareUpdaterKit/scripts/add_panel_image.py --image firmware.bin --version 1.0.0 --sha 1d0683f
 """
@@ -16,7 +17,7 @@ import sys
 
 ESP_IMAGE_MAGIC = 0xE9  # the first byte of every ESP32 app image (esp_image_header_t.magic)
 
-DEFAULT_CATALOG = pathlib.Path(__file__).resolve().parent.parent / "Sources/FirmwareCatalog/Resources"
+DEFAULT_CATALOG = pathlib.Path(__file__).resolve().parent.parent / "Sources/FirmwareCatalog/Catalog"
 
 
 def main(argv):

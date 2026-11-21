@@ -52,6 +52,10 @@ class NeedsMacTests(unittest.TestCase):
         self.assertTrue(ci_changes.needs_mac(["tools/lc6000-display-fw/test/ref/stale.ppm"]))
         self.assertTrue(ci_changes.needs_mac(["tools/lc6000-display-fw/test/ref/make_refs.sh"]))
 
+    def test_the_lc6000_patch_descriptions_run_the_mac_jobs(self):
+        # the firmware updater's catalog (#686) carries copies of them, and its Kit tests check the copies match
+        self.assertTrue(ci_changes.needs_mac(["tools/lc6000-firmware/patches/wd-00.50-show-slot-16.patch"]))
+
     def test_the_deck_panel_firmware_skips_the_mac_jobs(self):
         # tools/deck-panel (#615): PlatformIO with its own tests, run by the Deck panel job on Linux
         self.assertFalse(ci_changes.needs_mac([

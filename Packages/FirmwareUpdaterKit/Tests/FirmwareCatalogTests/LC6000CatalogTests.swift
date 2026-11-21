@@ -30,9 +30,9 @@ func aCatalogWhoseLC6000PatchIsNotAPatchDescriptionDoesNotLoad(name: String) thr
     #expect(set.entries[1].edits == [PatchEdit(address: 0x0801_5CDB, old: [0x0A, 0x14, 0xFF, 0x64], new: [0x0A, 0x14, 0x00, 0x64])])
 }
 
-/// A file the catalog doesn't name (say, a vendor image dropped next to the patches) stops it loading.
+/// A file the catalog doesn't name (say, an image dropped next to the patches) stops it loading.
 @Test func aCatalogFolderHoldingAFileItDoesNotNameDoesNotLoad() throws {
-    #expect(throws: CatalogError.unnamedFile("firmware/jc20_wd_update_00_50.dfu.bin")) {
+    #expect(throws: CatalogError.unnamedFile("firmware/not-named-here.bin")) {
         try Catalog(directory: fixture("stray-file"))
     }
 }

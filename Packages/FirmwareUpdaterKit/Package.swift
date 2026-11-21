@@ -17,7 +17,7 @@ let package = Package(
         .target(name: "FirmwareModel"),
         // The firmware the app ships with (#686): the deck panel image and the LC6000 patch descriptions, with the
         // rules for what applies to what. Built-in resources only; no network.
-        .target(name: "FirmwareCatalog", dependencies: ["FirmwareModel"], resources: [.copy("Resources")]),
+        .target(name: "FirmwareCatalog", dependencies: ["FirmwareModel"], resources: [.copy("Catalog")]),
         .testTarget(name: "FirmwareCatalogTests", dependencies: ["FirmwareCatalog", "FirmwareModel"], resources: [.copy("Fixtures")]),
         // What is plugged in (#685), over read-only ports: the USB devices, the MIDI port names and a panel's serial
         // lines. It only looks: nothing here can send to a device. The real ports are the app's adapters.
