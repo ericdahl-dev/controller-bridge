@@ -31,10 +31,17 @@ void test_the_deck_view_never_counts() {
     wifi_setup::HoldReset hold;
     TEST_ASSERT_FALSE(hold.update(true, false, 0));
     TEST_ASSERT_FALSE(hold.update(true, false, 20000));
-    // The deck went away under a finger already down: the hold counts from now, not from the press.
-    TEST_ASSERT_FALSE(hold.update(true, true, 20000));
-    TEST_ASSERT_FALSE(hold.update(true, true, 24999));
-    TEST_ASSERT_TRUE(hold.update(true, true, 25000));
+}
+
+void test_a_press_that_began_on_the_deck_never_counts() {
+    // A hand on the glass mid-set, and the feed goes quiet under it: that press never forgets the Wi-Fi.
+    wifi_setup::HoldReset hold;
+    hold.update(true, false, 0);
+    TEST_ASSERT_FALSE(hold.update(true, true, 1000));
+    TEST_ASSERT_FALSE(hold.update(true, true, 60000));
+    hold.update(false, true, 60100);  // a fresh press on the waiting screen does
+    hold.update(true, true, 61000);
+    TEST_ASSERT_TRUE(hold.update(true, true, 66000));
 }
 
 void test_the_deck_coming_back_mid_hold_cancels_it() {
@@ -42,7 +49,7 @@ void test_the_deck_coming_back_mid_hold_cancels_it() {
     hold.update(true, true, 0);
     hold.update(true, false, 3000);
     TEST_ASSERT_FALSE(hold.update(true, true, 5000));
-    TEST_ASSERT_TRUE(hold.update(true, true, 10000));
+    TEST_ASSERT_FALSE(hold.update(true, true, 10000));  // that press touched the deck: it never counts again
 }
 
 void test_the_clock_wrapping_is_no_jump() {
@@ -57,6 +64,7 @@ int main() {
     RUN_TEST(test_a_5_s_hold_on_the_waiting_screen_fires_once);
     RUN_TEST(test_letting_go_starts_over);
     RUN_TEST(test_the_deck_view_never_counts);
+    RUN_TEST(test_a_press_that_began_on_the_deck_never_counts);
     RUN_TEST(test_the_deck_coming_back_mid_hold_cancels_it);
     RUN_TEST(test_the_clock_wrapping_is_no_jump);
     return UNITY_END();

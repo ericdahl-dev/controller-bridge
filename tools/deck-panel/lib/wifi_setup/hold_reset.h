@@ -10,12 +10,14 @@ class HoldReset {
   public:
     static constexpr uint32_t kHoldMs = 5000;
 
-    // True once, when a hold that began on the waiting screen reaches kHoldMs; letting go re-arms it.
+    // True once, when a press held only on the waiting screen reaches kHoldMs. A press that was ever down on the
+    // deck view never counts. Letting go re-arms it.
     bool update(bool pressed, bool waiting_screen, uint32_t now_ms);
 
   private:
     bool holding_ = false;  // a hold on the waiting screen is being timed
     bool fired_ = false;    // this press already fired
+    bool on_deck_ = false;  // this press was down on the deck view at some point
     uint32_t since_ms_ = 0;
 };
 
