@@ -34,8 +34,12 @@ class BeatClock {
     static constexpr int kAveragedEdges = 4;
     /// An edge more than this many beats after the last starts the clock over: a gap, not a beat.
     static constexpr float kGapBeats = 1.5f;
+    /// An edge further than this off the grid isn't jitter: the clock moves to it at once, keeping the tempo.
+    static constexpr float kSnapMs = 40;
 
   private:
+    void snap(int beat, uint32_t at_ms);
+
     int beat_ = 0;              ///< the last beat heard
     uint32_t edge_ms_ = 0;      ///< when it's taken to have started: its arrival, corrected by the lock
     float period_ms_ = 0;       ///< a beat's length; 0 until two edges in a row give it

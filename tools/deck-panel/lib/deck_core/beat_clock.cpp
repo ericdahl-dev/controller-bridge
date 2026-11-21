@@ -21,6 +21,10 @@ void BeatClock::edge(int beat, uint32_t at_ms) {
     const float since_last = static_cast<float>(at_ms - edge_ms_);
     // Too long since the last for one beat: a gap (the master stopped, or the feed went quiet), not a beat length.
     const bool gap = since_last > (period_ms_ > 0 ? kGapBeats * period_ms_ : static_cast<float>(kLongestBeatMs));
+    if (beat_ != 0 && !gap && period_ms_ > 0 && beat != next(beat_)) {
+        snap(beat, at_ms);  // out of turn: a cue jump on the master
+        return;
+    }
     if (beat_ == 0 || beat != next(beat_) || gap) {
         // A first beat, or not the next one: a new run starts here.
         beat_ = beat;
@@ -37,6 +41,10 @@ void BeatClock::edge(int beat, uint32_t at_ms) {
         return;
     }
     float error = since_last - period_ms_;
+    if (std::fabs(error) > kSnapMs) {
+        snap(beat, at_ms);  // in turn but far off the grid: a loop wrapping, a jump
+        return;
+    }
     if (error > kMaxErrorMs) error = kMaxErrorMs;
     if (error < -kMaxErrorMs) error = -kMaxErrorMs;
     edge_ms_ += static_cast<uint32_t>(static_cast<int32_t>(std::lround(period_ms_ + kPhaseGain * error)));
@@ -45,6 +53,13 @@ void BeatClock::edge(int beat, uint32_t at_ms) {
     } else {
         period_ms_ += kTempoGain * error;
     }
+}
+
+void BeatClock::snap(int beat, uint32_t at_ms) {
+    // The beat as heard, from now; the tempo holds, and from here on only the lock moves it.
+    beat_ = beat;
+    edge_ms_ = at_ms;
+    if (edges_ < kAveragedEdges) edges_ = kAveragedEdges;
 }
 
 int BeatClock::beat_at(uint32_t now_ms) const {

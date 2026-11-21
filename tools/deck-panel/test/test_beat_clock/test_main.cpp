@@ -121,6 +121,36 @@ void test_beats_after_a_gap_start_over() {
     TEST_ASSERT_EQUAL(1, clock.beat_at(6938));
 }
 
+
+// 8 beats in time at 128 BPM from 1000 ms: the last (beat 4) at 4281.
+static BeatClock locked() {
+    BeatClock clock;
+    int beat = 1;
+    for (int k = 0; k < 8; ++k) {
+        clock.edge(beat, static_cast<uint32_t>(1000 + k * 468.75 + 0.5));
+        beat = beat % 4 + 1;
+    }
+    return clock;
+}
+
+// A cue jump on the master: a beat out of turn, off the grid. It shows at once, and the tempo holds: the beat after
+// it is due one beat length on.
+void test_a_beat_out_of_turn_shows_at_once_and_keeps_the_tempo() {
+    BeatClock clock = locked();
+    clock.edge(3, 4500);  // 2 was next, at 4750
+    TEST_ASSERT_EQUAL(3, clock.beat_at(4500));
+    TEST_ASSERT_UINT32_WITHIN(3, 4969, first_shows(clock, 4, 4500, 5200));
+}
+
+// A loop wrapping on the master: the next beat, but early, far off the grid. The clock moves to it at once, not a
+// quarter of the way, and the tempo holds.
+void test_a_beat_far_off_the_grid_moves_the_clock_at_once() {
+    BeatClock clock = locked();
+    clock.edge(1, 4600);  // due at 4750
+    TEST_ASSERT_EQUAL(1, clock.beat_at(4600));
+    TEST_ASSERT_UINT32_WITHIN(3, 5069, first_shows(clock, 2, 4600, 5400));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_beat_heard_is_none);
@@ -133,5 +163,7 @@ int main(int, char**) {
     RUN_TEST(test_one_late_message_barely_moves_the_next_beat);
     RUN_TEST(test_a_quiet_feed_holds_and_never_runs_on);
     RUN_TEST(test_beats_after_a_gap_start_over);
+    RUN_TEST(test_a_beat_out_of_turn_shows_at_once_and_keeps_the_tempo);
+    RUN_TEST(test_a_beat_far_off_the_grid_moves_the_clock_at_once);
     return UNITY_END();
 }
