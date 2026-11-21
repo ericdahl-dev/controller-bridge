@@ -34,7 +34,9 @@ fi
 folder="$(mktemp -d)"
 trap 'rm -rf "$folder"' EXIT
 gh release download "$tag" --dir "$folder"
+# A run that uploaded but didn't publish left the old manifest in the draft: it is re-made, never re-used.
+rm -f "$folder/manifest.json" "$folder/manifest.sig"
 $tool sign --key "$key" --folder "$folder" --lowest "$lowest"
-gh release upload "$tag" "$folder/manifest.json" "$folder/manifest.sig"
+gh release upload "$tag" "$folder/manifest.json" "$folder/manifest.sig" --clobber
 gh release edit "$tag" --draft=false
 echo "published $tag"

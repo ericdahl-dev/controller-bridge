@@ -25,6 +25,7 @@ class SignRelease(unittest.TestCase):
         self.log = root / "calls.log"
         self.draft = "true"
         self.sign_fails = False
+        self.signed_before = False
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -35,13 +36,15 @@ class SignRelease(unittest.TestCase):
             case "$1 $2" in
               "release view") echo "{self.draft}" ;;
               "release download") dir=""; while [ $# -gt 0 ]; do [ "$1" = --dir ] && dir="$2"; shift; done
-                                  echo '{{"panel": [], "lc6000": []}}' > "$dir/catalog.json" ;;
+                                  echo '{{"panel": [], "lc6000": []}}' > "$dir/catalog.json"
+                                  {'echo old > "$dir/manifest.json"; echo old > "$dir/manifest.sig"' if self.signed_before else ""} ;;
             esac
             """)
         executable(self.bin / "firmware-release", f"""
             echo "firmware-release $*" >> "{self.log}"
             {"exit 1" if self.sign_fails else ""}
             dir=""; while [ $# -gt 0 ]; do [ "$1" = --folder ] && dir="$2"; shift; done
+            [ -e "$dir/manifest.json" ] || [ -e "$dir/manifest.sig" ] && {{ echo "unnamed file manifest.json" >&2; exit 1; }}
             echo manifest > "$dir/manifest.json"; echo sig > "$dir/manifest.sig"
             """)
         env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", FIRMWARE_RELEASE=str(self.bin / "firmware-release"))
@@ -71,6 +74,14 @@ class SignRelease(unittest.TestCase):
         result, calls = self.run_script()
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(calls, ["gh release view", "gh release download", "firmware-release sign --key"])
+
+    def test_a_run_that_uploaded_but_did_not_publish_can_be_run_again(self):
+        # The draft then already holds manifest.json and manifest.sig: they are re-made, and the upload replaces them.
+        self.signed_before = True
+        result, calls = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        upload = [c for c in self.log.read_text().splitlines() if c.startswith("gh release upload")][0]
+        self.assertIn("--clobber", upload)
 
 
 if __name__ == "__main__":
