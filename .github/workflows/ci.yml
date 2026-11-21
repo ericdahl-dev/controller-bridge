@@ -17,7 +17,7 @@ concurrency:
 jobs:
   # Which jobs a change needs (scripts/ci_changes.py): a change to only the website, its scripts or Markdown docs
   # skips the two Mac jobs. A skipped job counts as passed for the ruleset's required Kit tests check. The Deck panel
-  # job runs only for tools/deck-panel or this workflow.
+  # job runs only for tools/deck-panel, the icon SVG its logo is made from (#669), or this workflow.
   changes:
     name: Changes
     runs-on: ubuntu-latest
@@ -90,9 +90,10 @@ jobs:
       - name: Deck panel host tests
         run: |
           pio test -d tools/deck-panel -e native
-          python3 -I tools/deck-panel/test_wifi_secrets.py
+          python3 -I tools/deck-panel/test_secret_logs.py
+          python3 -I tools/deck-panel/check_secret_logs.py
           python3 -I tools/deck-panel/test_deck_logo.py
-      # No Wi-Fi file here, so all three build without credentials: the deck view says "Wi-Fi isn't set" (#620).
+      # The panel keeps its Wi-Fi in NVS, set from a phone (#622): nothing to build in.
       - name: Deck panel firmware build
         run: |
           pio run -d tools/deck-panel -e crowpanel

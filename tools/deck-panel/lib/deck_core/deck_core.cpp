@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "font_fallback.h"
+
 namespace deck_core {
 
 namespace {
@@ -223,6 +225,11 @@ void DeckCore::set_network(Network state, const char* ip) {
     std::snprintf(ip_, sizeof ip_, "%s", ip);
 }
 
+void DeckCore::set_setup(const char* name, const char* password) {
+    std::snprintf(setup_name_, sizeof setup_name_, "%s", name);
+    std::snprintf(setup_password_, sizeof setup_password_, "%s", password);
+}
+
 void DeckCore::render(Screen& screen, uint32_t now_ms) {
     // The time since, signed: a clock that wraps round still counts it, and a render that read the clock a moment
     // before the packet's time sees a little under 0, not 49 days.
@@ -234,12 +241,21 @@ void DeckCore::render(Screen& screen, uint32_t now_ms) {
     if (waiting) {
         const WaitingView view = waiting_view();
         if (shown_ && shown_waiting_ && view == shown_waiting_view_) return;
-        screen.show_waiting(view);
+        const WaitingChanges changes = drawn_waiting_ ? changed(shown_waiting_view_, view) : WaitingChanges::all();
         shown_waiting_view_ = view;
+        drawn_waiting_ = true;
+        screen.show_waiting(shown_waiting_view_, changes);
     } else {
+        // Every frame: the view compare is the cheap way out; the face is built only when the view changed.
         if (shown_ && !shown_waiting_ && view_ == shown_view_) return;
-        screen.show_deck(view_);
         shown_view_ = view_;
+        const Face now = face(view_);
+        const Changes changes = drawn_ ? changed(shown_face_, now) : Changes::all();
+        // Back from waiting with nothing changed, the page needs showing even so: the board shows it on any call.
+        if (drawn_ && !changes.any() && !shown_waiting_) return;
+        shown_face_ = now;
+        drawn_ = true;
+        screen.show_deck(shown_face_, changes);
     }
     shown_ = true;
     shown_waiting_ = waiting;
@@ -249,13 +265,15 @@ WaitingView DeckCore::waiting_view() const {
     WaitingView view;
     view.logo = true;  // every waiting screen: the logo, the reason and the address beneath (#651)
     switch (network_) {
-        case Network::not_set:
-            std::snprintf(view.headline, sizeof view.headline, "Wi-Fi isn't set");
-            std::snprintf(view.detail, sizeof view.detail,
-                          "Build the panel with your Wi-Fi's name and password: see its README");
+        case Network::setup:
+            std::snprintf(view.headline, sizeof view.headline, "Set up the panel's Wi-Fi");
+            std::snprintf(view.detail, sizeof view.detail, "Join %s, password %s, then open %s", setup_name_,
+                          setup_password_, ip_);
             break;
         case Network::joining:
             std::snprintf(view.headline, sizeof view.headline, "Joining Wi-Fi\xE2\x80\xA6");
+            // A wrong password looks like this forever: the way out is on the screen.
+            std::snprintf(view.detail, sizeof view.detail, "Hold the screen 5 s to set up Wi-Fi again");
             break;
         case Network::connected:
             // What to type into DeckBridge's Settings, Display feed: host and port.
@@ -263,7 +281,12 @@ WaitingView DeckCore::waiting_view() const {
             std::snprintf(view.detail, sizeof view.detail, "%s  port %u", ip_, unsigned(kFeedPort));
             break;
     }
-    return view;
+    // Fitted to the fonts, as the deck's texts are: the address and names come from outside.
+    WaitingView fitted;
+    fitted.logo = view.logo;
+    font_fallback::fit(view.headline, fitted.headline, sizeof fitted.headline);
+    font_fallback::fit(view.detail, fitted.detail, sizeof fitted.detail);
+    return fitted;
 }
 
 }  // namespace deck_core

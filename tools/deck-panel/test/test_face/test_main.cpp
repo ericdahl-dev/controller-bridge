@@ -39,14 +39,17 @@ void test_an_empty_deck_shows_no_track_loaded_and_nothing_else() {
     v.loaded = false;
     const Face f = deck_core::face(v);
     TEST_ASSERT_EQUAL_STRING("1", f.deck);
-    TEST_ASSERT_EQUAL_HEX32(0xFF0000, f.color);
+    TEST_ASSERT_EQUAL_HEX32(0xFF0000, f.deck_color);
     TEST_ASSERT_EQUAL_STRING("No track loaded", f.title);
-    for (const char* text : {f.artist, f.key, f.bpm, f.tempo, f.elapsed, f.remaining, f.loop_length})
+    for (const char* text : {f.artist, f.key, f.bpm, f.tempo, f.elapsed, f.remaining})
         TEST_ASSERT_EQUAL_STRING("", text);
-    TEST_ASSERT_FALSE(f.playing || f.cue || f.sync || f.master || f.loop || f.end_warning || f.phase_shown);
-    TEST_ASSERT_EQUAL(0, f.beat);
-    TEST_ASSERT_EQUAL_FLOAT(0, f.progress);
-    TEST_ASSERT_EQUAL_FLOAT(0, f.level);
+    TEST_ASSERT_EQUAL_STRING("LOOP", f.loop_label);
+    TEST_ASSERT_EQUAL(deck_core::kPhaseHidden, f.phase_px);
+    TEST_ASSERT_EQUAL_HEX32(0xE0E0E0, f.progress_color);
+    for (uint32_t c : f.beat_color) TEST_ASSERT_EQUAL_HEX32(0x262626, c);
+    for (uint32_t c : f.lamp_color) TEST_ASSERT_EQUAL_HEX32(0x262626, c);
+    TEST_ASSERT_EQUAL(0, f.progress_px);
+    TEST_ASSERT_EQUAL(0, f.level_px);
 }
 
 void test_a_loaded_deck_shows_its_title_and_artist() {
@@ -108,86 +111,118 @@ void test_with_no_known_length_remaining_is_blank() {
     TEST_ASSERT_EQUAL_STRING("1:35", deck_core::face(v).elapsed);
 }
 
-void test_the_progress_bar_is_clamped_to_0_1() {
+// The bar is 704 px; its fill in whole pixels, so a change too small to move a pixel is no change.
+void test_the_progress_fill_is_whole_pixels_of_the_704_px_bar() {
     DeckView v = loaded_deck();
-    TEST_ASSERT_EQUAL_FLOAT(0.3125f, deck_core::face(v).progress);
+    TEST_ASSERT_EQUAL(220, deck_core::face(v).progress_px);  // 0.3125 of 704
     v.progress = 1.5f;
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).progress);
+    TEST_ASSERT_EQUAL(704, deck_core::face(v).progress_px);
     v.progress = -0.2f;
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, deck_core::face(v).progress);
+    TEST_ASSERT_EQUAL(0, deck_core::face(v).progress_px);
+    v.progress = 0.0007f;  // 0.49 px
+    TEST_ASSERT_EQUAL(0, deck_core::face(v).progress_px);
+    v.progress = 0.0010f;  // 0.70 px
+    TEST_ASSERT_EQUAL(1, deck_core::face(v).progress_px);
 }
 
-// The warning: the last 30 seconds, as DJ players flash it. Not with no known length (remaining 0).
-void test_the_bar_warns_in_the_last_30_seconds() {
+// The warning: the last 30 seconds, as DJ players flash it, the bar in red. Not with no known length (remaining 0).
+void test_the_bar_turns_red_in_the_last_30_seconds() {
     TEST_ASSERT_EQUAL(30, deck_core::kEndWarningSeconds);
     DeckView v = loaded_deck();
     v.remaining = 31;
-    TEST_ASSERT_FALSE(deck_core::face(v).end_warning);
+    TEST_ASSERT_EQUAL_HEX32(0xE0E0E0, deck_core::face(v).progress_color);
     v.remaining = 30;
-    TEST_ASSERT_TRUE(deck_core::face(v).end_warning);
+    TEST_ASSERT_EQUAL_HEX32(0xFF3B30, deck_core::face(v).progress_color);
     v.remaining = 1;
-    TEST_ASSERT_TRUE(deck_core::face(v).end_warning);
+    TEST_ASSERT_EQUAL_HEX32(0xFF3B30, deck_core::face(v).progress_color);
     v.remaining = 0;
-    TEST_ASSERT_FALSE(deck_core::face(v).end_warning);
+    TEST_ASSERT_EQUAL_HEX32(0xE0E0E0, deck_core::face(v).progress_color);
 }
 
-void test_the_beat_lights_its_block_and_none_outside_1_to_4() {
-    DeckView v = loaded_deck();
-    TEST_ASSERT_EQUAL(3, deck_core::face(v).beat);
-    v.beat = 0;
-    TEST_ASSERT_EQUAL(0, deck_core::face(v).beat);
-    v.beat = 5;
-    TEST_ASSERT_EQUAL(0, deck_core::face(v).beat);
-}
-
-void test_the_lamps_follow_play_cue_sync_master_and_loop() {
+// The lit block is the deck's color, the others the track's gray; none outside 1-4.
+void test_the_beat_lights_its_block_in_the_deck_color() {
     DeckView v = loaded_deck();
     Face f = deck_core::face(v);
-    TEST_ASSERT_TRUE(f.playing && f.sync && f.master && f.loop);
-    TEST_ASSERT_FALSE(f.cue);
+    const uint32_t beat3[] = {0x262626, 0x262626, 0xFF0000, 0x262626};
+    TEST_ASSERT_EQUAL_HEX32_ARRAY(beat3, f.beat_color, 4);
+    for (int beat : {0, 5}) {
+        v.beat = beat;
+        f = deck_core::face(v);
+        for (uint32_t c : f.beat_color) TEST_ASSERT_EQUAL_HEX32(0x262626, c);
+    }
+}
+
+// Black is the background, so a deck without a color shows white, the number and the lit block both.
+void test_a_deck_without_a_color_shows_white() {
+    DeckView v = loaded_deck();
+    v.color = 0;
+    const Face f = deck_core::face(v);
+    TEST_ASSERT_EQUAL_HEX32(0xFFFFFF, f.deck_color);
+    TEST_ASSERT_EQUAL_HEX32(0xFFFFFF, f.beat_color[2]);
+}
+
+// Lit: the lamp's own color with black text. Unlit: the track's gray with dim text.
+void test_the_lamps_light_in_their_colors() {
+    DeckView v = loaded_deck();  // play, sync, master, loop on; cue off
+    Face f = deck_core::face(v);
+    const uint32_t lit[] = {0x30D158, 0x262626, 0x0A84FF, 0xFFD60A, 0x64D2FF};
+    const uint32_t text[] = {0x000000, 0x5A5A5A, 0x000000, 0x000000, 0x000000};
+    TEST_ASSERT_EQUAL_HEX32_ARRAY(lit, f.lamp_color, 5);
+    TEST_ASSERT_EQUAL_HEX32_ARRAY(text, f.lamp_text_color, 5);
     v.playing = v.sync = v.master = v.loop = false;
     v.cue = true;
     f = deck_core::face(v);
-    TEST_ASSERT_FALSE(f.playing || f.sync || f.master || f.loop);
-    TEST_ASSERT_TRUE(f.cue);
+    const uint32_t cue[] = {0x262626, 0xFF9F0A, 0x262626, 0x262626, 0x262626};
+    TEST_ASSERT_EQUAL_HEX32_ARRAY(cue, f.lamp_color, 5);
 }
 
-// Beats, as the LC6000's loop display shows them: whole, or a fraction of one beat.
-void test_the_loop_length_shows_whole_beats_or_fractions() {
+// The loop lamp's label: the length in beats, as the LC6000's loop display shows them, whole or a fraction of one.
+void test_the_loop_lamp_shows_whole_beats_or_fractions() {
     DeckView v = loaded_deck();
     const struct { float beats; const char* text; } cases[] = {
-        {0.5f, "1/2"}, {0.25f, "1/4"}, {0.125f, "1/8"}, {0.0625f, "1/16"}, {0.03125f, "1/32"},
-        {1, "1"}, {4, "4"}, {16, "16"}, {1.5f, "1.5"}, {0, ""},
+        {0.5f, "LOOP 1/2"}, {0.25f, "LOOP 1/4"}, {0.125f, "LOOP 1/8"}, {0.0625f, "LOOP 1/16"}, {0.03125f, "LOOP 1/32"},
+        {1, "LOOP 1"}, {4, "LOOP 4"}, {16, "LOOP 16"}, {1.5f, "LOOP 1.5"}, {0, "LOOP"},
     };
     for (const auto& c : cases) {
         v.loop_length = c.beats;
-        TEST_ASSERT_EQUAL_STRING(c.text, deck_core::face(v).loop_length);
+        TEST_ASSERT_EQUAL_STRING(c.text, deck_core::face(v).loop_label);
     }
+}
+
+// Texts come fitted to the fonts: a character they don't have is "?", never an empty box.
+void test_texts_come_fitted_to_the_fonts() {
+    DeckView v = loaded_deck();
+    std::strcpy(v.title, "T\xC5\x8Dky\xC5\x8D \xE6\x9D\xB1");  // "Tōkyō 東": ō is in the fonts, 東 isn't
+    std::strcpy(v.artist, "\xE2\x98\x85 Star");  // ★
+    const Face f = deck_core::face(v);
+    TEST_ASSERT_EQUAL_STRING("T\xC5\x8Dky\xC5\x8D ?", f.title);
+    TEST_ASSERT_EQUAL_STRING("? Star", f.artist);
 }
 
 // Phase -1 is unknown (the deck stopped, or no offset since it loaded): no marker, never one parked in the middle.
 void test_the_phase_marker_hides_while_unknown_and_stays_on_the_bar() {
     DeckView v = loaded_deck();
     Face f = deck_core::face(v);
-    TEST_ASSERT_TRUE(f.phase_shown);
-    TEST_ASSERT_EQUAL_FLOAT(0.5f, f.phase);
+    // The 10 px marker's left edge on the 704 px bar: 0-694 px, 347 in phase.
+    TEST_ASSERT_EQUAL(347, f.phase_px);
     v.phase = 0.2f;
-    TEST_ASSERT_EQUAL_FLOAT(0.2f, deck_core::face(v).phase);
+    TEST_ASSERT_EQUAL(139, deck_core::face(v).phase_px);  // 138.8
     v.phase = 1.3f;
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).phase);
+    TEST_ASSERT_EQUAL(694, deck_core::face(v).phase_px);
     v.phase = -1;
-    TEST_ASSERT_FALSE(deck_core::face(v).phase_shown);
+    TEST_ASSERT_EQUAL(-1, deck_core::face(v).phase_px);
     v.phase = -0.5f;  // any value below 0 is unknown
-    TEST_ASSERT_FALSE(deck_core::face(v).phase_shown);
+    TEST_ASSERT_EQUAL(-1, deck_core::face(v).phase_px);
 }
 
-void test_the_level_meter_is_clamped_to_0_1() {
+// The meter is 310 px tall, from the key row to the lamps' bottom.
+void test_the_level_fill_is_whole_pixels_of_the_310_px_meter() {
     DeckView v = loaded_deck();
-    TEST_ASSERT_EQUAL_FLOAT(0.75f, deck_core::face(v).level);
+    TEST_ASSERT_EQUAL(233, deck_core::face(v).level_px);  // 232.5, half away from zero
     v.level = 2;
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).level);
+    TEST_ASSERT_EQUAL(310, deck_core::face(v).level_px);
     v.level = -1;
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, deck_core::face(v).level);
+    TEST_ASSERT_EQUAL(0, deck_core::face(v).level_px);
 }
 
 int main(int, char**) {
@@ -199,12 +234,14 @@ int main(int, char**) {
     RUN_TEST(test_times_show_as_minutes_and_seconds_remaining_with_a_minus);
     RUN_TEST(test_past_an_hour_times_show_hours);
     RUN_TEST(test_with_no_known_length_remaining_is_blank);
-    RUN_TEST(test_the_progress_bar_is_clamped_to_0_1);
-    RUN_TEST(test_the_bar_warns_in_the_last_30_seconds);
-    RUN_TEST(test_the_beat_lights_its_block_and_none_outside_1_to_4);
-    RUN_TEST(test_the_lamps_follow_play_cue_sync_master_and_loop);
-    RUN_TEST(test_the_loop_length_shows_whole_beats_or_fractions);
+    RUN_TEST(test_the_progress_fill_is_whole_pixels_of_the_704_px_bar);
+    RUN_TEST(test_the_bar_turns_red_in_the_last_30_seconds);
+    RUN_TEST(test_the_beat_lights_its_block_in_the_deck_color);
+    RUN_TEST(test_a_deck_without_a_color_shows_white);
+    RUN_TEST(test_the_lamps_light_in_their_colors);
+    RUN_TEST(test_the_loop_lamp_shows_whole_beats_or_fractions);
+    RUN_TEST(test_texts_come_fitted_to_the_fonts);
     RUN_TEST(test_the_phase_marker_hides_while_unknown_and_stays_on_the_bar);
-    RUN_TEST(test_the_level_meter_is_clamped_to_0_1);
+    RUN_TEST(test_the_level_fill_is_whole_pixels_of_the_310_px_meter);
     return UNITY_END();
 }

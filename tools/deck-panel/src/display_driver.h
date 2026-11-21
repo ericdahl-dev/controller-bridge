@@ -48,3 +48,13 @@ scan_watch::Report display_take_scan();
 // otherwise.
 uint32_t display_copy_budget_us();
 bounce_budget::Report display_take_copy();
+
+#ifdef PANEL_PERF_LOG
+// The frame ledger's boundaries (#662), perf build only: latches so far, where the panel takes the next frame's
+// buffer (frame end in bounce mode, vsync without), and the last one's time in esp_timer microseconds. Any task.
+struct DisplayLatch {
+    uint32_t count;
+    uint32_t us;
+};
+DisplayLatch display_latch();
+#endif

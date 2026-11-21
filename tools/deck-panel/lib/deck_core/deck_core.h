@@ -7,71 +7,19 @@
 #include <cstdint>
 #include <cstring>
 
+#include "deck_face.h"
+#include "deck_types.h"
+
 namespace deck_core {
-
-/// The longest title and artist shown, in characters; longer ones are cut and end in "…" (#490).
-constexpr size_t kTitleMax = 40;
-constexpr size_t kArtistMax = 40;
-/// Room for 40 characters of up to 4 bytes each, and the NUL. No text is kept on the heap: the board's small
-/// allocations come from the internal RAM LVGL and Wi-Fi use.
-/// A key, such as "11B" or "F#m", fits in this many characters.
-constexpr size_t kKeyMax = 4;
-constexpr size_t kTextBytes = 40 * 4 + 1;
-static_assert(kTitleMax <= 40 && kArtistMax <= 40, "kTextBytes holds 40 characters");
-
-/// What the deck screen shows.
-struct DeckView {
-    int deck = 0;  ///< 1-4; 0 until the feed says
-    uint32_t color = 0;  ///< 0xRRGGBB
-    char title[kTextBytes] = "";  ///< UTF-8, shortened
-    char artist[kTextBytes] = "";
-    bool loaded = true;  ///< until the feed says 0
-    char key[kKeyMax * 4 + 1] = "";  ///< shortened like the title
-    float bpm = 0;
-    float tempo = 0;  ///< percent
-    bool playing = false, cue = false, sync = false, master = false, loop = false;
-    float loop_length = 0;  ///< beats
-    int beat = 0;  ///< 1-4; 0 none
-    int32_t elapsed = 0, remaining = 0;  ///< whole seconds
-    float progress = 0;  ///< 0-1
-    float phase = -1;  ///< 0-1, 0.5 in phase; -1 unknown
-    float level = 0;  ///< 0-1
-
-    /// Every field: one added later goes here too, or a change to it won't redraw.
-    bool operator==(const DeckView& o) const {
-        return deck == o.deck && color == o.color && std::strcmp(title, o.title) == 0 &&
-               std::strcmp(artist, o.artist) == 0 && loaded == o.loaded && std::strcmp(key, o.key) == 0 &&
-               bpm == o.bpm && tempo == o.tempo && playing == o.playing && cue == o.cue && sync == o.sync &&
-               master == o.master && loop == o.loop && loop_length == o.loop_length && beat == o.beat &&
-               elapsed == o.elapsed && remaining == o.remaining && progress == o.progress && phase == o.phase &&
-               level == o.level;
-    }
-};
-
-/// The panel's network, as the board layer reports it (#620).
-enum class Network {
-    not_set,  ///< built without Wi-Fi credentials
-    joining,  ///< joining, or lost and rejoining
-    connected,
-};
-
-/// What the waiting screen says.
-struct WaitingView {
-    char headline[48] = "";
-    char detail[96] = "";
-    bool logo = false;  ///< the DeckBridge logo above the lines (#651)
-
-    bool operator==(const WaitingView& other) const {
-        return std::strcmp(headline, other.headline) == 0 && std::strcmp(detail, other.detail) == 0 &&
-               logo == other.logo;
-    }
-};
 
 /// The board layer draws what the core decides.
 struct Screen {
     virtual ~Screen() = default;
-    virtual void show_waiting(const WaitingView& view) = 0;
-    virtual void show_deck(const DeckView& view) = 0;
+    /// The waiting page shows `view`, the core's own until the next call; only `changes` differ from what it holds.
+    virtual void show_waiting(const WaitingView& view, const WaitingChanges& changes) = 0;
+    /// The deck page shows `face`; only the parts in `changes` differ from what its objects hold. `face` is the core's
+    /// own and stays as it is until the next call, so the board may point its objects' texts at it.
+    virtual void show_deck(const Face& face, const Changes& changes) = 0;
 };
 
 /// Not thread-safe: feed() and render() must run on one task. On the board, the UDP task copies each payload into a
@@ -79,6 +27,11 @@ struct Screen {
 /// render() every frame. No heap, no exceptions, no RTTI.
 class DeckCore {
 public:
+    DeckCore() = default;
+    /// Not copied: the screen's labels point at this core's held face and waiting view.
+    DeckCore(const DeckCore&) = delete;
+    DeckCore& operator=(const DeckCore&) = delete;
+
     /// No feed for this long and the panel shows the waiting screen (#490).
     static constexpr uint32_t kWaitAfterMs = 3000;
     /// The UDP port the panel listens on for the feed: DeckBridge's default (#616).
@@ -91,6 +44,11 @@ public:
     /// The network's state and the panel's IPv4 address ("" if none), from the board layer.
     /// Until told, the core takes the network as up: on the Mac, and for any board without Wi-Fi of its own.
     void set_network(Network state, const char* ip);
+    /// The setup network's name and password, for the waiting screen while Network::setup (#622).
+    void set_setup(const char* name, const char* password);
+    /// Whether the last render() showed the waiting screen (joining and setup included), not the deck: true before the
+    /// first render. Hold-to-reset counts only then (#622).
+    bool waiting() const { return shown_waiting_; }
     /// Tells `screen` what to show at `now_ms`, only when that changed since the last call.
     void render(Screen& screen, uint32_t now_ms);
 
@@ -105,11 +63,17 @@ private:
     uint32_t last_heard_ms_ = 0;
     Network network_ = Network::connected;
     char ip_[16] = "";
+    char setup_name_[24] = "";
+    char setup_password_[16] = "";
     // What the screen was last told.
     bool shown_ = false;
     bool shown_waiting_ = true;
     DeckView shown_view_;
+    /// What the deck page was last told, the face its objects hold; drawn_ once it has been told once.
+    Face shown_face_;
+    bool drawn_ = false;
     WaitingView shown_waiting_view_;
+    bool drawn_waiting_ = false;
 };
 
 }  // namespace deck_core

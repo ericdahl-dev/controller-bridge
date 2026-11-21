@@ -226,7 +226,7 @@ static std::string title_shown(const std::string& title) {
     ScreenStub screen;
     feed(core, string_message(prefix + "title", title), 100);
     core.render(screen, 100);
-    return screen.last().title;
+    return core.view().title;  // the core's cut; the face then fits it to the fonts
 }
 
 static std::string artist_shown(const std::string& artist) {
@@ -234,7 +234,7 @@ static std::string artist_shown(const std::string& artist) {
     ScreenStub screen;
     feed(core, string_message(prefix + "artist", artist), 100);
     core.render(screen, 100);
-    return screen.last().artist;
+    return core.view().artist;
 }
 
 static const std::string ellipsis = "\xE2\x80\xA6";  // …
@@ -321,14 +321,14 @@ void test_each_shared_example_shows_its_deck_state() {
                          static_cast<uint32_t>(rgb[2].number);
         TEST_ASSERT_FALSE_MESSAGE(screen.last().waiting, name);
         TEST_ASSERT_EQUAL_MESSAGE(static_cast<int>(state["deck"].number), screen.last().deck, name);
-        TEST_ASSERT_EQUAL_HEX32_MESSAGE(color, screen.last().color, name);
+        TEST_ASSERT_EQUAL_HEX32_MESSAGE(color, core.view().color, name);
         // A missing title or artist is "", as in the Swift walker.
         std::string title = state.has("title") ? state["title"].string : "";
         std::string artist = state.has("artist") ? state["artist"].string : "";
-        TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), screen.last().title.c_str(), name);
-        TEST_ASSERT_EQUAL_STRING_MESSAGE(artist.c_str(), screen.last().artist.c_str(), name);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), core.view().title, name);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(artist.c_str(), core.view().artist, name);
         // #617's fields. A state leaves out what's off or 0; phase left out is -1, unknown.
-        const deck_core::DeckView& v = screen.last().view;
+        const deck_core::DeckView& v = core.view();
         auto flag = [&](const char* key) { return state.has(key) && state[key].boolean; };
         auto number = [&](const char* key, double otherwise) { return state.has(key) ? state[key].number : otherwise; };
         TEST_ASSERT_EQUAL_MESSAGE(!state.has("loaded") || state["loaded"].boolean, v.loaded, name);
@@ -353,7 +353,7 @@ void test_each_shared_example_shows_its_deck_state() {
             TEST_ASSERT_EQUAL_STRING_MESSAGE(deck_core::kNoTrack, f.title, name);
             TEST_ASSERT_EQUAL_STRING_MESSAGE("", f.elapsed, name);
             TEST_ASSERT_EQUAL_STRING_MESSAGE("", f.bpm, name);
-            TEST_ASSERT_FALSE_MESSAGE(f.phase_shown, name);
+            TEST_ASSERT_EQUAL_MESSAGE(deck_core::kPhaseHidden, f.phase_px, name);
         } else {
             TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), f.title, name);
         }
@@ -395,15 +395,18 @@ void test_control_characters_show_as_spaces() {
 void test_the_waiting_screen_says_why() {
     deck_core::DeckCore core;
     ScreenStub screen;
-    core.set_network(deck_core::Network::not_set, "");
+    // No saved Wi-Fi (#622): the panel's own setup network, and how to reach the page on it.
+    core.set_setup("DeckPanel-1A2B", "abcd2345");
+    core.set_network(deck_core::Network::setup, "192.168.4.1");
     core.render(screen, 0);
-    TEST_ASSERT_EQUAL_STRING("Wi-Fi isn't set", screen.last().headline.c_str());
-    TEST_ASSERT_EQUAL_STRING("Build the panel with your Wi-Fi's name and password: see its README",
+    TEST_ASSERT_EQUAL_STRING("Set up the panel's Wi-Fi", screen.last().headline.c_str());
+    TEST_ASSERT_EQUAL_STRING("Join DeckPanel-1A2B, password abcd2345, then open 192.168.4.1",
                              screen.last().detail.c_str());
     core.set_network(deck_core::Network::joining, "");
     core.render(screen, 0);
     TEST_ASSERT_EQUAL_STRING("Joining Wi-Fi…", screen.last().headline.c_str());
-    TEST_ASSERT_EQUAL_STRING("", screen.last().detail.c_str());
+    // A wrong password looks like joining forever: the way out is on the screen.
+    TEST_ASSERT_EQUAL_STRING("Hold the screen 5 s to set up Wi-Fi again", screen.last().detail.c_str());
     core.set_network(deck_core::Network::connected, "192.168.1.40");
     core.render(screen, 0);
     TEST_ASSERT_EQUAL_STRING("Waiting for DeckBridge", screen.last().headline.c_str());
@@ -431,14 +434,30 @@ void test_losing_wifi_is_the_waiting_screen_at_once() {
     TEST_ASSERT_EQUAL(2, screen.last().deck);
 }
 
+// What the last render showed, for hold-to-reset (#622): the waiting screen (joining and setup too), not the deck.
+void test_waiting_says_what_the_last_render_showed() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    TEST_ASSERT_TRUE(core.waiting());  // nothing heard yet
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    core.render(screen, 1000);
+    TEST_ASSERT_FALSE(core.waiting());
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 1100);
+    TEST_ASSERT_TRUE(core.waiting());
+    core.set_network(deck_core::Network::setup, "192.168.4.1");
+    core.render(screen, 1200);
+    TEST_ASSERT_TRUE(core.waiting());
+}
+
 // #617's fields (ADR 0011): one address-table row each.
-static const deck_core::DeckView& after(std::initializer_list<Bytes> messages) {
-    static deck_core::DeckCore core;
-    static ScreenStub screen;
-    core = deck_core::DeckCore();
+static deck_core::DeckView after(std::initializer_list<Bytes> messages) {
+    deck_core::DeckCore core;
+    ScreenStub screen;
     for (const Bytes& m : messages) feed(core, m, 100);
     core.render(screen, 100);
-    return screen.last().view;
+    return core.view();
 }
 
 void test_every_field_of_the_feed_has_its_row() {
@@ -474,8 +493,8 @@ void test_flags_go_off_with_0_and_phase_takes_minus_1() {
     TEST_ASSERT_EQUAL_FLOAT(-1.0f, v.phase);
 }
 
-// Fast fields (phase, level, progress) come at up to 30 a second: each change is one show_deck, the same value again
-// none.
+// Fast fields (phase, level, progress) come at up to 30 a second: each change that shows is one show_deck, the same
+// value again none.
 void test_a_fast_field_change_is_one_redraw_and_the_same_value_none() {
     deck_core::DeckCore core;
     ScreenStub screen;
@@ -489,13 +508,16 @@ void test_a_fast_field_change_is_one_redraw_and_the_same_value_none() {
         feed(core, float_message(prefix + field, 0.25f), 120);
         core.render(screen, 120);
     }
-    const char* ints[] = {"loaded", "playing", "cue", "sync", "master", "loop", "beat", "elapsed", "remaining"};
+    const char* ints[] = {"playing", "cue", "sync", "master", "loop", "beat", "elapsed", "remaining"};
     for (const char* field : ints) {
-        feed(core, int_message(prefix + field, field == std::string("loaded") ? 0 : 2), 130);
+        feed(core, int_message(prefix + field, 2), 130);
         core.render(screen, 130);
     }
     feed(core, string_message(prefix + "key", "11B"), 140);
     core.render(screen, 140);
+    // Last: an empty deck shows none of the above, so a change after it would show nothing.
+    feed(core, int_message(prefix + "loaded", 0), 150);
+    core.render(screen, 150);
     TEST_ASSERT_EQUAL(before + 6 + 9 + 1, screen.shown.size());
 }
 
@@ -512,7 +534,7 @@ void test_a_clipped_stream_after_boot_never_says_no_track_loaded() {
     ScreenStub screen;
     for (const Bytes& m : fast) feed(core, m, 1000);
     core.render(screen, 1000);
-    deck_core::Face f = deck_core::face(screen.last().view);
+    deck_core::Face f = screen.last().face;
     TEST_ASSERT_EQUAL_STRING("", f.deck);  // no deck yet
     TEST_ASSERT_EQUAL_STRING("", f.title);
     TEST_ASSERT_EQUAL_STRING("126.0", f.bpm);
@@ -520,18 +542,18 @@ void test_a_clipped_stream_after_boot_never_says_no_track_loaded() {
     feed(core, int_message(prefix + "deck", 1), 1010);
     feed(core, int_message(prefix + "color", 0xFF0000), 1010);
     core.render(screen, 1010);
-    f = deck_core::face(screen.last().view);
+    f = screen.last().face;
     TEST_ASSERT_EQUAL_STRING("1", f.deck);
     TEST_ASSERT_EQUAL_STRING("", f.title);
 
     feed(core, int_message(prefix + "loaded", 1), 1020);
     core.render(screen, 1020);
-    f = deck_core::face(screen.last().view);
+    f = screen.last().face;
     TEST_ASSERT_EQUAL_STRING("", f.title);  // blank until a title arrives, not "No track loaded"
 
     feed(core, int_message(prefix + "loaded", 0), 1030);
     core.render(screen, 1030);
-    TEST_ASSERT_EQUAL_STRING(deck_core::kNoTrack, deck_core::face(screen.last().view).title);
+    TEST_ASSERT_EQUAL_STRING(deck_core::kNoTrack, screen.last().face.title);
 }
 
 // #636: the feed sends each update tick and each full snapshot as one bundle, so a burst is one datagram.
@@ -547,7 +569,7 @@ void test_a_bundle_applies_all_its_messages_as_one_arrival() {
     TEST_ASSERT_EQUAL(3, screen.last().deck);
     TEST_ASSERT_EQUAL_STRING("Night Drive", screen.last().title.c_str());
     TEST_ASSERT_EQUAL_STRING("Example Artist", screen.last().artist.c_str());
-    TEST_ASSERT_EQUAL_FLOAT(126.0f, screen.last().view.bpm);
+    TEST_ASSERT_EQUAL_FLOAT(126.0f, core.view().bpm);
     core.render(screen, 3999);
     TEST_ASSERT_FALSE(screen.last().waiting);  // the bundle's arrival keeps it alive 3 s
     core.render(screen, 4000);
@@ -605,8 +627,8 @@ static std::string title_after_boot_then(std::initializer_list<Bytes> stream) {
     for (const Bytes& m : stream) feed(core, m, 20500);
     core.render(screen, 20500);
     TEST_ASSERT_FALSE(screen.last().waiting);
-    TEST_ASSERT_TRUE(screen.last().view.loaded);
-    return deck_core::face(screen.last().view).title;
+    TEST_ASSERT_TRUE(core.view().loaded);
+    return screen.last().face.title;
 }
 
 void test_a_booted_panel_given_a_clipped_stream_never_says_no_track_loaded() {
@@ -633,7 +655,7 @@ void test_coming_back_from_waiting_keeps_the_deck_loaded() {
     TEST_ASSERT_TRUE(screen.last().waiting);
     feed(core, float_message(prefix + "level", 0.5f), 9500);
     core.render(screen, 9500);
-    TEST_ASSERT_EQUAL_STRING("Night Drive", deck_core::face(screen.last().view).title);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", screen.last().face.title);
 }
 
 // For the perf env's capture (#636): what the core holds now, read without a render.
@@ -652,7 +674,7 @@ void test_the_core_says_what_it_holds() {
 void test_every_waiting_screen_shows_the_logo() {
     deck_core::DeckCore core;
     ScreenStub screen;
-    const deck_core::Network states[] = {deck_core::Network::not_set, deck_core::Network::joining,
+    const deck_core::Network states[] = {deck_core::Network::setup, deck_core::Network::joining,
                                          deck_core::Network::connected};
     for (deck_core::Network state : states) {
         core.set_network(state, "192.168.1.40");
@@ -709,8 +731,8 @@ void test_a_goodbye_of_another_value_is_ignored() {
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
-    void show_waiting(const deck_core::WaitingView&) override { ++calls; }
-    void show_deck(const deck_core::DeckView&) override { ++calls; }
+    void show_waiting(const deck_core::WaitingView&, const deck_core::WaitingChanges&) override { ++calls; }
+    void show_deck(const deck_core::Face&, const deck_core::Changes&) override { ++calls; }
 };
 
 void test_reading_packets_and_rendering_use_no_heap() {
@@ -733,6 +755,79 @@ void test_reading_packets_and_rendering_use_no_heap() {
     core.render(screen, 50 * 100 + 5000);
     TEST_ASSERT_EQUAL(0, allocations - before);
     TEST_ASSERT_TRUE(screen.calls > 2);
+}
+
+
+// #665: the screen is told the face and only the parts that changed. The first deck it sees is every part.
+void test_the_first_deck_is_every_part_then_only_what_changed() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 1), 100);
+    core.render(screen, 100);
+    TEST_ASSERT_EQUAL(28, screen.last().changes.count());
+    feed(core, int_message(prefix + "playing", 1), 110);
+    core.render(screen, 110);
+    TEST_ASSERT_EQUAL(2, screen.last().changes.count());  // the play lamp's box and its text
+    TEST_ASSERT_TRUE(screen.last().changes.has(deck_core::Part::lamp_color, 0));
+    TEST_ASSERT_TRUE(screen.last().changes.has(deck_core::Part::lamp_text_color, 0));
+    TEST_ASSERT_EQUAL_HEX32(0x30D158, screen.last().face.lamp_color[0]);
+}
+
+// A fast field that moves no whole pixel is no redraw: the level meter is 310 px, so 0.5 and 0.501 are both 155 px.
+void test_a_change_that_moves_no_pixel_tells_the_screen_nothing() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 1), 100);
+    feed(core, float_message(prefix + "level", 0.5f), 100);
+    core.render(screen, 100);
+    const size_t before = screen.shown.size();
+    feed(core, float_message(prefix + "level", 0.501f), 110);
+    core.render(screen, 110);
+    TEST_ASSERT_EQUAL(before, screen.shown.size());
+    feed(core, float_message(prefix + "level", 0.51f), 120);  // 158 px
+    core.render(screen, 120);
+    TEST_ASSERT_EQUAL(before + 1, screen.shown.size());
+    TEST_ASSERT_TRUE(screen.last().changes.has(deck_core::Part::level_px));
+    TEST_ASSERT_EQUAL(158, screen.last().face.level_px);
+}
+
+// Back from waiting, the deck page shows what its objects already hold: only what changed meanwhile redraws.
+void test_back_from_waiting_only_what_changed_meanwhile_redraws() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 1), 100);
+    core.render(screen, 100);
+    core.render(screen, 100 + deck_core::DeckCore::kWaitAfterMs);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    feed(core, int_message(prefix + "beat", 2), 5000);
+    core.render(screen, 5000);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_EQUAL(1, screen.last().changes.count());
+    TEST_ASSERT_TRUE(screen.last().changes.has(deck_core::Part::beat_color, 1));
+}
+
+
+// #665: the waiting screen is told what changed too: the first time both texts, then only the one that changed.
+void test_the_waiting_screen_is_told_only_what_changed() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 0);
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.headline && screen.last().waiting_changes.detail);
+    core.set_network(deck_core::Network::connected, "192.168.1.41");
+    core.render(screen, 10);
+    TEST_ASSERT_FALSE(screen.last().waiting_changes.headline);
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.detail);
+    TEST_ASSERT_EQUAL_STRING("192.168.1.41  port 9100", screen.last().detail.c_str());
+}
+
+// Its texts come fitted to the fonts, as the deck's do.
+void test_the_waiting_texts_come_fitted_to_the_fonts() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "\xE6\x9D\xB1");  // 東, not in the fonts
+    core.render(screen, 0);
+    TEST_ASSERT_EQUAL_STRING("?  port 9100", screen.last().detail.c_str());
 }
 
 int main(int, char**) {
@@ -768,6 +863,7 @@ int main(int, char**) {
     RUN_TEST(test_a_quit_deckbridge_is_the_logo_within_3_seconds);
     RUN_TEST(test_a_goodbye_is_the_logo_at_once_and_the_next_message_brings_the_deck_back);
     RUN_TEST(test_a_goodbye_of_another_value_is_ignored);
+    RUN_TEST(test_waiting_says_what_the_last_render_showed);
     RUN_TEST(test_a_bundle_applies_all_its_messages_as_one_arrival);
     RUN_TEST(test_the_core_says_what_it_holds);
     RUN_TEST(test_a_bad_element_does_not_lose_the_good_ones);
@@ -776,6 +872,11 @@ int main(int, char**) {
     RUN_TEST(test_a_booted_panel_given_a_clipped_stream_never_says_no_track_loaded);
     RUN_TEST(test_coming_back_from_waiting_keeps_the_deck_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
+    RUN_TEST(test_the_waiting_screen_is_told_only_what_changed);
+    RUN_TEST(test_the_waiting_texts_come_fitted_to_the_fonts);
+    RUN_TEST(test_the_first_deck_is_every_part_then_only_what_changed);
+    RUN_TEST(test_a_change_that_moves_no_pixel_tells_the_screen_nothing);
+    RUN_TEST(test_back_from_waiting_only_what_changed_meanwhile_redraws);
     RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
     RUN_TEST(test_a_fast_field_change_is_one_redraw_and_the_same_value_none);
     RUN_TEST(test_the_waiting_screen_says_why);

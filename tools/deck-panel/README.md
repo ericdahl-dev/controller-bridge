@@ -2,16 +2,16 @@
 
 Firmware for the panel that shows DeckBridge's display feed: an Elecrow CrowPanel Advance 7.0-HMI (ESP32-S3-WROOM-1-N16R8, hardware V1.4, 800×480 RGB IPS screen, GT911 touch, 16 MB flash, 8 MB PSRAM).
 
-The default firmware is the deck view (#620): it joins Wi-Fi, listens for the feed on UDP port 9100 and shows the deck in front: its number in the deck color, title, artist, key, BPM, tempo, times, progress, beat, phase, level and lamps (#621). With no feed for 3 seconds it shows the waiting screen, with the panel's address and port to type into DeckBridge's Settings. It only listens: it never sends anything (ADR 0011). The test screen (#615) is a separate build, `crowpanel-test`.
+The default firmware is the deck view (#620): it joins Wi-Fi (set up from a phone, see Wi-Fi), listens for the feed on UDP port 9100 and shows the deck in front: its number in the deck color, title, artist, key, BPM, tempo, times, progress, beat, phase, level and lamps (#621). With no feed for 3 seconds it shows the waiting screen, with the panel's address and port to type into DeckBridge's Settings. On your network it only listens: it never sends anything (ADR 0011). Only in setup does it answer, with its own setup network and page. The test screen (#615) is a separate build, `crowpanel-test`.
 
 ## Layout
 
 | Path | What | Built for |
 |---|---|---|
-| `lib/` | Portable code: no Arduino, no LVGL. `deck_core` (reads the feed, decides the screen), `feed_drain` (datagrams into the core), `font_fallback` (text the font can draw), `test_pattern` (the test screen's bars), `backlight` (the companion chip's bytes per board revision), `gt911` (touch decoding) | The Mac (tests) and the panel |
+| `lib/` | Portable code: no Arduino, no LVGL. `deck_core` (reads the feed, decides the screen down to the pixel and says which parts changed; the layout is `deck_layout.h`), `feed_drain` (datagrams into the core), `font_fallback` (text the font can draw), `test_pattern` (the test screen's bars), `backlight` (the companion chip's bytes per board revision), `gt911` (touch decoding) | The Mac (tests) and the panel |
 | `test/` | Host tests for `lib/`, with Unity | The Mac |
-| `src/` | The board layer: pins, the companion chip, the RGB panel with LVGL, touch, LVGL's heap in PSRAM, Wi-Fi (`wifi_link`), the feed's UDP socket (`feed_udp`), the deck and waiting screens (`deck_view`), the test screen and `main.cpp` | The panel only |
-| `wifi_secrets.py` | Writes `src/wifi_secrets.h` (never committed) from your Wi-Fi file at build time; `test_wifi_secrets.py` tests it | The Mac |
+| `src/` | The board layer: pins, the companion chip, the RGB panel with LVGL, touch, LVGL's heap in PSRAM, Wi-Fi (`wifi_link`), the feed's UDP socket (`feed_udp`), the deck and waiting screens (`deck_view`, which sets only what the core says changed and keeps no copy), the test screen and `main.cpp` | The panel only |
+| `check_secret_logs.py` | Fails if any `src/` line logs or prints the Wi-Fi password; `test_secret_logs.py` tests it | The Mac |
 | `deck_logo.py` | Writes `src/deck_logo.c`, the waiting screen's logo, from `design/icon/icon-1-deck-ring.svg`; run it after an icon change. `test_deck_logo.py` fails while the committed image is stale | The Mac |
 | `feed/` | The display feed's example messages, shared with DeckBridge's tests | — |
 | `fonts/` | `make_fonts.sh`, which converts Geist into `src/fonts/` | The Mac |
@@ -30,7 +30,8 @@ From the repo root:
 
 ```sh
 pio test -d tools/deck-panel -e native          # host tests for lib/
-python3 -I tools/deck-panel/test_wifi_secrets.py  # the Wi-Fi pre-script
+python3 -I tools/deck-panel/test_secret_logs.py   # the password-log check's tests
+python3 -I tools/deck-panel/check_secret_logs.py  # no src/ line logs the password
 pio run  -d tools/deck-panel -e crowpanel       # the deck view: the panel firmware
 pio run  -d tools/deck-panel -e crowpanel-test  # the test screen
 ```
@@ -39,21 +40,34 @@ CI runs all of them in the Deck panel job, whenever `tools/deck-panel/` changes.
 
 ## Wi-Fi
 
-A stopgap until the panel is set up from a phone (#622): the network's name and password go into the firmware when it's built. Put them in `~/.config/deckbridge/panel-wifi.ini`, outside the repo (or point `DECK_PANEL_WIFI_INI` at another file):
+The panel is set up from a phone (#622). No network name or password goes into the firmware.
 
-```ini
-[wifi]
-ssid = Your network
-password = your password
-```
+**First boot, or after a reset:**
 
-No quotes: the spaces around `=` are dropped and quotes would be kept as part of the value. Make the file readable only by you (`chmod 600`).
+1. The panel opens its own setup network and shows "Set up the panel's Wi-Fi", e.g. `Join DeckPanel-3A7F, password k7mQx2PaRt, then open 192.168.4.1`.
+   - The name ends in four hex digits from the panel's MAC, so two panels never share one.
+   - The password is new at every boot into setup (WPA2, 10 characters, no look-alikes such as `0`/`O` or `1`/`l`).
+2. Join that network on the phone. Most phones open the page by themselves; if not, open `http://192.168.4.1/`.
+3. Pick your network from the list (strongest first; reload the page for a fresh scan, at most every 10 s) or type its name, enter its password, and press Save. Leave the password empty for an open network.
+4. The page says the network is saved, and the panel restarts about 1 s later and joins it. It restarts rather than switching at once because writing to the panel's flash upsets the screen's scan-out.
 
-Each build of `crowpanel` writes `src/wifi_secrets.h` from it (mode 600, gitignored) and prints only `wifi_secrets: set` or `none`, never the values. **Never commit either file.** The password ends up in the firmware image, so anyone with the panel or the `.bin` can read it out. Change the file and build again to move the panel to another network.
+A bad form (no network, a name over 32 bytes, a password that isn't 8 to 63 characters or 64 hex digits) shows the page again with the reason. The password field is never filled back in.
 
-Without the file (as in CI), the panel builds with no Wi-Fi and says "Wi-Fi isn't set".
+**Where it's kept:** in the panel's flash (NVS, namespace `deckpanel`, key `wifi`), not in the firmware image, so flashing a new build keeps it. A full flash erase loses it. NVS isn't encrypted here: anyone with the panel and a USB cable can read the password out of flash.
+
+**To set up again** (a new network, a wrong password): on the "Joining Wi-Fi…" or "Waiting for DeckBridge" screen, hold the screen for 5 s. The panel forgets the network and restarts into setup. A wrong password leaves the panel at "Joining Wi-Fi…" forever, so this is the way out; the screen says so.
+
+**What is never shown or logged:** the saved password. Serial shows the network's name, the setup network's name and the page address, never a password. The setup password is shown only on the panel's screen. CI's `check_secret_logs.py` fails any `src/` line that would log the password.
 
 The panel joins 2.4 GHz networks only. An iPhone hotspot needs **Maximize Compatibility** on (Settings › Personal Hotspot); on 5 GHz the panel stays at "Joining Wi-Fi…" forever, which is also what a wrong password looks like.
+
+**Owner check on the panel:**
+
+- [ ] Fresh flash after an erase: the setup screen shows a name and password; the phone sees the network and the page opens.
+- [ ] Save a 2.4 GHz network: "saved" page, restart, "Waiting for DeckBridge" with an address; the feed works.
+- [ ] Power cycle: it rejoins without setup.
+- [ ] A wrong password: stuck at "Joining Wi-Fi…"; hold 5 s: back to setup with a new password.
+- [ ] Serial from boot to joined: no password anywhere.
 
 ## Flash
 
@@ -75,15 +89,15 @@ esptool.py --port /dev/cu.wchusbserial210 write_flash 0 <the backup file>
 
 ## What the deck view shows
 
-- At boot, before Wi-Fi: "Joining Wi-Fi..." (or "Wi-Fi isn't set" in a build without credentials).
+- At boot with a saved network: "Joining Wi-Fi…". With none saved: the setup screen (see Wi-Fi).
 - On Wi-Fi with no feed: "Waiting for DeckBridge" and the panel's address and port, e.g. `192.168.1.40  port 9100`. Type those into DeckBridge's Settings, Display feed.
 - With the feed: the deck screen below. Long titles and artists end in `…`. Characters outside the fonts (see Fonts) show as `?`.
 - No feed for 3 seconds, or Wi-Fi lost: the waiting screen again. Wi-Fi rejoins by itself.
-- On serial: `deck panel: joining Wi-Fi`, then `on Wi-Fi at <address>, feed port 9100` and `feed port 9100 open`. The network's name is never logged.
+- On serial: `deck panel: joining Wi-Fi "<name>"`, then `on Wi-Fi at <address>, feed port 9100` and `feed port 9100 open`. In setup: `setup network DeckPanel-XXXX up, page at http://192.168.4.1/`. No password is ever logged.
 
 ## The deck screen
 
-800×480, black, every object at a fixed place and size (`src/deck_view.cpp`):
+800×480, black, every object at a fixed place and size (`lib/deck_core/deck_layout.h`, drawn by `src/deck_view.cpp`):
 
 | Where (x, y, px) | What |
 |---|---|

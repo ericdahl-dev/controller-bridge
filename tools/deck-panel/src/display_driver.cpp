@@ -23,6 +23,9 @@
 #include "bounce_budget.h"
 #include "frame_pacing.h"
 #include "panel_mcu.h"
+#ifdef PANEL_PERF_LOG
+#include "perf_log.h"
+#endif
 #include "scan_watch.h"
 #include "swap_gate.h"
 
@@ -101,6 +104,15 @@ portMUX_TYPE g_scan_lock = portMUX_INITIALIZER_UNLOCKED;
 // Written only by the vsync interrupt; read without a reset, so no read-modify-write races it.
 volatile uint32_t g_vsyncs = 0;
 
+#ifdef PANEL_PERF_LOG
+// The frame ledger's stamps (#662), perf build only: written by release_swap() in the panel interrupt under
+// g_scan_lock, read by LVGL's task, which replays them into the ledger (perf_log). A latch is where the panel takes
+// the next frame's buffer: the frame-end callback in bounce mode, the vsync without; the ledger's frame boundary.
+uint32_t g_latches = 0;     // running count
+uint32_t g_latch_us = 0;    // the last one
+uint32_t g_release_us = 0;  // the last latch that released a swap: that frame's start of scan-out
+#endif
+
 // LVGL's task only.
 struct {
     uint32_t vsyncs_seen;
@@ -114,7 +126,18 @@ struct {
 // flash cache is off, and calling the gate's flash-resident code from here is fine.
 bool IRAM_ATTR release_swap() {
     BaseType_t woke = pdFALSE;
-    if (g_gate.vsync()) xSemaphoreGiveFromISR(g_vsync_sem, &woke);
+    const bool released = g_gate.vsync();
+#ifdef PANEL_PERF_LOG
+    // Stamps only, before the give, so the waiter that takes it reads this release's time. Its own clock read, a
+    // fraction of a microsecond after the caller's, so the production callers stay as they are.
+    const uint32_t now_us = static_cast<uint32_t>(esp_timer_get_time());
+    portENTER_CRITICAL_ISR(&g_scan_lock);
+    ++g_latches;
+    g_latch_us = now_us;
+    if (released) g_release_us = now_us;
+    portEXIT_CRITICAL_ISR(&g_scan_lock);
+#endif
+    if (released) xSemaphoreGiveFromISR(g_vsync_sem, &woke);
     return woke == pdTRUE;
 }
 
@@ -152,10 +175,19 @@ void flush_cb(lv_display_t* disp, const lv_area_t*, uint8_t* px_map) {
     (void)esp_lcd_panel_draw_bitmap(g_panel, 0, 0, board::LCD_WIDTH, board::LCD_HEIGHT, px_map);
     g_perf.draw_bitmap_us += static_cast<uint32_t>(esp_timer_get_time() - start);
     ++g_perf.swaps;
+#ifdef PANEL_PERF_LOG
+    // The latches so far count as before this swap; taken here, handed to the ledger after the gate is armed, so the
+    // ledger adds nothing between the two.
+    const DisplayLatch latch = display_latch();
+    const uint32_t swapped_us = static_cast<uint32_t>(esp_timer_get_time());
+#endif
     // A vsync that came between the last timeout and its waited() left a give behind; drop it, or it releases this
     // frame before its vsync. Nothing can give for this swap until swapped() arms the gate.
     xSemaphoreTake(g_vsync_sem, 0);
     g_gate.swapped();
+#ifdef PANEL_PERF_LOG
+    perf_log::frame_swapped(latch.count, latch.us, swapped_us);
+#endif
 }
 
 // With this set, LVGL calls it instead of spinning on flushing, before every flush and after every frame. Only a swap
@@ -169,6 +201,15 @@ void flush_wait_cb(lv_display_t* disp) {
     const bool got = xSemaphoreTake(g_vsync_sem, pdMS_TO_TICKS(SWAP_TIMEOUT_MS)) == pdTRUE;
     g_perf.flush_wait_us += static_cast<uint32_t>(esp_timer_get_time() - start);
     g_gate.waited(got);
+#ifdef PANEL_PERF_LOG
+    // The give orders this read after the release's stamp. A timeout has no release: its glass time is unknown.
+    if (got) {
+        portENTER_CRITICAL(&g_scan_lock);
+        const uint32_t release_us = g_release_us;
+        portEXIT_CRITICAL(&g_scan_lock);
+        perf_log::frame_on_glass(release_us);
+    }
+#endif
     lv_display_flush_ready(disp);
 }
 
@@ -324,6 +365,15 @@ scan_watch::Report display_take_scan() {
     portEXIT_CRITICAL(&g_scan_lock);
     return r;
 }
+
+#ifdef PANEL_PERF_LOG
+DisplayLatch display_latch() {
+    portENTER_CRITICAL(&g_scan_lock);
+    const DisplayLatch l = {g_latches, g_latch_us};
+    portEXIT_CRITICAL(&g_scan_lock);
+    return l;
+}
+#endif
 
 uint32_t display_copy_budget_us() { return bounce_budget::chunk_ns(TIMING, PANEL_BOUNCE_PX) / 1000u; }
 

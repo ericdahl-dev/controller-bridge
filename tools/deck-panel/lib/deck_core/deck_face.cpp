@@ -2,14 +2,19 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+
+#include "font_fallback.h"
 
 namespace deck_core {
 
 namespace {
 
+/// `text` fitted to the fonts: a character they lack is "?". For the texts from outside (title, artist, key); the
+/// numbers and times are printed here in ASCII, which the fonts have.
 template <size_t N>
 void copy(char (&out)[N], const char* text) {
-    std::snprintf(out, N, "%s", text);
+    font_fallback::fit(text, out, N);
 }
 
 /// Whole seconds as "m:ss", or "h:mm:ss" past an hour, after `sign`. Negative counts as 0.
@@ -57,12 +62,16 @@ void tenths_text(char (&out)[N], const char* sign, float x, const char* unit = "
 
 float clamp01(float x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
+/// `fraction`, clamped to 0-1, of `span`, in whole pixels, half away from zero.
+int32_t pixels(float fraction, int span) { return static_cast<int32_t>(std::lround(clamp01(fraction) * span)); }
+
 }  // namespace
 
 Face face(const DeckView& view) {
     Face f;
     if (view.deck >= 1 && view.deck <= 4) std::snprintf(f.deck, sizeof f.deck, "%d", view.deck);
-    f.color = view.color;
+    // Black is the background: a deck without a color shows white.
+    f.deck_color = view.color == 0 ? palette::kWhite : view.color;
     if (!view.loaded) {
         // Empty: the deck and "No track loaded", nothing else, never the last track.
         copy(f.title, kNoTrack);
@@ -85,20 +94,46 @@ Face face(const DeckView& view) {
     time_text(f.elapsed, "", view.elapsed);
     // 0 is no known length.
     if (view.remaining > 0) time_text(f.remaining, "-", view.remaining);
-    f.progress = clamp01(view.progress);
-    f.end_warning = view.remaining > 0 && view.remaining <= kEndWarningSeconds;
-    if (view.beat >= 1 && view.beat <= 4) f.beat = view.beat;
-    f.playing = view.playing;
-    f.cue = view.cue;
-    f.sync = view.sync;
-    f.master = view.master;
-    f.loop = view.loop;
-    loop_text(f.loop_length, view.loop_length);
+    f.progress_px = pixels(view.progress, layout::kWidth);
+    if (view.remaining > 0 && view.remaining <= kEndWarningSeconds) f.progress_color = palette::kWarning;
+    if (view.beat >= 1 && view.beat <= 4) f.beat_color[view.beat - 1] = f.deck_color;
+    const bool lit[kLamps] = {view.playing, view.cue, view.sync, view.master, view.loop};
+    for (int i = 0; i < kLamps; ++i) {
+        if (!lit[i]) continue;
+        f.lamp_color[i] = palette::kLamp[i];
+        f.lamp_text_color[i] = palette::kBlack;
+    }
+    char length[24] = "";
+    loop_text(length, view.loop_length);
+    if (length[0]) std::snprintf(f.loop_label, sizeof f.loop_label, "LOOP %s", length);
     // Below 0 is unknown (-1): no marker, never one parked in the middle as if in phase.
-    f.phase_shown = view.phase >= 0;
-    if (f.phase_shown) f.phase = clamp01(view.phase);
-    f.level = clamp01(view.level);
+    if (view.phase >= 0) f.phase_px = pixels(view.phase, layout::kPhaseTravel);
+    f.level_px = pixels(view.level, layout::kMeterH);
     return f;
+}
+
+namespace {
+
+bool same(uint32_t a, uint32_t b) { return a == b; }
+bool same(int32_t a, int32_t b) { return a == b; }
+template <size_t N>
+bool same(const char (&a)[N], const char (&b)[N]) {
+    return std::strcmp(a, b) == 0;
+}
+
+}  // namespace
+
+Changes changed(const Face& was, const Face& now) {
+    Changes c;
+#define DECK_CHANGED_ONE(name) \
+    if (!same(was.name, now.name)) c.set(Part::name);
+#define DECK_CHANGED_MANY(name, n) \
+    for (int i = 0; i < (n); ++i)  \
+        if (!same(was.name[i], now.name[i])) c.set(Part::name, i);
+    DECK_FACE_FIELDS(DECK_CHANGED_ONE, DECK_CHANGED_MANY)
+#undef DECK_CHANGED_ONE
+#undef DECK_CHANGED_MANY
+    return c;
 }
 
 }  // namespace deck_core

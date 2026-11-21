@@ -22,8 +22,9 @@ SITE_ONLY = ["website/*", "scripts/check_site.py", "scripts/test_check_site.py",
 # drawn display's reference images (#464), which the Kit tests check against the Swift renderer, and the display feed's
 # example messages (#490), which the Kit tests walk too.
 ALSO_MAC = ["tools/lc6000-display-fw/vectors/*", "tools/lc6000-display-fw/test/ref/*", "tools/deck-panel/feed/*"]
-# What the Deck panel job (#615) builds and tests, and CI itself, so a change to the job runs it.
-DECK_PANEL = ["tools/deck-panel/*", ".github/workflows/ci.yml"]
+# What the Deck panel job (#615) builds and tests, and CI itself, so a change to the job runs it. The icon SVG the
+# panel's logo is made from (#651), whose drift test the job runs (#669).
+DECK_PANEL = ["tools/deck-panel/*", ".github/workflows/ci.yml", "design/icon/icon-1-deck-ring.svg"]
 
 
 def site_only(path):
