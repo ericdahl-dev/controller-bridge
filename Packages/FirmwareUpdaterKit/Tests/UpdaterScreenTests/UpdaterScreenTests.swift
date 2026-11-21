@@ -68,6 +68,45 @@ struct UpdaterScreenTests {
         #expect(screen.panel.detail == "Build 1d0683f-dirty (a development build)")
     }
 
+    @Test("#695's boot line: the build and its version, both read",
+          arguments: [
+              ("deck panel: boot, build 1d0683f", PanelBuild(sha: "1d0683f")),
+              ("deck panel: boot, build 1d0683f, version 1.2.0", PanelBuild(sha: "1d0683f", version: FirmwareVersion("1.2.0"))),
+              ("deck panel: boot, build 1d0683f, version 1.10", PanelBuild(sha: "1d0683f", version: FirmwareVersion("1.10"))),
+          ])
+    func panelVersion(line: String, build: PanelBuild) async {
+        let rig = Rig()
+        Self.panel(rig, printing: [line])
+        #expect(await rig.finder.find().panel == .onSerial(build: build))
+    }
+
+    @Test("A local or development build gives no version, so the SHA decides; the SHA reads as printed",
+          arguments: [
+              ("deck panel: boot, build 1d0683f, version 1.2.0 local", "1d0683f"),
+              ("deck panel: boot, build 1d0683f-dirty, version 1.2.0 local", "1d0683f-dirty"),
+              ("deck panel: boot, build 1d0683f-dirty, version 1.2.0", "1d0683f-dirty"),
+          ])
+    func panelLocalBuildHasNoVersion(line: String, sha: String) async {
+        let rig = Rig()
+        Self.panel(rig, printing: [line])
+        #expect(await rig.finder.find().panel == .onSerial(build: PanelBuild(sha: sha)))
+    }
+
+    @Test("A boot line whose version tail isn't dotted digits: build not read",
+          arguments: [
+              "deck panel: boot, build 1d0683f, version ",
+              "deck panel: boot, build 1d0683f, version 1.x",
+              "deck panel: boot, build 1d0683f, version +1.2",
+              "deck panel: boot, build 1d0683f, version 1..2",
+              "deck panel: boot, build 1d0683f, version 1.2.0 beta",
+              "deck panel: boot, build 1d0683f, 1.2.0",
+          ])
+    func panelBadVersion(line: String) async {
+        let rig = Rig()
+        Self.panel(rig, printing: [line])
+        #expect(await rig.finder.find().panel == .onSerial(build: nil))
+    }
+
     @Test("An LC6000 on MIDI (DeckBridge's port names): found, firmware not checked yet")
     func lc6000OnMIDI() async {
         let rig = Rig()
