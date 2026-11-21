@@ -1,7 +1,7 @@
 import DeviceFinder
 
 /// One section of the app, as the owner reads it.
-public struct Section: Sendable, Equatable {
+public struct DeviceSection: Sendable, Equatable {
     public let status: String
     public let detail: String?
     /// A warning the owner must accept before anything else in the section shows or can be used.
@@ -16,8 +16,8 @@ public struct Section: Sendable, Equatable {
 
 /// The app's two sections (#685).
 public struct UpdaterScreen: Sendable, Equatable {
-    public let panel: Section
-    public let lc6000: Section
+    public let panel: DeviceSection
+    public let lc6000: DeviceSection
 
     /// The LC6000 section's own warning (#685, spec #684 story 9), so someone who owns only a panel never starts on it.
     public static let lc6000Warning = """
@@ -28,23 +28,23 @@ public struct UpdaterScreen: Sendable, Equatable {
 
     public init(found: Found, lc6000WarningAccepted: Bool) {
         switch found.panel {
-        case nil: panel = Section(status: "Nothing connected")
-        case .driverMissing: panel = Section(status: "Deck panel found", detail: "The USB driver for its chip is missing")
+        case nil: panel = DeviceSection(status: "Nothing connected")
+        case .driverMissing: panel = DeviceSection(status: "Deck panel found", detail: "The USB driver for its chip is missing")
         case .onSerial(let build?):
             let development = build.sha.hasSuffix(DeviceFinder.dirty) ? " (a development build)" : ""
-            panel = Section(status: "Deck panel found", detail: "Build \(build.sha)\(development)")
+            panel = DeviceSection(status: "Deck panel found", detail: "Build \(build.sha)\(development)")
         case .onSerial(nil):
-            panel = Section(status: "Deck panel found",
+            panel = DeviceSection(status: "Deck panel found",
                             detail: "Build not read: unplug the panel and plug it back in to read it")
         }
         guard lc6000WarningAccepted else {
-            lc6000 = Section(status: "Read the warning first", warning: Self.lc6000Warning)
+            lc6000 = DeviceSection(status: "Read the warning first", warning: Self.lc6000Warning)
             return
         }
         switch found.lc6000 {
-        case nil: lc6000 = Section(status: "Nothing connected")
-        case .onMIDI: lc6000 = Section(status: "LC6000 found", detail: "Firmware not checked yet")
-        case .updateMode: lc6000 = Section(status: "A device in update mode, maybe an LC6000")
+        case nil: lc6000 = DeviceSection(status: "Nothing connected")
+        case .onMIDI: lc6000 = DeviceSection(status: "LC6000 found", detail: "Firmware not checked yet")
+        case .updateMode: lc6000 = DeviceSection(status: "A device in update mode, maybe an LC6000")
         }
     }
 }
