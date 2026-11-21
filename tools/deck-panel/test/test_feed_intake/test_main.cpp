@@ -3,9 +3,11 @@
 #include <unity.h>
 
 #include <cstdlib>
+#include <deque>
 #include <vector>
 
 #include "deck_core.h"
+#include "feed_drain.h"
 #include "feed_intake.h"
 
 void setUp() {}
@@ -22,6 +24,23 @@ static std::vector<uint8_t> deck_message(uint8_t deck) {
     out.insert(out.end(), value, value + 4);
     return out;
 }
+
+/// Datagrams waiting on a fake socket, the board's seam (feed_drain::Socket).
+struct FakeSocket : feed_drain::Socket {
+    std::deque<std::vector<uint8_t>> waiting;
+    size_t next_size() override { return waiting.empty() ? 0 : waiting.front().size(); }
+    size_t read(uint8_t* into, size_t room) override {
+        std::vector<uint8_t> d = waiting.front();
+        waiting.pop_front();
+        size_t n = d.size() < room ? d.size() : room;
+        for (size_t i = 0; i < n; ++i) into[i] = d[i];
+        return n;
+    }
+    void skip() override { waiting.pop_front(); }
+};
+
+static uint64_t g_us = 0;
+static uint64_t ticking_us() { return g_us += 250; }  // 250 us a look
 
 struct Last : deck_core::Screen {
     int deck = -1;
@@ -107,11 +126,33 @@ void test_a_datagram_too_big_is_counted_and_never_queued() {
     TEST_ASSERT_EQUAL(1, intake.drain(core).count);
 }
 
+// From a socket (the receive side's seam): everything waiting is taken, each stamped when it's read off the socket;
+// one too big is skipped unread and counted, and one with the queue full is skipped and counted as dropped.
+void test_pumping_a_socket_stamps_each_datagram_as_it_is_taken() {
+    feed_intake::Intake intake;
+    FakeSocket socket;
+    socket.waiting = {deck_message(1), std::vector<uint8_t>(feed_intake::kMaxDatagram + 1, 0), deck_message(3)};
+    g_us = 1000000;
+    TEST_ASSERT_EQUAL(2, intake.pump(socket, ticking_us));
+    TEST_ASSERT_TRUE(socket.waiting.empty());
+    TEST_ASSERT_EQUAL_UINT32(1, intake.too_big());
+    deck_core::DeckCore core;
+    connect(core);
+    const feed_intake::Drained got = intake.drain(core);
+    TEST_ASSERT_EQUAL(2, got.count);
+    TEST_ASSERT_EQUAL_UINT64(1000750, got.newest_us);  // the third look
+    for (size_t i = 0; i <= feed_intake::kSlots; ++i) socket.waiting.push_back(deck_message(2));
+    TEST_ASSERT_EQUAL(int(feed_intake::kSlots), intake.pump(socket, ticking_us));
+    TEST_ASSERT_TRUE(socket.waiting.empty());
+    TEST_ASSERT_EQUAL_UINT32(1, intake.dropped());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_the_core_gets_each_datagram_at_its_arrival_not_its_read);
     RUN_TEST(test_a_frame_takes_everything_since_the_last_in_order_and_knows_the_newest);
     RUN_TEST(test_a_full_queue_drops_the_newcomer_and_counts_it);
     RUN_TEST(test_a_datagram_too_big_is_counted_and_never_queued);
+    RUN_TEST(test_pumping_a_socket_stamps_each_datagram_as_it_is_taken);
     return UNITY_END();
 }

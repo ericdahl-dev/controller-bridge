@@ -6,6 +6,7 @@
 #include <cstdint>
 
 #include "deck_core.h"
+#include "feed_drain.h"
 
 namespace feed_intake {
 
@@ -20,11 +21,17 @@ struct Drained {
     uint64_t newest_us = 0;
 };
 
+/// Microseconds, esp_timer's clock on the board.
+using ClockUs = uint64_t (*)();
+
 class Intake {
 public:
     /// Queues a datagram that arrived at `at_us` (microseconds, esp_timer's clock). False if it wasn't kept: bigger than
     /// kMaxDatagram (counted in too_big), or the queue was full, so the newcomer is dropped and counted, and what's queued stays.
     bool push(const uint8_t* bytes, size_t length, uint64_t at_us);
+    /// Takes every datagram waiting on `socket` into the queue, each stamped by `clock` as it's found, read straight
+    /// into its slot; one too big, or one with the queue full, is skipped unread and counted. Returns how many it kept.
+    int pump(feed_drain::Socket& socket, ClockUs clock);
     /// Feeds the core every datagram queued, oldest first, each at its arrival (in ms, millis' clock).
     Drained drain(deck_core::DeckCore& core);
     /// Since boot: datagrams dropped because the queue was full, and because they were bigger than kMaxDatagram.

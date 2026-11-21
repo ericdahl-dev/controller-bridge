@@ -21,6 +21,29 @@ bool Intake::push(const uint8_t* bytes, size_t length, uint64_t at_us) {
     return true;
 }
 
+int Intake::pump(feed_drain::Socket& socket, ClockUs clock) {
+    int kept = 0;
+    for (size_t size = socket.next_size(); size > 0; size = socket.next_size()) {
+        const uint64_t at_us = clock();
+        if (size > kMaxDatagram) {
+            ++too_big_;
+            socket.skip();
+            continue;
+        }
+        if (tail_ - head_ == kSlots) {
+            ++dropped_;
+            socket.skip();
+            continue;
+        }
+        Slot& slot = slots_[tail_ % kSlots];
+        slot.length = socket.read(slot.bytes, sizeof slot.bytes);
+        slot.at_us = at_us;
+        ++tail_;
+        ++kept;
+    }
+    return kept;
+}
+
 Drained Intake::drain(deck_core::DeckCore& core) {
     Drained got;
     while (head_ != tail_) {
