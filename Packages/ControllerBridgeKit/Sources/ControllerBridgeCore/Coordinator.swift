@@ -298,8 +298,9 @@ public final class Coordinator {
     /// Takes the display feed and its setting from the real Coordinator, for the demo's while it runs (#625). The
     /// destination is already open, so the first snapshot goes out once the demo's deck is known.
     public func takeDisplayFeed(from real: Coordinator) {
-        guard let (sender, settings) = real.displayFeed.release() else { return }
+        guard let (sender, settings, greeted) = real.displayFeed.release() else { return }
         displayFeed.attach(sender)
+        displayFeed.carryGreeting(greeted)
         displayFeed.set(settings, at: clock.now)
         status.requiredSubscriptions = requiredSubscriptions
         displayFeedReady()
@@ -308,8 +309,9 @@ public final class Coordinator {
     /// Takes the display feed back from the demo's Coordinator when it ends (#625), with a full snapshot. Its own
     /// setting stays: a change made during the demo waited for the real Coordinator and is already applied.
     public func takeBackDisplayFeed(from demo: Coordinator) {
-        guard let (sender, _) = demo.displayFeed.release() else { return }
+        guard let (sender, _, greeted) = demo.displayFeed.release() else { return }
         displayFeed.attach(sender)
+        displayFeed.carryGreeting(greeted)
         displayFeedReady()
     }
 
@@ -669,6 +671,14 @@ public final class Coordinator {
         // Every controller gone says the goodbye already; this covers a display with none connected.
         jogController.disconnect()
         jogController.flush()
+        displayFeedGoodbye()
+    }
+
+    /// The display feed's goodbye, last, and its sends flushed (#651): on quit, from whichever Coordinator holds the feed
+    /// (the demo's while it runs).
+    public func displayFeedGoodbye() {
+        displayFeed.goodbye()
+        displayFeed.flush()
     }
 
     /// The Mac is about to sleep: release everything held, since the controller may be gone on wake.

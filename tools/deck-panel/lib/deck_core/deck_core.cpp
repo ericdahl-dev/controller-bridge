@@ -172,17 +172,38 @@ const Row kRows[] = {
 }  // namespace
 
 void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
+    static const char kBundle[8] = {'#', 'b', 'u', 'n', 'd', 'l', 'e', 0};
+    bool alive = false;
+    if (length >= 16 && std::memcmp(bytes, kBundle, 8) == 0) {
+        // A bundle (#636): "#bundle", a timetag (ignored: the feed's are "immediately"), then elements, each a size
+        // and that many bytes. One arrival for the whole bundle.
+        size_t at = 16;
+        while (at + 4 <= length) {
+            const uint32_t size = uint32_t(bytes[at]) << 24 | uint32_t(bytes[at + 1]) << 16 |
+                                  uint32_t(bytes[at + 2]) << 8 | uint32_t(bytes[at + 3]);
+            at += 4;
+            if (size == 0 || size % 4 != 0 || size > length - at) break;  // the framing can't be trusted past here
+            alive = apply(bytes + at, size) || alive;
+            at += size;
+        }
+    } else {
+        alive = apply(bytes, length);
+    }
+    if (!alive) return;
+    heard_ = true;
+    last_heard_ms_ = now_ms;
+}
+
+bool DeckCore::apply(const uint8_t* bytes, size_t length) {
     Message message;
-    if (!parse(bytes, length, message)) return;
+    if (!parse(bytes, length, message)) return false;
     // An address this panel doesn't know is a newer DeckBridge's (ADR 0011): ignored, but the feed is alive.
     bool alive = true;
     for (const Row& row : kRows) {
         if (std::strcmp(row.name, message.name) != 0) continue;
         alive = row.type == message.type && row.apply(view_, message);
     }
-    if (!alive) return;
-    heard_ = true;
-    last_heard_ms_ = now_ms;
+    return alive;
 }
 
 void DeckCore::set_network(Network state, const char* ip) {
