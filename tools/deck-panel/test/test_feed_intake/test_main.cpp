@@ -4,7 +4,10 @@
 
 #include <cstdlib>
 #include <new>
+#include <atomic>
+#include <cstring>
 #include <deque>
+#include <thread>
 #include <vector>
 
 #include "deck_core.h"
@@ -190,6 +193,51 @@ void test_taking_and_draining_datagrams_uses_no_heap() {
     TEST_ASSERT_EQUAL(before, allocations);
 }
 
+/// Checks what a drain hands over: each datagram's sequence number, in order, and its bytes whole.
+struct Checker {
+    uint32_t next = 0;
+    uint32_t bad = 0;
+    void feed(const uint8_t* bytes, size_t length, uint32_t) {
+        uint32_t seq;
+        std::memcpy(&seq, bytes, sizeof seq);
+        if (seq < next) ++bad;  // out of order, or seen twice
+        next = seq + 1;
+        if (length != 200) ++bad;
+        for (size_t i = sizeof seq; i < length; ++i) {
+            if (bytes[i] != uint8_t(seq + i)) ++bad;
+        }
+    }
+};
+
+// The receive side and the loop on two threads at once, as on the board (lwIP's task and the loop): every datagram
+// is kept or counted dropped, none twice, in order and whole.
+void test_two_tasks_at_once_lose_nothing_uncounted_and_tear_nothing() {
+    static feed_intake::Intake intake;
+    constexpr uint32_t kCount = 200000;
+    std::atomic<bool> done{false};
+    uint32_t kept = 0;
+    std::thread receiver([&] {
+        uint8_t d[200];
+        for (uint32_t seq = 0; seq < kCount; ++seq) {
+            std::memcpy(d, &seq, sizeof seq);
+            for (size_t i = sizeof seq; i < sizeof d; ++i) d[i] = uint8_t(seq + i);
+            if (intake.push(d, sizeof d, seq)) ++kept;
+        }
+        done = true;
+    });
+    Checker checker;
+    uint32_t fed = 0;
+    for (bool last = false; !last;) {
+        last = done.load();
+        fed += intake.drain_into(checker).count;
+    }
+    receiver.join();
+    fed += intake.drain_into(checker).count;
+    TEST_ASSERT_EQUAL_UINT32(0, checker.bad);
+    TEST_ASSERT_EQUAL_UINT32(kept, fed);
+    TEST_ASSERT_EQUAL_UINT32(kCount, fed + intake.dropped());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_the_core_gets_each_datagram_at_its_arrival_not_its_read);
@@ -198,5 +246,6 @@ int main(int, char**) {
     RUN_TEST(test_a_datagram_too_big_is_counted_and_never_queued);
     RUN_TEST(test_pumping_a_socket_stamps_each_datagram_as_it_is_taken);
     RUN_TEST(test_taking_and_draining_datagrams_uses_no_heap);
+    RUN_TEST(test_two_tasks_at_once_lose_nothing_uncounted_and_tear_nothing);
     return UNITY_END();
 }

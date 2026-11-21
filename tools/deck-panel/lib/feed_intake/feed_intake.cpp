@@ -4,20 +4,26 @@
 
 namespace feed_intake {
 
+Intake::Slot* Intake::free_slot() {
+    const uint32_t tail = tail_.load(std::memory_order_relaxed);
+    if (tail - head_.load(std::memory_order_acquire) == kSlots) return nullptr;
+    return &slots_[tail % kSlots];
+}
+
 bool Intake::push(const uint8_t* bytes, size_t length, uint64_t at_us) {
     if (length > kMaxDatagram) {
-        ++too_big_;
+        count(too_big_);
         return false;
     }
-    if (tail_ - head_ == kSlots) {
-        ++dropped_;
+    Slot* slot = free_slot();
+    if (!slot) {
+        count(dropped_);
         return false;
     }
-    Slot& slot = slots_[tail_ % kSlots];
-    std::memcpy(slot.bytes, bytes, length);
-    slot.length = length;
-    slot.at_us = at_us;
-    ++tail_;
+    std::memcpy(slot->bytes, bytes, length);
+    slot->length = length;
+    slot->at_us = at_us;
+    publish();
     return true;
 }
 
@@ -26,34 +32,22 @@ int Intake::pump(feed_drain::Socket& socket, ClockUs clock) {
     for (size_t size = socket.next_size(); size > 0; size = socket.next_size()) {
         const uint64_t at_us = clock();
         if (size > kMaxDatagram) {
-            ++too_big_;
+            count(too_big_);
             socket.skip();
             continue;
         }
-        if (tail_ - head_ == kSlots) {
-            ++dropped_;
+        Slot* slot = free_slot();
+        if (!slot) {
+            count(dropped_);
             socket.skip();
             continue;
         }
-        Slot& slot = slots_[tail_ % kSlots];
-        slot.length = socket.read(slot.bytes, sizeof slot.bytes);
-        slot.at_us = at_us;
-        ++tail_;
+        slot->length = socket.read(slot->bytes, sizeof slot->bytes);
+        slot->at_us = at_us;
+        publish();
         ++kept;
     }
     return kept;
-}
-
-Drained Intake::drain(deck_core::DeckCore& core) {
-    Drained got;
-    while (head_ != tail_) {
-        const Slot& slot = slots_[head_ % kSlots];
-        core.feed(slot.bytes, slot.length, static_cast<uint32_t>(slot.at_us / 1000));
-        got.newest_us = slot.at_us;
-        ++head_;
-        ++got.count;
-    }
-    return got;
 }
 
 }  // namespace feed_intake
