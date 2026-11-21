@@ -22,6 +22,8 @@ public struct PublishedRelease: Sendable {
 /// Why a fetched release wasn't used. The built-in catalog stays in use whatever the reason.
 public enum Refusal: Error, Sendable, Equatable {
     case badSignature
+    /// Signed, by its own account, with a key the app doesn't trust.
+    case unknownKey(String)
 }
 
 public struct FetchOutcome: Sendable {
@@ -56,9 +58,8 @@ public struct ReleaseFetcher: Sendable {
         let published = try await feed.latest()
         // Nothing in the manifest is used before its signature checks out, except the name of the key to check it with.
         let claimed = try JSONDecoder().decode(KeyName.self, from: published.manifest).key
-        guard let key = keys.first(where: { $0.id == claimed }), key.signed(published.manifest, published.signature) else {
-            throw Refusal.badSignature
-        }
+        guard let key = keys.first(where: { $0.id == claimed }) else { throw Refusal.unknownKey(claimed) }
+        guard key.signed(published.manifest, published.signature) else { throw Refusal.badSignature }
         let manifest = try JSONDecoder().decode(Manifest.self, from: published.manifest)
         let folder = cache.appending(path: "fetched")
         try? FileManager.default.removeItem(at: folder)

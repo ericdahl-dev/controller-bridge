@@ -32,3 +32,21 @@ import FirmwareRelease
         .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
     #expect(outcome.refusal == .badSignature)
 }
+
+@Test func aReleaseSignedByAKeyTheAppDoesNotTrustIsRefusedByName() async throws {
+    let stranger = TestKey(id: "someone-else")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: stranger)
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [TestKey(id: "primary").trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .unknownKey("someone-else"))
+}
+
+/// ADR 0012: the app trusts the offline backup key from day one, so a release signed with it after the primary is lost works.
+@Test func aReleaseSignedByTheBackupKeyIsAccepted() async throws {
+    let primary = TestKey(id: "primary"), backup = TestKey(id: "backup")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: backup)
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted, backup.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == nil)
+    #expect(outcome.catalog.newestPanel()?.version == FirmwareVersion("1.1.0"))
+}
