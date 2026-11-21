@@ -514,13 +514,36 @@ struct DisplayFeedCoordinatorTests {
         #expect(beats() == [Self.message("beat", Int32(0))])
     }
 
-    @Test("An empty deck sends beat 0 whatever the clock")
+    @Test("clockBpm is Syndicate's master BPM while its clock runs, to 2 decimals; 0 before the clock, and once it's been quiet for over 2 s (#674)")
+    func clockBpm() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        func clock() -> [OSCMessage] { feed.sent.filter { $0.address.hasSuffix("/clockBpm") } }
+        feed.sent.removeAll()
+        rig.clock.now = 0.5
+        // The master BPM alone, with no clock yet, isn't a running clock.
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/BPM", [.float(127.996)]))
+        rig.coordinator.tick()
+        #expect(clock() == [])
+        rig.clock.now = 0.6
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(1)]))
+        #expect(clock() == [Self.message("clockBpm", Float(128))])
+        feed.sent.removeAll()
+        rig.clock.now = 2.61
+        rig.coordinator.tick()
+        #expect(clock() == [Self.message("clockBpm", Float(0))])
+    }
+
+    @Test("An empty deck sends beat 0 and clockBpm 0 whatever the clock")
     func emptyDeckBeat() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
         rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/Loaded", [.int(0)]))
         Self.turnOn(rig)
         feed.sent.removeAll()
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/BPM", [.float(128)]))
         rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(3)]))
         #expect(feed.sent == [])
     }
