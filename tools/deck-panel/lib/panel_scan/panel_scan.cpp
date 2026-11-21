@@ -111,7 +111,7 @@ void Scan::copied(uint32_t took_us, uint64_t now_us, bool drawing) {
     meter_.copied(took_us);
     if (static_cast<uint64_t>(took_us) * 1000 > copy_budget_ns_) {  // the deadline from start(), not per copy
         if (drawing) ++copy_late_drawing_;
-        else if (now_us - latches_.us < kTurnUs) ++copy_late_turn_;
+        else if (now_us - took_us - latches_.us < kTurnUs) ++copy_late_turn_;  // placed by its start
     }
     panel_.unlock();
 }

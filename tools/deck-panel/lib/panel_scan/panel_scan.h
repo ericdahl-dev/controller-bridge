@@ -40,7 +40,7 @@ struct Health {
     scan_watch::Report scan;     ///< vsync-to-frame-end lag, vsync spread, resyncs
     bounce_budget::Report copy;  ///< the copies timed (perf build): worst, margin, late
     uint32_t copy_late_drawing = 0;  ///< of the late, those while the loop drew (#663)
-    uint32_t copy_late_turn = 0;     ///< of the late, the rest within kTurnUs after a latch
+    uint32_t copy_late_turn = 0;     ///< of the late, the rest that started within kTurnUs after a latch
 };
 
 /// How LVGL's flush wait ended. released and timed_out: call lv_display_flush_ready (a timeout is counted).

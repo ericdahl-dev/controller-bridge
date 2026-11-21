@@ -347,6 +347,19 @@ void test_without_bounce_buffers_the_vsync_after_a_latch_is_the_latch() {
     TEST_ASSERT_EQUAL(33333, panel.now_us);
 }
 
+// Where a copy fell is where it started (#663, as the copy line files it): one that starts 2.5 ms after the latch is in
+// the turn even if it ends past 3 ms.
+void test_a_late_copy_is_placed_by_its_start() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{31400, Irq::frame_complete}};
+    panel.run_until(31400);
+    scan.copied(700, 31400 + 3200, false);  // started 2500 us after the latch
+    TEST_ASSERT_EQUAL(1, scan.take_health().copy_late_turn);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
@@ -371,5 +384,6 @@ int main(int, char**) {
     RUN_TEST(test_late_copies_are_counted_where_they_fell);
     RUN_TEST(test_interrupts_during_start_see_the_config);
     RUN_TEST(test_without_bounce_buffers_the_vsync_after_a_latch_is_the_latch);
+    RUN_TEST(test_a_late_copy_is_placed_by_its_start);
     return UNITY_END();
 }
