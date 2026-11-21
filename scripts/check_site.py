@@ -67,6 +67,7 @@ class Page(HTMLParser):
         self.refs = []  # (url, loaded): loaded is "script" for a <script src>, True for other resources, False for links
         self.scripts = []  # src of every <script src>
         self.untracked_mailto = []  # href of every mailto: link without a data-track
+        self.images = []  # (src, alt) of every <img>
         self.no_alt = []  # src of every <img> without an alt attribute
         self.json_ld = []  # the text of each <script type="application/ld+json">
         self._in = None
@@ -96,6 +97,8 @@ class Page(HTMLParser):
             self.refs.append((attrs["href"], not rels or not set(rels) <= LINK_RELS))
         if tag == "script" and (attrs.get("type") or "").strip().lower() == "application/ld+json":
             self._ld = []
+        if tag == "img":
+            self.images.append((attrs.get("src") or "", attrs.get("alt") or ""))
         if tag == "img" and "alt" not in attrs:
             self.no_alt.append(attrs.get("src") or "")
         if attrs.get("src") is not None:
@@ -229,6 +232,14 @@ def check_page(root, file, text):
     out += [f'{file}: <img src="{src}"> has no alt' for src in page.no_alt]
     if COMPANY not in " ".join(" ".join(page.footer_text).split()):
         out.append(f'{file}: the footer doesn\'t name "{COMPANY}"')
+    # v1.1 ships the jog display: it's shown by the app's own renderer (img/jog-display-*), whose alt says what the
+    # ring (the master clock) and the needle (the deck's bar) show; the old teaser art is gone.
+    for src, alt in page.images:
+        name = os.path.basename(urlsplit(src).path)
+        if name == TEASER_ART:
+            out.append(f"{file}: shows the v1.1 teaser art (img/{TEASER_ART}); use the renderer's images (img/jog-display-*)")
+        elif name.startswith("jog-display-") and not ("ring" in alt.lower() and "needle" in alt.lower()):
+            out.append(f"{file}: the alt of {src} doesn't say what the ring and the needle show")
     if not any(target(root, file, src) == os.path.join(os.path.normpath(root), ANALYTICS)
                for src in page.scripts if not is_external(src)):
         out.append(f"{file}: doesn't load {ANALYTICS}")
@@ -305,6 +316,8 @@ def check_capture_prompts(root, app_prompts):
 # parts only, so a planned "DeckBridge 1.2" is free, and not in parentheses, so "Syndicate's mapping (version 0.3.7)" is.
 VERSION_MENTION = re.compile(r"(?:\b[Vv]ersion|\bDeckBridge) (\d+\.\d+\.\d+)(?![\d.]|\s*\))")
 
+
+TEASER_ART = "jog-art.png"
 
 # "Coming in v1.1": a feature promised for a version, which can't still be coming once that version ships.
 COMING = re.compile(r"coming in v(\d+(?:\.\d+){1,2})", re.IGNORECASE)
