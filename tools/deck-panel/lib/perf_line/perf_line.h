@@ -6,6 +6,7 @@
 #include <string>
 
 #include "bounce_budget.h"
+#include "frame_ledger.h"
 #include "scan_watch.h"
 
 
@@ -27,6 +28,7 @@ struct Window {
     scan_watch::Report scan;        // the scan-out's steadiness
     uint32_t copy_budget_us = 0;    // a bounce chunk's deadline
     bounce_budget::Report copy;     // the bounce copies against it; no chunks when the build can't time them
+    frame_ledger::Report ledger;    // feed data's arrival to glass (#662)
 };
 
 std::string format(const Window& w);

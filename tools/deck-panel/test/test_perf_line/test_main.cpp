@@ -39,7 +39,8 @@ void test_the_line_has_every_number_in_one_fixed_order() {
     TEST_ASSERT_EQUAL_STRING(
         "perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, "
         "39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, vsync 25.6-30.0 ms, 1 resyncs, "
-        "copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, internal free 123456",
+        "copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, no feed frames, "
+        "internal free 123456",
         perf_line::format(window()).c_str());
 }
 
@@ -54,7 +55,7 @@ void test_a_window_with_no_frames_says_so_without_dividing_by_zero() {
     TEST_ASSERT_EQUAL_STRING(
         "perf: no frames (nothing changed), 39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, "
         "vsync 25.6-30.0 ms, 1 resyncs, copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, "
-        "internal free 123456",
+        "no feed frames, internal free 123456",
         perf_line::format(w).c_str());
 }
 
@@ -82,11 +83,31 @@ void test_the_copy_numbers_show_an_underrun_and_their_absence() {
     TEST_ASSERT_TRUE(perf_line::format(w).find("copy not timed") != std::string::npos);
 }
 
+// The frame ledger's report (#662): arrival-to-glass lag, typical and worst, and the frames that missed a vsync.
+void test_the_feed_lag_and_skipped_frames_follow_the_feed_counts() {
+    perf_line::Window w = window();
+    w.ledger.frames = 150;
+    w.ledger.lag_typical_us = 21340;
+    w.ledger.lag_worst_us = 48020;
+    w.ledger.skipped = 2;
+    TEST_ASSERT_TRUE(perf_line::format(w).find("1 too big, lag 21.3 worst 48.0 ms, 2 of 150 frames skipped,") !=
+                     std::string::npos);
+}
+
+// No feed data reached the glass: "nothing changed", told apart from a lag of 0.
+void test_a_window_with_no_feed_frames_says_so() {
+    perf_line::Window w = window();
+    w.ledger = {};
+    TEST_ASSERT_TRUE(perf_line::format(w).find("1 too big, no feed frames,") != std::string::npos);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_line_has_every_number_in_one_fixed_order);
     RUN_TEST(test_a_window_with_no_frames_says_so_without_dividing_by_zero);
     RUN_TEST(test_frames_per_second_comes_from_this_windows_own_length);
     RUN_TEST(test_the_copy_numbers_show_an_underrun_and_their_absence);
+    RUN_TEST(test_the_feed_lag_and_skipped_frames_follow_the_feed_counts);
+    RUN_TEST(test_a_window_with_no_feed_frames_says_so);
     return UNITY_END();
 }
