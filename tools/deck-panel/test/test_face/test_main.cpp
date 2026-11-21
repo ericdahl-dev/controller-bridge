@@ -249,6 +249,22 @@ void test_a_loaded_track_at_its_end_shows_minus_0_00_and_a_red_bar() {
     TEST_ASSERT_EQUAL_HEX32(0xFF3B30, f.progress_color);
 }
 
+
+// #682: just loaded, no times told yet (everything 0), and no track at all: no remaining time and no red bar.
+void test_not_told_yet_or_no_track_is_no_end() {
+    DeckView v = loaded_deck();
+    v.elapsed = v.remaining = 0;
+    v.progress = 0;
+    Face f = deck_core::face(v);
+    TEST_ASSERT_EQUAL_STRING("", f.remaining);
+    TEST_ASSERT_EQUAL_HEX32(0xE0E0E0, f.progress_color);
+    v.loaded = false;
+    v.progress = 1;  // whatever else came, an empty deck is never at an end
+    f = deck_core::face(v);
+    TEST_ASSERT_EQUAL_STRING("", f.remaining);
+    TEST_ASSERT_EQUAL_HEX32(0xE0E0E0, f.progress_color);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_empty_deck_shows_no_track_loaded_and_nothing_else);
@@ -261,6 +277,7 @@ int main(int, char**) {
     RUN_TEST(test_the_progress_fill_is_whole_pixels_of_the_704_px_bar);
     RUN_TEST(test_the_bar_turns_red_in_the_last_30_seconds);
     RUN_TEST(test_a_loaded_track_at_its_end_shows_minus_0_00_and_a_red_bar);
+    RUN_TEST(test_not_told_yet_or_no_track_is_no_end);
     RUN_TEST(test_the_beat_lights_its_block_in_the_deck_color);
     RUN_TEST(test_a_deck_without_a_color_shows_white);
     RUN_TEST(test_the_lamps_light_in_their_colors);
