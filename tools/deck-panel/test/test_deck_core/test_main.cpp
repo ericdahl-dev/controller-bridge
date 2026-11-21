@@ -868,6 +868,25 @@ void test_the_setup_screen_has_the_small_logo_and_no_other() {
     TEST_ASSERT_FALSE(screen.last().waiting_changes.logo_small);
 }
 
+// #695: every waiting screen shows the firmware's version beside its SHA, as the board gives it, so the owner can
+// tell which firmware runs. It's drawn with the first screen and doesn't count as a change between waiting screens.
+void test_every_waiting_screen_shows_the_build() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_build("v1.2.0  abc1234");
+    core.set_network(deck_core::Network::setup, "192.168.4.1");
+    core.render(screen, 0);
+    TEST_ASSERT_EQUAL_STRING("v1.2.0  abc1234", screen.last().build.c_str());
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.build);
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 10);
+    TEST_ASSERT_EQUAL_STRING("v1.2.0  abc1234", screen.last().build.c_str());
+    TEST_ASSERT_FALSE(screen.last().waiting_changes.build);
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 20);
+    TEST_ASSERT_EQUAL_STRING("v1.2.0  abc1234", screen.last().build.c_str());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -913,6 +932,7 @@ int main(int, char**) {
     RUN_TEST(test_the_waiting_screen_is_told_only_what_changed);
     RUN_TEST(test_the_waiting_screen_is_told_when_the_logo_changes);
     RUN_TEST(test_the_setup_screen_has_the_small_logo_and_no_other);
+    RUN_TEST(test_every_waiting_screen_shows_the_build);
     RUN_TEST(test_the_waiting_texts_come_fitted_to_the_fonts);
     RUN_TEST(test_the_first_deck_is_every_part_then_only_what_changed);
     RUN_TEST(test_a_change_that_moves_no_pixel_tells_the_screen_nothing);

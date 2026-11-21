@@ -46,6 +46,8 @@ public:
     void set_network(Network state, const char* ip);
     /// The setup network's name and password, for the waiting screen while Network::setup (#622).
     void set_setup(const char* name, const char* password);
+    /// The firmware's version and SHA as one short line, for every waiting screen (#695); the board sets it once.
+    void set_build(const char* label);
     /// Whether the last render() showed the waiting screen (joining and setup included), not the deck: true before the
     /// first render. Hold-to-reset counts only then (#622).
     bool waiting() const { return shown_waiting_; }
@@ -65,6 +67,7 @@ private:
     char ip_[16] = "";
     char setup_name_[24] = "";
     char setup_password_[16] = "";
+    char build_[48] = "";
     // What the screen was last told.
     bool shown_ = false;
     bool shown_waiting_ = true;
