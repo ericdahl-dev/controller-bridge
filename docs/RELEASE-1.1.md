@@ -179,11 +179,12 @@ Groundwork, inactive for the LC6000:
 
 ## 10. Site
 
-- **Who:** agent3. **Gate:** step 6: v1.1.0 is tagged and on TestFlight (release day).
-- The site lives on `main` (#170); Coolify deploys it. agent3's v1.1 site update is held on its own branch, `site-v1.1`, as draft
-  [PR #300](https://github.com/ericdahl-dev/deckbridge/pull/300) (no auto-merge; merging it deploys the site),
-  until release day: "coming in v1.1" becomes shipped, and the jog display goes on the LC6000 page and in the support FAQ. Merge it
-  with `check_site` and the taste-skill gate passing.
+- **Who:** the CoS. **Gate:** step 6: v1.1.0 is tagged and on TestFlight (release day).
+- The site lives on `main` (#170); Coolify deploys it. The v1.1 site update is held as
+  [PR #652](https://github.com/ericdahl-dev/deckbridge/pull/652) (#647; it replaced #300), no auto-merge: merging it deploys the
+  site. It carries [PR #634](https://github.com/ericdahl-dev/deckbridge/pull/634) (#632, the network and privacy wording for the
+  display feed), so the two go live together. Before merging: the re-rendered Diagnostics screenshot, the Display feed screenshot
+  and the owner's photos its body lists, `check_site` passing, and the taste-skill gate.
 - [ ] Merged and deployed.
 
 ## 11. After the release
