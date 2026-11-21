@@ -202,7 +202,9 @@
       <div class="grid grid--top">
         <div class="span-5 stack-4">
           <h2 id="jog-h">The jog display</h2>
-          <p>Turn on <strong>Show the deck on the jog display</strong> in Settings. The LC6000’s jog display then shows the deck in front: its title, artist, key and BPM, Syndicate’s master clock around the ring, and the deck’s own bar in the needle.</p>
+          <p><strong>Show the deck on the jog display</strong> is on by default (Settings › Controller). The LC6000’s jog display shows the deck in front: its title, artist, key and BPM, Syndicate’s master clock around the ring, and the deck’s own bar in the needle.</p>
+          <p>Settings › Controller › Firmware (shown with the jog display on): leave it on Denon unless your unit runs custom firmware.</p>
+          <p>Settings › Controller › Key display (with the jog display on) writes keys as Syndicate does, traditional or Camelot. Match Syndicate’s own key setting.</p>
           <p class="muted">Diagnostics › Jog display shows the same picture on your Mac for every deck, even with no LC6000 connected.</p>
         </div>
         <div class="span-6 start-7">
@@ -213,6 +215,31 @@
   </section>
 
   <!-- The FAQPage JSON-LD in the head repeats these words exactly: change both together. -->
+  <section class="section" id="fader" aria-labelledby="fader-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <div class="span-5 stack-4">
+          <h2 id="fader-h">Shift + Needle Drop: the channel fader</h2>
+          <p>Shift + Needle Drop moves the deck’s channel fader in Syndicate, from where it is (Relative) or straight to where you touch (Jump) (Settings › Controller, on by default).</p>
+          <p class="muted">Relative needs Syndicate’s Volume feedback: turn it on in Syndicate’s OSC feedback, or the fader can’t start from where it is.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="feed" aria-labelledby="feed-h">
+    <div class="wrap">
+      <div class="grid grid--top">
+        <div class="span-5 stack-4">
+          <h2 id="feed-h">The display feed</h2>
+          <p>DeckBridge can send the deck in front to a display on your local network, unencrypted to the one address you set (Settings › Syndicate › Display feed, off by default).</p>
+          <p>Give it the display’s host and port. The status line under them says whether it’s sending. While it’s on, DeckBridge also asks Syndicate for its Meter and PhaseOffset feedback, and says so if they’re off.</p>
+          <p class="muted">Leave it off if you have no display listening.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="section" id="faq" aria-labelledby="faq-h">
     <div class="wrap">
       <div class="grid grid--top">
