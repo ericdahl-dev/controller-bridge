@@ -8,12 +8,22 @@ public enum PanelFound: Sendable, Equatable {
     case onSerial(build: PanelBuild?)
 }
 
+/// An LC6000 the finder saw. Its firmware isn't read here: nothing is sent to it (#692 checks the unit).
+public enum LC6000Found: Sendable, Equatable {
+    /// Its MIDI ports are there.
+    case onMIDI
+    /// ST's ROM bootloader is on USB: any STM32 device in update mode, likely an LC6000's chip.
+    case updateMode
+}
+
 /// What the finder saw.
 public struct Found: Sendable, Equatable {
     public var panel: PanelFound?
+    public var lc6000: LC6000Found?
 
-    public init(panel: PanelFound? = nil) {
+    public init(panel: PanelFound? = nil, lc6000: LC6000Found? = nil) {
         self.panel = panel
+        self.lc6000 = lc6000
     }
 }
 
@@ -22,6 +32,10 @@ public struct DeviceFinder: Sendable {
     /// The CrowPanel's USB serial chip, a CH340K (tools/deck-panel/README.md).
     static let panelChip = (vendor: UInt16(0x1A86), product: UInt16(0x7522))
 
+    /// The LC6000's MIDI ports carry this in their names, as DeckBridge finds them ("LC6000 PRIME Controller", "… WD").
+    static let lc6000Ports = "LC6000 PRIME"
+    /// ST's ROM DFU bootloader.
+    static let stBootloader = (vendor: UInt16(0x0483), product: UInt16(0xDF11))
     /// How long the finder listens to a panel's serial port for its boot line.
     public static let listenSeconds = 3.0
     static let bootLine = "deck panel: boot, build "
@@ -48,6 +62,11 @@ public struct DeviceFinder: Sendable {
             } else {
                 found.panel = .driverMissing
             }
+        }
+        if await midi.names().contains(where: { $0.contains(Self.lc6000Ports) }) {
+            found.lc6000 = .onMIDI
+        } else if devices.contains(where: { $0.vendor == Self.stBootloader.vendor && $0.product == Self.stBootloader.product }) {
+            found.lc6000 = .updateMode
         }
         return found
     }

@@ -27,6 +27,10 @@ public struct UpdaterScreen: Sendable, Equatable {
             panel = Section(status: "Deck panel found",
                             detail: "Build not read: unplug the panel and plug it back in to read it")
         }
-        lc6000 = Section(status: "Nothing connected")
+        switch found.lc6000 {
+        case nil: lc6000 = Section(status: "Nothing connected")
+        case .onMIDI: lc6000 = Section(status: "LC6000 found", detail: "Firmware not checked yet")
+        case .updateMode: lc6000 = Section(status: "A device in update mode, maybe an LC6000")
+        }
     }
 }

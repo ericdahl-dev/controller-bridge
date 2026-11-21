@@ -67,4 +67,23 @@ struct UpdaterScreenTests {
         let screen = UpdaterScreen(found: found, lc6000WarningAccepted: true)
         #expect(screen.panel.detail == "Build 1d0683f-dirty (a development build)")
     }
+
+    @Test("An LC6000 on MIDI (DeckBridge's port names): found, firmware not checked yet")
+    func lc6000OnMIDI() async {
+        let rig = Rig()
+        rig.midi.ports = ["IAC Driver Bus 1", "LC6000 PRIME Controller", "LC6000 PRIME WD"]
+        let screen = await rig.screen()
+        #expect(screen.lc6000.status == "LC6000 found")
+        #expect(screen.lc6000.detail == "Firmware not checked yet")
+        #expect(screen.panel.status == "Nothing connected")
+    }
+
+    @Test("ST's ROM bootloader on USB (0483:DF11): a device in update mode, maybe an LC6000")
+    func deviceInUpdateMode() async {
+        let rig = Rig()
+        rig.usb.plugged = [USBDevice(vendor: 0x0483, product: 0xDF11, name: "STM32  BOOTLOADER")]
+        let screen = await rig.screen()
+        #expect(screen.lc6000.status == "A device in update mode, maybe an LC6000")
+        #expect(screen.lc6000.detail == nil)
+    }
 }
