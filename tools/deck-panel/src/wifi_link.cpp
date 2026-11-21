@@ -102,6 +102,7 @@ WebServer g_server(80);
 char g_body[kMaxBody];
 size_t g_body_length = 0;
 bool g_body_overflow = false;
+bool g_body_seen = false;  // this request's body came in raw chunks (RAW_START)
 const char* g_error = "";
 
 struct SeenCopy {
@@ -267,14 +268,14 @@ void handle_page() {
     send_page(g_error);
 }
 
-/// The body, as posted: WebServer hands a non-multipart POST to the upload function in raw chunks when one is given,
-/// instead of decoding it into args, so parse_form sees the real bytes.
-void handle_save_body() {
-    HTTPRaw& raw = g_server.raw();
+/// The body, as posted, in raw chunks instead of decoded args, so parse_form sees the real bytes. Called only for a
+/// non-multipart POST (SaveHandler takes no uploads), with the core's HTTPRaw passed in, never fetched.
+void handle_save_body(HTTPRaw& raw) {
     switch (raw.status) {
         case RAW_START:
             g_body_length = 0;
             g_body_overflow = false;
+            g_body_seen = true;
             break;
         case RAW_WRITE:
             if (g_body_overflow || raw.currentSize > sizeof g_body - g_body_length) {
@@ -303,13 +304,15 @@ void handle_save() {
         g_server.send(200, "text/html; charset=utf-8", wifi_setup::saved_page(g_saved.ssid).c_str());
         return;
     }
-    if (g_body_overflow) {
+    if (g_body_overflow || !g_body_seen) {  // not seen: a multipart post, which the form never sends
+        g_body_seen = false;
         wipe_body();
         g_body_overflow = false;
         g_error = "That form didn't arrive whole. Try again.";
         send_page(g_error);
         return;
     }
+    g_body_seen = false;
     wifi_setup::FormResult form = wifi_setup::parse_form(g_body, g_body_length);
     wipe_body();
     if (!form.ok) {
@@ -333,6 +336,23 @@ void handle_save() {
     g_restart_at_ms = millis() + kRestartAfterMs;
 }
 
+/// POST /save. WebServer's on(uri, method, fn, ufn) hands multipart file parts to the same ufn as raw bodies, where
+/// raw() would dereference an empty pointer and panic. This handler says no to uploads, so only raw bodies reach it.
+class SaveHandler : public RequestHandler {
+  public:
+    bool canHandle(WebServer&, HTTPMethod method, const String& uri) override {
+        return method == HTTP_POST && uri == "/save";
+    }
+    bool canUpload(WebServer&, const String&) override { return false; }
+    bool canRaw(WebServer&, const String& uri) override { return uri == "/save"; }
+    bool handle(WebServer&, HTTPMethod, const String&) override {
+        handle_save();
+        return true;
+    }
+    void raw(WebServer&, const String&, HTTPRaw& raw) override { handle_save_body(raw); }
+};
+SaveHandler g_save_handler;
+
 /// The setup network: false if the driver didn't start, and poll() tries again.
 bool start_setup() {
     WiFi.persistent(false);
@@ -350,7 +370,7 @@ bool start_setup() {
     // Every name answers with the panel, so the phone's captive-portal check lands on the page. Setup only.
     if (!g_dns.start(53, "*", ap)) Serial.println("deck panel: setup DNS didn't start");
     g_server.on("/", HTTP_GET, handle_page);
-    g_server.on("/save", HTTP_POST, handle_save, handle_save_body);
+    g_server.addHandler(&g_save_handler);
     g_server.onNotFound(handle_page);
     g_server.begin();
     Serial.printf("deck panel: setup network %s up, page at http://%s/\n", g_setup_name, kSetupIp);
