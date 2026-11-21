@@ -151,6 +151,48 @@ void test_a_beat_far_off_the_grid_moves_the_clock_at_once() {
     TEST_ASSERT_UINT32_WITHIN(3, 5069, first_shows(clock, 2, 4600, 5400));
 }
 
+
+// With the master clock's BPM (the feed's clockBpm, #674), one edge is enough: the next is due a beat length on.
+void test_with_the_clock_bpm_one_edge_gives_the_next_beat() {
+    BeatClock clock;
+    clock.set_tempo(128);
+    clock.edge(1, 1000);
+    TEST_ASSERT_EQUAL(1, clock.beat_at(1468));
+    TEST_ASSERT_EQUAL(2, clock.beat_at(1469));
+}
+
+// The BPM gives the beat length; jittered edges move only the beat's place, never its length.
+void test_with_the_clock_bpm_jitter_never_changes_the_beat_length() {
+    BeatClock clock;
+    clock.set_tempo(128);
+    const int jitter[] = {0, 9, 9, 9, 9, 9, 9, 9};  // late every time but the first
+    int beat = 1;
+    for (int k = 0; k < 8; ++k) {
+        clock.edge(beat, static_cast<uint32_t>(1000 + k * 468.75 + jitter[k] + 0.5));
+        beat = beat % 4 + 1;
+    }
+    // The last edge sits about 9 ms late (the lock follows a steady lateness), and the next is one 468.75 ms on.
+    const uint32_t shown = first_shows(clock, beat, 4400, 5000);
+    TEST_ASSERT_UINT32_WITHIN(4, 4759, shown);
+}
+
+// A tempo change on the master applies at once: the next beat is due at the new length.
+void test_a_clock_bpm_change_applies_at_once() {
+    BeatClock clock = locked();  // 128 BPM from the edges; the last, beat 4, at 4281
+    clock.set_tempo(120);        // 500 ms
+    TEST_ASSERT_UINT32_WITHIN(2, 4781, first_shows(clock, 1, 4281, 5000));
+}
+
+// 0 is "no master BPM" (an older DeckBridge, or a quiet clock): the edges give the beat length again.
+void test_clock_bpm_0_leaves_the_beat_length_to_the_edges() {
+    BeatClock clock;
+    clock.set_tempo(0);
+    clock.edge(1, 1000);
+    TEST_ASSERT_EQUAL(1, clock.beat_at(1600));  // one edge, no length
+    clock.edge(2, 1469);
+    TEST_ASSERT_EQUAL(3, clock.beat_at(1938));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_beat_heard_is_none);
@@ -165,5 +207,9 @@ int main(int, char**) {
     RUN_TEST(test_beats_after_a_gap_start_over);
     RUN_TEST(test_a_beat_out_of_turn_shows_at_once_and_keeps_the_tempo);
     RUN_TEST(test_a_beat_far_off_the_grid_moves_the_clock_at_once);
+    RUN_TEST(test_with_the_clock_bpm_one_edge_gives_the_next_beat);
+    RUN_TEST(test_with_the_clock_bpm_jitter_never_changes_the_beat_length);
+    RUN_TEST(test_a_clock_bpm_change_applies_at_once);
+    RUN_TEST(test_clock_bpm_0_leaves_the_beat_length_to_the_edges);
     return UNITY_END();
 }

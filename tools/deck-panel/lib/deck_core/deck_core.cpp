@@ -156,6 +156,7 @@ const Row kRows[] = {
          return true;
      }},
     {"bpm", 'f', [](DeckView& v, const Message& m) { return set(v.bpm, m.f); }},
+    {"clockBpm", 'f', [](DeckView& v, const Message& m) { return set(v.clock_bpm, m.f); }},
     {"tempo", 'f', [](DeckView& v, const Message& m) { return set(v.tempo, m.f); }},
     {"playing", 'i', [](DeckView& v, const Message& m) { return set(v.playing, m.i != 0); }},
     {"cue", 'i', [](DeckView& v, const Message& m) { return set(v.cue, m.i != 0); }},
@@ -207,6 +208,7 @@ bool DeckCore::apply(const uint8_t* bytes, size_t length, uint32_t now_ms) {
     }
     // The master clock's beat also sets the panel's beat clock (#660), at the time it arrived.
     if (alive && std::strcmp(message.name, "beat") == 0) clock_.edge(view_.beat, now_ms);
+    if (alive && std::strcmp(message.name, "clockBpm") == 0) clock_.set_tempo(view_.clock_bpm);
     // The deck in front is the master and stopped: so did the master clock, at once (#660). Another deck's pause
     // says nothing about it.
     if (alive && std::strcmp(message.name, "playing") == 0 && view_.master && !view_.playing) clock_.stop();

@@ -24,6 +24,9 @@ class BeatClock {
     void edge(int beat, uint32_t at_ms);
     /// The beat to show at `now_ms`, 1-4; 0 for none.
     int beat_at(uint32_t now_ms) const;
+    /// The master clock's BPM (the feed's clockBpm, #674): with it, a beat's length is known from the first edge and
+    /// only the beat's place is locked; a change applies at once. 0 (or out of range) is none: the edges give it.
+    void set_tempo(float bpm);
     /// The master stopped: show the beat heard, nothing ahead, until beats come again.
     void stop() { period_ms_ = 0; }
 
@@ -47,6 +50,7 @@ class BeatClock {
     float period_ms_ = 0;       ///< a beat's length; 0 until two edges in a row give it
     uint32_t first_ms_ = 0;     ///< the first edge of this run of beats in a row
     int edges_ = 0;             ///< beats in a row since first_ms_
+    float tempo_ms_ = 0;        ///< a beat's length from the master clock's BPM; 0 for none
 };
 
 }  // namespace deck_core

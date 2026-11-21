@@ -468,7 +468,7 @@ void test_every_field_of_the_feed_has_its_row() {
         int_message(prefix + "master", 1), int_message(prefix + "loop", 1), float_message(prefix + "loopLength", 0.25f),
         int_message(prefix + "beat", 3), int_message(prefix + "elapsed", 95), int_message(prefix + "remaining", 212),
         float_message(prefix + "progress", 0.3125f), float_message(prefix + "phase", 0.75f),
-        float_message(prefix + "level", 0.5f),
+        float_message(prefix + "level", 0.5f), float_message(prefix + "clockBpm", 128.0f),
     });
     TEST_ASSERT_TRUE(v.loaded);
     TEST_ASSERT_EQUAL_STRING("11B", v.key);
@@ -482,6 +482,7 @@ void test_every_field_of_the_feed_has_its_row() {
     TEST_ASSERT_EQUAL_FLOAT(0.3125f, v.progress);
     TEST_ASSERT_EQUAL_FLOAT(0.75f, v.phase);
     TEST_ASSERT_EQUAL_FLOAT(0.5f, v.level);
+    TEST_ASSERT_EQUAL_FLOAT(128.0f, v.clock_bpm);
 }
 
 void test_flags_go_off_with_0_and_phase_takes_minus_1() {
@@ -821,6 +822,18 @@ void test_a_deck_that_is_not_the_master_stopping_leaves_the_beat() {
     TEST_ASSERT_NOT_EQUAL(0x262626, screen.last().face.beat_color[2]);
 }
 
+
+// #660 with #674: the feed's clockBpm is the master clock's BPM; with it, the first beat heard is enough.
+void test_the_feeds_clock_bpm_times_the_beat_from_the_first_edge() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 1), 1000);
+    feed(core, float_message(prefix + "clockBpm", 128.0f), 1000);
+    feed(core, int_message(prefix + "beat", 1), 1000);
+    core.render(screen, 1469);
+    TEST_ASSERT_NOT_EQUAL(0x262626, screen.last().face.beat_color[1]);  // beat 2, due
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -860,6 +873,7 @@ int main(int, char**) {
     RUN_TEST(test_coming_back_from_waiting_keeps_the_deck_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_the_next_beat_box_lights_when_due_before_its_message);
+    RUN_TEST(test_the_feeds_clock_bpm_times_the_beat_from_the_first_edge);
     RUN_TEST(test_the_master_stopping_stops_the_beat_at_once);
     RUN_TEST(test_a_deck_that_is_not_the_master_stopping_leaves_the_beat);
     RUN_TEST(test_the_waiting_screen_is_told_only_what_changed);

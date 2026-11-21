@@ -30,7 +30,7 @@ void BeatClock::edge(int beat, uint32_t at_ms) {
         beat_ = beat;
         edge_ms_ = first_ms_ = at_ms;
         edges_ = 0;
-        period_ms_ = 0;
+        period_ms_ = tempo_ms_;  // known from the BPM, or 0 until the next edge
         return;
     }
     beat_ = beat;
@@ -48,11 +48,20 @@ void BeatClock::edge(int beat, uint32_t at_ms) {
     if (error > kMaxErrorMs) error = kMaxErrorMs;
     if (error < -kMaxErrorMs) error = -kMaxErrorMs;
     edge_ms_ += static_cast<uint32_t>(static_cast<int32_t>(std::lround(period_ms_ + kPhaseGain * error)));
-    if (edges_ <= kAveragedEdges) {
+    if (tempo_ms_ > 0) {
+        period_ms_ = tempo_ms_;  // the BPM's, never the edges'
+    } else if (edges_ <= kAveragedEdges) {
         period_ms_ = static_cast<float>(at_ms - first_ms_) / static_cast<float>(edges_);
     } else {
         period_ms_ += kTempoGain * error;
     }
+}
+
+void BeatClock::set_tempo(float bpm) {
+    const float ms = bpm > 0 ? 60000.0f / bpm : 0;
+    tempo_ms_ = ms >= kShortestBeatMs && ms <= kLongestBeatMs ? ms : 0;
+    // Running: the new length from now. Stopped or not started, the next edge takes it.
+    if (tempo_ms_ > 0 && period_ms_ > 0) period_ms_ = tempo_ms_;
 }
 
 void BeatClock::snap(int beat, uint32_t at_ms) {
