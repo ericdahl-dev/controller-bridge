@@ -19,6 +19,7 @@
   leaves the Mac names the display feed; the privacy page discloses the feed in the owner's wording (#632)
 - the home page has an In the lab section with the owner's disclaimers; what it holds (the deck panel, the drawn jog
   display, a reflashed chip) is named nowhere else, and no page says how to flash anything (#647)
+- once the site says 1.1 or later, the home page, index.md and llms.txt each name 1.1's features (#647)
 - no other company's logo is in the site
 - the whole site stays under 2 MB
 Standard library only. Run: python3 -I scripts/check_site.py [website]   (exits 1 on any problem)
@@ -225,6 +226,11 @@ LAB_STATEMENTS = ["not part of the deckbridge app", "not offered for download",
                   "never includes or distributes denon's firmware", "no kit or firmware to download"]
 LAB_ONLY = ["deck panel", "drawn jog display", "reflashed"]
 FLASHING = ["bootloader", "dfu-util", "dfu mode", "flashing", "flash the", "flash it"]
+
+
+# What 1.1 brings (#647), named on each product page, worded as the CHANGELOG (#648) and the What to Test do.
+NEW_IN_1_1 = ["jog display", "transpose", "exact colors", "key display", "shift + needle drop", "display feed"]
+NEW_IN_1_1_FILES = ["index.html", "index.md", "llms.txt"]
 
 
 def plain_words(text):
@@ -453,6 +459,9 @@ def problems(root, app_prompts=None):
             out += company_problems(file, text)
             out += network_problems(file, text)
             out += lab_problems(file, text)
+            if file in NEW_IN_1_1_FILES and app_version and version_tuple(app_version) >= (1, 1):
+                said = plain_words(text)
+                out += [f'{file}: doesn\'t name 1.1\'s "{words}"' for words in NEW_IN_1_1 if words not in said]
             if PLACEHOLDER.search(text):
                 out.append(f"{file}: still has a TODO(user) TestFlight placeholder")
             if app_version:

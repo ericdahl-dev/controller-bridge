@@ -36,6 +36,8 @@ PRICE_LD = ('<script type="application/ld+json">{"@graph": [{"@type": "SoftwareA
             '[{"@type": "Question", "name": "How much does DeckBridge cost?", "acceptedAnswer": {"@type": "Answer", '
             '"text": "DeckBridge is free."}}]}]}</script>')
 
+NEW_11 = '<p>The jog display. Shift + Pitch Bend transposes. Exact colors. Key display. Shift + Needle Drop. The display feed.</p>'
+
 LAB = ('<section id="lab"><h2>In the lab</h2><p>A reflashed display chip draws the deck. That firmware is not part of the'
        ' DeckBridge app and is not offered for download, and DeckBridge never includes or distributes Denon’s firmware.</p>'
        '<p>A deck panel shows the deck in front. There’s no kit or firmware to download.</p></section>')
@@ -45,7 +47,7 @@ GOOD = {
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="capture/">record it in your browser</a>'
                             ' <a href="for/lc6000/">DeckBridge for the LC6000</a>'
-                            ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>' + LAB),
+                            ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>' + LAB + NEW_11),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
     "capture/index.html": page(body='<a href="../">Home</a>'),
     "for/lc6000/index.html": page(body='<a href="../../">Home</a>'),
@@ -57,7 +59,7 @@ GOOD = {
     "sitemap.xml": sitemap("https://getdeckbridge.app/", "https://getdeckbridge.app/support/",
                            "https://getdeckbridge.app/privacy/", "https://getdeckbridge.app/capture/",
                            "https://getdeckbridge.app/for/lc6000/"),
-    "llms.txt": "# DeckBridge\n\n> A bridge.\n\n- [Home](https://getdeckbridge.app/)\n- [Support](https://getdeckbridge.app/support/)\n"
+    "llms.txt": "# DeckBridge\n\n> A bridge.\n\n- New in v1.1: the jog display, transpose, exact colors, key display, Shift + Needle Drop, the display feed.\n- [Home](https://getdeckbridge.app/)\n- [Support](https://getdeckbridge.app/support/)\n"
                 "- [Privacy](https://getdeckbridge.app/privacy/)\n- [Capture](https://getdeckbridge.app/capture/)\n"
                 "- [LC6000](https://getdeckbridge.app/for/lc6000/)\n",
     "analytics.js": "/* PostHog */",
@@ -313,6 +315,18 @@ class CheckSiteTests(unittest.TestCase):
             'support/index.html: says "bootloader": no flashing instructions on the site',
             'support/index.html: says "dfu-util": no flashing instructions on the site',
         ])
+
+    def test_the_product_pages_name_what_1_1_brings(self):
+        """#647: the home page, index.md and llms.txt each name 1.1's features, so one can't quietly drop out."""
+        at_1_1 = GOOD["index.html"].replace('"softwareVersion": "1.0.1"', '"softwareVersion": "1.1.0"')
+        root = self.site({"index.html": at_1_1, "index.md": "# DeckBridge\n\nThe jog display and a display feed.\n"})
+        problems = check_site.problems(root)
+        self.assertIn('index.md: doesn\'t name 1.1\'s "transpose"', problems)
+        self.assertIn('index.md: doesn\'t name 1.1\'s "exact colors"', problems)
+        self.assertNotIn('index.md: doesn\'t name 1.1\'s "jog display"', problems)
+        self.assertNotIn('index.md: doesn\'t name 1.1\'s "display feed"', problems)
+        # At 1.0.1, 1.1's features aren't asked for.
+        self.assertEqual([p for p in check_site.problems(self.site({"index.md": "# DeckBridge\n"})) if "1.1's" in p], [])
 
     def test_the_privacy_page_must_say_no_data_is_collected(self):
         root = self.site({"privacy/index.html": page(body="<p>We care about your privacy.</p>" + FEED + WEBSITE)})
