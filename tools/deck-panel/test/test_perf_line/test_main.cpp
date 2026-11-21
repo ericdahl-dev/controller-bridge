@@ -158,8 +158,17 @@ void test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step() {
     TEST_ASSERT_EQUAL_STRING(
         "perf copy: late/copies by eighth after the latch 0/300 0/301 0/302 2/303 0/304 0/305 0/306 0/307; "
         "by loop step wait 1/6000 read 0/0 render 0/0 refresh 0/900 wifi 0/0 udp 0/0 touch 0/0 lvgl 0/0 perf 1/40 "
-        "other 0/0",
+        "other 0/0; outside an interrupt 0/0",
         perf_line::format_copy(c).c_str());
+}
+
+// A 16000-byte copy out of PSRAM that isn't the panel interrupt's is someone else's: counted apart, so the meter's
+// own filter can be checked on the panel.
+void test_the_copy_line_counts_copies_outside_an_interrupt_apart() {
+    perf_line::CopySpread c;
+    c.outside_isr = 12;
+    c.late_outside_isr = 3;
+    TEST_ASSERT_TRUE(perf_line::format_copy(c).find("other 0/0; outside an interrupt 3/12") != std::string::npos);
 }
 
 int main() {
@@ -174,5 +183,6 @@ int main() {
     RUN_TEST(test_late_copies_say_how_many_fell_in_a_refresh_and_at_the_frame_turn);
     RUN_TEST(test_a_copy_falls_in_the_eighth_of_the_scan_out_since_the_latch);
     RUN_TEST(test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step);
+    RUN_TEST(test_the_copy_line_counts_copies_outside_an_interrupt_apart);
     return UNITY_END();
 }

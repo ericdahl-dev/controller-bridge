@@ -60,7 +60,7 @@ std::string format_copy(const CopySpread& c) {
     static const char* const kNames[kMarks] = {"wait", "read", "render", "refresh", "wifi",
                                                "udp",  "touch", "lvgl",  "perf",    "other"};
     std::string line = "perf copy: late/copies by eighth after the latch";
-    char part[32];
+    char part[64];
     for (int i = 0; i < kPhases; ++i) {
         snprintf(part, sizeof part, " %u/%u", static_cast<unsigned>(c.late_by_phase[i]),
                  static_cast<unsigned>(c.copies_by_phase[i]));
@@ -72,6 +72,9 @@ std::string format_copy(const CopySpread& c) {
                  static_cast<unsigned>(c.copies_by_mark[i]));
         line += part;
     }
+    snprintf(part, sizeof part, "; outside an interrupt %u/%u", static_cast<unsigned>(c.late_outside_isr),
+             static_cast<unsigned>(c.outside_isr));
+    line += part;
     return line;
 }
 

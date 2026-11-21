@@ -49,6 +49,9 @@ struct CopySpread {
     uint32_t late_by_phase[kPhases] = {};
     uint32_t copies_by_mark[kMarks] = {};
     uint32_t late_by_mark[kMarks] = {};
+    // Not the panel interrupt's: in none of the above.
+    uint32_t outside_isr = 0;
+    uint32_t late_outside_isr = 0;
 };
 
 // The eighth of a `period_us` scan-out that `since_latch_us` falls in; one period or more is the last.
