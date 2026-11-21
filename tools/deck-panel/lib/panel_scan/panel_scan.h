@@ -18,8 +18,16 @@ struct Config {
     uint32_t bounce_px;
 };
 
-/// The two things the loop waits on: a swap's release, and a frame boundary (a latch or a vsync).
-enum class Signal { release = 0, frame = 1 };
+/// What the loop waits on: a swap's release, a latch (where the panel takes the next frame's buffer), a vsync.
+enum class Signal { release = 0, latch = 1, vsync = 2 };
+
+/// The latches so far (#663, #664): the running count, and the last two in esp_timer microseconds (previous_us 0
+/// until there are two), so a reader that missed some still sees the real one before the last.
+struct Latches {
+    uint32_t count = 0;
+    uint64_t us = 0;
+    uint64_t previous_us = 0;
+};
 
 /// How LVGL's flush wait ended. released and timed_out: call lv_display_flush_ready (a timeout is counted).
 /// deferred: don't; the swap is still out, and the next frame's first wait collects it.
@@ -39,6 +47,9 @@ struct Panel {
     virtual bool take(Signal signal, uint32_t timeout_ms) = 0;
     /// Microseconds, on the clock the interrupts stamp with (esp_timer_get_time).
     virtual uint64_t now() const = 0;
+    /// Around what the interrupts and the tasks share (a spinlock on the board, which works from both).
+    virtual void lock() = 0;
+    virtual void unlock() = 0;
 };
 
 class Scan {
@@ -60,6 +71,14 @@ class Scan {
     /// no swap out, released at once.
     Wait wait_release(uint32_t timeout_ms);
 
+    /// The frame clock's wait (#663): until a latch newer than the one current on entry, so a give left from before the
+    /// call never starts a frame. False after `timeout_ms` with none.
+    bool wait_next_frame(uint32_t timeout_ms, Latches& latch);
+    /// The other wake (#679): until the vsync after `latch`, at once if it came already. False after `timeout_ms`.
+    bool wait_vsync_after(const Latches& latch, uint32_t timeout_ms);
+    /// The latch stamp, for any task.
+    Latches latches() const;
+
     /// The panel's interrupts: stamp and count only.
     void vsync(uint64_t now_us);
     void frame_complete(uint64_t now_us);
@@ -71,6 +90,9 @@ class Scan {
     Panel& panel_;
     swap_gate::Gate gate_;
     bool defer_ = false;  ///< set by a swap: its first wait returns at once
+    // Written by the interrupts, read by the tasks, under the Panel's lock.
+    Latches latches_;
+    uint64_t vsync_us_ = 0;
     Config config_{};
     uint32_t frame_us_ = 0;
     uint32_t copy_budget_us_ = 0;

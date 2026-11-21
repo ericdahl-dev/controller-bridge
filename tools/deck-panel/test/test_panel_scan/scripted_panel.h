@@ -22,7 +22,7 @@ struct ScriptedPanel : panel_scan::Panel {
     bool started = false;
     panel_scan::Config config{};
     int hand_overs = 0;
-    bool given[2] = {false, false};  // a binary semaphore per signal
+    bool given[3] = {false, false, false};  // a binary semaphore per signal
 
     bool start(const panel_scan::Config& c) override {
         started = true;
@@ -48,6 +48,8 @@ struct ScriptedPanel : panel_scan::Panel {
         return true;
     }
     uint64_t now() const override { return now_us; }
+    void lock() override {}
+    void unlock() override {}
 
     /// The next scripted interrupt, now.
     void fire() {

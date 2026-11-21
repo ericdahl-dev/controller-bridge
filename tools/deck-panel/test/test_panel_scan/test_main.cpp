@@ -161,6 +161,96 @@ void test_the_wait_right_after_the_swap_is_deferred_to_the_next_frame() {
     TEST_ASSERT_EQUAL(34000, panel.now_us);  // already given: no wait
 }
 
+
+using panel_scan::Latches;
+
+// The frame clock's wait (#663): until a latch newer than the one current on entry, so a frame always starts just
+// after a latch. It returns the latch, and the one before it for the ledger (#664), in esp_timer microseconds.
+void test_the_next_frame_starts_at_the_next_latch() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{33333, Irq::frame_complete}};
+    panel.run_until(5000);
+    Latches l;
+    TEST_ASSERT_TRUE(scan.wait_next_frame(70, l));
+    TEST_ASSERT_EQUAL(33333, panel.now_us);
+    TEST_ASSERT_EQUAL(1, l.count);
+    TEST_ASSERT_EQUAL_UINT64(33333, l.us);
+    TEST_ASSERT_EQUAL_UINT64(0, l.previous_us);
+}
+
+// A latch that came before the call, its give still pending, never starts the frame: the frame waits for the next.
+void test_a_latch_from_before_the_call_doesnt_start_the_frame() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{1000, Irq::frame_complete}, {34333, Irq::frame_complete}};
+    panel.run_until(2000);  // the loop was busy through the first latch
+    Latches l;
+    TEST_ASSERT_TRUE(scan.wait_next_frame(70, l));
+    TEST_ASSERT_EQUAL(34333, panel.now_us);
+    TEST_ASSERT_EQUAL(2, l.count);
+    TEST_ASSERT_EQUAL_UINT64(34333, l.us);
+    TEST_ASSERT_EQUAL_UINT64(1000, l.previous_us);
+}
+
+// Latches the loop missed are in the count; latches() is the same stamp, for any task.
+void test_latches_counts_every_latch_and_keeps_the_last_two() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{33333, Irq::frame_complete}, {66666, Irq::frame_complete}, {99999, Irq::frame_complete}};
+    panel.run_until(100000);
+    const Latches l = scan.latches();
+    TEST_ASSERT_EQUAL(3, l.count);
+    TEST_ASSERT_EQUAL_UINT64(99999, l.us);
+    TEST_ASSERT_EQUAL_UINT64(66666, l.previous_us);
+}
+
+// Microseconds past 2^32 (71 minutes) stay whole: the ledger compares them with 64-bit arrival stamps.
+void test_latch_times_are_64_bit() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    const uint64_t late = (uint64_t(1) << 32) + 5000;
+    panel.script = {{late, Irq::frame_complete}};
+    panel.run_until(late);
+    TEST_ASSERT_EQUAL_UINT64(late, scan.latches().us);
+}
+
+// A stopped panel: no frame, the wait gives up.
+void test_no_latch_in_time_is_no_frame() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    Latches l;
+    TEST_ASSERT_FALSE(scan.wait_next_frame(70, l));
+    TEST_ASSERT_EQUAL(70000, panel.now_us);
+}
+
+// The other wake (#679's option A): the vsync after a latch, about 1.9 ms later with bounce buffers. If it already
+// came, at once.
+void test_the_vsync_after_a_latch() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{31400, Irq::frame_complete}, {33333, Irq::vsync}};
+    Latches l;
+    TEST_ASSERT_TRUE(scan.wait_next_frame(70, l));
+    TEST_ASSERT_EQUAL(31400, panel.now_us);
+    TEST_ASSERT_TRUE(scan.wait_vsync_after(l, 70));
+    TEST_ASSERT_EQUAL(33333, panel.now_us);
+    TEST_ASSERT_TRUE(scan.wait_vsync_after(l, 70));  // already came
+    TEST_ASSERT_EQUAL(33333, panel.now_us);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
@@ -174,5 +264,11 @@ int main(int, char**) {
     RUN_TEST(test_a_release_that_never_comes_times_out);
     RUN_TEST(test_a_late_latch_never_releases_the_next_swap);
     RUN_TEST(test_the_wait_right_after_the_swap_is_deferred_to_the_next_frame);
+    RUN_TEST(test_the_next_frame_starts_at_the_next_latch);
+    RUN_TEST(test_a_latch_from_before_the_call_doesnt_start_the_frame);
+    RUN_TEST(test_latches_counts_every_latch_and_keeps_the_last_two);
+    RUN_TEST(test_latch_times_are_64_bit);
+    RUN_TEST(test_no_latch_in_time_is_no_frame);
+    RUN_TEST(test_the_vsync_after_a_latch);
     return UNITY_END();
 }

@@ -37,12 +37,58 @@ Wait Scan::wait_release(uint32_t timeout_ms) {
     return got ? Wait::released : Wait::timed_out;
 }
 
-void Scan::latch(uint64_t) {
-    if (gate_.vsync()) panel_.give(Signal::release);
+void Scan::latch(uint64_t now_us) {
+    const bool released = gate_.vsync();
+    // Stamped before the gives, so a waiter that wakes reads this latch.
+    panel_.lock();
+    ++latches_.count;
+    latches_.previous_us = latches_.us;
+    latches_.us = now_us;
+    panel_.unlock();
+    if (released) panel_.give(Signal::release);
+    panel_.give(Signal::latch);
 }
 
 void Scan::vsync(uint64_t now_us) {
+    // Without bounce buffers the latch is this vsync, and comes first, so a frame woken here sees its count.
     if (config_.bounce_px == 0) latch(now_us);
+    panel_.lock();
+    vsync_us_ = now_us;
+    panel_.unlock();
+    panel_.give(Signal::vsync);
+}
+
+Latches Scan::latches() const {
+    panel_.lock();
+    const Latches l = latches_;
+    panel_.unlock();
+    return l;
+}
+
+bool Scan::wait_next_frame(uint32_t timeout_ms, Latches& latch) {
+    const uint32_t entry = latches().count;
+    const uint64_t until = panel_.now() + uint64_t(timeout_ms) * 1000;
+    for (;;) {
+        const uint64_t now = panel_.now();
+        if (now >= until) return false;
+        const uint32_t left_ms = static_cast<uint32_t>((until - now + 999) / 1000);
+        if (!panel_.take(Signal::latch, left_ms)) return false;
+        latch = latches();
+        if (latch.count != entry) return true;  // else a give from before the call: wait on
+    }
+}
+
+bool Scan::wait_vsync_after(const Latches& latch, uint32_t timeout_ms) {
+    const uint64_t until = panel_.now() + uint64_t(timeout_ms) * 1000;
+    for (;;) {
+        panel_.lock();
+        const uint64_t vsync_us = vsync_us_;
+        panel_.unlock();
+        if (vsync_us > latch.us) return true;
+        const uint64_t now = panel_.now();
+        if (now >= until) return false;
+        if (!panel_.take(Signal::vsync, static_cast<uint32_t>((until - now + 999) / 1000))) return false;
+    }
 }
 
 void Scan::frame_complete(uint64_t now_us) {
