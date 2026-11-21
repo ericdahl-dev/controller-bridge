@@ -821,6 +821,22 @@ void test_the_waiting_screen_is_told_only_what_changed() {
     TEST_ASSERT_EQUAL_STRING("192.168.1.41  port 9100", screen.last().detail.c_str());
 }
 
+// #651 in #665's shape: the logo is a part of the waiting screen too. The first waiting screen shows it (the board's
+// logo starts hidden), and a view that differs only in the logo says so.
+void test_the_waiting_screen_is_told_when_the_logo_changes() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 0);
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.logo);
+    deck_core::WaitingView with, without;
+    with.logo = true;
+    const deck_core::WaitingChanges c = deck_core::changed(without, with);
+    TEST_ASSERT_TRUE(c.logo);
+    TEST_ASSERT_FALSE(c.headline || c.detail);
+    TEST_ASSERT_TRUE(c.any());
+}
+
 // Its texts come fitted to the fonts, as the deck's do.
 void test_the_waiting_texts_come_fitted_to_the_fonts() {
     deck_core::DeckCore core;
@@ -873,6 +889,7 @@ int main(int, char**) {
     RUN_TEST(test_coming_back_from_waiting_keeps_the_deck_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_the_waiting_screen_is_told_only_what_changed);
+    RUN_TEST(test_the_waiting_screen_is_told_when_the_logo_changes);
     RUN_TEST(test_the_waiting_texts_come_fitted_to_the_fonts);
     RUN_TEST(test_the_first_deck_is_every_part_then_only_what_changed);
     RUN_TEST(test_a_change_that_moves_no_pixel_tells_the_screen_nothing);

@@ -70,9 +70,10 @@ struct WaitingView {
 struct WaitingChanges {
     bool headline = false;
     bool detail = false;
+    bool logo = false;  ///< shown or hidden (#651)
 
-    bool any() const { return headline || detail; }
-    static WaitingChanges all() { return {true, true}; }
+    bool any() const { return headline || detail || logo; }
+    static WaitingChanges all() { return {true, true, true}; }
 };
 
 /// What changed between two waiting views: every field of WaitingView, as its == compares them.
@@ -80,6 +81,7 @@ inline WaitingChanges changed(const WaitingView& was, const WaitingView& now) {
     WaitingChanges c;
     c.headline = std::strcmp(was.headline, now.headline) != 0;
     c.detail = std::strcmp(was.detail, now.detail) != 0;
+    c.logo = was.logo != now.logo;
     return c;
 }
 

@@ -175,7 +175,7 @@ void DeckScreen::show_waiting(const deck_core::WaitingView& view, const deck_cor
     // The view is the core's and stays put until the next call: the labels point at its texts.
     if (changes.headline) lv_label_set_text_static(headline_, view.headline);
     if (changes.detail) lv_label_set_text_static(detail_, view.detail);
-    set_hidden(logo_, !view.logo);
+    if (changes.logo) set_hidden(logo_, !view.logo);
     set_hidden(deck_page_, true);
     set_hidden(waiting_page_, false);
 }
