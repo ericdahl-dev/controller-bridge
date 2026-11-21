@@ -34,7 +34,7 @@ struct DisplayFeedExamplesTests {
                          playing: state["playing"] as? Bool ?? false, cue: state["cue"] as? Bool ?? false,
                          sync: state["sync"] as? Bool ?? false, master: state["master"] as? Bool ?? false,
                          loop: state["loop"] as? Bool ?? false, loopLength: state["loopLength"] as? Double ?? 0,
-                         beat: state["beat"] as? Int ?? 0, elapsed: state["elapsed"] as? Int ?? 0,
+                         beat: state["beat"] as? Int ?? 0, clockBpm: state["clockBpm"] as? Double ?? 0, elapsed: state["elapsed"] as? Int ?? 0,
                          remaining: state["remaining"] as? Int ?? 0, progress: state["progress"] as? Double ?? 0,
                          phase: state["phase"] as? Double ?? -1,
                          level: state["level"] as? Double ?? 0)

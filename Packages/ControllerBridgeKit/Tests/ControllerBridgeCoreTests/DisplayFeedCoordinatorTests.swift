@@ -52,6 +52,7 @@ struct DisplayFeedCoordinatorTests {
             OSCMessage("/DeckBridge/Display/loop", [.int(0)]),
             OSCMessage("/DeckBridge/Display/loopLength", [.float(0)]),
             OSCMessage("/DeckBridge/Display/beat", [.int(0)]),
+            OSCMessage("/DeckBridge/Display/clockBpm", [.float(0)]),
             OSCMessage("/DeckBridge/Display/elapsed", [.int(0)]),
             OSCMessage("/DeckBridge/Display/remaining", [.int(loaded ? 428 : 0)]),
             OSCMessage("/DeckBridge/Display/progress", [.float(0)]),
@@ -155,7 +156,7 @@ struct DisplayFeedCoordinatorTests {
         #expect(feed.sent == Self.snapshot(deck: 1, color: 0xFF0000))
     }
 
-    @Test("One datagram per update (#636): the opening snapshot is one bundle of all 20; a new title is a bundle of one; nothing changed sends nothing")
+    @Test("One datagram per update (#636): the opening snapshot is one bundle of all 21; a new title is a bundle of one; nothing changed sends nothing")
     func bundlePerUpdate() throws {
         let (rig, feed) = try Self.rig()
         rig.coordinator.start()
@@ -226,7 +227,7 @@ struct DisplayFeedCoordinatorTests {
         #expect(feed.bundles.count <= 350)
         let keepalives = feed.bundles.filter { $0.first?.address.hasSuffix("/deck") == true }
         #expect(keepalives.count == 5)
-        #expect(keepalives.allSatisfy { $0.count == 20 })
+        #expect(keepalives.allSatisfy { $0.count == 21 })
     }
 
     @Test("Only changes go out: a new title sends the title alone; the same feedback again sends nothing")

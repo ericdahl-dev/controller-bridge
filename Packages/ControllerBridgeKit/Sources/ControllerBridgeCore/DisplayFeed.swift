@@ -34,6 +34,8 @@ final class DisplayFeed {
         var loopLength = 0.0
         /// Syndicate's master clock beat, 1-4, the same on every deck; 0 for none.
         var beat = 0
+        /// Syndicate's master clock BPM, the clock `beat` follows (#674); 0 whenever `beat` is 0.
+        var clockBpm = 0.0
         /// The track time in whole seconds, as the drawn display counts it; remaining is 0 with no known length.
         var elapsed = 0
         var remaining = 0
@@ -64,6 +66,7 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "loop", [.int(loop ? 1 : 0)]),
                 OSCMessage(DisplayFeed.prefix + "loopLength", [.float(Float(loopLength))]),
                 OSCMessage(DisplayFeed.prefix + "beat", [.int(Int32(beat))]),
+                OSCMessage(DisplayFeed.prefix + "clockBpm", [.float(Float((clockBpm * 100).rounded() / 100))]),
                 OSCMessage(DisplayFeed.prefix + "elapsed", [.int(Int32(elapsed))]),
                 OSCMessage(DisplayFeed.prefix + "remaining", [.int(Int32(remaining))]),
                 OSCMessage(DisplayFeed.prefix + "progress", [.float(Float(progress))]),
