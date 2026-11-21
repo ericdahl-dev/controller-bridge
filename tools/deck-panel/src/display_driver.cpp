@@ -192,12 +192,8 @@ DisplayLatch display_latch() {
 // #663's wait on the Scan (#666): the next latch, then the vsync after it, one deadline across both. Without bounce
 // buffers the latch is the vsync, so the second returns at once. The newest latch comes back, read after the vsync.
 bool display_wait_latch(uint32_t timeout_ms, DisplayLatch& latch) {
-    const int64_t until = esp_timer_get_time() + static_cast<int64_t>(timeout_ms) * 1000;
     panel_scan::Latches l;
-    if (!g_scan.wait_next_frame(timeout_ms, l)) return false;
-    const int64_t left_us = until - esp_timer_get_time();
-    const uint32_t left_ms = left_us <= 0 ? 0 : static_cast<uint32_t>((left_us + 999) / 1000);
-    if (!g_scan.wait_vsync_after(l, left_ms)) return false;
+    if (!g_scan.wait_frame(timeout_ms, l)) return false;  // one wake: at the vsync after the latch
     latch = display_latch();
     return true;
 }
