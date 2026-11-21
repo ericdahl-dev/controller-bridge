@@ -268,6 +268,11 @@ void handle_page() {
     send_page(g_error);
 }
 
+void wipe_body() {
+    std::memset(g_body, 0, sizeof g_body);
+    g_body_length = 0;
+}
+
 /// The body, as posted, in raw chunks instead of decoded args, so parse_form sees the real bytes. Called only for a
 /// non-multipart POST (SaveHandler takes no uploads), with the core's HTTPRaw passed in, never fetched.
 void handle_save_body(HTTPRaw& raw) {
@@ -279,6 +284,9 @@ void handle_save_body(HTTPRaw& raw) {
             break;
         case RAW_WRITE:
             if (g_body_overflow || raw.currentSize > sizeof g_body - g_body_length) {
+                // Too big for any form: close the socket, so the core's next read gets 0 and aborts the request,
+                // instead of reading on to Content-Length in 5 s waits while the loop (screen, touch) stands still.
+                if (!g_body_overflow) g_server.client().stop();
                 g_body_overflow = true;
                 break;
             }
@@ -288,16 +296,15 @@ void handle_save_body(HTTPRaw& raw) {
         case RAW_END:
             break;
         case RAW_ABORTED:
-            g_body_overflow = true;  // an incomplete body is no form
+            // An incomplete body is no form, and handle_save never runs for it: wipe what came, it may hold the password.
+            wipe_body();
+            g_body_overflow = false;
+            g_body_seen = false;
             break;
     }
     std::memset(raw.buf, 0, sizeof raw.buf);  // the chunk may hold the password
 }
 
-void wipe_body() {
-    std::memset(g_body, 0, sizeof g_body);
-    g_body_length = 0;
-}
 
 void handle_save() {
     if (g_restart_pending) {
