@@ -34,6 +34,8 @@ final class DisplayFeed {
         var loopLength = 0.0
         /// Syndicate's master clock beat, 1-4, the same on every deck; 0 for none.
         var beat = 0
+        /// Syndicate's master clock BPM, the clock `beat` follows (#674); 0 whenever `beat` is 0.
+        var clockBpm = 0.0
         /// The track time in whole seconds, as the drawn display counts it; remaining is 0 with no known length.
         var elapsed = 0
         var remaining = 0
@@ -64,6 +66,7 @@ final class DisplayFeed {
                 OSCMessage(DisplayFeed.prefix + "loop", [.int(loop ? 1 : 0)]),
                 OSCMessage(DisplayFeed.prefix + "loopLength", [.float(Float(loopLength))]),
                 OSCMessage(DisplayFeed.prefix + "beat", [.int(Int32(beat))]),
+                OSCMessage(DisplayFeed.prefix + "clockBpm", [.float(Float((clockBpm * 100).rounded() / 100))]),
                 OSCMessage(DisplayFeed.prefix + "elapsed", [.int(Int32(elapsed))]),
                 OSCMessage(DisplayFeed.prefix + "remaining", [.int(Int32(remaining))]),
                 OSCMessage(DisplayFeed.prefix + "progress", [.float(Float(progress))]),
@@ -90,8 +93,14 @@ final class DisplayFeed {
     /// each (#617): a change inside it waits, and the next
     /// update after it sends the value then, so the latest wins and nothing queues. A snapshot sends them at once.
     static let fastAddresses: Set<String> = [
-        prefix + "bpm", prefix + "tempo", prefix + "progress", prefix + "phase", prefix + "level",
+        prefix + "bpm", prefix + "tempo", prefix + "progress", prefix + "phase", prefix + "level", prefix + "clockBpm",
     ]
+    /// clockBpm coming from 0, the clock starting, goes at once (#674): with the clock's first beat, so a display
+    /// times its first beat right, not a slot later.
+    static func waitsForSlot(_ message: OSCMessage, after sent: [OSCArgument]?) -> Bool {
+        guard fastAddresses.contains(message.address) else { return false }
+        return !(message.address == prefix + "clockBpm" && (sent == nil || sent == [.float(0)]))
+    }
     static let fastInterval = 1.0 / 30
     /// When the fast fields may next go out: one slot every `fastInterval` that they all share (#636), so a playing
     /// deck sends one bundle of them per slot, about 30 a second, not one per field drifting onto every tick. Kept on
@@ -259,7 +268,7 @@ final class DisplayFeed {
         let fastOpen = snapshot || fastDue.map { now >= $0 - 1e-9 } ?? true
         var fastSent = false
         for message in deck.messages where sent[message.address] != message.arguments {
-            if Self.fastAddresses.contains(message.address) {
+            if Self.waitsForSlot(message, after: sent[message.address]) {
                 guard fastOpen else { continue }
                 fastSent = true
             }
@@ -274,7 +283,7 @@ final class DisplayFeed {
         if !bundles.isEmpty { greeted = true }
         let count = changes.count
         if snapshot {
-            say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", \(count) messages in \(bundles.count) bundle\(bundles.count == 1 ? "" : "s")")
+            say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", clockBpm \(Self.format((deck.clockBpm * 100).rounded() / 100)), \(count) messages in \(bundles.count) bundle\(bundles.count == 1 ? "" : "s")")
         }
     }
 }
