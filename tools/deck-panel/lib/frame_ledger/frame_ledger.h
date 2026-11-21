@@ -10,13 +10,16 @@ namespace frame_ledger {
 
 struct Report {
     uint32_t frames = 0;           // frames that carried feed data to the glass
-    uint32_t lag_typical_us = 0;   // arrival to glass, the median
+    uint32_t lag_typical_us = 0;   // arrival to glass, the median (the upper of the middle two)
     uint32_t lag_worst_us = 0;
     uint32_t skipped = 0;          // frames that reached the glass a vsync or more late
 };
 
 class Ledger {
   public:
+    // Lags kept per window for the median: a 5 s window at the panel's 39 frames/s is about 195.
+    static constexpr int kCapacity = 256;
+
     // A feed datagram was seen waiting on the socket, not read yet.
     void arrived(uint32_t us);
     // A feed datagram was read and handed to the core.
@@ -45,6 +48,8 @@ class Ledger {
     uint32_t in_flight_us_ = 0;
     bool in_flight_late_ = false;
     Report report_;
+    uint32_t lags_[kCapacity];
+    int stored_ = 0;
 };
 
 }  // namespace frame_ledger
