@@ -4,6 +4,8 @@ import FirmwareModel
 public enum PanelFound: Sendable, Equatable {
     /// On USB, but no driver made a serial port for its chip.
     case driverMissing
+    /// On its serial port; the build is nil when its boot line wasn't seen.
+    case onSerial(build: PanelBuild?)
 }
 
 /// What the finder saw.
@@ -20,6 +22,10 @@ public struct DeviceFinder: Sendable {
     /// The CrowPanel's USB serial chip, a CH340K (tools/deck-panel/README.md).
     static let panelChip = (vendor: UInt16(0x1A86), product: UInt16(0x7522))
 
+    /// How long the finder listens to a panel's serial port for its boot line.
+    public static let listenSeconds = 3.0
+    static let bootLine = "deck panel: boot, build "
+
     let usb: any USBDevices
     let midi: any MIDIPorts
     let serial: any PanelSerial
@@ -35,9 +41,21 @@ public struct DeviceFinder: Sendable {
     public func find() async -> Found {
         let devices = await usb.devices()
         var found = Found()
-        if devices.contains(where: { $0.vendor == Self.panelChip.vendor && $0.product == Self.panelChip.product }) {
-            found.panel = .driverMissing
+        if let chip = devices.first(where: { $0.vendor == Self.panelChip.vendor && $0.product == Self.panelChip.product }) {
+            if let port = chip.serialPort {
+                found.panel = .onSerial(build: Self.build(in: await serial.listen(on: port, for: Self.listenSeconds)))
+            } else {
+                found.panel = .driverMissing
+            }
         }
         return found
+    }
+
+    /// The build from the panel's boot line, "deck panel: boot, build <sha>".
+    static func build(in lines: [String]) -> PanelBuild? {
+        for line in lines where line.hasPrefix(bootLine) {
+            return PanelBuild(sha: String(line.dropFirst(bootLine.count)))
+        }
+        return nil
     }
 }

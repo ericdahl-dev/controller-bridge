@@ -25,4 +25,20 @@ struct UpdaterScreenTests {
         #expect(screen.panel.detail == "The USB driver for its chip is missing")
         #expect(screen.lc6000.status == "Nothing connected")
     }
+
+    static let port = "/dev/cu.wchusbserial210"
+
+    static func panel(_ rig: Rig, printing lines: [String]) {
+        rig.usb.plugged = [USBDevice(vendor: ch340k.vendor, product: ch340k.product, name: "USB Serial", serialPort: port)]
+        rig.serial.lines[port] = lines
+    }
+
+    @Test("A panel that boots while the app listens: found, with the build from its boot line")
+    func panelBuild() async {
+        let rig = Rig()
+        Self.panel(rig, printing: ["ESP-ROM:esp32s3-20210327", "deck panel: boot, build 1d0683f", "deck panel: waiting"])
+        let screen = await rig.screen()
+        #expect(screen.panel.status == "Deck panel found")
+        #expect(screen.panel.detail == "Build 1d0683f")
+    }
 }
