@@ -10,6 +10,7 @@ public struct PanelFirmware: Sendable, Hashable {
 
 public enum CatalogError: Error, Equatable {
     case badVersion(String)
+    case notAPatchDescription(String)
 }
 
 /// The firmware the app ships with, read from a folder holding `catalog.json` and the files it names. No network.
@@ -23,10 +24,19 @@ public struct Catalog: Sendable {
             guard let version = FirmwareVersion(entry.version) else { throw CatalogError.badVersion(entry.version) }
             return PanelFirmware(version: version, sha: entry.sha, image: directory.appending(path: entry.image))
         }
-        lc6000 = file.lc6000.map { set in
+        lc6000 = try file.lc6000.map { set in
             LC6000PatchSet(
                 firmware: LC6000Firmware(wd: set.wd, tp: set.tp),
-                entries: set.entries.map { LC6000Entry(kind: $0.kind, chip: $0.chip, file: directory.appending(path: $0.file)) })
+                entries: try set.entries.map { entry in
+                    let url = directory.appending(path: entry.file)
+                    switch entry.kind {
+                    case .patch:
+                        guard let edits = PatchDescription.edits(try Data(contentsOf: url)) else {
+                            throw CatalogError.notAPatchDescription(entry.file)
+                        }
+                        return LC6000Entry(kind: .patch, chip: entry.chip, file: url, edits: edits)
+                    }
+                })
         }
     }
 
@@ -85,6 +95,20 @@ public struct LC6000Entry: Sendable, Hashable {
     public let kind: Kind
     public let chip: Chip
     public let file: URL
+    public var edits: [PatchEdit] = []
+}
+
+/// One line of a patch description: at `address`, the bytes `old` become `new`.
+public struct PatchEdit: Sendable, Hashable {
+    public let address: UInt32
+    public let old: [UInt8]
+    public let new: [UInt8]
+
+    public init(address: UInt32, old: [UInt8], new: [UInt8]) {
+        self.address = address
+        self.old = old
+        self.new = new
+    }
 }
 
 /// The patches tested together on one pair of stock firmware versions.
