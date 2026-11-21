@@ -664,6 +664,48 @@ void test_every_waiting_screen_shows_the_logo() {
     TEST_ASSERT_EQUAL_STRING("192.168.1.40  port 9100", screen.last().detail.c_str());
 }
 
+// A quit DeckBridge sends nothing more: within 3 s the panel shows the logo, never a frozen deck (#651).
+void test_a_quit_deckbridge_is_the_logo_within_3_seconds() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    feed(core, bundle({int_message(prefix + "deck", 1), int_message(prefix + "loaded", 1),
+                       string_message(prefix + "title", "Night Drive"), int_message(prefix + "playing", 1)}), 1000);
+    core.render(screen, 1000);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    core.render(screen, 3999);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    core.render(screen, 4000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    TEST_ASSERT_TRUE(screen.last().logo);
+    TEST_ASSERT_EQUAL_STRING("Waiting for DeckBridge", screen.last().headline.c_str());
+}
+
+// DeckBridge's goodbye (ADR 0011, #651): the logo at once, the deck kept for when the feed comes back.
+void test_a_goodbye_is_the_logo_at_once_and_the_next_message_brings_the_deck_back() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, bundle({int_message(prefix + "deck", 2), string_message(prefix + "title", "Night Drive")}), 1000);
+    core.render(screen, 1000);
+    feed(core, bundle({int_message(prefix + "goodbye", 1)}), 1100);
+    core.render(screen, 1100);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    TEST_ASSERT_TRUE(screen.last().logo);
+    feed(core, int_message(prefix + "deck", 2), 9000);
+    core.render(screen, 9000);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", screen.last().title.c_str());
+}
+
+void test_a_goodbye_of_another_value_is_ignored() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    feed(core, int_message(prefix + "goodbye", 0), 1100);
+    core.render(screen, 1100);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -723,6 +765,9 @@ int main(int, char**) {
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
     RUN_TEST(test_every_waiting_screen_shows_the_logo);
+    RUN_TEST(test_a_quit_deckbridge_is_the_logo_within_3_seconds);
+    RUN_TEST(test_a_goodbye_is_the_logo_at_once_and_the_next_message_brings_the_deck_back);
+    RUN_TEST(test_a_goodbye_of_another_value_is_ignored);
     RUN_TEST(test_a_bundle_applies_all_its_messages_as_one_arrival);
     RUN_TEST(test_the_core_says_what_it_holds);
     RUN_TEST(test_a_bad_element_does_not_lose_the_good_ones);

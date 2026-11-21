@@ -189,6 +189,12 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
     } else {
         alive = apply(bytes, length);
     }
+    if (goodbye_) {
+        // The waiting screen at once; the deck is kept for the next snapshot.
+        goodbye_ = false;
+        heard_ = false;
+        return;
+    }
     if (!alive) return;
     heard_ = true;
     last_heard_ms_ = now_ms;
@@ -197,6 +203,12 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
 bool DeckCore::apply(const uint8_t* bytes, size_t length) {
     Message message;
     if (!parse(bytes, length, message)) return false;
+    // DeckBridge's goodbye (ADR 0011, #651): not the deck's state but the feed's end, so not a table row. 1 is the
+    // only value; anything else is ignored like a bad value.
+    if (std::strcmp(message.name, "goodbye") == 0) {
+        if (message.type == 'i' && message.i == 1) goodbye_ = true;
+        return false;
+    }
     // An address this panel doesn't know is a newer DeckBridge's (ADR 0011): ignored, but the feed is alive.
     bool alive = true;
     for (const Row& row : kRows) {
