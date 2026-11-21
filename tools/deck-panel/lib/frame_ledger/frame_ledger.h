@@ -27,8 +27,12 @@ class Ledger {
     Report take();
 
   private:
-    bool pending_ = false;     // a read waits for its frame to reach the glass
-    uint32_t pending_us_ = 0;  // when it was read
+    // Read, waiting for a frame to be handed over.
+    bool waiting_ = false;
+    uint32_t waiting_us_ = 0;
+    // In the frame handed over, waiting for the glass.
+    bool in_flight_ = false;
+    uint32_t in_flight_us_ = 0;
     Report report_;
 };
 
