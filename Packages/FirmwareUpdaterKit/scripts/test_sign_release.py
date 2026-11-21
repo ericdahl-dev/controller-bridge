@@ -60,6 +60,18 @@ class SignRelease(unittest.TestCase):
         self.assertIn("manifest.sig", upload)
         self.assertIn("--draft=false", self.log.read_text().splitlines()[-1])
 
+    def test_a_release_that_is_not_a_draft_is_not_touched(self):
+        self.draft = "false"
+        result, calls = self.run_script()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, ["gh release view"])
+
+    def test_when_signing_fails_nothing_is_uploaded_or_published(self):
+        self.sign_fails = True
+        result, calls = self.run_script()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, ["gh release view", "gh release download", "firmware-release sign --key"])
+
 
 if __name__ == "__main__":
     unittest.main()
