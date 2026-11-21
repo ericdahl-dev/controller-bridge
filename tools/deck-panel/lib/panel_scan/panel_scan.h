@@ -91,6 +91,10 @@ class Scan {
     /// The other wake (#679): until the vsync after `latch`, at once if it came already (without bounce buffers the
     /// latch is a vsync, so at once). False after `timeout_ms`.
     bool wait_vsync_after(const Latches& latch, uint32_t timeout_ms);
+    /// The frame clock's wait in one wake (#666): until the vsync after a latch newer than the one current on entry (the
+    /// two waits above as one, so the loop isn't woken between the latch and the draw). Without bounce buffers the latch
+    /// is the vsync. `latch` is that latch. False after `timeout_ms`.
+    bool wait_frame(uint32_t timeout_ms, Latches& latch);
     /// The latch stamp, for any task.
     Latches latches() const;
     /// The health since the last call, and a fresh window. Loop only.

@@ -22,6 +22,7 @@ struct ScriptedPanel : panel_scan::Panel {
     bool started = false;
     panel_scan::Config config{};
     int hand_overs = 0;
+    int wakes = 0;  // takes that returned with their signal: the loop woken
     bool given[3] = {false, false, false};  // a binary semaphore per signal
 
     bool start(const panel_scan::Config& c) override {
@@ -45,6 +46,7 @@ struct ScriptedPanel : panel_scan::Panel {
             fire();
         }
         given[static_cast<int>(s)] = false;
+        ++wakes;
         return true;
     }
     uint64_t now() const override { return now_us; }

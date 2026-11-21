@@ -382,6 +382,66 @@ void test_the_health_is_looked_at_in_parts_of_one_window() {
     TEST_ASSERT_EQUAL(0, next.copy.chunks);
 }
 
+// The frame wait in one wake (#666): the vsync after the next latch, so the loop wakes once a frame and not again
+// between the latch and the draw (#663: nothing but the feed in that gap).
+void test_the_frame_wait_wakes_once_at_the_vsync_after_the_next_latch() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{31400, Irq::frame_complete}, {33333, Irq::vsync}};
+    Latches l;
+    TEST_ASSERT_TRUE(scan.wait_frame(70, l));
+    TEST_ASSERT_EQUAL(33333, panel.now_us);
+    TEST_ASSERT_EQUAL(1, l.count);
+    TEST_ASSERT_EQUAL(31400, l.us);
+    TEST_ASSERT_EQUAL(1, panel.wakes);
+}
+
+// A vsync with no new latch before it (the latch late, or the call just after a latch) doesn't end the wait.
+void test_the_frame_wait_needs_a_latch_newer_than_the_call() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{1000, Irq::frame_complete}};
+    panel.run_until(1500);
+    panel.script.push_back({2933, Irq::vsync});
+    panel.script.push_back({34733, Irq::frame_complete});
+    panel.script.push_back({36666, Irq::vsync});
+    Latches l;
+    TEST_ASSERT_TRUE(scan.wait_frame(70, l));
+    TEST_ASSERT_EQUAL(36666, panel.now_us);
+    TEST_ASSERT_EQUAL(2, l.count);
+    TEST_ASSERT_EQUAL(34733, l.us);
+}
+
+// Without bounce buffers the latch is the vsync: one interrupt, one wake.
+void test_without_bounce_buffers_the_frame_wait_ends_at_the_latch() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners(0));
+    panel.script = {{33333, Irq::vsync}};
+    Latches l;
+    TEST_ASSERT_TRUE(scan.wait_frame(70, l));
+    TEST_ASSERT_EQUAL(33333, panel.now_us);
+    TEST_ASSERT_EQUAL(33333, l.us);
+    TEST_ASSERT_EQUAL(1, panel.wakes);
+}
+
+// No frame in time: false at the timeout.
+void test_the_frame_wait_times_out() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{31400, Irq::frame_complete}};
+    Latches l;
+    TEST_ASSERT_FALSE(scan.wait_frame(70, l));
+    TEST_ASSERT_EQUAL(70000, panel.now_us);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
@@ -408,5 +468,9 @@ int main(int, char**) {
     RUN_TEST(test_without_bounce_buffers_the_vsync_after_a_latch_is_the_latch);
     RUN_TEST(test_a_late_copy_is_placed_by_its_start);
     RUN_TEST(test_the_health_is_looked_at_in_parts_of_one_window);
+    RUN_TEST(test_the_frame_wait_wakes_once_at_the_vsync_after_the_next_latch);
+    RUN_TEST(test_the_frame_wait_needs_a_latch_newer_than_the_call);
+    RUN_TEST(test_without_bounce_buffers_the_frame_wait_ends_at_the_latch);
+    RUN_TEST(test_the_frame_wait_times_out);
     return UNITY_END();
 }

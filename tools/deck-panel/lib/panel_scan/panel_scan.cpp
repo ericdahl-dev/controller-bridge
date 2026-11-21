@@ -99,6 +99,24 @@ bool Scan::wait_vsync_after(const Latches& latch, uint32_t timeout_ms) {
     }
 }
 
+bool Scan::wait_frame(uint32_t timeout_ms, Latches& latch) {
+    const uint32_t entry = latches().count;
+    const uint64_t until = panel_.now() + uint64_t(timeout_ms) * 1000;
+    for (;;) {
+        panel_.lock();
+        const Latches l = latches_;
+        const uint64_t vsync_us = vsync_us_;
+        panel_.unlock();
+        if (l.count != entry && (vsync_us > l.us || (config_.bounce_px == 0 && vsync_us == l.us))) {
+            latch = l;
+            return true;
+        }
+        const uint64_t now = panel_.now();
+        if (now >= until) return false;
+        if (!panel_.take(Signal::vsync, static_cast<uint32_t>((until - now + 999) / 1000))) return false;
+    }
+}
+
 void Scan::frame_complete(uint64_t now_us) {
     panel_.lock();
     watch_.frame_complete(static_cast<uint32_t>(now_us));
