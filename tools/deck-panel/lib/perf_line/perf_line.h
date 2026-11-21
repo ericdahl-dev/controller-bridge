@@ -29,6 +29,8 @@ struct Window {
     scan_watch::Report scan;        // the scan-out's steadiness
     uint32_t copy_budget_us = 0;    // a bounce chunk's deadline
     bounce_budget::Report copy;     // the bounce copies against it; no chunks when the build can't time them
+    uint32_t copy_late_drawing = 0; // of copy.late, those during the loop's LVGL refresh (#663)
+    uint32_t copy_late_turn = 0;    // of copy.late, those within 3 ms after a latch: the frame turn (#663)
     frame_ledger::Report ledger;    // feed data's arrival to glass (#662)
     frame_clock::Report clock;      // the frame clock's frames, late ones, missed latches, waits no latch ended (#663)
 };

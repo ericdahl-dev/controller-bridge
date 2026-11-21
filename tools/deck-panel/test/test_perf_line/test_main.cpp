@@ -121,6 +121,21 @@ void test_the_frame_clock_counts_follow_the_feed_lag() {
                                                "internal free") != std::string::npos);
 }
 
+// Where the late copies fell (#663): during the loop's LVGL refresh, and within 3 ms after a latch (the frame turn,
+// where the driver refills both bounce buffers at the vsync). Overlapping counts, not a split. Only when some are late.
+void test_late_copies_say_how_many_fell_in_a_refresh_and_at_the_frame_turn() {
+    perf_line::Window w = window();
+    w.copy.late = 41;
+    w.copy_late_drawing = 30;
+    w.copy_late_turn = 12;
+    TEST_ASSERT_TRUE(perf_line::format(w).find("(margin 126) 41 late (30 drawing, 12 at the turn), feed") !=
+                     std::string::npos);
+    w.copy.late = 0;
+    w.copy_late_drawing = 0;
+    w.copy_late_turn = 0;
+    TEST_ASSERT_TRUE(perf_line::format(w).find("(margin 126) 0 late, feed") != std::string::npos);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_line_has_every_number_in_one_fixed_order);
@@ -130,5 +145,6 @@ int main() {
     RUN_TEST(test_the_feed_lag_and_skipped_frames_follow_the_feed_counts);
     RUN_TEST(test_a_window_with_no_feed_frames_says_so);
     RUN_TEST(test_the_frame_clock_counts_follow_the_feed_lag);
+    RUN_TEST(test_late_copies_say_how_many_fell_in_a_refresh_and_at_the_frame_turn);
     return UNITY_END();
 }
