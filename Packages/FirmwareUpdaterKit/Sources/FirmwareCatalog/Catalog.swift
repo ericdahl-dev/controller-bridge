@@ -13,6 +13,7 @@ public enum CatalogError: Error, Equatable {
     case notAPatchDescription(String)
     case unnamedFile(String)
     case missingBuiltIn
+    case outsideFolder(String)
 }
 
 /// The firmware the app ships with, read from a folder holding `catalog.json` and the files it names. No network.
@@ -22,6 +23,8 @@ public struct Catalog: Sendable {
 
     public init(directory: URL) throws {
         let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: directory.appending(path: "catalog.json")))
+        let names = file.panel.map(\.image) + file.lc6000.flatMap { $0.entries.map(\.file) }
+        if let outside = names.first(where: { !Self.staysInside($0) }) { throw CatalogError.outsideFolder(outside) }
         panel = try file.panel.map { entry in
             guard let version = FirmwareVersion(entry.version) else { throw CatalogError.badVersion(entry.version) }
             return PanelFirmware(version: version, sha: entry.sha, image: directory.appending(path: entry.image))
@@ -44,6 +47,12 @@ public struct Catalog: Sendable {
         if let stray = try Self.files(in: directory).first(where: { !named.contains($0) }) {
             throw CatalogError.unnamedFile(stray)
         }
+    }
+
+    /// A plain relative path inside a folder: no leading "/", no "." or ".." parts, no empty parts, no backslashes.
+    public static func staysInside(_ name: String) -> Bool {
+        let parts = name.split(separator: "/", omittingEmptySubsequences: false)
+        return !name.contains("\\") && parts.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
     }
 
     /// Every file under `directory`, as paths relative to it (Finder's .DS_Store aside).

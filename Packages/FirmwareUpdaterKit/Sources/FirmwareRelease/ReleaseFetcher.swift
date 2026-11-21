@@ -88,7 +88,7 @@ public struct ReleaseFetcher: Sendable {
         guard let manifest = try? JSONDecoder().decode(Manifest.self, from: published.manifest) else {
             throw Refusal.unreadableManifest
         }
-        if let unsafe = manifest.files.map(\.name).first(where: { !Self.staysInside($0) }) {
+        if let unsafe = manifest.files.map(\.name).first(where: { !Catalog.staysInside($0) }) {
             throw Refusal.unsafeFileName(unsafe)
         }
         let folder = cache.appending(path: "fetched")
@@ -123,11 +123,6 @@ public struct ReleaseFetcher: Sendable {
         do { return try await call() } catch { throw Refusal.unreachable }
     }
 
-    /// A plain relative path: no leading "/", no "." or ".." parts, no empty parts, no backslashes.
-    static func staysInside(_ name: String) -> Bool {
-        let parts = name.split(separator: "/", omittingEmptySubsequences: false)
-        return !name.contains("\\") && parts.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
-    }
 }
 
 func sha256Hex(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
