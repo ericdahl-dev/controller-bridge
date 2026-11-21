@@ -17,7 +17,7 @@ concurrency:
 jobs:
   # Which jobs a change needs (scripts/ci_changes.py): a change to only the website, its scripts or Markdown docs
   # skips the two Mac jobs. A skipped job counts as passed for the ruleset's required Kit tests check. The Deck panel
-  # job runs only for tools/deck-panel or this workflow.
+  # job runs only for tools/deck-panel, the icon SVG its logo is made from (#669), or this workflow.
   changes:
     name: Changes
     runs-on: ubuntu-latest
