@@ -23,6 +23,8 @@ public struct PublishedRelease: Sendable {
 /// Why a fetched release wasn't used. The built-in catalog stays in use whatever the reason.
 public enum Refusal: Error, Sendable, Equatable {
     case badSignature
+    /// The manifest isn't one: cut short, empty, or not JSON.
+    case unreadableManifest
     /// Signed, by its own account, with a key the app doesn't trust.
     case unknownKey(String)
     /// A file whose size or SHA-256 differs from the manifest: altered, or cut short.
@@ -60,10 +62,14 @@ public struct ReleaseFetcher: Sendable {
     private func fetched() async throws -> Catalog {
         let published = try await feed.latest()
         // Nothing in the manifest is used before its signature checks out, except the name of the key to check it with.
-        let claimed = try JSONDecoder().decode(KeyName.self, from: published.manifest).key
+        guard let claimed = try? JSONDecoder().decode(KeyName.self, from: published.manifest).key else {
+            throw Refusal.unreadableManifest
+        }
         guard let key = keys.first(where: { $0.id == claimed }) else { throw Refusal.unknownKey(claimed) }
         guard key.signed(published.manifest, published.signature) else { throw Refusal.badSignature }
-        let manifest = try JSONDecoder().decode(Manifest.self, from: published.manifest)
+        guard let manifest = try? JSONDecoder().decode(Manifest.self, from: published.manifest) else {
+            throw Refusal.unreadableManifest
+        }
         let folder = cache.appending(path: "fetched")
         try? FileManager.default.removeItem(at: folder)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

@@ -71,3 +71,14 @@ import FirmwareRelease
         .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
     #expect(outcome.refusal == .fileMismatch(name))
 }
+
+@Test(arguments: [0.5, 0.0])
+func aManifestCutShortIsRefused(kept: Double) async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary)
+    feed.manifest = feed.manifest.prefix(Int(Double(feed.manifest.count) * kept))
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .unreadableManifest)
+    #expect(outcome.catalog.newestPanel()?.version == FirmwareVersion("1.0.0"))
+}
