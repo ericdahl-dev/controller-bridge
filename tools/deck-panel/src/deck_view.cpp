@@ -1,11 +1,7 @@
 #include "deck_view.h"
 
-#include <cmath>
-#include <cstdio>
-#include <cstring>
 
 #include "board_pins.h"
-#include "font_fallback.h"
 
 // Geist (OFL), converted by fonts/make_fonts.sh into src/fonts/.
 LV_FONT_DECLARE(geist_semibold_36)
@@ -90,9 +86,9 @@ void DeckScreen::build() {
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 
-    // The deck. Every object starts as a default Face draws it: no text, bars empty, blocks and lamps off.
+    // The deck. The objects only: the first show_deck is every part, and sets them all.
     deck_page_ = page(screen);
-    deck_number_ = field(deck_page_, kLeft, 12, 70, &geist_mono_semibold_64, lv_color_hex(shown_.deck_color));
+    deck_number_ = field(deck_page_, kLeft, 12, 70, &geist_mono_semibold_64, lv_color_white());
 
     // Title (up to two lines) and artist across the top; the artist follows the title's height, inside this box.
     lv_obj_t* header = lv_obj_create(deck_page_);
@@ -124,7 +120,7 @@ void DeckScreen::build() {
 
     // The progress bar: a fill on a track, its width the progress.
     lv_obj_t* progress = box(deck_page_, kLeft, kProgressY, kWidth, kProgressH, kTrack);
-    progress_fill_ = box(progress, 0, 0, 0, kProgressH, lv_color_hex(shown_.progress_color));
+    progress_fill_ = box(progress, 0, 0, 0, kProgressH, lv_color_hex(palette::kProgress));
 
     // The beat in the bar: four blocks, the lit one in the deck color.
     const int beat_w = (kWidth - 3 * kBeatGap) / 4;
@@ -135,8 +131,7 @@ void DeckScreen::build() {
     // The phase bar: a track, a center mark, and the marker, hidden while the phase is unknown.
     lv_obj_t* phase = box(deck_page_, kLeft, kPhaseY, kWidth, kPhaseH, kTrack);
     box(phase, kWidth / 2 - 1, 0, 2, kPhaseH, kGray);
-    phase_px_ = deck_core::layout::kPhaseTravel / 2;
-    phase_marker_ = box(phase, phase_px_, 0, kMarkerW, kPhaseH, lv_color_white());
+    phase_marker_ = box(phase, 0, 0, kMarkerW, kPhaseH, lv_color_white());
     lv_obj_add_flag(phase_marker_, LV_OBJ_FLAG_HIDDEN);
 
     // The lamps: lit is the lamp's color with black text.
@@ -151,8 +146,6 @@ void DeckScreen::build() {
                           LV_TEXT_ALIGN_CENTER);
         lv_label_set_text_static(lamp.text, names[i]);
     }
-    std::snprintf(loop_text_, sizeof loop_text_, "%s", shown_.loop_label);
-    lv_label_set_text_static(loop_.text, loop_text_);
 
     // The level meter: a fill from the bottom.
     lv_obj_t* meter = box(deck_page_, kMeterX, kMeterY, kMeterW, kMeterH, kTrack);
@@ -170,73 +163,55 @@ void DeckScreen::build() {
     detail_ = label(waiting_page_, waiting_w, &geist_regular_24, kGray, LV_TEXT_ALIGN_CENTER, 3);
 }
 
-template <size_t N>
-void DeckScreen::set_text(lv_obj_t* label, char (&shown)[N], const char* text) {
-    static_assert(N <= sizeof fitted_, "fitted_ holds it");
-    font_fallback::fit(text, fitted_, N);
-    if (std::strcmp(shown, fitted_) == 0) return;
-    std::memcpy(shown, fitted_, N);
-    lv_label_set_text_static(label, shown);
-}
-
-void DeckScreen::show_waiting(const deck_core::WaitingView& view, const deck_core::WaitingChanges&) {
-    set_text(headline_, headline_text_, view.headline);
-    set_text(detail_, detail_text_, view.detail);
+void DeckScreen::show_waiting(const deck_core::WaitingView& view, const deck_core::WaitingChanges& changes) {
+    // The view is the core's and stays put until the next call: the labels point at its texts.
+    if (changes.headline) lv_label_set_text_static(headline_, view.headline);
+    if (changes.detail) lv_label_set_text_static(detail_, view.detail);
     set_hidden(deck_page_, true);
     set_hidden(waiting_page_, false);
 }
 
-void DeckScreen::show_deck(const deck_core::Face& face, const deck_core::Changes&) {
-    draw(face);
+void DeckScreen::show_deck(const deck_core::Face& f, const deck_core::Changes& c) {
+    draw(f, c);
     set_hidden(waiting_page_, true);
     set_hidden(deck_page_, false);
 }
 
-void DeckScreen::draw(const deck_core::Face& f) {
-    using std::strcmp;
-    if (f.deck_color != shown_.deck_color) lv_obj_set_style_text_color(deck_number_, lv_color_hex(f.deck_color), 0);
-    if (strcmp(f.deck, shown_.deck) != 0) set_text(deck_number_, deck_text_, f.deck);
-    if (strcmp(f.title, shown_.title) != 0) set_text(title_, title_text_, f.title);
-    if (strcmp(f.artist, shown_.artist) != 0) set_text(artist_, artist_text_, f.artist);
-    if (strcmp(f.key, shown_.key) != 0) set_text(key_, key_text_, f.key);
-    if (strcmp(f.bpm, shown_.bpm) != 0) set_text(bpm_, bpm_text_, f.bpm);
-    if (strcmp(f.tempo, shown_.tempo) != 0) set_text(tempo_, tempo_text_, f.tempo);
-    if (strcmp(f.elapsed, shown_.elapsed) != 0) set_text(elapsed_, elapsed_text_, f.elapsed);
-    if (strcmp(f.remaining, shown_.remaining) != 0) set_text(remaining_, remaining_text_, f.remaining);
+void DeckScreen::draw(const deck_core::Face& f, const deck_core::Changes& c) {
+    using deck_core::Part;
+    // Texts: the face is the core's and stays put until the next call, so each label points at it.
+    struct {
+        Part part;
+        lv_obj_t* label;
+        const char* text;
+    } texts[] = {{Part::deck, deck_number_, f.deck},   {Part::title, title_, f.title},
+                 {Part::artist, artist_, f.artist},    {Part::key, key_, f.key},
+                 {Part::bpm, bpm_, f.bpm},             {Part::tempo, tempo_, f.tempo},
+                 {Part::elapsed, elapsed_, f.elapsed}, {Part::remaining, remaining_, f.remaining},
+                 {Part::loop_label, loop_.text, f.loop_label}};
+    for (const auto& t : texts) {
+        if (c.has(t.part)) lv_label_set_text_static(t.label, t.text);
+    }
+    if (c.has(Part::deck_color)) lv_obj_set_style_text_color(deck_number_, lv_color_hex(f.deck_color), 0);
 
-    // Fast: progress, phase and level move a box only when a whole pixel changes.
-    const int32_t progress = f.progress_px;
-    if (progress != progress_px_) {
-        progress_px_ = progress;
-        lv_obj_set_width(progress_fill_, progress);
-    }
-    if (f.progress_color != shown_.progress_color) {
-        lv_obj_set_style_bg_color(progress_fill_, lv_color_hex(f.progress_color), 0);
-    }
+    // Fast: the core tells only whole-pixel moves.
+    if (c.has(Part::progress_px)) lv_obj_set_width(progress_fill_, f.progress_px);
+    if (c.has(Part::progress_color)) lv_obj_set_style_bg_color(progress_fill_, lv_color_hex(f.progress_color), 0);
     for (int i = 0; i < 4; ++i) {
-        if (f.beat_color[i] != shown_.beat_color[i]) lv_obj_set_style_bg_color(beats_[i], lv_color_hex(f.beat_color[i]), 0);
+        if (c.has(Part::beat_color, i)) lv_obj_set_style_bg_color(beats_[i], lv_color_hex(f.beat_color[i]), 0);
     }
-    const bool marker = f.phase_px != deck_core::kPhaseHidden;
-    if (marker && f.phase_px != phase_px_) {
-        phase_px_ = f.phase_px;
-        lv_obj_set_x(phase_marker_, f.phase_px);
+    if (c.has(Part::phase_px)) {
+        const bool marker = f.phase_px != deck_core::kPhaseHidden;
+        if (marker) lv_obj_set_x(phase_marker_, f.phase_px);
+        set_hidden(phase_marker_, !marker);
     }
-    set_hidden(phase_marker_, !marker);
-    const int32_t level = f.level_px;
-    if (level != level_px_) {
-        level_px_ = level;
-        lv_obj_set_height(level_fill_, level);
-    }
+    if (c.has(Part::level_px)) lv_obj_set_height(level_fill_, f.level_px);
 
-    // The lamps.
     Lamp* lamps[] = {&play_, &cue_, &sync_, &master_, &loop_};
     for (int i = 0; i < deck_core::kLamps; ++i) {
-        if (f.lamp_color[i] != shown_.lamp_color[i]) lv_obj_set_style_bg_color(lamps[i]->box, lv_color_hex(f.lamp_color[i]), 0);
-        if (f.lamp_text_color[i] != shown_.lamp_text_color[i]) {
+        if (c.has(Part::lamp_color, i)) lv_obj_set_style_bg_color(lamps[i]->box, lv_color_hex(f.lamp_color[i]), 0);
+        if (c.has(Part::lamp_text_color, i)) {
             lv_obj_set_style_text_color(lamps[i]->text, lv_color_hex(f.lamp_text_color[i]), 0);
         }
     }
-    if (strcmp(f.loop_label, shown_.loop_label) != 0) set_text(loop_.text, loop_text_, f.loop_label);
-
-    shown_ = f;
 }
