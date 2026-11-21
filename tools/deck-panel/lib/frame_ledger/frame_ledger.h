@@ -17,6 +17,8 @@ struct Report {
 
 class Ledger {
   public:
+    // A feed datagram was seen waiting on the socket, not read yet.
+    void arrived(uint32_t us);
     // A feed datagram was read and handed to the core.
     void read(uint32_t us);
     // The frame was handed to the panel.
@@ -30,6 +32,9 @@ class Ledger {
     Report take();
 
   private:
+    // Seen on the socket, not read yet: the newest.
+    bool arrived_ = false;
+    uint32_t arrived_us_ = 0;
     // Read, waiting for a frame to be handed over.
     bool waiting_ = false;
     uint32_t waiting_us_ = 0;

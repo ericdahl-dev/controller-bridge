@@ -47,10 +47,21 @@ void test_a_vsync_that_passes_before_the_read_is_handed_over_marks_its_frame_ski
     TEST_ASSERT_EQUAL_UINT32(1, r.skipped);
 }
 
+void test_lag_counts_from_the_newest_arrival_before_the_read() {
+    frame_ledger::Ledger ledger;
+    ledger.arrived(500);
+    ledger.arrived(800);  // the newest
+    ledger.read(1000);
+    ledger.swapped(9000);
+    ledger.on_glass(21000);
+    TEST_ASSERT_EQUAL_UINT32(20200, ledger.take().lag_worst_us);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_a_read_swapped_and_shown_at_the_next_vsync_is_one_frame_with_its_lag);
     RUN_TEST(test_a_read_after_the_swap_is_not_in_that_frame_but_the_next);
     RUN_TEST(test_a_vsync_that_passes_before_the_read_is_handed_over_marks_its_frame_skipped);
+    RUN_TEST(test_lag_counts_from_the_newest_arrival_before_the_read);
     return UNITY_END();
 }
