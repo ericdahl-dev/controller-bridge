@@ -97,6 +97,7 @@ jobs:
         run: |
           pio run -d tools/deck-panel -e crowpanel
           pio run -d tools/deck-panel -e crowpanel-test
+          pio run -d tools/deck-panel -e crowpanel-perf
 
   display-firmware:
     name: Display firmware

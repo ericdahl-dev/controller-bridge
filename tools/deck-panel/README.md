@@ -133,6 +133,63 @@ tools/deck-panel/fonts/make_fonts.sh
 
 The deck view no longer uses Montserrat 20, 28 or 48; the test screen still has 20 and 28, and LVGL keeps 14 as its default. Together 438 KB of flash, about 287 KB more than the Montserrat sizes they replace. Geist has no glyph for 12 of the range's characters (Geist Mono 14), so the script draws them as their base letter: the soft hyphen as `-`, Ĕĕ Ĭĭ Ŏŏ without the breve, ĸ as `k`, Ŀŀ as `Ll`, ŉ as `n`, ſ as `s`, and in Mono Ĳĳ as `Ii`.
 
+## Drawing without tearing (#635)
+
+The panel scans its picture out 30 times a second (12.3 MHz pixel clock). There are two framebuffers in PSRAM. LVGL draws into the hidden one (DIRECT mode), then hands it to the panel at the frame's end. Until the panel has moved off the old buffer, LVGL waits, so it never draws into the picture being shown. LVGL refreshes every 33 ms, one frame, which keeps up with the feed's 30 updates a second. The timing is `lib/frame_pacing`, and the handshake is `lib/swap_gate`; both are host-tested.
+
+The driver is Espressif's `esp_lcd` RGB panel with bounce buffers: two buffers of ten lines each, in internal RAM, filled by an interrupt from the current framebuffer. They're needed on this core. It restarts the panel's DMA at every vsync, and on the S3 that restart always starts from the first framebuffer, which would undo every swap to the second.
+
+**Why 12.3 MHz and not Elecrow's 16.** The copy into a bounce buffer has to finish before the DMA comes back for it: 512.5 µs a chunk at 16 MHz, 585.7 µs at 14 MHz, 666.7 µs at 12.3 MHz. At 16 MHz it didn't. Every 10th row showed its start from 20 rows back, fixed on a still picture and worse in motion. At 12.3 MHz the owner's panel was clean, still and with the deck playing. 14 MHz is untried; the perf line's copy margin says whether it would hold. Going back to 16 MHz without a copy needs a rebuilt core (#650).
+
+**Overrides, to try on the panel without a commit** (defaults in `src/display_driver.cpp`):
+
+| Flag | Default | What it changes |
+|---|---|---|
+| `-DPANEL_PCLK_HZ=14000000` | 12.3 MHz | Pixel clock, 12.3 to 16 MHz (30 Hz at 12.3, 34 Hz at 14, 39 Hz at 16; the refresh period follows). Above 12.3, watch the copy margin |
+| `-DPANEL_PCLK_ACTIVE_NEG=0` | 1 | The clock edge the panel samples on |
+| `-DPANEL_BOUNCE_PX=0` | 8000 | Bounce buffers off: expected to show only every other frame on this core. Any other size must divide 384,000 into an even number of chunks (the build refuses others) |
+| `-DPANEL_ISR_CORE=0` | 1 | The core that runs the panel's interrupts, the bounce copy among them (about 30 MB/s out of PSRAM). 1 is LVGL's; 0 is Wi-Fi's |
+| `-DARDUINO_RUNNING_CORE=0` | 1 | Arduino's own: the core loop() and so LVGL run on. Wi-Fi and lwIP stay on core 0 (fixed in the prebuilt sdkconfig) |
+| `-DPANEL_PCLK_IDLE_HIGH`, `-DPANEL_HSYNC_IDLE_LOW`, `-DPANEL_VSYNC_IDLE_LOW`, `-DPANEL_DE_IDLE_HIGH` | as LovyanGFX had them | Signal idle levels |
+
+Not a flag: running code and constants from PSRAM (XIP, `CONFIG_SPIRAM_FETCH_INSTRUCTIONS`/`RODATA`) is off in this prebuilt core and needs a custom sdkconfig rebuild. It matters because a flash write (NVS, Wi-Fi's first-boot calibration) stops the bounce interrupt for milliseconds, which can leave a band until the next disturbance.
+
+Stack them on any env: `PLATFORMIO_BUILD_FLAGS="-DPANEL_PCLK_ACTIVE_NEG=0" pio run -d tools/deck-panel -e crowpanel-perf -t upload --upload-port /dev/cu.wchusbserial210`.
+
+**What a fault looks like on the glass:**
+
+| You see | Likely | Try |
+|---|---|---|
+| A fine shimmer or sparkle on edges and text, even on the still test screen; colors a little off or noisy | The wrong clock edge | `-DPANEL_PCLK_ACTIVE_NEG=0` |
+| Moving parts flicker between old and new values, or move in steps with the old picture flashing back; the perf line shows swap timeouts, or vsyncs/s well off 39 | The swap's timing | Read the perf line first. `-DPANEL_BOUNCE_PX=0` shows the core's restart problem on its own |
+| Single rows every 10 lines showing part of a row from 20 lines away, fixed on a still picture | The bounce copy late (an underrun) | A lower clock; `-DPANEL_ISR_CORE=0` |
+| The whole picture jumps, jitters sideways or shifts, worse with Wi-Fi busy; the perf line shows resyncs, a wide scan lag, or vsyncs/s below 30 | The scan-out falling behind | `-DPANEL_ISR_CORE=0` |
+| Horizontal bands that stay | The bounce buffers out of step (after a flash write) | A restart clears it; report when it started |
+| Black with the backlight on | No frame reached the panel | The serial log's `display:` lines |
+
+## The perf build
+
+`crowpanel-perf` is the deck view plus a line on serial every 5 s. To read it, after flashing:
+
+```sh
+pio device monitor -d tools/deck-panel -e crowpanel-perf -p /dev/cu.wchusbserial210 -b 115200
+```
+
+```text
+perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, 30.0 vsyncs/s, 0 swap timeouts, scan lag 31.6-31.6 ms, vsync 33.3-33.3 ms, 0 resyncs, copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 0 too big, internal free 123456
+```
+
+- **frames/s:** LVGL's refreshes that drew something, at most 30. With the deck playing it should be close to 30.
+- **frame:** a refresh that drew something, from its start to its end, the swap wait (in brackets) included. Frames are counted over the same 5 s as the rest of the line.
+- **swap wait:** how long LVGL waited, per frame, for the panel to take the last one. Up to one frame (33.3 ms) is normal.
+- **vsyncs/s:** the panel's own rate, 30.0 at 12.3 MHz, drawing or not.
+- **swap timeouts:** waits that hit 60 ms. Anything but 0 is a fault.
+- **scan lag, vsync, resyncs:** the scan-out's steadiness. The bounce driver finishes copying each frame at a fixed time after its vsync, and vsyncs come every 33.3 ms (12.3 MHz). A healthy panel shows one value for each, give or take a few µs, and 0 resyncs. A resync is a frame whose copy ended more than 0.5 ms off the last one: the scan-out fell behind or was restarted out of step. A jumping picture should show up here. (Bounce mode only.)
+- **copy:** the bounce copy against its deadline: the longest copy of a 10-line chunk out of PSRAM in the window, the chunk's time on the panel (666 µs at 12.3 MHz, 512 µs at 16), the margin left, and how many copies ran past it. A negative margin or any late copy is an underrun: stale rows every 10 lines. Timed in this build only, by wrapping `memcpy` at link time (`-Wl,--wrap=memcpy`); before raising the clock, this is the number to read.
+- **feed:** datagrams read in the window, and those dropped for being too big. lwIP's own drops, when its 6-deep receive queue is full, can't be seen from here.
+- **internal free:** free internal RAM, in bytes.
+- A still screen prints `perf: no frames (nothing changed)`: LVGL draws only what changes.
+
 ## What the test screen shows
 
 Build and flash `crowpanel-test` (`-e crowpanel-test` in the commands above) for it.
