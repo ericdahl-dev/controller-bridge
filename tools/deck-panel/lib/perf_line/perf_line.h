@@ -37,4 +37,24 @@ struct Window {
 
 std::string format(const Window& w);
 
+// Where the bounce copies ran (#663), perf build only: by eighth of the scan-out since the latch, and by the loop step
+// the copy's interrupt broke into. Every copy is counted, and the late ones apart, so a bucket's lates read against
+// its copies.
+constexpr int kPhases = 8;
+enum class Mark : uint8_t { wait, read, render, refresh, wifi, udp, touch, lvgl, perf, other, count };
+constexpr int kMarks = static_cast<int>(Mark::count);
+
+struct CopySpread {
+    uint32_t copies_by_phase[kPhases] = {};
+    uint32_t late_by_phase[kPhases] = {};
+    uint32_t copies_by_mark[kMarks] = {};
+    uint32_t late_by_mark[kMarks] = {};
+};
+
+// The eighth of a `period_us` scan-out that `since_latch_us` falls in; one period or more is the last.
+int phase(uint32_t since_latch_us, uint32_t period_us);
+
+// The second perf line: "perf copy: late/copies by eighth after the latch ...; by loop step ...".
+std::string format_copy(const CopySpread& c);
+
 }  // namespace perf_line

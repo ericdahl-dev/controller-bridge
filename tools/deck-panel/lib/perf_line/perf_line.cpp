@@ -51,4 +51,28 @@ std::string format(const Window& w) {
     return line;
 }
 
+int phase(uint32_t since_latch_us, uint32_t period_us) {
+    if (period_us == 0 || since_latch_us >= period_us) return kPhases - 1;
+    return static_cast<int>(static_cast<uint64_t>(since_latch_us) * kPhases / period_us);
+}
+
+std::string format_copy(const CopySpread& c) {
+    static const char* const kNames[kMarks] = {"wait", "read", "render", "refresh", "wifi",
+                                               "udp",  "touch", "lvgl",  "perf",    "other"};
+    std::string line = "perf copy: late/copies by eighth after the latch";
+    char part[32];
+    for (int i = 0; i < kPhases; ++i) {
+        snprintf(part, sizeof part, " %u/%u", static_cast<unsigned>(c.late_by_phase[i]),
+                 static_cast<unsigned>(c.copies_by_phase[i]));
+        line += part;
+    }
+    line += "; by loop step";
+    for (int i = 0; i < kMarks; ++i) {
+        snprintf(part, sizeof part, " %s %u/%u", kNames[i], static_cast<unsigned>(c.late_by_mark[i]),
+                 static_cast<unsigned>(c.copies_by_mark[i]));
+        line += part;
+    }
+    return line;
+}
+
 }  // namespace perf_line

@@ -136,6 +136,32 @@ void test_late_copies_say_how_many_fell_in_a_refresh_and_at_the_frame_turn() {
     TEST_ASSERT_TRUE(perf_line::format(w).find("(margin 126) 0 late, feed") != std::string::npos);
 }
 
+// Where in the frame the bounce copies ran, and in which loop step (#663): every copy counted, and the late ones, so a
+// bucket's late count reads against how many copies it had. The eighths start at the latch.
+void test_a_copy_falls_in_the_eighth_of_the_scan_out_since_the_latch() {
+    TEST_ASSERT_EQUAL_INT(0, perf_line::phase(0, 33400));
+    TEST_ASSERT_EQUAL_INT(0, perf_line::phase(4174, 33400));  // 33400 / 8 = 4175
+    TEST_ASSERT_EQUAL_INT(1, perf_line::phase(4175, 33400));
+    TEST_ASSERT_EQUAL_INT(7, perf_line::phase(33399, 33400));
+    TEST_ASSERT_EQUAL_INT(7, perf_line::phase(90000, 33400));  // a latch missed: the last eighth, not past the array
+}
+
+void test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step() {
+    perf_line::CopySpread c;
+    for (int i = 0; i < perf_line::kPhases; ++i) c.copies_by_phase[i] = 300 + i;
+    c.late_by_phase[3] = 2;
+    c.copies_by_mark[static_cast<int>(perf_line::Mark::wait)] = 6000;
+    c.late_by_mark[static_cast<int>(perf_line::Mark::wait)] = 1;
+    c.copies_by_mark[static_cast<int>(perf_line::Mark::refresh)] = 900;
+    c.late_by_mark[static_cast<int>(perf_line::Mark::perf)] = 1;
+    c.copies_by_mark[static_cast<int>(perf_line::Mark::perf)] = 40;
+    TEST_ASSERT_EQUAL_STRING(
+        "perf copy: late/copies by eighth after the latch 0/300 0/301 0/302 2/303 0/304 0/305 0/306 0/307; "
+        "by loop step wait 1/6000 read 0/0 render 0/0 refresh 0/900 wifi 0/0 udp 0/0 touch 0/0 lvgl 0/0 perf 1/40 "
+        "other 0/0",
+        perf_line::format_copy(c).c_str());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_line_has_every_number_in_one_fixed_order);
@@ -146,5 +172,7 @@ int main() {
     RUN_TEST(test_a_window_with_no_feed_frames_says_so);
     RUN_TEST(test_the_frame_clock_counts_follow_the_feed_lag);
     RUN_TEST(test_late_copies_say_how_many_fell_in_a_refresh_and_at_the_frame_turn);
+    RUN_TEST(test_a_copy_falls_in_the_eighth_of_the_scan_out_since_the_latch);
+    RUN_TEST(test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step);
     return UNITY_END();
 }
