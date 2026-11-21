@@ -29,6 +29,8 @@ public enum Refusal: Error, Sendable, Equatable {
     case unknownKey(String)
     /// A file whose size or SHA-256 differs from the manifest: altered, or cut short.
     case fileMismatch(String)
+    /// A file name that would land outside the release's folder.
+    case unsafeFileName(String)
 }
 
 public struct FetchOutcome: Sendable {
@@ -70,6 +72,9 @@ public struct ReleaseFetcher: Sendable {
         guard let manifest = try? JSONDecoder().decode(Manifest.self, from: published.manifest) else {
             throw Refusal.unreadableManifest
         }
+        if let unsafe = manifest.files.map(\.name).first(where: { !Self.staysInside($0) }) {
+            throw Refusal.unsafeFileName(unsafe)
+        }
         let folder = cache.appending(path: "fetched")
         try? FileManager.default.removeItem(at: folder)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -87,6 +92,12 @@ public struct ReleaseFetcher: Sendable {
     }
 
     private struct KeyName: Decodable { let key: String }
+
+    /// A plain relative path: no leading "/", no "." or ".." parts, no empty parts, no backslashes.
+    static func staysInside(_ name: String) -> Bool {
+        let parts = name.split(separator: "/", omittingEmptySubsequences: false)
+        return !name.contains("\\") && parts.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
+    }
 }
 
 func sha256Hex(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }

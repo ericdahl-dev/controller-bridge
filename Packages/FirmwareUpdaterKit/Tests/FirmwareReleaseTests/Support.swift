@@ -42,8 +42,9 @@ func sha256Hex(_ data: Data) -> String { SHA256.hash(data: data).map { String(fo
 func panelImage(_ tag: String) -> Data { Data([0xE9]) + Data("deck panel image \(tag)".utf8) }
 
 /// A release as the maintainer's signing step writes it: one panel image, listed in the catalog and in the files.
-func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAllowed: String = "1.0.0") -> FakeFeed {
-    let name = "panel/deck-panel-\(panelVersion)-\(sha).bin"
+func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAllowed: String = "1.0.0",
+             name: String? = nil) -> FakeFeed {
+    let name = name ?? "panel/deck-panel-\(panelVersion)-\(sha).bin"
     let image = panelImage(panelVersion)
     let manifest: [String: Any] = [
         "format": 1,

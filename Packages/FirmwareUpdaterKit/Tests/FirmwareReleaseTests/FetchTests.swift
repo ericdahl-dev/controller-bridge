@@ -82,3 +82,15 @@ func aManifestCutShortIsRefused(kept: Double) async throws {
     #expect(outcome.refusal == .unreadableManifest)
     #expect(outcome.catalog.newestPanel()?.version == FirmwareVersion("1.0.0"))
 }
+
+/// Even a validly signed manifest (a stolen key, say) can't make the app write outside the release's own folder.
+@Test(arguments: ["../escaped.bin", "panel/../../escaped.bin", "/tmp/escaped.bin"])
+func aFileNamedOutsideTheReleaseFolderIsRefusedAndNotWritten(name: String) async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary, name: name)
+    let cache = temporaryFolder()
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: cache)
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .unsafeFileName(name))
+    #expect(!FileManager.default.fileExists(atPath: cache.appending(path: "escaped.bin").path(percentEncoded: false)))
+}
