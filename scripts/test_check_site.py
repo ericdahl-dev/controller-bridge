@@ -405,6 +405,16 @@ class CheckSiteTests(unittest.TestCase):
         root = self.site({"index.html": GOOD["index.html"].replace('"softwareVersion": "1.0.1", ', "")})
         self.assertEqual(check_site.problems(root), ["index.html: the JSON-LD has no SoftwareApplication softwareVersion"])
 
+    def test_the_lc6000_page_documents_shift_hot_cue(self):
+        # Shift + hot cue pad on a stopped deck (#358, #363): the LC6000 page's control list has a row for it, naming
+        # the stopped deck, and the quantize reset to Use Global.
+        page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "website", "for", "lc6000", "index.html")
+        with open(page, encoding="utf-8") as f:
+            rows = [line for line in f if "<dt>Shift + pad" in line]
+        self.assertEqual(len(rows), 1, "one Shift + pad row")
+        for words in ("Hot Cue", "stopped", "Use Global"):
+            self.assertIn(words, rows[0])
+
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
         self.assertEqual(check_site.problems(root), ["img/Syndicate_logo.png: looks like another company's logo",
