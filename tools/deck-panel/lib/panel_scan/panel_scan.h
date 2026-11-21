@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "frame_pacing.h"
+#include "swap_gate.h"
 
 namespace panel_scan {
 
@@ -47,12 +48,23 @@ class Scan {
     uint32_t frame_us() const { return frame_us_; }
     uint32_t copy_budget_us() const { return copy_budget_us_; }
 
+    /// LVGL's flush, one area drawn. True: release it at once (lv_display_flush_ready). False: it was the frame's last,
+    /// now handed to the panel, out until its release.
+    bool present(bool last_area);
+    /// LVGL's flush wait: blocks until the swap out is released, at most `timeout_ms` (false then, counted). True at
+    /// once with no swap out.
+    bool wait_release(uint32_t timeout_ms);
+
     /// The panel's interrupts: stamp and count only.
     void vsync(uint64_t now_us);
     void frame_complete(uint64_t now_us);
 
   private:
+    /// Where the panel takes the next frame's buffer: frame complete with bounce buffers, the vsync without.
+    void latch(uint64_t now_us);
+
     Panel& panel_;
+    swap_gate::Gate gate_;
     Config config_{};
     uint32_t frame_us_ = 0;
     uint32_t copy_budget_us_ = 0;

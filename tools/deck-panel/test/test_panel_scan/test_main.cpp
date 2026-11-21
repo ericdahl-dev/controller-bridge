@@ -56,11 +56,66 @@ void test_another_pixel_clock_is_one_change() {
     TEST_ASSERT_EQUAL(512, scan.copy_budget_us());
 }
 
+
+using Irq = ScriptedPanel::Irq;
+
+// Areas before a frame's last are drawn in place and released at once; the last hands the buffer to the panel.
+void test_only_a_frames_last_area_goes_to_the_panel() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    TEST_ASSERT_TRUE(scan.present(false));
+    TEST_ASSERT_EQUAL(0, panel.hand_overs);
+    TEST_ASSERT_FALSE(scan.present(true));
+    TEST_ASSERT_EQUAL(1, panel.hand_overs);
+}
+
+// Bounce buffers: the driver takes the next buffer at frame complete, when the last chunk of this one is copied, not at
+// the vsync. A swap released at the vsync would let LVGL draw into a buffer still feeding a whole frame (#635).
+void test_with_bounce_buffers_the_frame_end_releases_a_swap_not_the_vsync() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{1000, Irq::vsync}, {20000, Irq::frame_complete}};
+    scan.present(true);
+    TEST_ASSERT_TRUE(scan.wait_release(60));
+    TEST_ASSERT_EQUAL(20000, panel.now_us);  // not 1000
+}
+
+// Without bounce buffers the GDMA reads the framebuffer itself, from the vsync on: the vsync releases it.
+void test_without_bounce_buffers_the_vsync_releases_a_swap() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners(0));
+    panel.script = {{1000, Irq::vsync}};
+    scan.present(true);
+    TEST_ASSERT_TRUE(scan.wait_release(60));
+    TEST_ASSERT_EQUAL(1000, panel.now_us);
+}
+
+// Nothing handed over: nothing to wait for.
+void test_with_no_swap_out_the_wait_returns_at_once() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{20000, Irq::frame_complete}};
+    TEST_ASSERT_TRUE(scan.wait_release(60));
+    TEST_ASSERT_EQUAL(0, panel.now_us);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
     RUN_TEST(test_start_refuses_a_bounce_size_that_isnt_an_even_count_of_chunks);
     RUN_TEST(test_no_bounce_buffers_has_no_copy_budget);
     RUN_TEST(test_another_pixel_clock_is_one_change);
+    RUN_TEST(test_only_a_frames_last_area_goes_to_the_panel);
+    RUN_TEST(test_with_bounce_buffers_the_frame_end_releases_a_swap_not_the_vsync);
+    RUN_TEST(test_without_bounce_buffers_the_vsync_releases_a_swap);
+    RUN_TEST(test_with_no_swap_out_the_wait_returns_at_once);
     return UNITY_END();
 }
