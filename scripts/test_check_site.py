@@ -338,6 +338,16 @@ class CheckSiteTests(unittest.TestCase):
         with open(readme, encoding="utf-8") as f:
             self.assertEqual(check_site.company_problems("README.md", f.read()), [])
 
+    def test_the_readme_documents_shift_needle_drop(self):
+        # Shift + Needle Drop on the channel fader (#609): the README's LC6000 controls table has a row for it, with the
+        # address it sends, both modes, the Volume feedback Relative needs, and the Settings switch.
+        readme = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "README.md")
+        with open(readme, encoding="utf-8") as f:
+            rows = [line for line in f if line.startswith("| Shift + Needle Drop")]
+        self.assertEqual(len(rows), 1, "one Shift + Needle Drop row")
+        for words in ("Mixer/CH", "Volume", "Relative", "Jump", "Settings"):
+            self.assertIn(words, rows[0])
+
     def test_the_readme_documents_shift_hot_cue(self):
         # Shift + hot cue pad on a stopped deck (#358, #363): the README's LC6000 controls table has a row for it, naming
         # the stopped deck, and the quantize reset to Use Global.
