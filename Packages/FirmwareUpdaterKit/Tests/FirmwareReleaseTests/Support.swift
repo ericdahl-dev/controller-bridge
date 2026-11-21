@@ -43,7 +43,7 @@ func panelImage(_ tag: String) -> Data { Data([0xE9]) + Data("deck panel image \
 
 /// A release as the maintainer's signing step writes it: one panel image, listed in the catalog and in the files.
 func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAllowed: String = "1.0.0",
-             name: String? = nil, wdPatch: Data? = nil) -> FakeFeed {
+             name: String? = nil, wdPatch: Data? = nil, catalog: [String: Any]? = nil) -> FakeFeed {
     let name = name ?? "panel/deck-panel-\(panelVersion)-\(sha).bin"
     let image = panelImage(panelVersion)
     var files: [String: Data] = [name: image]
@@ -60,7 +60,7 @@ func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAll
         "format": 1,
         "key": key.id,
         "lowest_allowed": ["deck-panel": lowestAllowed],
-        "catalog": ["panel": [["version": panelVersion, "sha": sha, "image": name]], "lc6000": lc6000],
+        "catalog": catalog ?? ["panel": [["version": panelVersion, "sha": sha, "image": name]], "lc6000": lc6000],
         "files": listed,
     ]
     let bytes = try! JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys])

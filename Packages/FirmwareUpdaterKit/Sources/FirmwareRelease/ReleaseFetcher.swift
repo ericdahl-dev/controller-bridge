@@ -38,6 +38,10 @@ public enum Refusal: Error, Sendable, Equatable {
     case unreachable
     /// Signed and intact, but not a catalog the app accepts (an LC6000 entry that isn't a patch description, say).
     case notACatalog(CatalogError)
+    /// Signed and intact, but its catalog isn't in the shape the app reads.
+    case unreadableCatalog
+    /// The release couldn't be written to the app's cache folder.
+    case couldNotStore
 }
 
 public struct FetchOutcome: Sendable {
@@ -67,7 +71,7 @@ public struct ReleaseFetcher: Sendable {
         } catch let refusal as Refusal {
             return FetchOutcome(catalog: builtIn, refusal: refusal)
         } catch {
-            return FetchOutcome(catalog: builtIn)
+            return FetchOutcome(catalog: builtIn, refusal: .couldNotStore)
         }
     }
 
@@ -99,7 +103,9 @@ public struct ReleaseFetcher: Sendable {
         }
         try Manifest.catalogJSON(in: published.manifest).write(to: folder.appending(path: "catalog.json"))
         let catalog: Catalog
-        do { catalog = try Catalog(directory: folder) } catch let error as CatalogError { throw Refusal.notACatalog(error) }
+        do { catalog = try Catalog(directory: folder) }
+        catch let error as CatalogError { throw Refusal.notACatalog(error) }
+        catch { throw Refusal.unreadableCatalog }
         // Newer means a newer panel image than the app carries; LC6000 patch sets ride along with it.
         guard let offered = catalog.newestPanel()?.version,
               builtIn.newestPanel().map({ $0.version < offered }) ?? true else { throw Refusal.notNewer }

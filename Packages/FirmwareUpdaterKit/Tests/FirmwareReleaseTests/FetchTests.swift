@@ -144,3 +144,24 @@ func aReleaseNotNewerThanTheBuiltInIsNotUsed(version: String) async throws {
         .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
     #expect(outcome.lowestAllowedPanel == FirmwareVersion("1.0.5"))
 }
+
+/// Every way a release can fail says why: a signed manifest whose catalog the app can't read isn't a silent fallback.
+@Test func aSignedReleaseWhoseCatalogCannotBeReadIsRefusedWithAReason() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary,
+                       catalog: ["panel": [["version": "1.1.0", "sha": "ddddddd", "image": "panel/deck-panel-1.1.0-ddddddd.bin"]]])
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .unreadableCatalog)
+    #expect(outcome.catalog.newestPanel()?.sha == "aaaaaaa")
+}
+
+/// The network dropping after a good manifest, mid-files, is "unreachable" too.
+@Test func theNetworkDroppingDuringTheFilesIsUnreachable() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary)
+    feed.files = [:]
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .unreachable)
+}
