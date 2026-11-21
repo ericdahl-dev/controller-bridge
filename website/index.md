@@ -61,7 +61,7 @@ Full steps: https://getdeckbridge.app/support/
 <!-- FAQ:START: provisional; the final FAQ copy will be synced here later. Keep every Q&A between these markers. -->
 ## In the lab
 
-On our own desk, not in your hands yet. Nothing here is something you can use today.
+Not in your hands yet: projects on our own desk.
 
 - **A drawn jog display:** on our own LC6000, a reflashed display chip draws the deck itself: its number in the deck color, title and artist, key and BPM, the beat ring, phase against the master, the last minute's warning and the channel meter, live from DeckBridge. This needs custom firmware that is not part of the DeckBridge app and is not offered for download, and DeckBridge never includes or distributes Denon's firmware. On the LC6000's own firmware, DeckBridge shows the deck on the jog display as described above: leave Settings › Controller › Firmware on Denon.
 - **A deck panel:** a 7-inch Wi-Fi display beside the controller shows the deck in front (track, key, BPM, tempo, time left, beat, phase and level) from DeckBridge's display feed. The feed is in DeckBridge, off by default, and sends unencrypted to the one address you set on your local network. The panel is a project on our desk: there's no kit or firmware to download.
