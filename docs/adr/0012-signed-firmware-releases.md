@@ -1,6 +1,6 @@
 # Firmware releases are signed by the maintainer, and the updater and the panel check the signature
 
-2026-11-21. **Proposed: the owner picks an option below; nothing is built until then** (#689, spec #684). The firmware updater (#684) can fetch a firmware release newer than the one it was built with, and the deck panel can take an update over Wi-Fi (#690). Both must accept only files that this project's maintainer released. The key that signs them is the maintainer's. It is never in the repo, and never printed in CI logs.
+2026-11-21. **Decided by the owner: option 1, an Ed25519 key on the maintainer's Mac** (#689, spec #684). The firmware updater (#684) can fetch a firmware release newer than the one it was built with, and the deck panel can take an update over Wi-Fi (#690). Both must accept only files that this project's maintainer released. The key that signs them is the maintainer's. It is never in the repo, and never printed in CI logs.
 
 ## What is signed
 
@@ -23,9 +23,9 @@ It also holds the lowest version a device may go back to (see below). The files 
 
 **Going back.** The updater offers only a version newer than the device's. A signed manifest can set a lowest allowed version, so a release with a security fix can stop a panel taking the older, still validly signed image over Wi-Fi. Restoring the owner's own LC6000 backup is never refused: the backup is their file, not a release.
 
-## Options
+## Options considered
 
-### 1. Ed25519, key kept offline on the maintainer's Mac, signed by a local release step (recommended)
+### 1. Ed25519, key kept offline on the maintainer's Mac, signed by a local release step (chosen)
 
 - **Scheme:** Ed25519 over the manifest. CryptoKit has it on the Mac (`Curve25519.Signing`). On the panel: see "The panel's side".
 - **The key:** made once on the maintainer's Mac, stored encrypted with a passphrase (the format minisign and signify use), and kept off GitHub. A second key, the **backup key**, is made at the same time and kept offline somewhere else (printed or on a USB stick in a drawer). The updater and the panel trust both public keys from day one.
@@ -35,14 +35,14 @@ It also holds the lowest version a device may go back to (see below). The files 
   3. The script publishes the release.
 - The key never reaches CI, so it can't appear in a CI log. The cost is one manual step per release.
 
-### 2. ECDSA P-256 on a hardware key (YubiKey PIV, or the Mac's Secure Enclave)
+### 2. ECDSA P-256 on a hardware key (YubiKey PIV, or the Mac's Secure Enclave): rejected
 
 - **Scheme:** ECDSA P-256 over the manifest. CryptoKit has it on the Mac (`P256.Signing`).
 - **The key:** made on the device itself, and it can't be copied out. Nothing can steal it except the device, and signing needs a touch or Touch ID.
 - **Release step:** as in option 1.
 - **Losing the device loses the key for good.** A second hardware key, enrolled as the backup key from day one, is required. A Secure Enclave key dies with its Mac.
 
-### 3. Ed25519, key in a protected GitHub Actions secret, CI signs on tag
+### 3. Ed25519, key in a protected GitHub Actions secret, CI signs on tag: rejected
 
 - **The key:** a repository environment secret. The environment has a required reviewer, so a signing run waits for the maintainer's approval.
 - **Release step:** fully automatic after the approval click. It's the "one step" of #684 story 25 in its most literal form.
@@ -51,9 +51,9 @@ It also holds the lowest version a device may go back to (see below). The files 
   - Any workflow change merged to main that reaches the environment can use the key, or print it. GitHub masks printed secrets, but an encoded value gets past the mask.
   - #689 says the key is "never in CI logs". This option keeps that rule by review, not by construction.
 
-## Recommendation
+## Why option 1
 
-Option 1. The key never leaves the maintainer's control, nothing in CI can use it, and the backup key makes a lost key recoverable. One local command per release fits a project with one maintainer and a few releases a year. Option 2 is stronger against a stolen laptop, but needs two hardware keys bought and kept. Option 3 is the most convenient, but it puts the key where a workflow change could leak it.
+The key never leaves the maintainer's control, nothing in CI can use it, and the backup key makes a lost key recoverable. One local command per release fits a project with one maintainer and a few releases a year. **Option 2 rejected:** stronger against a stolen laptop, but needs two hardware keys bought and kept, and a lost device loses its key for good. **Option 3 rejected:** the most convenient, but the key lives on GitHub, where a merged workflow change could use or leak it.
 
 ## Key rotation and a lost key
 
@@ -105,7 +105,7 @@ Nothing was flashed. **V** means read in a file or in command output. **I** mean
 - **Trusted keys** are a built-in array, primary and backup. The manifest names which key signed it. A key costs 32 bytes with Ed25519.
 - **One check before code:** CryptoKit makes randomized Ed25519 signatures that are still valid under RFC 8032 (I). The first test signs with CryptoKit and verifies with libsodium's `crypto_sign_verify_detached`.
 
-**The agent's recommendation:** Ed25519, with no blocker found. ECDSA P-256 works as well if the owner picks option 2, and adds no code to the panel.
+**The agent's finding:** Ed25519 has no blocker on the panel. ECDSA P-256 would have worked as well, with no code added to the panel.
 
 ## Out of scope
 
