@@ -38,6 +38,15 @@ class ReleaseChecklist(unittest.TestCase):
         self.assertIn("[external]", doc)
         self.assertIn("## 1.1.0", doc)  # the ready-to-paste CHANGELOG block
 
+    def test_changelog_block_is_what_changelog_has(self):
+        # Step 4's block says it's what CHANGELOG.md has (#648): the two can't drift.
+        doc = read("docs/RELEASE-1.1.md")
+        step = doc[doc.index("## 4. CHANGELOG"):doc.index("## 5. ")]
+        block = re.search(r"```markdown\n(.*?)```", step, re.S).group(1)
+        changelog = read("CHANGELOG.md")
+        entry = changelog[changelog.index("## 1.1.0"):changelog.index("## 1.0.2")]
+        self.assertEqual(block.strip(), entry.strip())
+
     def test_hardware_checklist_extras(self):
         # #307: before the checklist, other host apps are quit; and host-mode layers and LEDs (#79, #120) are re-checked.
         # #306: the platter wins while a deck plays too.
