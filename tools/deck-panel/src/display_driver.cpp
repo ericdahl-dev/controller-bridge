@@ -70,12 +70,10 @@ static_assert(PANEL_BOUNCE_PX == 0 || ((800 * 480) / PANEL_BOUNCE_PX) % 2 == 0,
 #define PANEL_ISR_CORE 1
 #endif
 // When the frame clock's frame starts (#663). 1: at the vsync after the latch that released the swap, about 1.9 ms
-// later in bounce mode (vsync period less scan lag). 0: at the latch itself. The owner's run of 37cef427 (latch wake)
-// had 72 late copies in 305 s, against 0 in 75 s before. Suspected, not proven: the loop's first PSRAM burst (LVGL's
-// copy of last frame's areas, then the draw) lands on the frame turn's copies with the cache full of dirty lines. That
-// the driver's vsync restart refills both bounce buffers, and calls on_vsync before it, is from memory of IDF's
-// esp_lcd_panel_rgb.c, not read here. The perf line's "at the turn" count tells. Without bounce buffers the latch and
-// the vsync are one interrupt.
+// later in bounce mode (vsync period less scan lag). 0: at the latch itself. Tried as the fix for the late bounce
+// copies of 37cef427 (72 in 305 s); the owner's A/B (36 at the vsync, 40 at the latch) refuted that: the count stayed,
+// only which loop step they fell in moved. Kept at 1 while the copy line (perf build) finds the cause. Without bounce
+// buffers the latch and the vsync are one interrupt.
 #ifndef PANEL_WAKE_AT_VSYNC
 #define PANEL_WAKE_AT_VSYNC 1
 #endif
@@ -111,6 +109,8 @@ uint32_t g_copy_late_turn = 0;
 volatile uint8_t g_mark = static_cast<uint8_t>(perf_line::Mark::other);
 const uint32_t g_period_us = frame_pacing::frame_us(TIMING);
 perf_line::CopySpread g_spread;
+// Until when the UART still drains the prints noted (display_note_print), esp_timer us.
+volatile uint32_t g_print_until_us = 0;
 #endif
 
 lv_display_t* g_disp = nullptr;
@@ -464,6 +464,13 @@ bounce_budget::Report display_take_copy(DisplayCopyLate* where) {
 #ifdef PANEL_PERF_LOG
 void display_mark(perf_line::Mark step) { g_mark = static_cast<uint8_t>(step); }
 
+void display_note_print(uint32_t bytes) {
+    // 115200 baud, 10 bits a byte: 87 us each, after whatever is still draining.
+    const uint32_t now = static_cast<uint32_t>(esp_timer_get_time());
+    const uint32_t from = static_cast<int32_t>(g_print_until_us - now) > 0 ? g_print_until_us : now;
+    g_print_until_us = from + bytes * 87u;
+}
+
 perf_line::CopySpread display_take_copy_spread() {
     portENTER_CRITICAL(&g_copy_lock);
     const perf_line::CopySpread c = g_spread;
@@ -502,12 +509,16 @@ extern "C" IRAM_ATTR void* __wrap_memcpy(void* to, const void* from, size_t n) {
     const uint32_t start = esp_cpu_get_cycle_count();
     void* result = __real_memcpy(to, from, n);
     const uint32_t took_us = (esp_cpu_get_cycle_count() - start) / esp_rom_get_cpu_ticks_per_us();
-    // Late as the meter counts it: longer than the chunk's deadline. The latch time is one aligned word.
+    // Late as the meter counts it: longer than the chunk's deadline. The latch time is one aligned word, written by
+    // the panel interrupt on this core. Where the copy fell is taken at its start: its end less its length.
     const bool late = static_cast<uint64_t>(took_us) * 1000u > g_chunk_ns;
-    const bool turn = late && static_cast<uint32_t>(esp_timer_get_time()) - g_latch_us < kTurnUs;
+    const uint32_t end_us = static_cast<uint32_t>(esp_timer_get_time());
+    const uint32_t since_latch_us = end_us - took_us - g_latch_us;
+    const bool turn = late && since_latch_us < kTurnUs;
     const bool in_isr = xPortInIsrContext();
-    const int phase = perf_line::phase(static_cast<uint32_t>(esp_timer_get_time()) - g_latch_us, g_period_us);
+    const int phase = perf_line::phase(since_latch_us, g_period_us);
     const uint8_t mark = g_mark;
+    const bool printing = static_cast<int32_t>(g_print_until_us - end_us) > 0;
     portENTER_CRITICAL_SAFE(&g_copy_lock);
     g_copy.copied(took_us);
     if (late && g_drawing) ++g_copy_late_drawing;
@@ -521,6 +532,13 @@ extern "C" IRAM_ATTR void* __wrap_memcpy(void* to, const void* from, size_t n) {
         if (late) {
             ++g_spread.late_by_phase[phase];
             if (mark < perf_line::kMarks) ++g_spread.late_by_mark[mark];
+            if (g_spread.kept < perf_line::CopySpread::kKept) {
+                g_spread.lates[g_spread.kept++] = {since_latch_us, took_us, mark};
+            }
+        }
+        if (printing) {
+            ++g_spread.while_printing;
+            if (late) ++g_spread.late_while_printing;
         }
     }
     portEXIT_CRITICAL_SAFE(&g_copy_lock);

@@ -64,6 +64,8 @@ bounce_budget::Report display_take_copy(DisplayCopyLate* where = nullptr);
 void display_mark(perf_line::Mark step);
 // The bounce copies since the last call, by eighth of the scan-out after the latch and by loop step.
 perf_line::CopySpread display_take_copy_spread();
+// A print of `bytes` went to Serial: copies while the UART drains it are counted apart. Loop task only.
+void display_note_print(uint32_t bytes);
 #endif
 
 // Latches so far, where the panel takes the next frame's buffer (frame end in bounce mode, vsync without), and the

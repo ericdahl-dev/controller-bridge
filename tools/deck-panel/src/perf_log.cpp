@@ -120,8 +120,11 @@ void tick(uint32_t now_ms, int datagrams, uint32_t too_big, bool may_print, fram
     w.copy_late_turn = where.turn;
     w.ledger = g_ledger.take();
     w.clock = clock.take();
-    Serial.println(perf_line::format(w).c_str());
-    Serial.println(perf_line::format_copy(spread).c_str());
+    const std::string line = perf_line::format(w);
+    const std::string copies = perf_line::format_copy(spread);
+    Serial.println(line.c_str());
+    Serial.println(copies.c_str());
+    display_note_print(static_cast<uint32_t>(line.size() + copies.size() + 4));
 
     g_frames = 0;
     g_frame_us = 0;

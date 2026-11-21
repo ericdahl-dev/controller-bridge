@@ -83,6 +83,9 @@ void log_health(uint32_t now_ms) {
     constexpr uint32_t kEveryMs = 60000;
     if (now_ms - g_health_ms < kEveryMs) return;
     g_health_ms = now_ms;
+#ifdef PANEL_PERF_LOG
+    display_note_print(96);  // about the line below
+#endif
     Serial.printf("deck panel: loop stack free %u B, internal heap free %u B (lowest %u B)\n",
                   unsigned(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t)),
                   unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
