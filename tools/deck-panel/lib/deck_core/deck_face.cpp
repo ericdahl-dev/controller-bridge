@@ -65,7 +65,8 @@ int32_t pixels(float fraction, int span) { return static_cast<int32_t>(std::lrou
 Face face(const DeckView& view) {
     Face f;
     if (view.deck >= 1 && view.deck <= 4) std::snprintf(f.deck, sizeof f.deck, "%d", view.deck);
-    f.color = view.color;
+    // Black is the background: a deck without a color shows white.
+    f.deck_color = view.color == 0 ? palette::kWhite : view.color;
     if (!view.loaded) {
         // Empty: the deck and "No track loaded", nothing else, never the last track.
         copy(f.title, kNoTrack);
@@ -89,13 +90,14 @@ Face face(const DeckView& view) {
     // 0 is no known length.
     if (view.remaining > 0) time_text(f.remaining, "-", view.remaining);
     f.progress_px = pixels(view.progress, layout::kWidth);
-    f.end_warning = view.remaining > 0 && view.remaining <= kEndWarningSeconds;
-    if (view.beat >= 1 && view.beat <= 4) f.beat = view.beat;
-    f.playing = view.playing;
-    f.cue = view.cue;
-    f.sync = view.sync;
-    f.master = view.master;
-    f.loop = view.loop;
+    if (view.remaining > 0 && view.remaining <= kEndWarningSeconds) f.progress_color = palette::kWarning;
+    if (view.beat >= 1 && view.beat <= 4) f.beat_color[view.beat - 1] = f.deck_color;
+    const bool lit[kLamps] = {view.playing, view.cue, view.sync, view.master, view.loop};
+    for (int i = 0; i < kLamps; ++i) {
+        if (!lit[i]) continue;
+        f.lamp_color[i] = palette::kLamp[i];
+        f.lamp_text_color[i] = palette::kBlack;
+    }
     loop_text(f.loop_length, view.loop_length);
     // Below 0 is unknown (-1): no marker, never one parked in the middle as if in phase.
     f.phase_shown = view.phase >= 0;

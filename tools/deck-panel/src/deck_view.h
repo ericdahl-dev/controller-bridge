@@ -27,7 +27,6 @@ private:
     struct Lamp {
         lv_obj_t* box = nullptr;
         lv_obj_t* text = nullptr;
-        uint32_t color = 0;  ///< lit
     };
 
     lv_obj_t* deck_page_ = nullptr;

@@ -17,12 +17,10 @@ namespace {
 
 using namespace deck_core::layout;
 
-const lv_color_t kGray = lv_color_hex(0xA0A0A0);
-const lv_color_t kDim = lv_color_hex(0x5A5A5A);  // an unlit lamp's text
-const lv_color_t kTrack = lv_color_hex(0x262626);  // bars, unlit blocks and lamps
-constexpr uint32_t kProgress = 0xE0E0E0;
-constexpr uint32_t kWarning = 0xFF3B30;
-constexpr uint32_t kLevel = 0x30D158;
+namespace palette = deck_core::palette;
+const lv_color_t kGray = lv_color_hex(palette::kGray);
+const lv_color_t kDim = lv_color_hex(palette::kDim);
+const lv_color_t kTrack = lv_color_hex(palette::kTrack);
 
 /// A full-screen page with no style of its own on the black screen, hidden.
 lv_obj_t* page(lv_obj_t* parent) {
@@ -83,8 +81,6 @@ void set_hidden(lv_obj_t* obj, bool hidden) {
     else lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
 }
 
-/// Black is the background: a deck without a color shows white.
-lv_color_t deck_color(uint32_t color) { return lv_color_hex(color == 0 ? 0xFFFFFF : color); }
 
 }  // namespace
 
@@ -96,7 +92,7 @@ void DeckScreen::build() {
 
     // The deck. Every object starts as a default Face draws it: no text, bars empty, blocks and lamps off.
     deck_page_ = page(screen);
-    deck_number_ = field(deck_page_, kLeft, 12, 70, &geist_mono_semibold_64, deck_color(0));
+    deck_number_ = field(deck_page_, kLeft, 12, 70, &geist_mono_semibold_64, lv_color_hex(shown_.deck_color));
 
     // Title (up to two lines) and artist across the top; the artist follows the title's height, inside this box.
     lv_obj_t* header = lv_obj_create(deck_page_);
@@ -128,7 +124,7 @@ void DeckScreen::build() {
 
     // The progress bar: a fill on a track, its width the progress.
     lv_obj_t* progress = box(deck_page_, kLeft, kProgressY, kWidth, kProgressH, kTrack);
-    progress_fill_ = box(progress, 0, 0, 0, kProgressH, lv_color_hex(kProgress));
+    progress_fill_ = box(progress, 0, 0, 0, kProgressH, lv_color_hex(shown_.progress_color));
 
     // The beat in the bar: four blocks, the lit one in the deck color.
     const int beat_w = (kWidth - 3 * kBeatGap) / 4;
@@ -147,10 +143,8 @@ void DeckScreen::build() {
     const int lamp_w = (kWidth - 4 * kLampGap) / 5;
     Lamp* lamps[] = {&play_, &cue_, &sync_, &master_, &loop_};
     const char* names[] = {"PLAY", "CUE", "SYNC", "MASTER", "LOOP"};
-    const uint32_t colors[] = {0x30D158, 0xFF9F0A, 0x0A84FF, 0xFFD60A, 0x64D2FF};
     for (int i = 0; i < 5; ++i) {
         Lamp& lamp = *lamps[i];
-        lamp.color = colors[i];
         lamp.box = box(deck_page_, kLeft + i * (lamp_w + kLampGap), kLampY, lamp_w, kLampH, kTrack);
         lv_obj_set_style_radius(lamp.box, 6, 0);
         lamp.text = field(lamp.box, 0, (kLampH - lv_font_get_line_height(small)) / 2, lamp_w, small, kDim,
@@ -162,7 +156,7 @@ void DeckScreen::build() {
 
     // The level meter: a fill from the bottom.
     lv_obj_t* meter = box(deck_page_, kMeterX, kMeterY, kMeterW, kMeterH, kTrack);
-    level_fill_ = box(meter, 0, 0, kMeterW, 0, lv_color_hex(kLevel));
+    level_fill_ = box(meter, 0, 0, kMeterW, 0, lv_color_hex(palette::kLevel));
     lv_obj_set_align(level_fill_, LV_ALIGN_BOTTOM_LEFT);
 
     // Waiting: why, and what to do, in the middle.
@@ -200,8 +194,7 @@ void DeckScreen::show_deck(const deck_core::DeckView& view) {
 
 void DeckScreen::draw(const deck_core::Face& f) {
     using std::strcmp;
-    const bool recolor = f.color != shown_.color;
-    if (recolor) lv_obj_set_style_text_color(deck_number_, deck_color(f.color), 0);
+    if (f.deck_color != shown_.deck_color) lv_obj_set_style_text_color(deck_number_, lv_color_hex(f.deck_color), 0);
     if (strcmp(f.deck, shown_.deck) != 0) set_text(deck_number_, deck_text_, f.deck);
     if (strcmp(f.title, shown_.title) != 0) set_text(title_, title_text_, f.title);
     if (strcmp(f.artist, shown_.artist) != 0) set_text(artist_, artist_text_, f.artist);
@@ -217,15 +210,11 @@ void DeckScreen::draw(const deck_core::Face& f) {
         progress_px_ = progress;
         lv_obj_set_width(progress_fill_, progress);
     }
-    if (f.end_warning != shown_.end_warning) {
-        lv_obj_set_style_bg_color(progress_fill_, lv_color_hex(f.end_warning ? kWarning : kProgress), 0);
+    if (f.progress_color != shown_.progress_color) {
+        lv_obj_set_style_bg_color(progress_fill_, lv_color_hex(f.progress_color), 0);
     }
-    if (f.beat != shown_.beat || recolor) {
-        for (int i = 0; i < 4; ++i) {
-            const bool was = shown_.beat == i + 1, lit = f.beat == i + 1;
-            if (lit) lv_obj_set_style_bg_color(beats_[i], deck_color(f.color), 0);
-            else if (was) lv_obj_set_style_bg_color(beats_[i], kTrack, 0);
-        }
+    for (int i = 0; i < 4; ++i) {
+        if (f.beat_color[i] != shown_.beat_color[i]) lv_obj_set_style_bg_color(beats_[i], lv_color_hex(f.beat_color[i]), 0);
     }
     if (f.phase_shown) {
         const int32_t x = f.phase_px;
@@ -242,15 +231,12 @@ void DeckScreen::draw(const deck_core::Face& f) {
     }
 
     // The lamps.
-    struct {
-        Lamp& lamp;
-        bool on, was;
-    } lamps[] = {{play_, f.playing, shown_.playing}, {cue_, f.cue, shown_.cue}, {sync_, f.sync, shown_.sync},
-                 {master_, f.master, shown_.master}, {loop_, f.loop, shown_.loop}};
-    for (auto& l : lamps) {
-        if (l.on == l.was) continue;
-        lv_obj_set_style_bg_color(l.lamp.box, l.on ? lv_color_hex(l.lamp.color) : kTrack, 0);
-        lv_obj_set_style_text_color(l.lamp.text, l.on ? lv_color_black() : kDim, 0);
+    Lamp* lamps[] = {&play_, &cue_, &sync_, &master_, &loop_};
+    for (int i = 0; i < deck_core::kLamps; ++i) {
+        if (f.lamp_color[i] != shown_.lamp_color[i]) lv_obj_set_style_bg_color(lamps[i]->box, lv_color_hex(f.lamp_color[i]), 0);
+        if (f.lamp_text_color[i] != shown_.lamp_text_color[i]) {
+            lv_obj_set_style_text_color(lamps[i]->text, lv_color_hex(f.lamp_text_color[i]), 0);
+        }
     }
     if (strcmp(f.loop_length, shown_.loop_length) != 0) {
         char text[sizeof loop_text_] = "LOOP";
