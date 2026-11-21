@@ -432,10 +432,9 @@ void test_losing_wifi_is_the_waiting_screen_at_once() {
 }
 
 // #617's fields (ADR 0011): one address-table row each.
-static const deck_core::DeckView& after(std::initializer_list<Bytes> messages) {
-    static deck_core::DeckCore core;
-    static ScreenStub screen;
-    core = deck_core::DeckCore();
+static deck_core::DeckView after(std::initializer_list<Bytes> messages) {
+    deck_core::DeckCore core;
+    ScreenStub screen;
     for (const Bytes& m : messages) feed(core, m, 100);
     core.render(screen, 100);
     return core.view();

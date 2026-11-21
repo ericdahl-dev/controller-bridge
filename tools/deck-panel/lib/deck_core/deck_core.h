@@ -27,6 +27,11 @@ struct Screen {
 /// render() every frame. No heap, no exceptions, no RTTI.
 class DeckCore {
 public:
+    DeckCore() = default;
+    /// Not copied: the screen's labels point at this core's held face and waiting view.
+    DeckCore(const DeckCore&) = delete;
+    DeckCore& operator=(const DeckCore&) = delete;
+
     /// No feed for this long and the panel shows the waiting screen (#490).
     static constexpr uint32_t kWaitAfterMs = 3000;
     /// The UDP port the panel listens on for the feed: DeckBridge's default (#616).

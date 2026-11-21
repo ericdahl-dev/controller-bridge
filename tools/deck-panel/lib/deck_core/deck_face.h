@@ -38,7 +38,7 @@ struct Face {
     /// Play, cue, sync, master, loop: each lamp's box and text.
     uint32_t lamp_color[kLamps] = {palette::kTrack, palette::kTrack, palette::kTrack, palette::kTrack, palette::kTrack};
     uint32_t lamp_text_color[kLamps] = {palette::kDim, palette::kDim, palette::kDim, palette::kDim, palette::kDim};
-    char deck[12] = "";  ///< "1"-"4"
+    char deck[13] = "";  ///< "1"-"4"; 13, so the fields' sizes add up to the struct's with no padding (the check below)
     char title[kTextBytes] = "";
     char artist[kTextBytes] = "";
     char key[kKeyMax * 4 + 1] = "";
@@ -74,8 +74,9 @@ constexpr size_t kListedBytes = 0 DECK_FACE_FIELDS(DECK_BYTES_ONE, DECK_BYTES_MA
 #undef DECK_BYTES_ONE
 #undef DECK_BYTES_MANY
 }  // namespace detail
-// The listed fields fill the struct, up to its end padding (under alignof, smaller than any field left out).
-static_assert(sizeof(Face) - detail::kListedBytes < alignof(Face), "a Face field is missing from DECK_FACE_FIELDS");
+// The listed fields fill the struct exactly, so a field of any size left out of the list fails here. A field whose
+// size breaks the no-padding sum fails too: resize a text so the sum comes out a multiple of 4 again.
+static_assert(sizeof(Face) == detail::kListedBytes, "a Face field is missing from DECK_FACE_FIELDS, or it pads");
 
 /// The parts that differ between two faces.
 class Changes {

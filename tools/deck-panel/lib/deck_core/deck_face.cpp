@@ -10,7 +10,8 @@ namespace deck_core {
 
 namespace {
 
-/// `text` fitted to the fonts: a character they lack is "?".
+/// `text` fitted to the fonts: a character they lack is "?". For the texts from outside (title, artist, key); the
+/// numbers and times are printed here in ASCII, which the fonts have.
 template <size_t N>
 void copy(char (&out)[N], const char* text) {
     font_fallback::fit(text, out, N);
