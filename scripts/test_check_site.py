@@ -528,6 +528,26 @@ class CheckSiteTests(unittest.TestCase):
         for words in ("Hot Cue", "stopped", "Use Global"):
             self.assertIn(words, rows[0])
 
+    def test_the_lc6000_page_documents_1_1s_controls(self):
+        # #647: each control 1.1 added or changed has its row, saying what README's row says; Slip is deck select now.
+        page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "website", "for", "lc6000", "index.html")
+        with open(page, encoding="utf-8") as f:
+            text = f.read()
+        rows = dict(re.findall(r"<dt>([^<]*)</dt><dd>([^<]*)</dd>", text))
+        expected = {
+            "VINYL": ["bending", "seeking"],
+            "Deck select (printed Slip)": ["next deck"],
+            "Shift + Sync (OFF)": ["sync off"],
+            "Shift + Pitch Bend − +": ["semitone", "key lock"],
+            "Shift + browse knob (ZOOM)": ["waveform"],
+            "Shift + Needle Drop strip": ["channel fader", "Relative", "Jump"],
+        }
+        for row, words in expected.items():
+            self.assertIn(row, rows, row)
+            for word in words:
+                self.assertIn(word, rows[row], row)
+        self.assertNotIn("Key Lock, Slip", rows)
+
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
         self.assertEqual(check_site.problems(root), ["img/Syndicate_logo.png: looks like another company's logo",
