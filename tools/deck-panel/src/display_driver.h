@@ -15,6 +15,7 @@
 
 #include <lvgl.h>
 
+#include "bounce_budget.h"
 #include "scan_watch.h"
 
 #include "board_pins.h"
@@ -42,3 +43,8 @@ DisplayPerf display_take_perf();
 // The scan-out's steadiness since the last call (lib/scan_watch): vsync-to-frame-end lag, vsync spread, resyncs.
 // Bounce mode only: without bounce buffers the frame-end callback isn't registered.
 scan_watch::Report display_take_scan();
+
+// A bounce chunk's deadline, and (perf build only) the copies timed against it since the last call; no chunks
+// otherwise.
+uint32_t display_copy_budget_us();
+bounce_budget::Report display_take_copy();

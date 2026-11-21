@@ -15,10 +15,12 @@
 #include <esp_rom_sys.h>
 #include <esp_system.h>
 #include <esp_timer.h>
+#include <esp_cpu.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <soc/lcd_cam_struct.h>
 
+#include "bounce_budget.h"
 #include "frame_pacing.h"
 #include "panel_mcu.h"
 #include "scan_watch.h"
@@ -80,6 +82,13 @@ constexpr frame_pacing::Timing TIMING = {
     board::LCD_VSYNC_PULSE_WIDTH,
     board::LCD_VSYNC_BACK_PORCH,
 };
+
+#ifdef PANEL_PERF_LOG
+// The bounce copy's timing (#635), perf build only: the link wraps memcpy (-Wl,--wrap=memcpy) and the wrapper below
+// times the copies of one bounce chunk out of PSRAM, esp_lcd's fill. Every other memcpy pays one compare.
+bounce_budget::Meter g_copy(bounce_budget::chunk_ns(TIMING, PANEL_BOUNCE_PX));
+portMUX_TYPE g_copy_lock = portMUX_INITIALIZER_UNLOCKED;
+#endif
 
 lv_display_t* g_disp = nullptr;
 esp_lcd_panel_handle_t g_panel = nullptr;
@@ -316,6 +325,19 @@ scan_watch::Report display_take_scan() {
     return r;
 }
 
+uint32_t display_copy_budget_us() { return bounce_budget::chunk_ns(TIMING, PANEL_BOUNCE_PX) / 1000u; }
+
+bounce_budget::Report display_take_copy() {
+#ifdef PANEL_PERF_LOG
+    portENTER_CRITICAL(&g_copy_lock);
+    const bounce_budget::Report r = g_copy.take();
+    portEXIT_CRITICAL(&g_copy_lock);
+    return r;
+#else
+    return {};
+#endif
+}
+
 DisplayPerf display_take_perf() {
     const uint32_t vsyncs = g_vsyncs;
     const uint32_t timeouts = g_gate.timeouts();
@@ -331,3 +353,23 @@ DisplayPerf display_take_perf() {
     g_perf.timeouts_seen = timeouts;
     return p;
 }
+
+#ifdef PANEL_PERF_LOG
+extern "C" void* __real_memcpy(void* to, const void* from, size_t n);
+
+// In IRAM: memcpy runs everywhere, flash writes included, when the cache is off. Only a copy out of PSRAM, which
+// can't happen then, reaches the meter's flash code.
+extern "C" IRAM_ATTR void* __wrap_memcpy(void* to, const void* from, size_t n) {
+    if (PANEL_BOUNCE_PX == 0 || n != PANEL_BOUNCE_PX * sizeof(uint16_t) || !esp_ptr_external_ram(from) ||
+        esp_ptr_external_ram(to)) {
+        return __real_memcpy(to, from, n);
+    }
+    const uint32_t start = esp_cpu_get_cycle_count();
+    void* result = __real_memcpy(to, from, n);
+    const uint32_t took_us = (esp_cpu_get_cycle_count() - start) / esp_rom_get_cpu_ticks_per_us();
+    portENTER_CRITICAL_SAFE(&g_copy_lock);
+    g_copy.copied(took_us);
+    portEXIT_CRITICAL_SAFE(&g_copy_lock);
+    return result;
+}
+#endif
