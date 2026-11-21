@@ -62,7 +62,7 @@ private:
     char tempo_text_[sizeof shown_.tempo] = "";
     char elapsed_text_[sizeof shown_.elapsed] = "";
     char remaining_text_[sizeof shown_.remaining] = "";
-    char loop_text_[16] = "";
+    char loop_text_[sizeof shown_.loop_label] = "";
     char headline_text_[sizeof deck_core::WaitingView::headline] = "";
     char detail_text_[sizeof deck_core::WaitingView::detail] = "";
     /// The fitted text, before it's compared; a member, not on the loop's stack.

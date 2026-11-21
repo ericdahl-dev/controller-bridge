@@ -151,7 +151,7 @@ void DeckScreen::build() {
                           LV_TEXT_ALIGN_CENTER);
         lv_label_set_text_static(lamp.text, names[i]);
     }
-    std::snprintf(loop_text_, sizeof loop_text_, "LOOP");
+    std::snprintf(loop_text_, sizeof loop_text_, "%s", shown_.loop_label);
     lv_label_set_text_static(loop_.text, loop_text_);
 
     // The level meter: a fill from the bottom.
@@ -238,11 +238,7 @@ void DeckScreen::draw(const deck_core::Face& f) {
             lv_obj_set_style_text_color(lamps[i]->text, lv_color_hex(f.lamp_text_color[i]), 0);
         }
     }
-    if (strcmp(f.loop_length, shown_.loop_length) != 0) {
-        char text[sizeof loop_text_] = "LOOP";
-        if (f.loop_length[0]) std::snprintf(text, sizeof text, "LOOP %s", f.loop_length);
-        set_text(loop_.text, loop_text_, text);
-    }
+    if (strcmp(f.loop_label, shown_.loop_label) != 0) set_text(loop_.text, loop_text_, f.loop_label);
 
     shown_ = f;
 }

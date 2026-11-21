@@ -23,7 +23,7 @@ constexpr uint32_t kLamp[] = {0x30D158, 0xFF9F0A, 0x0A84FF, 0xFFD60A, 0x64D2FF};
 
 constexpr int kLamps = 5;
 
-/// What the deck screen shows. Texts are UTF-8; "" draws nothing. The number texts' sizes fit any long their format
+/// What the deck screen shows. Texts are UTF-8, fitted to the fonts (font_fallback); "" draws nothing. The number texts' sizes fit any long their format
 /// can print, as GCC's -Wformat-truncation checks under -Werror (CI's Linux build), though real values are short.
 struct Face {
     char deck[12] = "";  ///< "1"-"4"
@@ -41,7 +41,7 @@ struct Face {
     /// Play, cue, sync, master, loop: each lamp's box and text.
     uint32_t lamp_color[kLamps] = {palette::kTrack, palette::kTrack, palette::kTrack, palette::kTrack, palette::kTrack};
     uint32_t lamp_text_color[kLamps] = {palette::kDim, palette::kDim, palette::kDim, palette::kDim, palette::kDim};
-    char loop_length[24] = "";
+    char loop_label[32] = "LOOP";  ///< the loop lamp's text, with the length when there is one: "LOOP 1/2"
     bool phase_shown = false;
     int32_t phase_px = layout::kPhaseTravel / 2;  ///< the marker's left edge, 0 to layout::kPhaseTravel
     int32_t level_px = 0;  ///< the meter's fill from the bottom, 0 to layout::kMeterH

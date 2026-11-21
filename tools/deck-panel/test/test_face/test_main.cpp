@@ -41,8 +41,9 @@ void test_an_empty_deck_shows_no_track_loaded_and_nothing_else() {
     TEST_ASSERT_EQUAL_STRING("1", f.deck);
     TEST_ASSERT_EQUAL_HEX32(0xFF0000, f.deck_color);
     TEST_ASSERT_EQUAL_STRING("No track loaded", f.title);
-    for (const char* text : {f.artist, f.key, f.bpm, f.tempo, f.elapsed, f.remaining, f.loop_length})
+    for (const char* text : {f.artist, f.key, f.bpm, f.tempo, f.elapsed, f.remaining})
         TEST_ASSERT_EQUAL_STRING("", text);
+    TEST_ASSERT_EQUAL_STRING("LOOP", f.loop_label);
     TEST_ASSERT_FALSE(f.phase_shown);
     TEST_ASSERT_EQUAL_HEX32(0xE0E0E0, f.progress_color);
     for (uint32_t c : f.beat_color) TEST_ASSERT_EQUAL_HEX32(0x262626, c);
@@ -175,17 +176,27 @@ void test_the_lamps_light_in_their_colors() {
     TEST_ASSERT_EQUAL_HEX32_ARRAY(cue, f.lamp_color, 5);
 }
 
-// Beats, as the LC6000's loop display shows them: whole, or a fraction of one beat.
-void test_the_loop_length_shows_whole_beats_or_fractions() {
+// The loop lamp's label: the length in beats, as the LC6000's loop display shows them, whole or a fraction of one.
+void test_the_loop_lamp_shows_whole_beats_or_fractions() {
     DeckView v = loaded_deck();
     const struct { float beats; const char* text; } cases[] = {
-        {0.5f, "1/2"}, {0.25f, "1/4"}, {0.125f, "1/8"}, {0.0625f, "1/16"}, {0.03125f, "1/32"},
-        {1, "1"}, {4, "4"}, {16, "16"}, {1.5f, "1.5"}, {0, ""},
+        {0.5f, "LOOP 1/2"}, {0.25f, "LOOP 1/4"}, {0.125f, "LOOP 1/8"}, {0.0625f, "LOOP 1/16"}, {0.03125f, "LOOP 1/32"},
+        {1, "LOOP 1"}, {4, "LOOP 4"}, {16, "LOOP 16"}, {1.5f, "LOOP 1.5"}, {0, "LOOP"},
     };
     for (const auto& c : cases) {
         v.loop_length = c.beats;
-        TEST_ASSERT_EQUAL_STRING(c.text, deck_core::face(v).loop_length);
+        TEST_ASSERT_EQUAL_STRING(c.text, deck_core::face(v).loop_label);
     }
+}
+
+// Texts come fitted to the fonts: a character they don't have is "?", never an empty box.
+void test_texts_come_fitted_to_the_fonts() {
+    DeckView v = loaded_deck();
+    std::strcpy(v.title, "T\xC5\x8Dky\xC5\x8D \xE6\x9D\xB1");  // "Tōkyō 東": ō is in the fonts, 東 isn't
+    std::strcpy(v.artist, "\xE2\x98\x85 Star");  // ★
+    const Face f = deck_core::face(v);
+    TEST_ASSERT_EQUAL_STRING("T\xC5\x8Dky\xC5\x8D ?", f.title);
+    TEST_ASSERT_EQUAL_STRING("? Star", f.artist);
 }
 
 // Phase -1 is unknown (the deck stopped, or no offset since it loaded): no marker, never one parked in the middle.
@@ -229,7 +240,8 @@ int main(int, char**) {
     RUN_TEST(test_the_beat_lights_its_block_in_the_deck_color);
     RUN_TEST(test_a_deck_without_a_color_shows_white);
     RUN_TEST(test_the_lamps_light_in_their_colors);
-    RUN_TEST(test_the_loop_length_shows_whole_beats_or_fractions);
+    RUN_TEST(test_the_loop_lamp_shows_whole_beats_or_fractions);
+    RUN_TEST(test_texts_come_fitted_to_the_fonts);
     RUN_TEST(test_the_phase_marker_hides_while_unknown_and_stays_on_the_bar);
     RUN_TEST(test_the_level_fill_is_whole_pixels_of_the_310_px_meter);
     return UNITY_END();

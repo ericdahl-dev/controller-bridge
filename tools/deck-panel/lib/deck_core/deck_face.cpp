@@ -3,13 +3,16 @@
 #include <cmath>
 #include <cstdio>
 
+#include "font_fallback.h"
+
 namespace deck_core {
 
 namespace {
 
+/// `text` fitted to the fonts: a character they lack is "?".
 template <size_t N>
 void copy(char (&out)[N], const char* text) {
-    std::snprintf(out, N, "%s", text);
+    font_fallback::fit(text, out, N);
 }
 
 /// Whole seconds as "m:ss", or "h:mm:ss" past an hour, after `sign`. Negative counts as 0.
@@ -98,7 +101,9 @@ Face face(const DeckView& view) {
         f.lamp_color[i] = palette::kLamp[i];
         f.lamp_text_color[i] = palette::kBlack;
     }
-    loop_text(f.loop_length, view.loop_length);
+    char length[24] = "";
+    loop_text(length, view.loop_length);
+    if (length[0]) std::snprintf(f.loop_label, sizeof f.loop_label, "LOOP %s", length);
     // Below 0 is unknown (-1): no marker, never one parked in the middle as if in phase.
     f.phase_shown = view.phase >= 0;
     if (f.phase_shown) f.phase_px = pixels(view.phase, layout::kPhaseTravel);
