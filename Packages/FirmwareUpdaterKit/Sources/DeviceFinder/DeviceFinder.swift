@@ -88,13 +88,33 @@ public struct DeviceFinder: Sendable {
     /// The build from the panel's boot line, "deck panel: boot, build <sha>": a git short SHA, lowercase hex of 7 to
     /// 40 digits, with "-dirty" on a development build (tools/deck-panel/git_sha.py), kept as printed. "unknown" (a
     /// build made outside git) or anything else is no build.
+    /// Reads "deck panel: boot, build <sha>" and #695's "deck panel: boot, build <sha>, version <v>[ local]".
+    /// A local or development ("-dirty") build gives no version, so its SHA decides.
     static func build(in lines: [String]) -> PanelBuild? {
         for line in lines where line.hasPrefix(bootLine) {
-            let printed = line.dropFirst(bootLine.count)
+            let tail = line.dropFirst(bootLine.count)
+            let parts = tail.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false)
+            let printed = parts[0]
             let sha = printed.hasSuffix(dirty) ? printed.dropLast(dirty.count) : printed
             guard (7...40).contains(sha.count), sha.allSatisfy({ "0123456789abcdef".contains($0) }) else { return nil }
-            return PanelBuild(sha: String(printed))
+            guard parts.count == 2 else { return PanelBuild(sha: String(printed)) }
+            guard let printedVersion = Self.version(in: parts[1]) else { return nil }
+            let version = printedVersion.local || printed.hasSuffix(dirty) ? nil : printedVersion.version
+            return PanelBuild(sha: String(printed), version: version)
         }
         return nil
+    }
+
+    /// " version <dotted digits>" with an optional " local".
+    private static func version(in tail: Substring) -> (version: FirmwareVersion, local: Bool)? {
+        let prefix = " version ", localSuffix = " local"
+        guard tail.hasPrefix(prefix) else { return nil }
+        var text = tail.dropFirst(prefix.count)
+        let local = text.hasSuffix(localSuffix)
+        if local { text = text.dropLast(localSuffix.count) }
+        guard text.allSatisfy({ $0 == "." || ("0"..."9").contains($0) }), let version = FirmwareVersion(String(text)) else {
+            return nil
+        }
+        return (version, local)
     }
 }
