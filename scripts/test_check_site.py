@@ -36,12 +36,16 @@ PRICE_LD = ('<script type="application/ld+json">{"@graph": [{"@type": "SoftwareA
             '[{"@type": "Question", "name": "How much does DeckBridge cost?", "acceptedAnswer": {"@type": "Answer", '
             '"text": "DeckBridge is free."}}]}]}</script>')
 
+LAB = ('<section id="lab"><h2>In the lab</h2><p>A reflashed display chip draws the deck. That firmware is not part of the'
+       ' DeckBridge app and is not offered for download, and DeckBridge never includes or distributes Denon’s firmware.</p>'
+       '<p>A deck panel shows the deck in front. There’s no kit or firmware to download.</p></section>')
+
 GOOD = {
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD + PRICE_LD,
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="capture/">record it in your browser</a>'
                             ' <a href="for/lc6000/">DeckBridge for the LC6000</a>'
-                            ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
+                            ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>' + LAB),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
     "capture/index.html": page(body='<a href="../">Home</a>'),
     "for/lc6000/index.html": page(body='<a href="../../">Home</a>'),
@@ -111,7 +115,7 @@ class CheckSiteTests(unittest.TestCase):
                                body='<img src="//cdn.example.com/a.png" alt=""> <script src="http://x.example/t.js"></script>'
                                     ' <a href="https://testflight.apple.com/join/XXXX">ok</a>'
                                     ' <a href="support/">s</a> <a href="privacy/">p</a> <a href="capture/">c</a>'
-                                    ' <a href="for/lc6000/">l</a>'),
+                                    ' <a href="for/lc6000/">l</a>' + LAB),
             "style.css": '@import url("https://fonts.example/x.css"); body { background: url(https://x.example/bg.png); }',
         })
         self.assertEqual(check_site.problems(root), [
@@ -275,6 +279,39 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(root), [
             'capture/index.html: says the app sends only to Syndicate or nothing leaves the Mac without naming the display feed: "It only talks to your LC6000 controller and to Syndicate."',
             'index.md: says the app sends only to Syndicate or nothing leaves the Mac without naming the display feed: "It sends OSC messages only to Syndicate, on this Mac by default."',
+        ])
+
+    def test_the_home_page_has_an_in_the_lab_section_with_its_disclaimers(self):
+        """#647: what needs hardware or firmware others can't get sits in one place, saying so (the owner's wording)."""
+        root = self.site({"index.html": GOOD["index.html"].replace(LAB, "")})
+        self.assertEqual(check_site.problems(root), ['index.html: has no In the lab section (<section id="lab">)'])
+        bare = GOOD["index.html"].replace(LAB, '<section id="lab"><h2>In the lab</h2><p>A reflashed chip draws the deck.</p></section>')
+        self.assertEqual(check_site.problems(self.site({"index.html": bare})), [
+            'index.html: the In the lab section doesn\'t say "not part of the deckbridge app"',
+            'index.html: the In the lab section doesn\'t say "not offered for download"',
+            'index.html: the In the lab section doesn\'t say "never includes or distributes denon\'s firmware"',
+            'index.html: the In the lab section doesn\'t say "no kit or firmware to download"',
+        ])
+
+    def test_lab_things_are_only_in_the_lab(self):
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                                            '<p>Point the display feed at your deck panel.</p>'),
+            "index.md": "## Features\n\nThe drawn jog display is here.\n\n## In the lab\n\nA deck panel and a reflashed chip.\n",
+            "llms.txt": GOOD["llms.txt"] + "- In the lab: a deck panel.\n- Features: a reflashed chip.\n",
+        })
+        self.assertEqual(check_site.problems(root), [
+            'index.md: names "drawn jog display" outside In the lab',
+            'llms.txt: names "reflashed" outside In the lab',
+            'support/index.html: names "deck panel" outside In the lab',
+        ])
+
+    def test_no_page_tells_how_to_flash(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                                                          '<p>Put the chip in its bootloader and run dfu-util.</p>')})
+        self.assertEqual(check_site.problems(root), [
+            'support/index.html: says "bootloader": no flashing instructions on the site',
+            'support/index.html: says "dfu-util": no flashing instructions on the site',
         ])
 
     def test_the_privacy_page_must_say_no_data_is_collected(self):

@@ -17,6 +17,8 @@
   showrecorder.app's does (PRIVACY_STATEMENTS)
 - a sentence saying nothing goes to the network, that the app talks or sends only to Syndicate, or that nothing
   leaves the Mac names the display feed; the privacy page discloses the feed in the owner's wording (#632)
+- the home page has an In the lab section with the owner's disclaimers; what it holds (the deck panel, the drawn jog
+  display, a reflashed chip) is named nowhere else, and no page says how to flash anything (#647)
 - no other company's logo is in the site
 - the whole site stays under 2 MB
 Standard library only. Run: python3 -I scripts/check_site.py [website]   (exits 1 on any problem)
@@ -215,6 +217,35 @@ META_CONTENT = re.compile(r'<meta\s[^>]*(?:name|property)="(?:description|og:des
                           r'content="([^"]*)"', re.IGNORECASE)
 
 
+# "In the lab" (#647): what needs hardware or firmware others can't get, on the home page in <section id="lab">, in
+# index.md under "## In the lab", in llms.txt on a "- In the lab:" line. It says the owner's disclaimers; what it holds
+# is named nowhere else, and no page says how to flash anything.
+LAB_SECTION = re.compile(r'<section\b[^>]*\bid="lab"[^>]*>(.*?)</section>', re.S | re.I)
+LAB_STATEMENTS = ["not part of the deckbridge app", "not offered for download",
+                  "never includes or distributes denon's firmware", "no kit or firmware to download"]
+LAB_ONLY = ["deck panel", "drawn jog display", "reflashed"]
+FLASHING = ["bootloader", "dfu-util", "dfu mode", "flashing", "flash the", "flash it"]
+
+
+def plain_words(text):
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", text)).replace("\u2019", "'").lower().split())
+
+
+def outside_lab(file, text):
+    if file.endswith(".html"):
+        return LAB_SECTION.sub(" ", text)
+    if file.endswith(".md"):
+        return re.sub(r"(?ms)^## In the lab\n.*?(?=^## |\Z)", "", text)
+    return "\n".join(line for line in text.split("\n") if not line.startswith("- In the lab:"))
+
+
+def lab_problems(file, text):
+    outside = plain_words(outside_lab(file, text))
+    out = [f'{file}: names "{words}" outside In the lab' for words in LAB_ONLY if words in outside]
+    said = plain_words(text)
+    return out + [f'{file}: says "{words}": no flashing instructions on the site' for words in FLASHING if words in said]
+
+
 def network_problems(file, text):
     # Inline tags sit inside a sentence; any other tag ends one.
     plain = text
@@ -296,6 +327,13 @@ def check_page(root, file, text):
         if not any(CAPTURE_URL in block for block in page.json_ld):
             out.append(f"{file}: its JSON-LD doesn't name {CAPTURE_URL}")
         out += check_price(file, page.json_ld)
+    if file == HOME:
+        lab = LAB_SECTION.search(text)
+        if not lab:
+            out.append(f'{file}: has no In the lab section (<section id="lab">)')
+        else:
+            said = plain_words(lab.group(1))
+            out += [f'{file}: the In the lab section doesn\'t say "{words}"' for words in LAB_STATEMENTS if words not in said]
     if file == PRIVACY:
         said = " ".join(" ".join(page.text).split()).lower()
         out += [f'{file}: doesn\'t say "{words}"' for words in PRIVACY_STATEMENTS if words not in said]
@@ -414,6 +452,7 @@ def problems(root, app_prompts=None):
                 text = f.read()
             out += company_problems(file, text)
             out += network_problems(file, text)
+            out += lab_problems(file, text)
             if PLACEHOLDER.search(text):
                 out.append(f"{file}: still has a TODO(user) TestFlight placeholder")
             if app_version:
