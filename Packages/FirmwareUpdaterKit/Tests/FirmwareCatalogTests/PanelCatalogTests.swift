@@ -13,3 +13,25 @@ func fixture(_ name: String) throws -> URL {
     #expect(newest.version == FirmwareVersion("1.10.0"))
     #expect(newest.sha == "bbbbbbb")
 }
+
+@Test func aPanelOnAnOlderShippedBuildIsOfferedTheNewest() throws {
+    let catalog = try Catalog(directory: fixture("one-panel"))
+    let newest = try #require(catalog.newestPanel())
+    #expect(catalog.offer(for: PanelBuild(sha: "ccccccc")) == .update(newest))
+}
+
+@Test func aPanelOnTheNewestBuildIsUpToDate() throws {
+    let catalog = try Catalog(directory: fixture("one-panel"))
+    #expect(catalog.offer(for: PanelBuild(sha: "bbbbbbb")) == .upToDate)
+}
+
+@Test func aPanelOnABuildTheCatalogNeverShippedIsUnknownAndStillOffered() throws {
+    let catalog = try Catalog(directory: fixture("one-panel"))
+    let newest = try #require(catalog.newestPanel())
+    #expect(catalog.offer(for: PanelBuild(sha: "1234567")) == .unknownBuild(newest))
+}
+
+@Test func theBootLineShaMayBeLongerThanTheCatalogs() throws {
+    let catalog = try Catalog(directory: fixture("one-panel"))
+    #expect(catalog.offer(for: PanelBuild(sha: "bbbbbbb0123")) == .upToDate)
+}

@@ -34,3 +34,29 @@ public struct Catalog: Sendable {
         let panel: [Panel]
     }
 }
+
+/// What the app offers a deck panel.
+public enum PanelOffer: Sendable, Hashable {
+    /// The panel runs an older build the app shipped; this is newer.
+    case update(PanelFirmware)
+    /// The panel runs the newest build.
+    case upToDate
+    /// The panel runs a build the app doesn't know (a dev build, or newer than the app): offered with a note.
+    case unknownBuild(PanelFirmware)
+    /// The app carries no panel firmware.
+    case nothing
+}
+
+extension Catalog {
+    public func offer(for build: PanelBuild) -> PanelOffer {
+        guard let newest = newestPanel() else { return .nothing }
+        guard let shipped = panel.first(where: { Self.sameBuild($0.sha, build.sha) }) else { return .unknownBuild(newest) }
+        return shipped.version < newest.version ? .update(newest) : .upToDate
+    }
+
+    /// Short and long forms of one SHA name the same build: the shorter must start the longer.
+    static func sameBuild(_ a: String, _ b: String) -> Bool {
+        let a = a.lowercased(), b = b.lowercased()
+        return a.count <= b.count ? b.hasPrefix(a) : a.hasPrefix(b)
+    }
+}
