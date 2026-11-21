@@ -215,7 +215,11 @@ void start_scan() {
     // Async: returns at once, WIFI_SCAN_RUNNING; poll_scan() collects. Needs the STA half of WIFI_AP_STA.
     if (WiFi.scanNetworks(true) == WIFI_SCAN_FAILED) {
         Serial.println("deck panel: Wi-Fi scan didn't start");
+        // Counts as a scan, so the next try waits for a page load past kRescanAfterMs, not the next loop pass.
         g_scanning = false;
+        g_scan_wanted = false;
+        g_scanned_ms = millis();
+        g_scanned_once = true;
         return;
     }
     g_scanning = true;
