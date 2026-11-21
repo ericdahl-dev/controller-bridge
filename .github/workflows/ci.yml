@@ -91,6 +91,7 @@ jobs:
         run: |
           pio test -d tools/deck-panel -e native
           python3 -I tools/deck-panel/test_wifi_secrets.py
+          python3 -I tools/deck-panel/test_deck_logo.py
       # No Wi-Fi file here, so all three build without credentials: the deck view says "Wi-Fi isn't set" (#620).
       - name: Deck panel firmware build
         run: |
