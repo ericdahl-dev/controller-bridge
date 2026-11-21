@@ -35,3 +35,15 @@ func fixture(_ name: String) throws -> URL {
     let catalog = try Catalog(directory: fixture("one-panel"))
     #expect(catalog.offer(for: PanelBuild(sha: "bbbbbbb0123")) == .upToDate)
 }
+
+@Test func aPanelThatReportsAnOlderVersionIsOfferedAnUpdateWhateverItsSha() throws {
+    let catalog = try Catalog(directory: fixture("one-panel"))
+    let newest = try #require(catalog.newestPanel())
+    #expect(catalog.offer(for: PanelBuild(sha: "1234567", version: FirmwareVersion("1.9.9"))) == .update(newest))
+}
+
+@Test func aPanelThatReportsTheNewestVersionOrLaterIsUpToDate() throws {
+    let catalog = try Catalog(directory: fixture("one-panel"))
+    #expect(catalog.offer(for: PanelBuild(sha: "1234567", version: FirmwareVersion("1.10.0"))) == .upToDate)
+    #expect(catalog.offer(for: PanelBuild(sha: "ccccccc", version: FirmwareVersion("2.0"))) == .upToDate)
+}

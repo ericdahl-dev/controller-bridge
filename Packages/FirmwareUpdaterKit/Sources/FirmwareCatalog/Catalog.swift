@@ -50,6 +50,8 @@ public enum PanelOffer: Sendable, Hashable {
 extension Catalog {
     public func offer(for build: PanelBuild) -> PanelOffer {
         guard let newest = newestPanel() else { return .nothing }
+        // A panel that reports its version (#695) is judged by it; the SHA list is for panels that report only a SHA.
+        if let version = build.version { return version < newest.version ? .update(newest) : .upToDate }
         guard let shipped = panel.first(where: { Self.sameBuild($0.sha, build.sha) }) else { return .unknownBuild(newest) }
         return shipped.version < newest.version ? .update(newest) : .upToDate
     }
