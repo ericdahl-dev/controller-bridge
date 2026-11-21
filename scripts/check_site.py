@@ -233,8 +233,11 @@ NEW_IN_1_1 = ["jog display", "transpose", "exact colors", "key display", "shift 
 NEW_IN_1_1_FILES = ["index.html", "index.md", "llms.txt"]
 
 
-def plain_words(text):
-    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", text)).replace("\u2019", "'").lower().split())
+def plain_words(text, markup=True):
+    """Lowercased words, curly apostrophes made straight; HTML's tags dropped (only HTML's: Markdown's <autolinks> aren't)."""
+    if markup:
+        text = html.unescape(re.sub(r"<[^>]+>", " ", text))
+    return " ".join(text.replace("\u2019", "'").lower().split())
 
 
 def outside_lab(file, text):
@@ -246,9 +249,10 @@ def outside_lab(file, text):
 
 
 def lab_problems(file, text):
-    outside = plain_words(outside_lab(file, text))
+    markup = file.endswith(".html")
+    outside = plain_words(outside_lab(file, text), markup)
     out = [f'{file}: names "{words}" outside In the lab' for words in LAB_ONLY if words in outside]
-    said = plain_words(text)
+    said = plain_words(text, markup)
     return out + [f'{file}: says "{words}": no flashing instructions on the site' for words in FLASHING if words in said]
 
 
@@ -460,7 +464,7 @@ def problems(root, app_prompts=None):
             out += network_problems(file, text)
             out += lab_problems(file, text)
             if file in NEW_IN_1_1_FILES and app_version and version_tuple(app_version) >= (1, 1):
-                said = plain_words(text)
+                said = plain_words(text, file.endswith(".html"))
                 out += [f'{file}: doesn\'t name 1.1\'s "{words}"' for words in NEW_IN_1_1 if words not in said]
             if PLACEHOLDER.search(text):
                 out.append(f"{file}: still has a TODO(user) TestFlight placeholder")

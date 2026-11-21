@@ -325,6 +325,11 @@ class CheckSiteTests(unittest.TestCase):
         self.assertIn('index.md: doesn\'t name 1.1\'s "exact colors"', problems)
         self.assertNotIn('index.md: doesn\'t name 1.1\'s "jog display"', problems)
         self.assertNotIn('index.md: doesn\'t name 1.1\'s "display feed"', problems)
+        # Markdown isn't HTML: index.md's arrow diagram ("LC6000 <--MIDI--") and a later comment's "-->" hide nothing.
+        md = ("# DeckBridge\n\nLC6000 <--MIDI LEDs-- DeckBridge\n\nThe jog display. Transpose. Exact colors. Key display."
+              " Shift + Needle Drop. The display feed.\n\n<!-- FAQ:START -->\n")
+        linked = check_site.problems(self.site({"index.html": at_1_1, "index.md": md}))
+        self.assertNotIn('index.md: doesn\'t name 1.1\'s "key display"', linked)
         # At 1.0.1, 1.1's features aren't asked for.
         self.assertEqual([p for p in check_site.problems(self.site({"index.md": "# DeckBridge\n"})) if "1.1's" in p], [])
 
