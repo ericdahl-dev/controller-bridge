@@ -34,7 +34,9 @@ bool display_init();
 // The LVGL display registered by display_init(), or nullptr before it runs.
 lv_display_t* display_lvgl();
 
-// What the panel did since the last call, for a performance log. Call it from LVGL's task (the loop).
+// What the panel did since the last call, for a performance log. Call it from LVGL's task (the loop). This,
+// display_take_scan() and display_take_copy() are parts of one health window (lib/panel_scan, #666): the first of
+// them called again starts the next window, so call each once a window.
 struct DisplayPerf {
     uint32_t vsyncs;          // frames the panel scanned out
     uint32_t swaps;           // frames LVGL finished and handed over
