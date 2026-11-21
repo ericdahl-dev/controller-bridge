@@ -192,6 +192,12 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
     } else {
         alive = apply(bytes, length, now_ms);
     }
+    if (goodbye_) {
+        // The waiting screen at once; the deck is kept for the next snapshot.
+        goodbye_ = false;
+        heard_ = false;
+        return;
+    }
     if (!alive) return;
     heard_ = true;
     last_heard_ms_ = now_ms;
@@ -200,6 +206,12 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
 bool DeckCore::apply(const uint8_t* bytes, size_t length, uint32_t now_ms) {
     Message message;
     if (!parse(bytes, length, message)) return false;
+    // DeckBridge's goodbye (ADR 0011, #651): not the deck's state but the feed's end, so not a table row. 1 is the
+    // only value; anything else is ignored like a bad value.
+    if (std::strcmp(message.name, "goodbye") == 0) {
+        if (message.type == 'i' && message.i == 1) goodbye_ = true;
+        return false;
+    }
     // An address this panel doesn't know is a newer DeckBridge's (ADR 0011): ignored, but the feed is alive.
     bool alive = true;
     for (const Row& row : kRows) {
@@ -263,6 +275,7 @@ void DeckCore::render(Screen& screen, uint32_t now_ms) {
 
 WaitingView DeckCore::waiting_view() const {
     WaitingView view;
+    view.logo = true;  // every waiting screen: the logo, the reason and the address beneath (#651)
     switch (network_) {
         case Network::setup:
             std::snprintf(view.headline, sizeof view.headline, "Set up the panel's Wi-Fi");
@@ -282,6 +295,7 @@ WaitingView DeckCore::waiting_view() const {
     }
     // Fitted to the fonts, as the deck's texts are: the address and names come from outside.
     WaitingView fitted;
+    fitted.logo = view.logo;
     font_fallback::fit(view.headline, fitted.headline, sizeof fitted.headline);
     font_fallback::fit(view.detail, fitted.detail, sizeof fitted.detail);
     return fitted;

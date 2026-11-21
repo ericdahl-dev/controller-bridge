@@ -16,6 +16,7 @@ struct ScreenStub : deck_core::Screen {
         std::string artist;
         std::string headline;  ///< the waiting screen's
         std::string detail;
+        bool logo = false;  ///< the waiting screen's DeckBridge logo
         deck_core::Face face;  ///< the whole face, as shown
         deck_core::Changes changes;  ///< the parts the core said changed
         deck_core::WaitingChanges waiting_changes;
@@ -27,6 +28,7 @@ struct ScreenStub : deck_core::Screen {
         s.waiting_changes = changes;
         s.headline = view.headline;
         s.detail = view.detail;
+        s.logo = view.logo;
         shown.push_back(s);
     }
     void show_deck(const deck_core::Face& face, const deck_core::Changes& changes) override {

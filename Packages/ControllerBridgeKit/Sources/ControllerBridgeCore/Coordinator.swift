@@ -394,7 +394,11 @@ public final class Coordinator {
         deck.loop = facts.looping
         if facts.looping { deck.loopLength = Self.loopBeats(facts, trackBPM: trackBPM, liveBPM: bpm) }
         // The master clock, as the ring's beat pulse: none once it's been quiet for the Bridge's timeout.
-        if let master = masterBeat, clock.now - master.at <= Bridge.clockTimeout { deck.beat = master.beat }
+        if let master = masterBeat, clock.now - master.at <= Bridge.clockTimeout {
+            deck.beat = master.beat
+            // Its BPM (#674), only while the clock runs, so a display never times beats off a stopped clock.
+            deck.clockBpm = jogController.masterBPM ?? 0
+        }
         let elapsed = Self.wholeSeconds(facts.position)
         deck.elapsed = elapsed
         if facts.duration != nil { deck.remaining = max(0, Self.wholeSeconds(facts.duration) - elapsed) }

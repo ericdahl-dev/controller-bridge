@@ -671,6 +671,64 @@ void test_the_core_says_what_it_holds() {
     TEST_ASSERT_EQUAL_STRING("Night Drive", core.view().title);
 }
 
+// #651: every waiting screen shows the DeckBridge logo, with its reason and address beneath.
+void test_every_waiting_screen_shows_the_logo() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    const deck_core::Network states[] = {deck_core::Network::setup, deck_core::Network::joining,
+                                         deck_core::Network::connected};
+    for (deck_core::Network state : states) {
+        core.set_network(state, "192.168.1.40");
+        core.render(screen, 0);
+        TEST_ASSERT_TRUE(screen.last().waiting);
+        TEST_ASSERT_TRUE(screen.last().logo);
+        TEST_ASSERT_TRUE(screen.last().headline.size() > 0);
+    }
+    TEST_ASSERT_EQUAL_STRING("192.168.1.40  port 9100", screen.last().detail.c_str());
+}
+
+// A quit DeckBridge sends nothing more: within 3 s the panel shows the logo, never a frozen deck (#651).
+void test_a_quit_deckbridge_is_the_logo_within_3_seconds() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    feed(core, bundle({int_message(prefix + "deck", 1), int_message(prefix + "loaded", 1),
+                       string_message(prefix + "title", "Night Drive"), int_message(prefix + "playing", 1)}), 1000);
+    core.render(screen, 1000);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    core.render(screen, 3999);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    core.render(screen, 4000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    TEST_ASSERT_TRUE(screen.last().logo);
+    TEST_ASSERT_EQUAL_STRING("Waiting for DeckBridge", screen.last().headline.c_str());
+}
+
+// DeckBridge's goodbye (ADR 0011, #651): the logo at once, the deck kept for when the feed comes back.
+void test_a_goodbye_is_the_logo_at_once_and_the_next_message_brings_the_deck_back() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, bundle({int_message(prefix + "deck", 2), string_message(prefix + "title", "Night Drive")}), 1000);
+    core.render(screen, 1000);
+    feed(core, bundle({int_message(prefix + "goodbye", 1)}), 1100);
+    core.render(screen, 1100);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    TEST_ASSERT_TRUE(screen.last().logo);
+    feed(core, int_message(prefix + "deck", 2), 9000);
+    core.render(screen, 9000);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", screen.last().title.c_str());
+}
+
+void test_a_goodbye_of_another_value_is_ignored() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 2), 1000);
+    feed(core, int_message(prefix + "goodbye", 0), 1100);
+    core.render(screen, 1100);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -762,6 +820,22 @@ void test_the_waiting_screen_is_told_only_what_changed() {
     TEST_ASSERT_FALSE(screen.last().waiting_changes.headline);
     TEST_ASSERT_TRUE(screen.last().waiting_changes.detail);
     TEST_ASSERT_EQUAL_STRING("192.168.1.41  port 9100", screen.last().detail.c_str());
+}
+
+// #651 in #665's shape: the logo is a part of the waiting screen too. The first waiting screen shows it (the board's
+// logo starts hidden), and a view that differs only in the logo says so.
+void test_the_waiting_screen_is_told_when_the_logo_changes() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 0);
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.logo);
+    deck_core::WaitingView with, without;
+    with.logo = true;
+    const deck_core::WaitingChanges c = deck_core::changed(without, with);
+    TEST_ASSERT_TRUE(c.logo);
+    TEST_ASSERT_FALSE(c.headline || c.detail);
+    TEST_ASSERT_TRUE(c.any());
 }
 
 // Its texts come fitted to the fonts, as the deck's do.
@@ -863,6 +937,10 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_every_waiting_screen_shows_the_logo);
+    RUN_TEST(test_a_quit_deckbridge_is_the_logo_within_3_seconds);
+    RUN_TEST(test_a_goodbye_is_the_logo_at_once_and_the_next_message_brings_the_deck_back);
+    RUN_TEST(test_a_goodbye_of_another_value_is_ignored);
     RUN_TEST(test_waiting_says_what_the_last_render_showed);
     RUN_TEST(test_a_bundle_applies_all_its_messages_as_one_arrival);
     RUN_TEST(test_the_core_says_what_it_holds);
@@ -877,6 +955,7 @@ int main(int, char**) {
     RUN_TEST(test_the_master_stopping_stops_the_beat_at_once);
     RUN_TEST(test_a_deck_that_is_not_the_master_stopping_leaves_the_beat);
     RUN_TEST(test_the_waiting_screen_is_told_only_what_changed);
+    RUN_TEST(test_the_waiting_screen_is_told_when_the_logo_changes);
     RUN_TEST(test_the_waiting_texts_come_fitted_to_the_fonts);
     RUN_TEST(test_the_first_deck_is_every_part_then_only_what_changed);
     RUN_TEST(test_a_change_that_moves_no_pixel_tells_the_screen_nothing);

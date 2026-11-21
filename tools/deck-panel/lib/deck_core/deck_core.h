@@ -60,6 +60,7 @@ private:
 
     DeckView view_;
     bool heard_ = false;
+    bool goodbye_ = false;  ///< the datagram being read had DeckBridge's goodbye
     uint32_t last_heard_ms_ = 0;
     Network network_ = Network::connected;
     char ip_[16] = "";
