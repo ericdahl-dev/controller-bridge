@@ -9,14 +9,15 @@ bool Scan::start(const Config& config) {
     if (config.bounce_px != 0 && (frame_px % config.bounce_px != 0 || (frame_px / config.bounce_px) % 2 != 0)) {
         return false;
     }
-    if (!panel_.start(config)) return false;
+    // Set before the panel starts: its interrupts begin inside start(), and read the config (bounce or not, the
+    // copy's deadline) from their first.
     config_ = config;
     frame_us_ = frame_pacing::frame_us(config.timing);
     const uint32_t budget_ns = config.bounce_px == 0 ? 0 : bounce_budget::chunk_ns(config.timing, config.bounce_px);
     copy_budget_ns_ = budget_ns;
     copy_budget_us_ = budget_ns / 1000;
     meter_ = bounce_budget::Meter(budget_ns);
-    return true;
+    return panel_.start(config);
 }
 
 bool Scan::present(bool last_area) {

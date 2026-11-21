@@ -316,6 +316,24 @@ void test_late_copies_are_counted_where_they_fell() {
     TEST_ASSERT_EQUAL(1, h.copy_late_drawing);
 }
 
+// The panel's interrupts start inside its start(), before start() returns: the scan already knows its config then, so
+// an early vsync with bounce buffers is no latch (the frame end is).
+struct EarlyPanel : ScriptedPanel {
+    bool start(const panel_scan::Config& c) override {
+        ScriptedPanel::start(c);
+        scan->vsync(500);
+        return true;
+    }
+};
+
+void test_interrupts_during_start_see_the_config() {
+    EarlyPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    TEST_ASSERT_TRUE(scan.start(owners()));
+    TEST_ASSERT_EQUAL(0, scan.latches().count);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
@@ -338,5 +356,6 @@ int main(int, char**) {
     RUN_TEST(test_health_reports_one_window_then_starts_another);
     RUN_TEST(test_a_frame_end_that_jumps_is_a_resync);
     RUN_TEST(test_late_copies_are_counted_where_they_fell);
+    RUN_TEST(test_interrupts_during_start_see_the_config);
     return UNITY_END();
 }
