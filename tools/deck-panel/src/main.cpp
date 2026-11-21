@@ -110,6 +110,10 @@ void build_screen() {
 //   -DPANEL_DRAW_CAP=N           refresh at most N frames a second of the panel's 30 (e.g. 22, main's rate)
 //   -DPANEL_DRAW_SKIP_AFTER_US=N skip the refresh on the frame after one that took longer than N us
 //   -DPANEL_YIELD_US=N           after each frame's refresh, block the loop N us (a timer and a semaphore, no spin)
+//   -DPANEL_WAKE_DELAY_US=N      start each frame N us after the vsync wake, the loop asleep till then: moves only the
+//                                phase. The bounce copy that runs late is the first after the vertical blank, about
+//                                3.28 ms after the latch; its preload is issued about 2.4 ms before it, so anything
+//                                core 1 does in that gap can evict it. 2500 wakes at about +4.4 ms, past that copy.
 #ifndef PANEL_DRAW_CAP
 #define PANEL_DRAW_CAP 0
 #endif
@@ -119,8 +123,11 @@ void build_screen() {
 #ifndef PANEL_YIELD_US
 #define PANEL_YIELD_US 0
 #endif
+#ifndef PANEL_WAKE_DELAY_US
+#define PANEL_WAKE_DELAY_US 0
+#endif
 
-#if PANEL_YIELD_US > 0
+#if PANEL_YIELD_US > 0 || PANEL_WAKE_DELAY_US > 0
 SemaphoreHandle_t g_yield_sem = nullptr;
 esp_timer_handle_t g_yield_timer = nullptr;
 
@@ -133,7 +140,8 @@ void yield_begin() {
         g_yield_timer = nullptr;
         Serial.println("deck panel: no yield timer; yielding in whole ticks");
     }
-    Serial.printf("deck panel: yield %u us after each refresh\n", unsigned(PANEL_YIELD_US));
+    Serial.printf("deck panel: yield %u us after each refresh, wake %u us after the vsync\n", unsigned(PANEL_YIELD_US),
+                  unsigned(PANEL_WAKE_DELAY_US));
 }
 
 /// Blocks the loop task `us`; core 1 runs its idle task meanwhile.
@@ -158,6 +166,9 @@ class PanelBoard : public frame_clock::Board {
             us = now_us();
             return false;
         }
+#if PANEL_WAKE_DELAY_US > 0
+        yield_for(PANEL_WAKE_DELAY_US);  // still "wait" on the copy line
+#endif
         count = latch.count;
         us = latch.us;
         return true;
@@ -284,7 +295,7 @@ void setup() {
     touch_init();
     build_screen();
     display_refresh();  // the whole first frame, now, whatever ran before
-#if PANEL_YIELD_US > 0
+#if PANEL_YIELD_US > 0 || PANEL_WAKE_DELAY_US > 0
     yield_begin();
 #endif
     // Last, after that frame, so the screen doesn't flash on boot.
