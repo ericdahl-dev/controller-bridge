@@ -885,6 +885,13 @@ void test_every_waiting_screen_shows_the_build() {
     core.set_network(deck_core::Network::connected, "192.168.1.40");
     core.render(screen, 20);
     TEST_ASSERT_EQUAL_STRING("v1.2.0  abc1234", screen.last().build.c_str());
+    // A new label alone is a change of the build and nothing else.
+    core.set_build("v1.3.0  def5678");
+    core.render(screen, 30);
+    TEST_ASSERT_EQUAL_STRING("v1.3.0  def5678", screen.last().build.c_str());
+    const deck_core::WaitingChanges c = screen.last().waiting_changes;
+    TEST_ASSERT_TRUE(c.build && c.any());
+    TEST_ASSERT_FALSE(c.headline || c.detail || c.logo || c.logo_small);
 }
 
 int main(int, char**) {
