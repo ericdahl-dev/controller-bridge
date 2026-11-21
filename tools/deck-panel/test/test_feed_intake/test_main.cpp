@@ -3,12 +3,23 @@
 #include <unity.h>
 
 #include <cstdlib>
+#include <new>
 #include <deque>
 #include <vector>
 
 #include "deck_core.h"
 #include "feed_drain.h"
 #include "feed_intake.h"
+
+// Every heap allocation in this test binary is counted, so a test can say the intake makes none per datagram.
+static size_t allocations = 0;
+void* operator new(size_t size) {
+    ++allocations;
+    if (void* p = std::malloc(size ? size : 1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete(void* p, size_t) noexcept { std::free(p); }
 
 void setUp() {}
 void tearDown() {}
@@ -147,6 +158,38 @@ void test_pumping_a_socket_stamps_each_datagram_as_it_is_taken() {
     TEST_ASSERT_EQUAL_UINT32(1, intake.dropped());
 }
 
+/// One datagram waiting, again and again, from fixed memory: a socket that allocates nothing itself.
+struct SameSocket : feed_drain::Socket {
+    const std::vector<uint8_t>* datagram = nullptr;
+    int left = 0;
+    size_t next_size() override { return left > 0 ? datagram->size() : 0; }
+    size_t read(uint8_t* into, size_t room) override {
+        --left;
+        size_t n = datagram->size() < room ? datagram->size() : room;
+        for (size_t i = 0; i < n; ++i) into[i] = (*datagram)[i];
+        return n;
+    }
+    void skip() override { --left; }
+};
+
+// No heap per datagram: pushing, pumping and draining a thousand frames' worth allocates nothing.
+void test_taking_and_draining_datagrams_uses_no_heap() {
+    static feed_intake::Intake intake;
+    static deck_core::DeckCore core;
+    connect(core);
+    const auto m = deck_message(2);
+    SameSocket socket;
+    socket.datagram = &m;
+    const size_t before = allocations;
+    for (int frame = 0; frame < 1000; ++frame) {
+        intake.push(m.data(), m.size(), uint64_t(frame) * 33000);
+        socket.left = 3;
+        intake.pump(socket, ticking_us);
+        intake.drain(core);
+    }
+    TEST_ASSERT_EQUAL(before, allocations);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_the_core_gets_each_datagram_at_its_arrival_not_its_read);
@@ -154,5 +197,6 @@ int main(int, char**) {
     RUN_TEST(test_a_full_queue_drops_the_newcomer_and_counts_it);
     RUN_TEST(test_a_datagram_too_big_is_counted_and_never_queued);
     RUN_TEST(test_pumping_a_socket_stamps_each_datagram_as_it_is_taken);
+    RUN_TEST(test_taking_and_draining_datagrams_uses_no_heap);
     return UNITY_END();
 }
