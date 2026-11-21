@@ -225,9 +225,16 @@ void DeckCore::render(Screen& screen, uint32_t now_ms) {
         screen.show_waiting(view);
         shown_waiting_view_ = view;
     } else {
+        // Every frame: the view compare is the cheap way out; the face is built only when the view changed.
         if (shown_ && !shown_waiting_ && view_ == shown_view_) return;
-        screen.show_deck(view_);
         shown_view_ = view_;
+        const Face now = face(view_);
+        const Changes changes = drawn_ ? changed(shown_face_, now) : Changes::all();
+        // Back from waiting with nothing changed, the page needs showing even so: the board shows it on any call.
+        if (drawn_ && !changes.any() && !shown_waiting_) return;
+        shown_face_ = now;
+        drawn_ = true;
+        screen.show_deck(shown_face_, changes);
     }
     shown_ = true;
     shown_waiting_ = waiting;

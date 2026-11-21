@@ -186,8 +186,8 @@ void DeckScreen::show_waiting(const deck_core::WaitingView& view) {
     set_hidden(waiting_page_, false);
 }
 
-void DeckScreen::show_deck(const deck_core::DeckView& view) {
-    draw(deck_core::face(view));
+void DeckScreen::show_deck(const deck_core::Face& face, const deck_core::Changes&) {
+    draw(face);
     set_hidden(waiting_page_, true);
     set_hidden(deck_page_, false);
 }

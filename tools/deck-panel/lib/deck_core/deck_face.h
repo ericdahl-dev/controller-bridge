@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstring>
 
-#include "deck_core.h"
+#include "deck_types.h"
 #include "deck_layout.h"
 
 namespace deck_core {

@@ -14,7 +14,7 @@ public:
     void build();
 
     void show_waiting(const deck_core::WaitingView& view) override;
-    void show_deck(const deck_core::DeckView& view) override;
+    void show_deck(const deck_core::Face& face, const deck_core::Changes& changes) override;
 
 private:
     /// `text` fitted to the font into `shown`, the label's static text, set only if it changed: each set redraws the
