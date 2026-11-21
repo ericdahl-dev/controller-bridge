@@ -19,9 +19,16 @@ public struct PublishedRelease: Sendable {
     }
 }
 
+/// Why a fetched release wasn't used. The built-in catalog stays in use whatever the reason.
+public enum Refusal: Error, Sendable, Equatable {
+    case badSignature
+}
+
 public struct FetchOutcome: Sendable {
     /// The catalog to use: the fetched release if it passed every check, otherwise the built-in one.
     public let catalog: Catalog
+    /// Why the fetched release wasn't used, or nil if it was.
+    public var refusal: Refusal? = nil
 }
 
 public struct ReleaseFetcher: Sendable {
@@ -37,20 +44,33 @@ public struct ReleaseFetcher: Sendable {
 
     public func fetch(over builtIn: Catalog) async -> FetchOutcome {
         do {
-            let published = try await feed.latest()
-            let manifest = try JSONDecoder().decode(Manifest.self, from: published.manifest)
-            let folder = cache.appending(path: "fetched")
-            try? FileManager.default.removeItem(at: folder)
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            for file in manifest.files {
-                let target = folder.appending(path: file.name)
-                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try await feed.file(file.name).write(to: target)
-            }
-            try Manifest.catalogJSON(in: published.manifest).write(to: folder.appending(path: "catalog.json"))
-            return FetchOutcome(catalog: try Catalog(directory: folder))
+            return FetchOutcome(catalog: try await fetched())
+        } catch let refusal as Refusal {
+            return FetchOutcome(catalog: builtIn, refusal: refusal)
         } catch {
             return FetchOutcome(catalog: builtIn)
         }
     }
+
+    private func fetched() async throws -> Catalog {
+        let published = try await feed.latest()
+        // Nothing in the manifest is used before its signature checks out, except the name of the key to check it with.
+        let claimed = try JSONDecoder().decode(KeyName.self, from: published.manifest).key
+        guard let key = keys.first(where: { $0.id == claimed }), key.signed(published.manifest, published.signature) else {
+            throw Refusal.badSignature
+        }
+        let manifest = try JSONDecoder().decode(Manifest.self, from: published.manifest)
+        let folder = cache.appending(path: "fetched")
+        try? FileManager.default.removeItem(at: folder)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for file in manifest.files {
+            let target = folder.appending(path: file.name)
+            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try await feed.file(file.name).write(to: target)
+        }
+        try Manifest.catalogJSON(in: published.manifest).write(to: folder.appending(path: "catalog.json"))
+        return try Catalog(directory: folder)
+    }
+
+    private struct KeyName: Decodable { let key: String }
 }
