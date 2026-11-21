@@ -40,6 +40,19 @@ struct DisplayFeedExamplesTests {
                          level: state["level"] as? Double ?? 0)
     }
 
+    @Test("Every address the snapshot sends has its row in ADR 0011's contract, with its OSC type (#674)")
+    func contractRows() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("docs/adr/0011-display-feed-to-other-devices.md")
+        let adr = try String(contentsOf: url, encoding: .utf8)
+        for message in DisplayFeed.Deck(number: 1, color: [255, 0, 0]).messages {
+            let name = String(message.address.dropFirst(DisplayFeed.prefix.count))
+            let type = switch message.arguments.first { case .int?: "i"; case .float?: "f"; default: "s" }
+            #expect(adr.contains("| `\(name)` | `\(type)` |"), "\(name)")
+        }
+    }
+
     @Test("The file's prefix is the feed's, and it has a loaded deck, an empty one and non-ASCII text")
     func fileShape() {
         #expect(Self.file["prefix"] as? String == DisplayFeed.prefix)
