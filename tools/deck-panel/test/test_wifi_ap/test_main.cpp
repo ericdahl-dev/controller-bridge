@@ -16,13 +16,13 @@ void test_the_name_ends_in_the_macs_last_two_bytes() {
     TEST_ASSERT_EQUAL_STRING("DeckPanel-1A2B", name);
 }
 
-void test_the_password_is_8_characters_with_no_look_alikes() {
+void test_the_password_is_10_characters_with_no_look_alikes() {
     uint32_t n = 0;
-    char password[9];
+    char password[11];
     // Every value a random source can give, in turn, so every letter it maps to shows up.
     for (int round = 0; round < 200; ++round) {
         wifi_setup::setup_password([&] { return n++ * 2654435761u; }, password, sizeof password);
-        TEST_ASSERT_EQUAL(8, std::strlen(password));
+        TEST_ASSERT_EQUAL(10, std::strlen(password));
         for (const char* p = password; *p; ++p) {
             TEST_ASSERT_TRUE_MESSAGE(std::strchr("0O1lIo", *p) == nullptr, password);
             TEST_ASSERT_TRUE((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '2' && *p <= '9'));
@@ -31,7 +31,7 @@ void test_the_password_is_8_characters_with_no_look_alikes() {
 }
 
 void test_the_same_random_values_give_the_same_password() {
-    char a[9], b[9];
+    char a[11], b[11];
     uint32_t x = 7, y = 7;
     wifi_setup::setup_password([&] { return x += 12345; }, a, sizeof a);
     wifi_setup::setup_password([&] { return y += 12345; }, b, sizeof b);
@@ -41,7 +41,7 @@ void test_the_same_random_values_give_the_same_password() {
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_name_ends_in_the_macs_last_two_bytes);
-    RUN_TEST(test_the_password_is_8_characters_with_no_look_alikes);
+    RUN_TEST(test_the_password_is_10_characters_with_no_look_alikes);
     RUN_TEST(test_the_same_random_values_give_the_same_password);
     return UNITY_END();
 }

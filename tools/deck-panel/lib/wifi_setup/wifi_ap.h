@@ -11,7 +11,7 @@ namespace wifi_setup {
 
 void network_name(const uint8_t mac[6], char* out, size_t room);
 
-// 8 characters a person reads off a screen and types on a phone: letters and digits, without 0/O/o, 1/l/I.
+// 10 characters a person reads off a screen and types on a phone: letters and digits, without 0/O/o, 1/l/I.
 void setup_password(const std::function<uint32_t()>& random, char* out, size_t room);
 
 }  // namespace wifi_setup
