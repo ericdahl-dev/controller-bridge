@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import FirmwareCatalog
 
@@ -24,6 +25,8 @@ public enum Refusal: Error, Sendable, Equatable {
     case badSignature
     /// Signed, by its own account, with a key the app doesn't trust.
     case unknownKey(String)
+    /// A file whose size or SHA-256 differs from the manifest: altered, or cut short.
+    case fileMismatch(String)
 }
 
 public struct FetchOutcome: Sendable {
@@ -67,7 +70,11 @@ public struct ReleaseFetcher: Sendable {
         for file in manifest.files {
             let target = folder.appending(path: file.name)
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try await feed.file(file.name).write(to: target)
+            let data = try await feed.file(file.name)
+            guard data.count == file.size, sha256Hex(data) == file.sha256.lowercased() else {
+                throw Refusal.fileMismatch(file.name)
+            }
+            try data.write(to: target)
         }
         try Manifest.catalogJSON(in: published.manifest).write(to: folder.appending(path: "catalog.json"))
         return try Catalog(directory: folder)
@@ -75,3 +82,5 @@ public struct ReleaseFetcher: Sendable {
 
     private struct KeyName: Decodable { let key: String }
 }
+
+func sha256Hex(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }

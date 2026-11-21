@@ -50,3 +50,24 @@ import FirmwareRelease
     #expect(outcome.refusal == nil)
     #expect(outcome.catalog.newestPanel()?.version == FirmwareVersion("1.1.0"))
 }
+
+@Test func aFileWhoseBytesDifferFromTheManifestIsRefused() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary)
+    let name = "panel/deck-panel-1.1.0-ddddddd.bin"
+    feed.files[name] = panelImage("1.1.1")  // same length, different bytes
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .fileMismatch(name))
+    #expect(outcome.catalog.newestPanel()?.version == FirmwareVersion("1.0.0"))
+}
+
+@Test func aFileCutShortIsRefused() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary)
+    let name = "panel/deck-panel-1.1.0-ddddddd.bin"
+    feed.files[name] = feed.files[name]!.prefix(5)
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .fileMismatch(name))
+}
