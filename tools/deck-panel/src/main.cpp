@@ -19,6 +19,7 @@
 #include "deck_view.h"
 #include "feed_drain.h"
 #include "feed_udp.h"
+#include "hold_reset.h"
 #include "wifi_link.h"
 #endif
 
@@ -34,6 +35,7 @@ deck_core::DeckCore g_core;
 feed_drain::Drain g_drain;
 FeedUdp g_udp;
 DeckScreen g_screen;
+wifi_setup::HoldReset g_hold;
 uint32_t g_too_big = 0;
 uint32_t g_health_ms = 0;
 
@@ -55,7 +57,8 @@ void build_screen() {
 #else
     g_screen.build();
     // The first frame says what's true before Wi-Fi starts: the core takes the network as up until told.
-    g_core.set_network(wifi_link::configured() ? deck_core::Network::joining : deck_core::Network::setup, "");
+    g_core.set_network(wifi_link::state(), wifi_link::ip());
+    g_core.set_setup(wifi_link::setup_name(), wifi_link::setup_password());
     g_core.render(g_screen, millis());
 #endif
 }
@@ -105,6 +108,7 @@ void loop() {
     // Read after the drain, so a datagram stamped `now` is never in the future of the render.
     g_core.render(g_screen, millis());
     log_health(now);
+    if (g_hold.update(touch_pressed(), g_core.waiting(), now)) wifi_link::forget_and_restart();
 #endif
     lv_timer_handler();
     delay(5);
