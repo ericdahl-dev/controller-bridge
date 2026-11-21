@@ -4,17 +4,16 @@ import FirmwareCatalog
 import FirmwareModel
 import FirmwareRelease
 
-/// A release folder as CI's draft holds it: the catalog plus the files it names.
+/// A release folder as `gh release download` gives it: the catalog plus the files it names, flat, since a GitHub
+/// release asset's name can't hold a "/".
 func releaseFolder(panelVersion: String, sha: String) throws -> URL {
     let folder = temporaryFolder()
-    let image = "panel/deck-panel-\(panelVersion)-\(sha).bin"
-    try FileManager.default.createDirectory(at: folder.appending(path: "panel"), withIntermediateDirectories: true)
-    try FileManager.default.createDirectory(at: folder.appending(path: "lc6000"), withIntermediateDirectories: true)
+    let image = "deck-panel-\(panelVersion)-\(sha).bin"
     try panelImage(panelVersion).write(to: folder.appending(path: image))
-    try Data("# test\n0x0800BDA4 0f28 1028\n".utf8).write(to: folder.appending(path: "lc6000/wd.patch"))
+    try Data("# test\n0x0800BDA4 0f28 1028\n".utf8).write(to: folder.appending(path: "wd.patch"))
     let json = #"""
     { "panel": [{ "version": "\#(panelVersion)", "sha": "\#(sha)", "image": "\#(image)" }],
-      "lc6000": [{ "wd": "00.50", "tp": "00.31", "entries": [{ "kind": "patch", "chip": "wd", "file": "lc6000/wd.patch" }] }] }
+      "lc6000": [{ "wd": "00.50", "tp": "00.31", "entries": [{ "kind": "patch", "chip": "wd", "file": "wd.patch" }] }] }
     """#
     try Data(json.utf8).write(to: folder.appending(path: "catalog.json"))
     return folder
@@ -23,7 +22,7 @@ func releaseFolder(panelVersion: String, sha: String) throws -> URL {
 /// The feed GitHub would serve once the signing step has uploaded the manifest and its signature next to the files.
 func feed(serving folder: URL, manifest: Data, signature: Data) throws -> FakeFeed {
     var files: [String: Data] = [:]
-    for name in ["panel/deck-panel-1.1.0-ddddddd.bin", "lc6000/wd.patch"] {
+    for name in ["deck-panel-1.1.0-ddddddd.bin", "wd.patch"] {
         files[name] = try Data(contentsOf: folder.appending(path: name))
     }
     return FakeFeed(manifest: manifest, signature: signature, files: files)
@@ -47,8 +46,8 @@ func feed(serving folder: URL, manifest: Data, signature: Data) throws -> FakeFe
 /// release the app would refuse (an LC6000 file that isn't a patch description, a file the catalog doesn't name).
 @Test func theSigningStepRefusesAFolderTheAppWouldNotLoad() throws {
     let folder = try releaseFolder(panelVersion: "1.1.0", sha: "ddddddd")
-    try Data(repeating: 0, count: 4096).write(to: folder.appending(path: "lc6000/stray.bin"))
-    #expect(throws: CatalogError.unnamedFile("lc6000/stray.bin")) {
+    try Data(repeating: 0, count: 4096).write(to: folder.appending(path: "stray.bin"))
+    #expect(throws: CatalogError.unnamedFile("stray.bin")) {
         try ReleaseSigner.manifest(for: folder, keyID: "primary", lowestAllowedPanel: FirmwareVersion("1.0.0")!)
     }
 }
