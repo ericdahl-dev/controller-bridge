@@ -1,0 +1,17 @@
+import DeviceFinder
+
+/// One section of the app, as the owner reads it.
+public struct Section: Sendable, Equatable {
+    public let status: String
+}
+
+/// The app's two sections (#685).
+public struct UpdaterScreen: Sendable, Equatable {
+    public let panel: Section
+    public let lc6000: Section
+
+    public init(found: Found, lc6000WarningAccepted: Bool) {
+        panel = Section(status: "Nothing connected")
+        lc6000 = Section(status: "Nothing connected")
+    }
+}
