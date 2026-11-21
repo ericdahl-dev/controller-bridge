@@ -17,11 +17,11 @@ import Testing
     #expect(throws: KeyFileError.wrongPassphraseOrDamaged) { try KeyFile.open(file, passphrase: "correct horse battery stapler") }
 }
 
-/// The id and public key are bound to the sealed seed, so a file relabelled as the backup key doesn't open.
+/// The id and public key are bound to the sealed seed, so a file relabeled as the backup key doesn't open.
 @Test func aKeyFileWhoseNameWasChangedDoesNotOpen() throws {
     let file = try KeyFile.seal(SigningKey.generate(id: "primary"), passphrase: "pass phrase")
-    let relabelled = Data(String(decoding: file, as: UTF8.self).replacingOccurrences(of: #""primary""#, with: #""backup""#).utf8)
-    #expect(throws: KeyFileError.wrongPassphraseOrDamaged) { try KeyFile.open(relabelled, passphrase: "pass phrase") }
+    let relabeled = Data(String(decoding: file, as: UTF8.self).replacingOccurrences(of: #""primary""#, with: #""backup""#).utf8)
+    #expect(throws: KeyFileError.wrongPassphraseOrDamaged) { try KeyFile.open(relabeled, passphrase: "pass phrase") }
 }
 
 @Test func theKeyFileNeverHoldsTheSeedInTheClear() throws {

@@ -9,7 +9,7 @@ use a release key.
 - One file per key, written by `firmware-release new-key`, readable only by you (mode 600).
 - **Format** (`deckbridge-release-key-1`): JSON holding the key's id, its public key, and the 32-byte Ed25519 seed
   sealed with AES-256-GCM. The AES key comes from your passphrase with PBKDF2-SHA256, 600,000 rounds and a 16-byte
-  random salt. The id and public key are bound to the seal, so a relabelled file doesn't open.
+  random salt. The id and public key are bound to the seal, so a relabeled file doesn't open.
 - **The passphrase is typed by you at signing**, with echo off. It is never taken from an argument, an environment
   variable or a file, and never goes near CI or the repo.
 - **A forgotten passphrase is a lost key.** Nothing can open the file without it. Sign with the backup key instead
@@ -27,13 +27,16 @@ swift run firmware-release new-key --id backup --out /Volumes/<USB stick>/backup
 
 - Use a different passphrase for each, at least 12 characters, kept in your password manager.
 - Keep the backup key **off this Mac**: a USB stick in a drawer, or printed. It is only for when the primary is lost.
-- Build both public keys into the app: run `swift run firmware-release public-key <file>` for each and paste the two
-  lines into `Sources/FirmwareRelease/ReleaseKeys.swift`, in a pull request. Public keys aren't secret.
+- **Then the one step that adds them to the app.** Until it's done the app trusts no key, so it refuses every fetched
+  release and uses its built-in firmware. That is the safe default. Run `swift run firmware-release public-key <file>`
+  for each key. Each prints `<id> <64 hex characters>`. Put both in `listed` in
+  `Sources/FirmwareRelease/ReleaseKeys.swift`, as `("primary", "<hex>"), ("backup", "<hex>")`, in a pull request.
+  Public keys aren't secret. A test fails on a mistyped key.
 
 ## Each release: one command
 
-CI builds the release files on a tag and leaves them in a **draft** GitHub release: `catalog.json` and every file it
-names. Then, on your Mac:
+A **draft** GitHub release must hold `catalog.json` and every file it names, with flat names, and nothing else. CI
+will build that draft on a tag; that job is a follow-up to #689 and doesn't exist yet. Then, on your Mac:
 
 ```sh
 Packages/FirmwareUpdaterKit/scripts/sign_release.sh <tag> --key ~/.deckbridge-keys/primary.key --lowest <version>
