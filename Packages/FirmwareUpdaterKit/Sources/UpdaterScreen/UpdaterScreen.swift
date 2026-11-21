@@ -20,7 +20,9 @@ public struct UpdaterScreen: Sendable, Equatable {
         switch found.panel {
         case nil: panel = Section(status: "Nothing connected")
         case .driverMissing: panel = Section(status: "Deck panel found", detail: "The USB driver for its chip is missing")
-        case .onSerial(let build?): panel = Section(status: "Deck panel found", detail: "Build \(build.sha)")
+        case .onSerial(let build?):
+            let development = build.sha.hasSuffix(DeviceFinder.dirty) ? " (a development build)" : ""
+            panel = Section(status: "Deck panel found", detail: "Build \(build.sha)\(development)")
         case .onSerial(nil):
             panel = Section(status: "Deck panel found",
                             detail: "Build not read: unplug the panel and plug it back in to read it")

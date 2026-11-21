@@ -25,6 +25,7 @@ public struct DeviceFinder: Sendable {
     /// How long the finder listens to a panel's serial port for its boot line.
     public static let listenSeconds = 3.0
     static let bootLine = "deck panel: boot, build "
+    public static let dirty = "-dirty"
 
     let usb: any USBDevices
     let midi: any MIDIPorts
@@ -52,12 +53,14 @@ public struct DeviceFinder: Sendable {
     }
 
     /// The build from the panel's boot line, "deck panel: boot, build <sha>": a git short SHA, lowercase hex of 7 to
-    /// 40 digits. "unknown" (a build made outside git) or anything else is no build.
+    /// 40 digits, with "-dirty" on a development build (tools/deck-panel/git_sha.py), kept as printed. "unknown" (a
+    /// build made outside git) or anything else is no build.
     static func build(in lines: [String]) -> PanelBuild? {
         for line in lines where line.hasPrefix(bootLine) {
-            let sha = line.dropFirst(bootLine.count)
+            let printed = line.dropFirst(bootLine.count)
+            let sha = printed.hasSuffix(dirty) ? printed.dropLast(dirty.count) : printed
             guard (7...40).contains(sha.count), sha.allSatisfy({ "0123456789abcdef".contains($0) }) else { return nil }
-            return PanelBuild(sha: String(sha))
+            return PanelBuild(sha: String(printed))
         }
         return nil
     }

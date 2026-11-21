@@ -57,4 +57,14 @@ struct UpdaterScreenTests {
         #expect(screen.panel.status == "Deck panel found")
         #expect(screen.panel.detail == "Build not read: unplug the panel and plug it back in to read it")
     }
+
+    @Test("A development build (uncommitted changes, tools/deck-panel/git_sha.py) shows as one, SHA as printed")
+    func panelDevelopmentBuild() async {
+        let rig = Rig()
+        Self.panel(rig, printing: ["deck panel: boot, build 1d0683f-dirty"])
+        let found = await rig.finder.find()
+        #expect(found.panel == .onSerial(build: PanelBuild(sha: "1d0683f-dirty")))
+        let screen = UpdaterScreen(found: found, lc6000WarningAccepted: true)
+        #expect(screen.panel.detail == "Build 1d0683f-dirty (a development build)")
+    }
 }
