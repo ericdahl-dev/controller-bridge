@@ -189,12 +189,12 @@ DisplayLatch display_latch() {
     return {l.count, static_cast<uint32_t>(l.us)};
 }
 
-// #663's wait on the Scan (#666): the next latch, then the vsync after it, one deadline across both. Without bounce
-// buffers the latch is the vsync, so the second returns at once. The newest latch comes back, read after the vsync.
+// #663's wait on the Scan (#666): one wake, at the vsync after a latch newer than the one current on entry. Without
+// bounce buffers the latch is the vsync. The latch that wake was for comes back.
 bool display_wait_latch(uint32_t timeout_ms, DisplayLatch& latch) {
     panel_scan::Latches l;
-    if (!g_scan.wait_frame(timeout_ms, l)) return false;  // one wake: at the vsync after the latch
-    latch = display_latch();
+    if (!g_scan.wait_frame(timeout_ms, l)) return false;
+    latch = {l.count, static_cast<uint32_t>(l.us)};
     return true;
 }
 
