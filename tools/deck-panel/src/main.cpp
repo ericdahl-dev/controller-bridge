@@ -8,6 +8,7 @@
 #include <lvgl.h>
 
 #include "board_pins.h"
+#include "build_info.h"
 #include "display_driver.h"
 #include "panel_mcu.h"
 #include "perf_log.h"
@@ -27,8 +28,28 @@
 #ifndef DECK_PANEL_SHA
 #define DECK_PANEL_SHA "unknown"
 #endif
+#ifndef DECK_PANEL_VERSION
+#define DECK_PANEL_VERSION "0"
+#endif
+#ifndef DECK_PANEL_RELEASE
+#define DECK_PANEL_RELEASE 0
+#endif
 
 namespace {
+
+// The firmware the updater reads (#695): on the boot line, on the waiting screen, and on request over serial.
+const build_info::Build kBuild{DECK_PANEL_VERSION, DECK_PANEL_SHA, DECK_PANEL_RELEASE != 0};
+build_info::Question g_question;
+
+// The updater asks without a reboot (opening the port can reset the board, so it can't wait for the boot line).
+void answer_version_questions() {
+    while (Serial.available() > 0) {
+        if (!g_question.feed(static_cast<char>(Serial.read()))) continue;
+        char line[96];
+        build_info::answer_line(kBuild, line, sizeof line);
+        Serial.println(line);
+    }
+}
 
 #ifndef DECK_PANEL_TEST_SCREEN
 // Static, not loop() locals: the drain's 512-byte buffer and the view's text stay off the loop task's 8 KB stack.
@@ -60,6 +81,9 @@ void build_screen() {
     // The first frame says what's true before Wi-Fi starts: the core takes the network as up until told.
     g_core.set_network(wifi_link::state(), wifi_link::ip());
     g_core.set_setup(wifi_link::setup_name(), wifi_link::setup_password());
+    static char build_label[48];  // the core copies it; static keeps it off the setup stack anyway
+    build_info::label(kBuild, build_label, sizeof build_label);
+    g_core.set_build(build_label);
     g_core.render(g_screen, millis());
 #endif
 }
@@ -68,7 +92,9 @@ void build_screen() {
 
 void setup() {
     Serial.begin(115200);
-    Serial.printf("deck panel: boot, build %s\n", DECK_PANEL_SHA);
+    char boot[96];
+    build_info::boot_line(kBuild, boot, sizeof boot);
+    Serial.println(boot);
     Wire.begin(board::I2C_SDA, board::I2C_SCL, board::I2C_HZ);
     // The companion chip can come up after the ESP32 (seen at power-on on a V1.4): wait up to 2 s for it, quietly,
     // then let begin() log what it found once.
@@ -114,6 +140,7 @@ void loop() {
     log_health(now);
     if (g_hold.update(touch_pressed(), g_core.waiting(), now)) wifi_link::forget_and_restart();
 #endif
+    answer_version_questions();
     lv_timer_handler();
     delay(5);
 }
