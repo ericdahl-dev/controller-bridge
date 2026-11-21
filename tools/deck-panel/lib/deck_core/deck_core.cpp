@@ -269,6 +269,7 @@ WaitingView DeckCore::waiting_view() const {
             std::snprintf(view.headline, sizeof view.headline, "Set up the panel's Wi-Fi");
             std::snprintf(view.detail, sizeof view.detail, "Join %s, password %s, then open %s", setup_name_,
                           setup_password_, ip_);
+            view.logo_small = true;  // the join instructions take more lines (#677)
             break;
         case Network::joining:
             std::snprintf(view.headline, sizeof view.headline, "Joining Wi-Fi\xE2\x80\xA6");
@@ -282,8 +283,7 @@ WaitingView DeckCore::waiting_view() const {
             break;
     }
     // Fitted to the fonts, as the deck's texts are: the address and names come from outside.
-    WaitingView fitted;
-    fitted.logo = view.logo;
+    WaitingView fitted = view;  // every field; the texts then fitted over
     font_fallback::fit(view.headline, fitted.headline, sizeof fitted.headline);
     font_fallback::fit(view.detail, fitted.detail, sizeof fitted.detail);
     return fitted;
