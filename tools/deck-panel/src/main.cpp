@@ -105,6 +105,48 @@ void build_screen() {
 #endif
 }
 
+// Experiment arms (#663), all off by default, for the late bounce copies: they split "more PSRAM writes a second" from
+// "no idle time on core 1". The feed is still read and rendered every frame; only LVGL's refresh is held back.
+//   -DPANEL_DRAW_CAP=N           refresh at most N frames a second of the panel's 30 (e.g. 22, main's rate)
+//   -DPANEL_DRAW_SKIP_AFTER_US=N skip the refresh on the frame after one that took longer than N us
+//   -DPANEL_YIELD_US=N           after each frame's refresh, block the loop N us (a timer and a semaphore, no spin)
+#ifndef PANEL_DRAW_CAP
+#define PANEL_DRAW_CAP 0
+#endif
+#ifndef PANEL_DRAW_SKIP_AFTER_US
+#define PANEL_DRAW_SKIP_AFTER_US 0
+#endif
+#ifndef PANEL_YIELD_US
+#define PANEL_YIELD_US 0
+#endif
+
+#if PANEL_YIELD_US > 0
+SemaphoreHandle_t g_yield_sem = nullptr;
+esp_timer_handle_t g_yield_timer = nullptr;
+
+void yield_done(void*) { xSemaphoreGive(g_yield_sem); }
+
+void yield_begin() {
+    g_yield_sem = xSemaphoreCreateBinary();
+    const esp_timer_create_args_t args = {yield_done, nullptr, ESP_TIMER_TASK, "yield", false};
+    if (g_yield_sem == nullptr || esp_timer_create(&args, &g_yield_timer) != ESP_OK) {
+        g_yield_timer = nullptr;
+        Serial.println("deck panel: no yield timer; yielding in whole ticks");
+    }
+    Serial.printf("deck panel: yield %u us after each refresh\n", unsigned(PANEL_YIELD_US));
+}
+
+/// Blocks the loop task `us`; core 1 runs its idle task meanwhile.
+void yield_for(uint32_t us) {
+    if (g_yield_timer != nullptr && esp_timer_start_once(g_yield_timer, us) == ESP_OK) {
+        // The timer gives in `us`; the bound only covers a lost give.
+        xSemaphoreTake(g_yield_sem, pdMS_TO_TICKS(us / 1000 + 5));
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS((us + 999) / 1000));
+}
+#endif
+
 /// The panel, as the frame clock sees it.
 class PanelBoard : public frame_clock::Board {
   public:
@@ -141,8 +183,34 @@ class PanelBoard : public frame_clock::Board {
     }
 
     void refresh() override {
-        MARK(refresh);
-        display_refresh();
+        bool draw = true;
+#if PANEL_DRAW_CAP > 0
+        // Credit of PANEL_DRAW_CAP a frame, one refresh per 30.
+        if (draw_credit_ + PANEL_DRAW_CAP >= 30) {
+            draw_credit_ = draw_credit_ + PANEL_DRAW_CAP - 30;
+        } else {
+            draw_credit_ += PANEL_DRAW_CAP;
+            draw = false;
+        }
+#endif
+#if PANEL_DRAW_SKIP_AFTER_US > 0
+        if (last_long_) draw = false;
+        last_long_ = false;
+#endif
+        if (draw) {
+            MARK(refresh);
+            const uint32_t start = now_us();
+            display_refresh();
+            const uint32_t took = now_us() - start;
+#if PANEL_DRAW_SKIP_AFTER_US > 0
+            last_long_ = took > PANEL_DRAW_SKIP_AFTER_US;
+#endif
+            (void)took;
+        }
+#if PANEL_YIELD_US > 0
+        MARK(other);  // the yield: the copy line's "other" step
+        yield_for(PANEL_YIELD_US);
+#endif
     }
 
     void chores(uint32_t until_us) override {
@@ -182,6 +250,14 @@ class PanelBoard : public frame_clock::Board {
         log_health(now);
 #endif
     }
+
+  private:
+#if PANEL_DRAW_CAP > 0
+    uint32_t draw_credit_ = 0;
+#endif
+#if PANEL_DRAW_SKIP_AFTER_US > 0
+    bool last_long_ = false;
+#endif
 };
 
 PanelBoard g_board;
@@ -208,6 +284,9 @@ void setup() {
     touch_init();
     build_screen();
     display_refresh();  // the whole first frame, now, whatever ran before
+#if PANEL_YIELD_US > 0
+    yield_begin();
+#endif
     // Last, after that frame, so the screen doesn't flash on boot.
     if (!panel_mcu::backlightOn()) Serial.println("deck panel: the backlight may be off");
 #ifdef DECK_PANEL_TEST_SCREEN
