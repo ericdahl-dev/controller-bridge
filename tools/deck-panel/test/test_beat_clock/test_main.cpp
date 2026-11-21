@@ -193,6 +193,23 @@ void test_clock_bpm_0_leaves_the_beat_length_to_the_edges() {
     TEST_ASSERT_EQUAL(3, clock.beat_at(1938));
 }
 
+
+// DeckBridge sends the first clockBpm in the bundle with the first beat, just after it: it times that beat too.
+void test_the_clock_bpm_just_after_the_first_edge_times_it() {
+    BeatClock clock;
+    clock.edge(1, 1000);
+    clock.set_tempo(128);
+    TEST_ASSERT_EQUAL(2, clock.beat_at(1469));
+}
+
+// Stopped, a BPM (a tempo change on the stopped master) doesn't start the clock again: only beats do.
+void test_a_clock_bpm_after_a_stop_doesnt_restart_it() {
+    BeatClock clock = locked();
+    clock.stop();
+    clock.set_tempo(120);
+    TEST_ASSERT_EQUAL(4, clock.beat_at(6000));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_beat_heard_is_none);
@@ -211,5 +228,7 @@ int main(int, char**) {
     RUN_TEST(test_with_the_clock_bpm_jitter_never_changes_the_beat_length);
     RUN_TEST(test_a_clock_bpm_change_applies_at_once);
     RUN_TEST(test_clock_bpm_0_leaves_the_beat_length_to_the_edges);
+    RUN_TEST(test_the_clock_bpm_just_after_the_first_edge_times_it);
+    RUN_TEST(test_a_clock_bpm_after_a_stop_doesnt_restart_it);
     return UNITY_END();
 }

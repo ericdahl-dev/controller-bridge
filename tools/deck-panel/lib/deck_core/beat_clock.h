@@ -28,7 +28,10 @@ class BeatClock {
     /// only the beat's place is locked; a change applies at once. 0 (or out of range) is none: the edges give it.
     void set_tempo(float bpm);
     /// The master stopped: show the beat heard, nothing ahead, until beats come again.
-    void stop() { period_ms_ = 0; }
+    void stop() {
+        period_ms_ = 0;
+        stopped_ = true;
+    }
 
     /// The lock (#660): arrivals jitter by a few ms (Wi-Fi, the sender), so each edge moves the clock only part of
     /// the way: kPhaseGain of its error, and the tempo kTempoGain of it, each error clipped to kMaxErrorMs so one late
@@ -51,6 +54,7 @@ class BeatClock {
     uint32_t first_ms_ = 0;     ///< the first edge of this run of beats in a row
     int edges_ = 0;             ///< beats in a row since first_ms_
     float tempo_ms_ = 0;        ///< a beat's length from the master clock's BPM; 0 for none
+    bool stopped_ = false;      ///< stop() since the last edge: nothing ahead until beats come again
 };
 
 }  // namespace deck_core
