@@ -473,7 +473,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model = Self.model else { return .terminateNow }
-        model.quit { sender.reply(toApplicationShouldTerminate: true) }
+        model.quit {
+            #if DEBUG
+            DebugTrace.shared.flush()  // the trace's last line is trustworthy (#653)
+            #endif
+            sender.reply(toApplicationShouldTerminate: true)
+        }
         return .terminateLater
     }
 }
