@@ -283,7 +283,7 @@ final class DisplayFeed {
         if !bundles.isEmpty { greeted = true }
         let count = changes.count
         if snapshot {
-            say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", \(count) messages in \(bundles.count) bundle\(bundles.count == 1 ? "" : "s")")
+            say("snapshot (\(snapshotReason)): deck \(deck.number), loaded \(deck.loaded ? 1 : 0), \"\(deck.title)\", clockBpm \(Self.format((deck.clockBpm * 100).rounded() / 100)), \(count) messages in \(bundles.count) bundle\(bundles.count == 1 ? "" : "s")")
         }
     }
 }
