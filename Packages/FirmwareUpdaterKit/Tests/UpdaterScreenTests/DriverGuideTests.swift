@@ -35,4 +35,19 @@ struct DriverGuideTests {
             #expect(!step.contains("http"), "a step carries a link: \(step)")
         }
     }
+
+    @Test("No guide when nothing is plugged in, or the driver already made the panel's serial port")
+    func noGuideWhenNotNeeded() async {
+        let nothing = Rig()
+        #expect(await nothing.screen().panel.guide == nil)
+
+        let withDriver = Rig()
+        withDriver.usb.plugged = [USBDevice(vendor: 0x1A86, product: 0x7522, name: "USB Serial",
+                                            serialPort: "/dev/cu.wchusbserial210")]
+        withDriver.serial.lines["/dev/cu.wchusbserial210"] = ["deck panel: boot, build 1d0683f"]
+        let screen = await withDriver.screen()
+        #expect(screen.panel.detail == "Build 1d0683f")
+        #expect(screen.panel.guide == nil)
+        #expect(screen.lc6000.guide == nil)
+    }
 }
