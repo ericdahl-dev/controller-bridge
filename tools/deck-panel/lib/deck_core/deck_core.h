@@ -44,6 +44,11 @@ public:
     /// The network's state and the panel's IPv4 address ("" if none), from the board layer.
     /// Until told, the core takes the network as up: on the Mac, and for any board without Wi-Fi of its own.
     void set_network(Network state, const char* ip);
+    /// The setup network's name and password, for the waiting screen while Network::setup (#622).
+    void set_setup(const char* name, const char* password);
+    /// Whether the last render() showed the waiting screen (joining and setup included), not the deck: true before the
+    /// first render. Hold-to-reset counts only then (#622).
+    bool waiting() const { return shown_waiting_; }
     /// Tells `screen` what to show at `now_ms`, only when that changed since the last call.
     void render(Screen& screen, uint32_t now_ms);
 
@@ -57,6 +62,8 @@ private:
     uint32_t last_heard_ms_ = 0;
     Network network_ = Network::connected;
     char ip_[16] = "";
+    char setup_name_[24] = "";
+    char setup_password_[16] = "";
     // What the screen was last told.
     bool shown_ = false;
     bool shown_waiting_ = true;

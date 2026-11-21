@@ -49,7 +49,7 @@ struct DeckView {
 
 /// The panel's network, as the board layer reports it (#620).
 enum class Network {
-    not_set,  ///< built without Wi-Fi credentials
+    setup,    ///< no saved Wi-Fi: the panel's own setup network is up (#622)
     joining,  ///< joining, or lost and rejoining
     connected,
 };

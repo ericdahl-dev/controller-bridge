@@ -213,6 +213,11 @@ void DeckCore::set_network(Network state, const char* ip) {
     std::snprintf(ip_, sizeof ip_, "%s", ip);
 }
 
+void DeckCore::set_setup(const char* name, const char* password) {
+    std::snprintf(setup_name_, sizeof setup_name_, "%s", name);
+    std::snprintf(setup_password_, sizeof setup_password_, "%s", password);
+}
+
 void DeckCore::render(Screen& screen, uint32_t now_ms) {
     // The time since, signed: a clock that wraps round still counts it, and a render that read the clock a moment
     // before the packet's time sees a little under 0, not 49 days.
@@ -247,13 +252,15 @@ void DeckCore::render(Screen& screen, uint32_t now_ms) {
 WaitingView DeckCore::waiting_view() const {
     WaitingView view;
     switch (network_) {
-        case Network::not_set:
-            std::snprintf(view.headline, sizeof view.headline, "Wi-Fi isn't set");
-            std::snprintf(view.detail, sizeof view.detail,
-                          "Build the panel with your Wi-Fi's name and password: see its README");
+        case Network::setup:
+            std::snprintf(view.headline, sizeof view.headline, "Set up the panel's Wi-Fi");
+            std::snprintf(view.detail, sizeof view.detail, "Join %s, password %s, then open %s", setup_name_,
+                          setup_password_, ip_);
             break;
         case Network::joining:
             std::snprintf(view.headline, sizeof view.headline, "Joining Wi-Fi\xE2\x80\xA6");
+            // A wrong password looks like this forever: the way out is on the screen.
+            std::snprintf(view.detail, sizeof view.detail, "Hold the screen 5 s to set up Wi-Fi again");
             break;
         case Network::connected:
             // What to type into DeckBridge's Settings, Display feed: host and port.
