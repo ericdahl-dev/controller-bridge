@@ -180,8 +180,9 @@ void test_the_copy_line_lists_the_late_copies_it_kept() {
     c.kept = 2;
     c.lates[0] = {3120, 702, static_cast<uint8_t>(perf_line::Mark::read)};
     c.lates[1] = {15004, 851, static_cast<uint8_t>(perf_line::Mark::wait)};
-    TEST_ASSERT_TRUE(perf_line::format_copy(c).find("outside an interrupt 0/0; while serial drains 0/0; "
-                                                    "late at +3120 702 us read, +15004 851 us wait") != std::string::npos);
+    const std::string line = perf_line::format_copy(c);
+    TEST_ASSERT_TRUE(line.find("outside an interrupt 0/0; while serial drains 0/0; late at +3120 702 us read, "
+                               "+15004 851 us wait") != std::string::npos);
     perf_line::CopySpread none;
     TEST_ASSERT_TRUE(perf_line::format_copy(none).find("outside an interrupt 0/0; while serial drains 0/0; "
                                                        "no late copies") != std::string::npos);

@@ -3,10 +3,11 @@
 // the UDP socket is polled here, never read from a callback. Built with DECK_PANEL_TEST_SCREEN (env crowpanel-test),
 // it shows the test screen (#615) instead, with no Wi-Fi.
 //
-// One frame clock (#663, lib/frame_clock): loop() is one frame. It waits for the panel's latch (and, by default, the
-// vsync after it, about 1.9 ms later: PANEL_WAKE_AT_VSYNC in display_driver.cpp), reads the feed that came since,
-// renders, refreshes once (draw and swap), then does the chores (Wi-Fi, touch, serial) until a guard before the next
-// latch. A datagram read after latch N is swapped before N+1 and on glass from N+1: under one scan-out.
+// One frame clock (#663, lib/frame_clock): loop() is one frame. It waits for the panel's latch and the vsync after it
+// (about 1.9 ms later), reads the feed that came since, holds until 4.3 ms after the latch (PANEL_DRAW_AT_US: the
+// bounce copy that follows the vertical blank needs core 1 quiet), renders, refreshes once (draw and swap), then does
+// the chores (Wi-Fi, touch, serial) until a guard before the next latch. A datagram read after latch N is swapped
+// before N+1 and on glass from N+1: under one scan-out.
 #include <Arduino.h>
 #include <Wire.h>
 #include <esp_heap_caps.h>
@@ -41,11 +42,7 @@ namespace {
 // millisecond), so no print waits for the wire unless the buffer is full. IDF's TX ring doesn't split an item and
 // takes a write in chunks of up to half its size, each with a header, so it holds less than its size: 2 KB keeps the
 // perf line (under 640 B), the health line and a few more with room.
-// -DPANEL_SERIAL_TX_BYTES=0 goes back to no buffer, to try on the panel.
-#ifndef PANEL_SERIAL_TX_BYTES
-#define PANEL_SERIAL_TX_BYTES 2048
-#endif
-constexpr size_t kSerialTxBytes = PANEL_SERIAL_TX_BYTES;
+constexpr size_t kSerialTxBytes = 2048;
 // The chores end this long before the next latch, so the frame's wait starts before it.
 constexpr uint32_t kGuardUs = 3000;
 
@@ -105,53 +102,46 @@ void build_screen() {
 #endif
 }
 
-// Experiment arms (#663), all off by default, for the late bounce copies: they split "more PSRAM writes a second" from
-// "no idle time on core 1". The feed is still read and rendered every frame; only LVGL's refresh is held back.
-//   -DPANEL_DRAW_CAP=N           refresh at most N frames a second of the panel's 30 (e.g. 22, main's rate)
-//   -DPANEL_DRAW_SKIP_AFTER_US=N skip the refresh on the frame after one that took longer than N us
-//   -DPANEL_YIELD_US=N           after each frame's refresh, block the loop N us (a timer and a semaphore, no spin)
-//   -DPANEL_WAKE_DELAY_US=N      start each frame N us after the vsync wake, the loop asleep till then: moves only the
-//                                phase. The bounce copy that runs late is the first after the vertical blank, about
-//                                3.28 ms after the latch; its preload is issued about 2.4 ms before it, so anything
-//                                core 1 does in that gap can evict it. 2500 wakes at about +4.4 ms, past that copy.
-#ifndef PANEL_DRAW_CAP
-#define PANEL_DRAW_CAP 0
-#endif
-#ifndef PANEL_DRAW_SKIP_AFTER_US
-#define PANEL_DRAW_SKIP_AFTER_US 0
-#endif
-#ifndef PANEL_YIELD_US
-#define PANEL_YIELD_US 0
-#endif
-#ifndef PANEL_WAKE_DELAY_US
-#define PANEL_WAKE_DELAY_US 0
+// When the frame may touch PSRAM (#663, #650), microseconds after the latch; 0: at once. The first bounce copy
+// after the vertical blank (IDF v5.5.4 esp_lcd_panel_rgb.c: the fill of chunk 2, at the first DMA EOF after the
+// vsync restart) starts about 3.28-3.30 ms after the latch, from a cache preload issued about 2 ms before it, after
+// the fill of chunk 1. Anything core 1 reads or writes through the data cache in that gap (LVGL's heap and the
+// framebuffers are PSRAM, its fonts flash rodata) can evict the preload, and then the copy runs cold, 667-969 us
+// against its 666 us margin. That copy ends by +4.26 ms at worst (the slowest seen, cold); with the loop asleep it
+// ran at most 589 us (owner's run c4), ending by about +3.9 ms. So render and refresh start at +4.3 ms, past even
+// the cold worst. The feed's drain runs in the gap: it reads lwIP's buffers and WiFiUDP's, both internal RAM (under
+// the 4096 B PSRAM threshold; Wi-Fi and lwIP buffers not in PSRAM), and feeds the core, a static in internal RAM
+// with no heap. Only its code and a few flash constants pass through the caches. -DPANEL_DRAW_AT_US=0 drops the hold.
+#ifndef PANEL_DRAW_AT_US
+#define PANEL_DRAW_AT_US 4300
 #endif
 
-#if PANEL_YIELD_US > 0 || PANEL_WAKE_DELAY_US > 0
-SemaphoreHandle_t g_yield_sem = nullptr;
-esp_timer_handle_t g_yield_timer = nullptr;
+#if PANEL_DRAW_AT_US > 0
+SemaphoreHandle_t g_hold_sem = nullptr;
+esp_timer_handle_t g_hold_timer = nullptr;
 
-void yield_done(void*) { xSemaphoreGive(g_yield_sem); }
+void hold_done(void*) { xSemaphoreGive(g_hold_sem); }
 
-void yield_begin() {
-    g_yield_sem = xSemaphoreCreateBinary();
-    const esp_timer_create_args_t args = {yield_done, nullptr, ESP_TIMER_TASK, "yield", false};
-    if (g_yield_sem == nullptr || esp_timer_create(&args, &g_yield_timer) != ESP_OK) {
-        g_yield_timer = nullptr;
-        Serial.println("deck panel: no yield timer; yielding in whole ticks");
+void hold_begin() {
+    g_hold_sem = xSemaphoreCreateBinary();
+    const esp_timer_create_args_t args = {hold_done, nullptr, ESP_TIMER_TASK, "draw_at", false};
+    if (g_hold_sem == nullptr || esp_timer_create(&args, &g_hold_timer) != ESP_OK) {
+        g_hold_timer = nullptr;
+        Serial.println("deck panel: no draw timer; holding in whole ticks");
     }
-    Serial.printf("deck panel: yield %u us after each refresh, wake %u us after the vsync\n", unsigned(PANEL_YIELD_US),
-                  unsigned(PANEL_WAKE_DELAY_US));
 }
 
-/// Blocks the loop task `us`; core 1 runs its idle task meanwhile.
-void yield_for(uint32_t us) {
-    if (g_yield_timer != nullptr && esp_timer_start_once(g_yield_timer, us) == ESP_OK) {
-        // The timer gives in `us`; the bound only covers a lost give.
-        xSemaphoreTake(g_yield_sem, pdMS_TO_TICKS(us / 1000 + 5));
+/// Blocks the loop task until `at_us` (esp_timer), if that's ahead; core 1 runs its idle task meanwhile. A one-shot
+/// esp_timer (its task and interrupt on core 0) gives the semaphore: no spin, finer than a tick.
+void hold_until(uint32_t at_us) {
+    const int32_t left = static_cast<int32_t>(at_us - now_us());
+    if (left <= 0) return;
+    if (g_hold_timer != nullptr && esp_timer_start_once(g_hold_timer, static_cast<uint64_t>(left)) == ESP_OK) {
+        // The bound only covers a lost give.
+        xSemaphoreTake(g_hold_sem, pdMS_TO_TICKS(left / 1000 + 5));
         return;
     }
-    vTaskDelay(pdMS_TO_TICKS((us + 999) / 1000));
+    vTaskDelay(pdMS_TO_TICKS((left + 999) / 1000));
 }
 #endif
 
@@ -166,24 +156,26 @@ class PanelBoard : public frame_clock::Board {
             us = now_us();
             return false;
         }
-#if PANEL_WAKE_DELAY_US > 0
-        yield_for(PANEL_WAKE_DELAY_US);  // still "wait" on the copy line
-#endif
         count = latch.count;
         us = latch.us;
+        latch_us_ = latch.us;
         return true;
     }
 
     void read_feed() override {
         MARK(read);
 #ifndef DECK_PANEL_TEST_SCREEN
-        // At the frame's start (the vsync after the latch, by default): until the socket is empty, within the
-        // drain's time budget (#636).
+        // At the frame's start, the vsync after the latch, in the gap before the draw (PANEL_DRAW_AT_US): until the
+        // socket is empty, within the drain's time budget (#636).
         g_read = g_drain.run(g_udp, g_core, millis(), [] { return static_cast<uint32_t>(millis()); });
 #endif
     }
 
     void render() override {
+#if PANEL_DRAW_AT_US > 0
+        MARK(wait);  // the hold: the loop is asleep
+        hold_until(latch_us_ + PANEL_DRAW_AT_US);
+#endif
         MARK(render);
 #ifdef DECK_PANEL_TEST_SCREEN
         test_screen::show_touch();
@@ -194,34 +186,8 @@ class PanelBoard : public frame_clock::Board {
     }
 
     void refresh() override {
-        bool draw = true;
-#if PANEL_DRAW_CAP > 0
-        // Credit of PANEL_DRAW_CAP a frame, one refresh per 30.
-        if (draw_credit_ + PANEL_DRAW_CAP >= 30) {
-            draw_credit_ = draw_credit_ + PANEL_DRAW_CAP - 30;
-        } else {
-            draw_credit_ += PANEL_DRAW_CAP;
-            draw = false;
-        }
-#endif
-#if PANEL_DRAW_SKIP_AFTER_US > 0
-        if (last_long_) draw = false;
-        last_long_ = false;
-#endif
-        if (draw) {
-            MARK(refresh);
-            const uint32_t start = now_us();
-            display_refresh();
-            const uint32_t took = now_us() - start;
-#if PANEL_DRAW_SKIP_AFTER_US > 0
-            last_long_ = took > PANEL_DRAW_SKIP_AFTER_US;
-#endif
-            (void)took;
-        }
-#if PANEL_YIELD_US > 0
-        MARK(other);  // the yield: the copy line's "other" step
-        yield_for(PANEL_YIELD_US);
-#endif
+        MARK(refresh);
+        display_refresh();
     }
 
     void chores(uint32_t until_us) override {
@@ -263,12 +229,7 @@ class PanelBoard : public frame_clock::Board {
     }
 
   private:
-#if PANEL_DRAW_CAP > 0
-    uint32_t draw_credit_ = 0;
-#endif
-#if PANEL_DRAW_SKIP_AFTER_US > 0
-    bool last_long_ = false;
-#endif
+    uint32_t latch_us_ = 0;  // the latch this frame woke on
 };
 
 PanelBoard g_board;
@@ -277,7 +238,7 @@ PanelBoard g_board;
 
 void setup() {
     // Before begin(): the buffer can't be set after.
-    const bool tx_buffered = kSerialTxBytes == 0 || Serial.setTxBufferSize(kSerialTxBytes) == kSerialTxBytes;
+    const bool tx_buffered = Serial.setTxBufferSize(kSerialTxBytes) == kSerialTxBytes;
     Serial.begin(115200);
     if (!tx_buffered) Serial.println("deck panel: no serial TX buffer; prints may hold a frame");
     Serial.printf("deck panel: boot, build %s\n", DECK_PANEL_SHA);
@@ -295,8 +256,8 @@ void setup() {
     touch_init();
     build_screen();
     display_refresh();  // the whole first frame, now, whatever ran before
-#if PANEL_YIELD_US > 0 || PANEL_WAKE_DELAY_US > 0
-    yield_begin();
+#if PANEL_DRAW_AT_US > 0
+    hold_begin();
 #endif
     // Last, after that frame, so the screen doesn't flash on boot.
     if (!panel_mcu::backlightOn()) Serial.println("deck panel: the backlight may be off");

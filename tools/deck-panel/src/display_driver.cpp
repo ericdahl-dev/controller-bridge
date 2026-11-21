@@ -69,14 +69,6 @@ static_assert(PANEL_BOUNCE_PX == 0 || ((800 * 480) / PANEL_BOUNCE_PX) % 2 == 0,
 #ifndef PANEL_ISR_CORE
 #define PANEL_ISR_CORE 1
 #endif
-// When the frame clock's frame starts (#663). 1: at the vsync after the latch that released the swap, about 1.9 ms
-// later in bounce mode (vsync period less scan lag). 0: at the latch itself. Tried as the fix for the late bounce
-// copies of 37cef427 (72 in 305 s); the owner's A/B (36 at the vsync, 40 at the latch) refuted that: the count stayed,
-// only which loop step they fell in moved. Kept at 1 while the copy line (perf build) finds the cause. Without bounce
-// buffers the latch and the vsync are one interrupt.
-#ifndef PANEL_WAKE_AT_VSYNC
-#define PANEL_WAKE_AT_VSYNC 1
-#endif
 
 namespace {
 
@@ -161,13 +153,12 @@ bool IRAM_ATTR release_swap() {
 #endif
     portEXIT_CRITICAL_ISR(&g_scan_lock);
     if (released) xSemaphoreGiveFromISR(g_vsync_sem, &woke);
-    if (!PANEL_WAKE_AT_VSYNC) xSemaphoreGiveFromISR(g_latch_sem, &woke);
     return woke == pdTRUE;
 }
 
 // Without bounce buffers the next frame reads the new buffer from this vsync on, so it releases the swap. Wakes the
-// frame clock (PANEL_WAKE_AT_VSYNC). On the loop's core, so the loop runs only after this interrupt ends, the
-// driver's vsync work included (a restart refill, if it does one there: unverified).
+// frame clock (#663), about 1.9 ms after the latch in bounce mode. On the loop's core, so the loop runs only after
+// this interrupt ends, the driver's vsync restart included.
 bool IRAM_ATTR on_vsync(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void*) {
     g_vsyncs = g_vsyncs + 1;
     portENTER_CRITICAL_ISR(&g_scan_lock);
@@ -176,7 +167,7 @@ bool IRAM_ATTR on_vsync(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_da
     // Without bounce buffers the latch first, so the frame this wakes sees its count.
     const bool woke_by_release = PANEL_BOUNCE_PX == 0 && release_swap();
     BaseType_t woke = pdFALSE;
-    if (PANEL_WAKE_AT_VSYNC) xSemaphoreGiveFromISR(g_latch_sem, &woke);
+    xSemaphoreGiveFromISR(g_latch_sem, &woke);
     return woke_by_release || woke == pdTRUE;
 }
 
@@ -388,7 +379,8 @@ bool display_init() {
     // (which resumes a paused one) can start a refresh off the latch.
     lv_display_delete_refr_timer(g_disp);
 
-    Serial.printf("display: %dx%d up, pclk %u Hz, %u fps, frame %u us, refresh on the latch, framebuffers %p %p in %s\n",
+    Serial.printf("display: %dx%d up, pclk %u Hz, %u fps, frame %u us, refresh on the frame clock, framebuffers %p %p "
+                  "in %s\n",
                   board::LCD_WIDTH, board::LCD_HEIGHT, static_cast<unsigned>(board::LCD_PCLK_HZ),
                   static_cast<unsigned>(frame_pacing::frames_per_second(TIMING)),
                   static_cast<unsigned>(frame_pacing::frame_us(TIMING)), fb0, fb1, region(fb0));

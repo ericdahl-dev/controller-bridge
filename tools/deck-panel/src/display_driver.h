@@ -77,8 +77,8 @@ struct DisplayLatch {
 };
 DisplayLatch display_latch();
 
-// The frame clock's wait (#663), loop task only: blocks until a latch newer than the one current on entry (and, with
-// PANEL_WAKE_AT_VSYNC, the vsync after it, about 1.9 ms later in bounce mode), and
+// The frame clock's wait (#663), loop task only: blocks until a latch newer than the one current on entry and the
+// vsync after it (about 1.9 ms later in bounce mode; without bounce buffers they're one interrupt), and
 // returns the newest (several since the last call count as one), or false after `timeout_ms` with none. A latch
 // left over from before the call never ends it, so a frame always starts just after a latch, and a swap handed over
 // before the call is always released by the latch that ends it.
