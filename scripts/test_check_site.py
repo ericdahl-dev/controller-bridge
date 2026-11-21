@@ -26,23 +26,32 @@ WEBSITE = ('<h2>This website</h2><p>It counts visits with PostHog and sets no co
            ' To have your visits removed, email us. On the capture page it counts only that a capture started and finished.</p>'
            '<p>The web capture saves the file on your computer; nothing is uploaded.</p>')
 
+FEED = ('<p>If you turn on the display feed, it also sends the deck in front\'s state, including track title and artist,'
+        ' unencrypted to the one address you set on your local network.</p>')
+
 CAPTURE_LD = '<script type="application/ld+json">{"text": "Record it at https://getdeckbridge.app/capture/."}</script>'
 
-PRICE_LD = ('<script type="application/ld+json">{"@graph": [{"@type": "SoftwareApplication", '
+PRICE_LD = ('<script type="application/ld+json">{"@graph": [{"@type": "SoftwareApplication", "softwareVersion": "1.0.1", '
             '"offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}, {"@type": "FAQPage", "mainEntity": '
             '[{"@type": "Question", "name": "How much does DeckBridge cost?", "acceptedAnswer": {"@type": "Answer", '
             '"text": "DeckBridge is free."}}]}]}</script>')
+
+NEW_11 = '<p>The jog display. Shift + Pitch Bend transposes. Exact colors. Key display. Shift + Needle Drop. The display feed.</p>'
+
+LAB = ('<section id="lab"><h2>In the lab</h2><p>A reflashed display chip draws the deck. That firmware is not part of the'
+       ' DeckBridge app and is not offered for download, and DeckBridge never includes or distributes Denon’s firmware.</p>'
+       '<p>A deck panel shows the deck in front. There’s no kit or firmware to download.</p></section>')
 
 GOOD = {
     "index.html": page(head='<link rel="stylesheet" href="style.css"><link rel="icon" href="img/icon.png">' + CAPTURE_LD + PRICE_LD,
                        body='<a href="support/">Support</a> <a href="privacy/">Privacy</a> <img src="img/icon.png" alt="">'
                             ' <a href="capture/">record it in your browser</a>'
                             ' <a href="for/lc6000/">DeckBridge for the LC6000</a>'
-                            ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>'),
+                            ' <a href="https://testflight.apple.com/join/XXXX">TestFlight</a>' + LAB + NEW_11),
     "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'),
     "capture/index.html": page(body='<a href="../">Home</a>'),
     "for/lc6000/index.html": page(body='<a href="../../">Home</a>'),
-    "privacy/index.html": page(body='<h2 id="network">Network</h2><p>DeckBridge collects no data.</p>' + WEBSITE),
+    "privacy/index.html": page(body='<h2 id="network">Network</h2><p>DeckBridge collects no data.</p>' + FEED + WEBSITE),
     "style.css": '@font-face { font-family: Inter; src: url("fonts/Inter-Regular.ttf"); } body { color: #EDEDEA; }',
     "fonts/Inter-Regular.ttf": "font",
     "img/icon.png": "png",
@@ -50,7 +59,7 @@ GOOD = {
     "sitemap.xml": sitemap("https://getdeckbridge.app/", "https://getdeckbridge.app/support/",
                            "https://getdeckbridge.app/privacy/", "https://getdeckbridge.app/capture/",
                            "https://getdeckbridge.app/for/lc6000/"),
-    "llms.txt": "# DeckBridge\n\n> A bridge.\n\n- [Home](https://getdeckbridge.app/)\n- [Support](https://getdeckbridge.app/support/)\n"
+    "llms.txt": "# DeckBridge\n\n> A bridge.\n\n- New in v1.1: the jog display, transpose, exact colors, key display, Shift + Needle Drop, the display feed.\n- [Home](https://getdeckbridge.app/)\n- [Support](https://getdeckbridge.app/support/)\n"
                 "- [Privacy](https://getdeckbridge.app/privacy/)\n- [Capture](https://getdeckbridge.app/capture/)\n"
                 "- [LC6000](https://getdeckbridge.app/for/lc6000/)\n",
     "analytics.js": "/* PostHog */",
@@ -108,7 +117,7 @@ class CheckSiteTests(unittest.TestCase):
                                body='<img src="//cdn.example.com/a.png" alt=""> <script src="http://x.example/t.js"></script>'
                                     ' <a href="https://testflight.apple.com/join/XXXX">ok</a>'
                                     ' <a href="support/">s</a> <a href="privacy/">p</a> <a href="capture/">c</a>'
-                                    ' <a href="for/lc6000/">l</a>'),
+                                    ' <a href="for/lc6000/">l</a>' + LAB),
             "style.css": '@import url("https://fonts.example/x.css"); body { background: url(https://x.example/bg.png); }',
         })
         self.assertEqual(check_site.problems(root), [
@@ -220,12 +229,116 @@ class CheckSiteTests(unittest.TestCase):
         self.assertEqual(check_site.problems(root), ["support/index.html: no <title>",
                                                      "support/index.html: no meta description"])
 
+    def test_saying_nothing_goes_to_the_network_must_name_the_display_feed(self):
+        """With the display feed on, the deck in front goes to the address the DJ sets (#632, ADR 0011): a sentence
+        that says nothing goes to the network must say so, in its HTML text, its JSON-LD and index.md alike."""
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                                            '<p>A scripted controller plays, with nothing sent to the network.</p>'),
+            "for/lc6000/index.html": page(head='<script type="application/ld+json">{"text": "Nothing goes to the network, and it\'s off at launch."}</script>',
+                                          body='<a href="../../">Home</a>'),
+            "index.md": "Yes. Nothing goes to the network.\n",
+        })
+        self.assertEqual(check_site.problems(root), [
+            'for/lc6000/index.html: says nothing goes to the network without naming the display feed: "Nothing goes to the network, and it\'s off at launch."',
+            'index.md: says nothing goes to the network without naming the display feed: "Nothing goes to the network."',
+            'support/index.html: says nothing goes to the network without naming the display feed: "A scripted controller plays, with nothing sent to the network."',
+        ])
+
+    def test_naming_the_display_feed_in_that_sentence_passes(self):
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                                            '<p>Nothing goes to the network unless you turn on the display feed, and then only'
+                                            ' unencrypted to the one address you set on your local network.</p>'),
+        })
+        self.assertEqual(check_site.problems(root), [])
+
+    def test_the_privacy_page_must_disclose_the_display_feed(self):
+        """The owner's wording (#632): what the feed sends, unencrypted, to the one address set on the local network."""
+        root = self.site({"privacy/index.html": page(body='<h2 id="network">Network</h2><p>DeckBridge collects no data.</p>' + WEBSITE)})
+        self.assertEqual(check_site.problems(root), [
+            'privacy/index.html: doesn\'t say "display feed"',
+            'privacy/index.html: doesn\'t say "including track title and artist"',
+            'privacy/index.html: doesn\'t say "unencrypted to the one address you set on your local network"',
+        ])
+
+    def test_saying_only_syndicate_or_nothing_leaves_the_mac_must_name_the_display_feed(self):
+        root = self.site({"support/index.html": page(
+            body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                 '<p>It only talks to your LC6000 controller and to Syndicate. Nothing leaves your Mac except OSC.'
+                 ' It only sends OSC messages to Syndicate, and the display feed if you turn it on.</p>')})
+        self.assertEqual(check_site.problems(root), [
+            'support/index.html: says the app sends only to Syndicate or nothing leaves the Mac without naming the display feed: "It only talks to your LC6000 controller and to Syndicate."',
+            'support/index.html: says the app sends only to Syndicate or nothing leaves the Mac without naming the display feed: "Nothing leaves your Mac except OSC."',
+        ])
+
+    def test_the_rule_reads_meta_descriptions_and_sends_only_to(self):
+        root = self.site({
+            "capture/index.html": page(description="It only talks to your LC6000 controller and to Syndicate.",
+                                       body='<a href="../">Home</a>'),
+            "index.md": "It sends OSC messages only to Syndicate, on this Mac by default.\n",
+        })
+        self.assertEqual(check_site.problems(root), [
+            'capture/index.html: says the app sends only to Syndicate or nothing leaves the Mac without naming the display feed: "It only talks to your LC6000 controller and to Syndicate."',
+            'index.md: says the app sends only to Syndicate or nothing leaves the Mac without naming the display feed: "It sends OSC messages only to Syndicate, on this Mac by default."',
+        ])
+
+    def test_the_home_page_has_an_in_the_lab_section_with_its_disclaimers(self):
+        """#647: what needs hardware or firmware others can't get sits in one place, saying so (the owner's wording)."""
+        root = self.site({"index.html": GOOD["index.html"].replace(LAB, "")})
+        self.assertEqual(check_site.problems(root), ['index.html: has no In the lab section (<section id="lab">)'])
+        bare = GOOD["index.html"].replace(LAB, '<section id="lab"><h2>In the lab</h2><p>A reflashed chip draws the deck.</p></section>')
+        self.assertEqual(check_site.problems(self.site({"index.html": bare})), [
+            'index.html: the In the lab section doesn\'t say "not part of the deckbridge app"',
+            'index.html: the In the lab section doesn\'t say "not offered for download"',
+            'index.html: the In the lab section doesn\'t say "never includes or distributes denon\'s firmware"',
+            'index.html: the In the lab section doesn\'t say "no kit or firmware to download"',
+        ])
+
+    def test_lab_things_are_only_in_the_lab(self):
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                                            '<p>Point the display feed at your deck panel.</p>'),
+            "index.md": "## Features\n\nThe drawn jog display is here.\n\n## In the lab\n\nA deck panel and a reflashed chip.\n",
+            "llms.txt": GOOD["llms.txt"] + "- In the lab: a deck panel.\n- Features: a reflashed chip.\n",
+        })
+        self.assertEqual(check_site.problems(root), [
+            'index.md: names "drawn jog display" outside In the lab',
+            'llms.txt: names "reflashed" outside In the lab',
+            'support/index.html: names "deck panel" outside In the lab',
+        ])
+
+    def test_no_page_tells_how_to_flash(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a> <a href="../privacy/#network">Network</a>'
+                                                          '<p>Put the chip in its bootloader and run dfu-util.</p>')})
+        self.assertEqual(check_site.problems(root), [
+            'support/index.html: says "bootloader": no flashing instructions on the site',
+            'support/index.html: says "dfu-util": no flashing instructions on the site',
+        ])
+
+    def test_the_product_pages_name_what_1_1_brings(self):
+        """#647: the home page, index.md and llms.txt each name 1.1's features, so one can't quietly drop out."""
+        at_1_1 = GOOD["index.html"].replace('"softwareVersion": "1.0.1"', '"softwareVersion": "1.1.0"')
+        root = self.site({"index.html": at_1_1, "index.md": "# DeckBridge\n\nThe jog display and a display feed.\n"})
+        problems = check_site.problems(root)
+        self.assertIn('index.md: doesn\'t name 1.1\'s "transpose"', problems)
+        self.assertIn('index.md: doesn\'t name 1.1\'s "exact colors"', problems)
+        self.assertNotIn('index.md: doesn\'t name 1.1\'s "jog display"', problems)
+        self.assertNotIn('index.md: doesn\'t name 1.1\'s "display feed"', problems)
+        # Markdown isn't HTML: index.md's arrow diagram ("LC6000 <--MIDI--") and a later comment's "-->" hide nothing.
+        md = ("# DeckBridge\n\nLC6000 <--MIDI LEDs-- DeckBridge\n\nThe jog display. Transpose. Exact colors. Key display."
+              " Shift + Needle Drop. The display feed.\n\n<!-- FAQ:START -->\n")
+        linked = check_site.problems(self.site({"index.html": at_1_1, "index.md": md}))
+        self.assertNotIn('index.md: doesn\'t name 1.1\'s "key display"', linked)
+        # At 1.0.1, 1.1's features aren't asked for.
+        self.assertEqual([p for p in check_site.problems(self.site({"index.md": "# DeckBridge\n"})) if "1.1's" in p], [])
+
     def test_the_privacy_page_must_say_no_data_is_collected(self):
-        root = self.site({"privacy/index.html": page(body="<p>We care about your privacy.</p>" + WEBSITE)})
+        root = self.site({"privacy/index.html": page(body="<p>We care about your privacy.</p>" + FEED + WEBSITE)})
         self.assertEqual(check_site.problems(root), ['privacy/index.html: doesn\'t say "collects no data"'])
 
     def test_the_privacy_page_must_disclose_the_website_analytics(self):
-        root = self.site({"privacy/index.html": page(body="<p>DeckBridge collects no data. This site uses no cookies.</p>")})
+        root = self.site({"privacy/index.html": page(body="<p>DeckBridge collects no data. This site uses no cookies.</p>" + FEED)})
         self.assertEqual(check_site.problems(root), [
             'privacy/index.html: doesn\'t say "posthog"',
             'privacy/index.html: doesn\'t say "anonymous hash that changes every day"',
@@ -240,7 +353,7 @@ class CheckSiteTests(unittest.TestCase):
     def test_the_privacy_page_must_disclose_the_web_capture(self):
         without = WEBSITE.replace(" On the capture page it counts only that a capture started and finished.", "").replace(
             "<p>The web capture saves the file on your computer; nothing is uploaded.</p>", "")
-        root = self.site({"privacy/index.html": page(body="<p>DeckBridge collects no data.</p>" + without)})
+        root = self.site({"privacy/index.html": page(body="<p>DeckBridge collects no data.</p>" + FEED + without)})
         self.assertEqual(check_site.problems(root), [
             'privacy/index.html: doesn\'t say "web capture"',
             'privacy/index.html: doesn\'t say "nothing is uploaded"',
@@ -357,6 +470,94 @@ class CheckSiteTests(unittest.TestCase):
             found = [line for line in lines if line.startswith(row)]
             self.assertEqual(len(found), 1, row)
             self.assertIn("Use Global", found[0], row)
+    def test_every_deckbridge_version_on_the_site_is_the_apps(self):
+        root = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <p>Version 1.0.1 on TestFlight. DeckBridge 1.2 adds capture.</p>'),
+            "llms.txt": GOOD["llms.txt"] + "- Status: version 1.0.1 is on TestFlight. Syndicate's mapping (version 0.3.7).\n",
+        })
+        self.assertEqual(check_site.problems(root), [])
+        stale = self.site({
+            "support/index.html": page(body='<a href="../">Home</a> <p>Version 1.0.0 on TestFlight.</p>'),
+            "llms.txt": GOOD["llms.txt"] + "DeckBridge 1.1.0 is out.\n",
+        })
+        self.assertEqual(check_site.problems(stale), [
+            "llms.txt: says DeckBridge 1.1.0, but the app's softwareVersion is 1.0.1",
+            "support/index.html: says DeckBridge 1.0.0, but the app's softwareVersion is 1.0.1",
+        ])
+
+    def test_the_web_capture_writes_the_apps_version(self):
+        same = self.site({"capture/capture-page.js": 'var APP_VERSION = "web 1.0.1";'})
+        self.assertEqual(check_site.problems(same), [])
+        stale = self.site({"capture/capture-page.js": 'var APP_VERSION = "web 1.0.0";'})
+        self.assertEqual(check_site.problems(stale),
+                         ["capture/capture-page.js: writes captures as web 1.0.0, but the app's softwareVersion is 1.0.1"])
+
+    def test_nothing_is_coming_in_a_version_that_has_shipped(self):
+        root = self.site({"support/index.html": page(body='<a href="../">Home</a> <p>Coming in v1.0: art. Coming in v1.2: more.</p>'),
+                          "llms.txt": GOOD["llms.txt"] + "- Jog art, coming in v1.0.1.\n"})
+        self.assertEqual(check_site.problems(root), [
+            "llms.txt: says coming in v1.0.1, but the app is 1.0.1",
+            "support/index.html: says coming in v1.0, but the app is 1.0.1",
+        ])
+
+    def test_the_jog_display_is_shown_by_the_apps_renderer_not_the_teaser_art(self):
+        teaser = self.site({"img/jog-art.png": "png", "support/index.html": page(
+            body='<a href="../">Home</a> <img src="../img/jog-art.png" alt="Art">')})
+        self.assertEqual(check_site.problems(teaser), ["support/index.html: shows the v1.1 teaser art (img/jog-art.png); "
+                                                       "use the renderer's images (img/jog-display-*)"])
+        vague = self.site({"img/jog-display-deck1.webp": "webp", "support/index.html": page(
+            body='<a href="../">Home</a> <img src="../img/jog-display-deck1.webp" alt="The jog display">')})
+        self.assertEqual(check_site.problems(vague), [
+            'support/index.html: the alt of ../img/jog-display-deck1.webp doesn\'t say what the ring and the needle show'])
+        good = self.site({"img/jog-display-deck1.webp": "webp", "support/index.html": page(
+            body='<a href="../">Home</a> <img src="../img/jog-display-deck1.webp" '
+                 'alt="Deck 1 playing: the ring lights the master clock\'s beat 2, the needle shows the deck\'s bar">')})
+        self.assertEqual(check_site.problems(good), [])
+
+    def test_the_home_page_names_the_apps_version(self):
+        root = self.site({"index.html": GOOD["index.html"].replace('"softwareVersion": "1.0.1", ', "")})
+        self.assertEqual(check_site.problems(root), ["index.html: the JSON-LD has no SoftwareApplication softwareVersion"])
+
+    def test_the_lc6000_page_documents_shift_hot_cue(self):
+        # Shift + hot cue pad on a stopped deck (#358, #363): the LC6000 page's control list has a row for it, naming
+        # the stopped deck, and the quantize reset to Use Global.
+        page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "website", "for", "lc6000", "index.html")
+        with open(page, encoding="utf-8") as f:
+            rows = [line for line in f if "<dt>Shift + pad" in line]
+        self.assertEqual(len(rows), 1, "one Shift + pad row")
+        for words in ("Hot Cue", "stopped", "Use Global"):
+            self.assertIn(words, rows[0])
+
+    def test_the_lc6000_page_documents_1_1s_controls(self):
+        # #647: each control 1.1 added or changed has its row, saying what README's row says; Slip is deck select now.
+        page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "website", "for", "lc6000", "index.html")
+        with open(page, encoding="utf-8") as f:
+            text = f.read()
+        rows = dict(re.findall(r"<dt>([^<]*)</dt><dd>([^<]*)</dd>", text))
+        expected = {
+            "VINYL": ["bending", "seeking"],
+            "Deck select (printed Slip)": ["next deck"],
+            "Shift + Sync (OFF)": ["sync off"],
+            "Shift + Pitch Bend − +": ["semitone", "key lock"],
+            "Shift + browse knob (ZOOM)": ["waveform"],
+            "Shift + Needle Drop strip": ["channel fader", "Relative", "Jump"],
+        }
+        for row, words in expected.items():
+            self.assertIn(row, rows, row)
+            for word in words:
+                self.assertIn(word, rows[row], row)
+        self.assertNotIn("Key Lock, Slip", rows)
+
+    def test_the_support_page_explains_firmware_and_the_display_feed(self):
+        # #647: release builds show the jog display's Firmware choice and the Display feed to everyone; Support says what
+        # they are, worded as the CHANGELOG (#648) words them.
+        page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "website", "support", "index.html")
+        with open(page, encoding="utf-8") as f:
+            text = check_site.plain_words(f.read())
+        for words in ["settings › controller › firmware (shown with the jog display on): leave it on denon unless your unit runs custom firmware",
+                      "settings › controller › key display", "settings › syndicate › display feed", "off by default",
+                      "unencrypted to the one address you set", "relative needs syndicate's volume feedback"]:
+            self.assertIn(words, text)
 
     def test_a_third_party_logo_file_fails(self):
         root = self.site({"img/denon-logo.svg": "<svg/>", "img/Syndicate_logo.png": "png"})
@@ -367,7 +568,7 @@ class CheckSiteTests(unittest.TestCase):
     def test_titles_and_headings_dont_use_other_companies_names(self):
         root = self.site({
             "support/index.html": page(title="Syndicate Bridge Support", body='<h1>Denon <em>Controller</em> Help</h1><a href="../">Home</a>'),
-            "privacy/index.html": page(body="<h1>Privacy</h1><p>Works with Syndicate. DeckBridge collects no data.</p>" + WEBSITE),
+            "privacy/index.html": page(body="<h1>Privacy</h1><p>Works with Syndicate. DeckBridge collects no data.</p>" + FEED + WEBSITE),
         })
         self.assertEqual(check_site.problems(root), ['support/index.html: the <title> names Syndicate',
                                                      'support/index.html: the <h1> names Denon'])
