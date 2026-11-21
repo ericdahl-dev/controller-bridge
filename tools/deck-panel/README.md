@@ -47,7 +47,7 @@ The panel is set up from a phone (#622). No network name or password goes into t
    - The name ends in four hex digits from the panel's MAC, so two panels never share one.
    - The password is new at every boot into setup (WPA2, 8 characters, no look-alikes such as `0`/`O` or `1`/`l`).
 2. Join that network on the phone. Most phones open the page by themselves; if not, open `http://192.168.4.1/`.
-3. Pick your network from the list (strongest first; it rescans every 10 s) or type its name, enter its password, and press Save. Leave the password empty for an open network.
+3. Pick your network from the list (strongest first; reload the page for a fresh scan, at most every 10 s) or type its name, enter its password, and press Save. Leave the password empty for an open network.
 4. The page says the network is saved, and the panel restarts about 1 s later and joins it. It restarts rather than switching at once because writing to the panel's flash upsets the screen's scan-out.
 
 A bad form (no network, a name over 32 bytes, a password that isn't 8 to 63 characters or 64 hex digits) shows the page again with the reason. The password field is never filled back in.
