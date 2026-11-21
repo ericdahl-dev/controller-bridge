@@ -35,8 +35,11 @@ struct ScriptedPanel : panel_scan::Panel {
     bool take(panel_scan::Signal s, uint32_t timeout_ms) override {
         const uint64_t until = now_us + uint64_t(timeout_ms) * 1000;
         while (!given[static_cast<int>(s)]) {
-            if (next >= script.size() || script[next].at_us > until) {
+            if (next >= script.size() || script[next].at_us >= until) {
                 now_us = until;
+                // An interrupt at the very moment the wait gives up lands after the timeout, before the caller hears
+                // of it: the race a real semaphore has, and the give it leaves behind.
+                while (next < script.size() && script[next].at_us == until) fire();
                 return false;
             }
             fire();

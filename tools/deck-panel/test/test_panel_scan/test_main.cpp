@@ -107,6 +107,34 @@ void test_with_no_swap_out_the_wait_returns_at_once() {
     TEST_ASSERT_EQUAL(0, panel.now_us);
 }
 
+
+// No latch in time (a stopped panel): the wait gives up and says so.
+void test_a_release_that_never_comes_times_out() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    scan.present(true);
+    TEST_ASSERT_FALSE(scan.wait_release(60));
+    TEST_ASSERT_EQUAL(60000, panel.now_us);
+}
+
+// The latch for a timed-out swap comes as the wait gives up, after the semaphore timed out but before the gate hears
+// of it, so it gives. That give is stale: the next swap still waits for its own latch, or LVGL draws into the buffer
+// on glass.
+void test_a_late_latch_never_releases_the_next_swap() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{60000, Irq::frame_complete}, {93333, Irq::frame_complete}};
+    scan.present(true);
+    TEST_ASSERT_FALSE(scan.wait_release(60));  // gives up at 60 ms, as the latch comes
+    scan.present(true);
+    TEST_ASSERT_TRUE(scan.wait_release(60));
+    TEST_ASSERT_EQUAL(93333, panel.now_us);  // its own latch, not the stale one
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
@@ -117,5 +145,7 @@ int main(int, char**) {
     RUN_TEST(test_with_bounce_buffers_the_frame_end_releases_a_swap_not_the_vsync);
     RUN_TEST(test_without_bounce_buffers_the_vsync_releases_a_swap);
     RUN_TEST(test_with_no_swap_out_the_wait_returns_at_once);
+    RUN_TEST(test_a_release_that_never_comes_times_out);
+    RUN_TEST(test_a_late_latch_never_releases_the_next_swap);
     return UNITY_END();
 }
