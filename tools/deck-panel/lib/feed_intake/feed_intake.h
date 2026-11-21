@@ -25,8 +25,11 @@ namespace feed_intake {
 
 /// The biggest datagram kept: one UDP payload in an Ethernet frame (1500 less the IP and UDP headers).
 constexpr size_t kMaxDatagram = 1472;
-/// Datagrams held between frames.
-constexpr size_t kSlots = 8;
+/// Datagrams held between frames. The feed's worst burst in one frame (ADR 0011, #636): a snapshot (one bundle, two
+/// past 1200 B), the fast slot's bundle and a change or two, so about 5. The old path held 6 in lwIP and read 8 a
+/// frame. 16 holds three frames' worth, so a frame late by two periods (a Wi-Fi rejoin, a slow chore) drops nothing;
+/// a drop is counted and the 2 s keepalive heals it. 16 x 1.5 KB = 24 KB, fixed.
+constexpr size_t kSlots = 16;
 static_assert((kSlots & (kSlots - 1)) == 0, "the indexes wrap cleanly only for a power of two");
 
 /// What a frame took: how many datagrams, and when the newest of them arrived (0 if none).
