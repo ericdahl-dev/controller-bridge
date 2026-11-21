@@ -43,8 +43,8 @@ void test_the_line_has_every_number_in_one_fixed_order() {
     TEST_ASSERT_EQUAL_STRING(
         "perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, "
         "39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, vsync 25.6-30.0 ms, 1 resyncs, "
-        "copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, no feed frames, "
-        "clock 150 frames 2 late 3 missed 1 no latch, internal free 123456",
+        "copy worst 540 of 666 us (margin 126) 0 late, 0 past the glass deadline, feed 900 datagrams 1 too big, "
+        "no feed frames, clock 150 frames 2 late 3 missed 1 no latch, internal free 123456",
         perf_line::format(window()).c_str());
 }
 
@@ -58,7 +58,8 @@ void test_a_window_with_no_frames_says_so_without_dividing_by_zero() {
     w.draw_bitmap_us = 0;
     TEST_ASSERT_EQUAL_STRING(
         "perf: no frames (nothing changed), 39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, "
-        "vsync 25.6-30.0 ms, 1 resyncs, copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, "
+        "vsync 25.6-30.0 ms, 1 resyncs, copy worst 540 of 666 us (margin 126) 0 late, 0 past the glass deadline, "
+        "feed 900 datagrams 1 too big, "
         "no feed frames, clock 150 frames 2 late 3 missed 1 no latch, internal free 123456",
         perf_line::format(w).c_str());
 }
@@ -128,12 +129,13 @@ void test_late_copies_say_how_many_fell_in_a_refresh_and_at_the_frame_turn() {
     w.copy.late = 41;
     w.copy_late_drawing = 30;
     w.copy_late_turn = 12;
-    TEST_ASSERT_TRUE(perf_line::format(w).find("(margin 126) 41 late (30 drawing, 12 at the turn), feed") !=
-                     std::string::npos);
+    TEST_ASSERT_TRUE(perf_line::format(w).find("(margin 126) 41 late (30 drawing, 12 at the turn), "
+                                               "0 past the glass deadline, feed") != std::string::npos);
     w.copy.late = 0;
     w.copy_late_drawing = 0;
     w.copy_late_turn = 0;
-    TEST_ASSERT_TRUE(perf_line::format(w).find("(margin 126) 0 late, feed") != std::string::npos);
+    TEST_ASSERT_TRUE(perf_line::format(w).find("(margin 126) 0 late, 0 past the glass deadline, feed") !=
+                     std::string::npos);
 }
 
 // Where in the frame the bounce copies ran, and in which loop step (#663): every copy counted, and the late ones, so a
@@ -178,11 +180,11 @@ void test_the_copy_line_lists_the_late_copies_it_kept() {
     c.kept = 2;
     c.lates[0] = {3120, 702, static_cast<uint8_t>(perf_line::Mark::read)};
     c.lates[1] = {15004, 851, static_cast<uint8_t>(perf_line::Mark::wait)};
-    TEST_ASSERT_TRUE(perf_line::format_copy(c).find("outside an interrupt 0/0; while serial drains 0/0; late at +3120 702 us read, "
-                                                    "+15004 851 us wait") != std::string::npos);
+    TEST_ASSERT_TRUE(perf_line::format_copy(c).find("outside an interrupt 0/0; while serial drains 0/0; "
+                                                    "late at +3120 702 us read, +15004 851 us wait") != std::string::npos);
     perf_line::CopySpread none;
-    TEST_ASSERT_TRUE(perf_line::format_copy(none).find("outside an interrupt 0/0; while serial drains 0/0; no late copies") !=
-                     std::string::npos);
+    TEST_ASSERT_TRUE(perf_line::format_copy(none).find("outside an interrupt 0/0; while serial drains 0/0; "
+                                                       "no late copies") != std::string::npos);
 }
 
 // Copies while the UART still drains the last print (#663): the loop's step has moved on by then, so they're counted
@@ -192,6 +194,15 @@ void test_the_copy_line_counts_copies_while_serial_drains() {
     c.while_printing = 1100;
     c.late_while_printing = 4;
     TEST_ASSERT_TRUE(perf_line::format_copy(c).find("outside an interrupt 0/0; while serial drains 4/1100;") !=
+                     std::string::npos);
+}
+
+// The glass deadline (#663): copies the DMA could overtake, apart from the margin's late ones.
+void test_the_copy_numbers_say_how_many_were_past_the_glass_deadline() {
+    perf_line::Window w = window();
+    w.copy.late = 3;
+    w.copy.past_glass = 1;
+    TEST_ASSERT_TRUE(perf_line::format(w).find("3 late (0 drawing, 0 at the turn), 1 past the glass deadline, feed") !=
                      std::string::npos);
 }
 
@@ -205,6 +216,7 @@ int main() {
     RUN_TEST(test_a_window_with_no_feed_frames_says_so);
     RUN_TEST(test_the_frame_clock_counts_follow_the_feed_lag);
     RUN_TEST(test_late_copies_say_how_many_fell_in_a_refresh_and_at_the_frame_turn);
+    RUN_TEST(test_the_copy_numbers_say_how_many_were_past_the_glass_deadline);
     RUN_TEST(test_a_copy_falls_in_the_eighth_of_the_scan_out_since_the_latch);
     RUN_TEST(test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step);
     RUN_TEST(test_the_copy_line_counts_copies_outside_an_interrupt_apart);

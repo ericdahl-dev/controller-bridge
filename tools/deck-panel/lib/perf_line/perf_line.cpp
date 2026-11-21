@@ -5,9 +5,9 @@
 namespace perf_line {
 
 std::string format(const Window& w) {
-    char line[680];
+    char line[720];
     const double seconds = w.ms > 0 ? w.ms / 1000.0 : 1.0;
-    char copy[144];
+    char copy[176];
     if (w.copy.chunks == 0) {
         snprintf(copy, sizeof copy, "copy not timed");
     } else {
@@ -16,9 +16,10 @@ std::string format(const Window& w) {
             snprintf(where, sizeof where, " (%u drawing, %u at the turn)", static_cast<unsigned>(w.copy_late_drawing),
                      static_cast<unsigned>(w.copy_late_turn));
         }
-        snprintf(copy, sizeof copy, "copy worst %u of %u us (margin %d) %u late%s",
+        snprintf(copy, sizeof copy, "copy worst %u of %u us (margin %d) %u late%s, %u past the glass deadline",
                  static_cast<unsigned>(w.copy.worst_us), static_cast<unsigned>(w.copy_budget_us),
-                 static_cast<int>(w.copy.margin_us), static_cast<unsigned>(w.copy.late), where);
+                 static_cast<int>(w.copy.margin_us), static_cast<unsigned>(w.copy.late), where,
+                 static_cast<unsigned>(w.copy.past_glass));
     }
     char lag[80];
     if (w.ledger.frames == 0) {
@@ -28,7 +29,7 @@ std::string format(const Window& w) {
                  w.ledger.lag_worst_us / 1000.0, static_cast<unsigned>(w.ledger.skipped),
                  static_cast<unsigned>(w.ledger.frames));
     }
-    char tail[520];
+    char tail[560];
     snprintf(tail, sizeof tail,
              "%.1f vsyncs/s, %u swap timeouts, scan lag %.1f-%.1f ms, vsync %.1f-%.1f ms, %u resyncs, %s, "
              "feed %u datagrams %u too big, %s, clock %u frames %u late %u missed %u no latch, internal free %u",
