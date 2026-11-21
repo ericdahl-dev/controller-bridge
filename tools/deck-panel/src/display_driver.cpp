@@ -67,7 +67,7 @@ static_assert(PANEL_BOUNCE_PX == 0 || ((800 * 480) / PANEL_BOUNCE_PX) % 2 == 0,
 
 namespace {
 
-constexpr uint32_t SWAP_TIMEOUT_MS = 60;  // two frames at 16 MHz and then some: only a stopped panel misses it
+constexpr uint32_t SWAP_TIMEOUT_MS = 60;  // nearly two frames at 30 Hz: only a stopped panel misses it
 
 constexpr frame_pacing::Timing TIMING = {
     board::LCD_PCLK_HZ,
@@ -181,7 +181,7 @@ const char* region(const void* p) { return esp_ptr_external_ram(p) ? "PSRAM" : "
 
 bool panel_init() {
     esp_lcd_rgb_panel_config_t cfg = {};
-    cfg.clk_src = LCD_CLK_SRC_DEFAULT;  // PLL 160 MHz: 16 MHz is an exact divide
+    cfg.clk_src = LCD_CLK_SRC_DEFAULT;  // PLL 160 MHz; the LCD clock divider takes fractions, so 12.3 MHz is near
     cfg.timings.pclk_hz = board::LCD_PCLK_HZ;
     cfg.timings.h_res = board::LCD_WIDTH;
     cfg.timings.v_res = board::LCD_HEIGHT;
