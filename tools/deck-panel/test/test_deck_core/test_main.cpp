@@ -846,6 +846,28 @@ void test_the_waiting_texts_come_fitted_to_the_fonts() {
     TEST_ASSERT_EQUAL_STRING("?  port 9100", screen.last().detail.c_str());
 }
 
+
+// #677: the setup screen's logo is half size, so the join instructions have the room; every other waiting screen's is
+// full size. The first screen and a change between them say so.
+void test_the_setup_screen_has_the_small_logo_and_no_other() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::setup, "192.168.4.1");
+    core.render(screen, 0);
+    TEST_ASSERT_TRUE(screen.last().logo && screen.last().logo_small);
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.logo_small);
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 10);
+    TEST_ASSERT_TRUE(screen.last().logo);
+    TEST_ASSERT_FALSE(screen.last().logo_small);
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.logo_small);
+    TEST_ASSERT_FALSE(screen.last().waiting_changes.logo);
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 20);
+    TEST_ASSERT_FALSE(screen.last().logo_small);
+    TEST_ASSERT_FALSE(screen.last().waiting_changes.logo_small);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -890,6 +912,7 @@ int main(int, char**) {
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_the_waiting_screen_is_told_only_what_changed);
     RUN_TEST(test_the_waiting_screen_is_told_when_the_logo_changes);
+    RUN_TEST(test_the_setup_screen_has_the_small_logo_and_no_other);
     RUN_TEST(test_the_waiting_texts_come_fitted_to_the_fonts);
     RUN_TEST(test_the_first_deck_is_every_part_then_only_what_changed);
     RUN_TEST(test_a_change_that_moves_no_pixel_tells_the_screen_nothing);
