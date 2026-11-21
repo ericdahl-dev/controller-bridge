@@ -28,7 +28,7 @@ It also holds the lowest version a device may go back to (see below). The files 
 ### 1. Ed25519, key kept offline on the maintainer's Mac, signed by a local release step (chosen)
 
 - **Scheme:** Ed25519 over the manifest. CryptoKit has it on the Mac (`Curve25519.Signing`). On the panel: see "The panel's side".
-- **The key:** made once on the maintainer's Mac, stored encrypted with a passphrase (the format minisign and signify use), and kept off GitHub. A second key, the **backup key**, is made at the same time and kept offline somewhere else (printed or on a USB stick in a drawer). The updater and the panel trust both public keys from day one.
+- **The key:** made once on the maintainer's Mac, stored encrypted with a passphrase: PBKDF2-SHA256, 600,000 rounds, 16-byte random salt, deriving an AES-256-GCM key that seals the 32-byte Ed25519 seed (Apple's CommonCrypto and CryptoKit, no extra tool). The owner types the passphrase at signing; it is never read from an environment variable or a file. A forgotten passphrase is a lost key: sign with the backup key. The key file is kept off GitHub. A second key, the **backup key**, is made at the same time and kept offline somewhere else (printed or on a USB stick in a drawer). The updater and the panel trust both public keys from day one.
 - **Release step:**
   1. CI builds the release files on a tag as today and uploads them unsigned to a draft GitHub release.
   2. The maintainer runs one script locally. It downloads the draft's files, writes the manifest, shows the versions and hashes, signs after the passphrase, and uploads the manifest and its signature.
