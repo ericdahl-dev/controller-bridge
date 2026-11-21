@@ -11,6 +11,7 @@ public struct PanelFirmware: Sendable, Hashable {
 public enum CatalogError: Error, Equatable {
     case badVersion(String)
     case notAPatchDescription(String)
+    case unnamedFile(String)
 }
 
 /// The firmware the app ships with, read from a folder holding `catalog.json` and the files it names. No network.
@@ -37,6 +38,23 @@ public struct Catalog: Sendable {
                         return LC6000Entry(kind: .patch, chip: entry.chip, file: url, edits: edits)
                     }
                 })
+        }
+        let named = Set(["catalog.json"] + file.panel.map(\.image) + file.lc6000.flatMap { $0.entries.map(\.file) })
+        if let stray = try Self.files(in: directory).first(where: { !named.contains($0) }) {
+            throw CatalogError.unnamedFile(stray)
+        }
+    }
+
+    /// Every file under `directory`, as paths relative to it (Finder's .DS_Store aside).
+    private static func files(in directory: URL) throws -> [String] {
+        let root = directory.standardizedFileURL.path(percentEncoded: false)
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        guard let walk = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.isRegularFileKey]) else { return [] }
+        return try walk.compactMap { item in
+            let url = (item as! URL).standardizedFileURL
+            guard try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true,
+                  url.lastPathComponent != ".DS_Store" else { return nil }
+            return String(url.path(percentEncoded: false).dropFirst(prefix.count))
         }
     }
 
