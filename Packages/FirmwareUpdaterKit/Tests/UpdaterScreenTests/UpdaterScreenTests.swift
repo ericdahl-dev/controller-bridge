@@ -86,4 +86,22 @@ struct UpdaterScreenTests {
         #expect(screen.lc6000.status == "A device in update mode, maybe an LC6000")
         #expect(screen.lc6000.detail == nil)
     }
+
+    @Test("Finding opens no serial port but the panel's own: another device's port is never touched, and opening resets some boards")
+    func opensOnlyThePanelsPort() async {
+        let rig = Rig()
+        rig.usb.plugged = [
+            USBDevice(vendor: 0x0403, product: 0x6001, name: "FT232R USB UART", serialPort: "/dev/cu.usbserial-A1"),
+            USBDevice(vendor: 0x10C4, product: 0xEA60, name: "CP2102", serialPort: "/dev/cu.SLAB_USBtoUART"),
+            USBDevice(vendor: 0x0483, product: 0xDF11, name: "STM32  BOOTLOADER"),
+        ]
+        rig.midi.ports = ["LC6000 PRIME Controller"]
+        _ = await rig.finder.find()
+        #expect(rig.serial.opened == [])
+
+        Self.panel(rig, printing: [])
+        rig.usb.plugged.append(USBDevice(vendor: 0x0403, product: 0x6001, name: "FT232R USB UART", serialPort: "/dev/cu.usbserial-A1"))
+        _ = await rig.finder.find()
+        #expect(rig.serial.opened == [Self.port])
+    }
 }

@@ -16,7 +16,12 @@ final class FakeMIDI: MIDIPorts, @unchecked Sendable {
 final class FakeSerial: PanelSerial, @unchecked Sendable {
     /// What the panel prints on each port while the app listens.
     var lines: [String: [String]] = [:]
-    func listen(on port: String, for seconds: Double) async -> [String] { lines[port] ?? [] }
+    /// Every port the finder opened.
+    var opened: [String] = []
+    func listen(on port: String, for seconds: Double) async -> [String] {
+        opened.append(port)
+        return lines[port] ?? []
+    }
 }
 
 final class FakeLog: LogSink, @unchecked Sendable {
