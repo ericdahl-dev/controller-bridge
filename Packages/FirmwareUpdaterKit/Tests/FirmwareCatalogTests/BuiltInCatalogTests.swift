@@ -21,3 +21,12 @@ let kitPatches = URL(filePath: #filePath).deletingLastPathComponent()
         #expect(try Data(contentsOf: entry.file) == kit, "\(entry.file.lastPathComponent) differs from the kit's")
     }
 }
+
+/// Works offline (#684, story 21): everything the built-in catalog hands out is a file already on this Mac.
+@Test func everythingTheBuiltInCatalogHandsOutIsALocalFile() throws {
+    let set = try #require(try Catalog.builtIn().patchSet(for: LC6000Firmware(wd: "00.50", tp: "00.31")))
+    for url in set.entries.map(\.file) {
+        #expect(url.isFileURL)
+        #expect(FileManager.default.isReadableFile(atPath: url.path(percentEncoded: false)), "\(url) is not on disk")
+    }
+}
