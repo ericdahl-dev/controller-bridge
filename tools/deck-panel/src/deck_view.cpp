@@ -15,19 +15,7 @@ LV_FONT_DECLARE(geist_mono_semibold_64)
 
 namespace {
 
-// The deck screen, in pixels (#490's layout). Everything below the header has a fixed place and size, so a change
-// redraws only its own box and never moves a neighbor.
-constexpr int kMargin = 40;  // the waiting screen's
-constexpr int kLeft = 24;
-constexpr int kWidth = 704;  // the rows under the header, left of the meter
-constexpr int kHeaderX = 100, kHeaderY = 16;
-constexpr int kInfoY = 146;  // key, BPM, tempo
-constexpr int kTimeY = 190;
-constexpr int kProgressY = 280, kProgressH = 36;
-constexpr int kBeatY = 328, kBeatH = 24, kBeatGap = 8;
-constexpr int kPhaseY = 366, kPhaseH = 28, kMarkerW = 10;
-constexpr int kLampY = 410, kLampH = 46, kLampGap = 12;
-constexpr int kMeterX = 748, kMeterW = 28, kMeterY = kInfoY, kMeterH = kLampY + kLampH - kInfoY;
+using namespace deck_core::layout;
 
 const lv_color_t kGray = lv_color_hex(0xA0A0A0);
 const lv_color_t kDim = lv_color_hex(0x5A5A5A);  // an unlit lamp's text
@@ -95,9 +83,6 @@ void set_hidden(lv_obj_t* obj, bool hidden) {
     else lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
 }
 
-/// `fraction` (0-1) of `span`, in whole pixels.
-int32_t pixels(float fraction, int span) { return static_cast<int32_t>(std::lround(fraction * span)); }
-
 /// Black is the background: a deck without a color shows white.
 lv_color_t deck_color(uint32_t color) { return lv_color_hex(color == 0 ? 0xFFFFFF : color); }
 
@@ -154,7 +139,7 @@ void DeckScreen::build() {
     // The phase bar: a track, a center mark, and the marker, hidden while the phase is unknown.
     lv_obj_t* phase = box(deck_page_, kLeft, kPhaseY, kWidth, kPhaseH, kTrack);
     box(phase, kWidth / 2 - 1, 0, 2, kPhaseH, kGray);
-    phase_px_ = pixels(shown_.phase, kWidth - kMarkerW);
+    phase_px_ = shown_.phase_px;
     phase_marker_ = box(phase, phase_px_, 0, kMarkerW, kPhaseH, lv_color_white());
     lv_obj_add_flag(phase_marker_, LV_OBJ_FLAG_HIDDEN);
 
@@ -227,7 +212,7 @@ void DeckScreen::draw(const deck_core::Face& f) {
     if (strcmp(f.remaining, shown_.remaining) != 0) set_text(remaining_, remaining_text_, f.remaining);
 
     // Fast: progress, phase and level move a box only when a whole pixel changes.
-    const int32_t progress = pixels(f.progress, kWidth);
+    const int32_t progress = f.progress_px;
     if (progress != progress_px_) {
         progress_px_ = progress;
         lv_obj_set_width(progress_fill_, progress);
@@ -243,14 +228,14 @@ void DeckScreen::draw(const deck_core::Face& f) {
         }
     }
     if (f.phase_shown) {
-        const int32_t x = pixels(f.phase, kWidth - kMarkerW);
+        const int32_t x = f.phase_px;
         if (x != phase_px_) {
             phase_px_ = x;
             lv_obj_set_x(phase_marker_, x);
         }
     }
     set_hidden(phase_marker_, !f.phase_shown);
-    const int32_t level = pixels(f.level, kMeterH);
+    const int32_t level = f.level_px;
     if (level != level_px_) {
         level_px_ = level;
         lv_obj_set_height(level_fill_, level);

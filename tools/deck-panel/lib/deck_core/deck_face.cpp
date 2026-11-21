@@ -57,6 +57,9 @@ void tenths_text(char (&out)[N], const char* sign, float x, const char* unit = "
 
 float clamp01(float x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
+/// `fraction`, clamped to 0-1, of `span`, in whole pixels, half away from zero.
+int32_t pixels(float fraction, int span) { return static_cast<int32_t>(std::lround(clamp01(fraction) * span)); }
+
 }  // namespace
 
 Face face(const DeckView& view) {
@@ -85,7 +88,7 @@ Face face(const DeckView& view) {
     time_text(f.elapsed, "", view.elapsed);
     // 0 is no known length.
     if (view.remaining > 0) time_text(f.remaining, "-", view.remaining);
-    f.progress = clamp01(view.progress);
+    f.progress_px = pixels(view.progress, layout::kWidth);
     f.end_warning = view.remaining > 0 && view.remaining <= kEndWarningSeconds;
     if (view.beat >= 1 && view.beat <= 4) f.beat = view.beat;
     f.playing = view.playing;
@@ -96,8 +99,8 @@ Face face(const DeckView& view) {
     loop_text(f.loop_length, view.loop_length);
     // Below 0 is unknown (-1): no marker, never one parked in the middle as if in phase.
     f.phase_shown = view.phase >= 0;
-    if (f.phase_shown) f.phase = clamp01(view.phase);
-    f.level = clamp01(view.level);
+    if (f.phase_shown) f.phase_px = pixels(view.phase, layout::kPhaseTravel);
+    f.level_px = pixels(view.level, layout::kMeterH);
     return f;
 }
 

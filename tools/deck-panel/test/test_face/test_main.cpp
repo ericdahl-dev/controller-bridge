@@ -45,8 +45,8 @@ void test_an_empty_deck_shows_no_track_loaded_and_nothing_else() {
         TEST_ASSERT_EQUAL_STRING("", text);
     TEST_ASSERT_FALSE(f.playing || f.cue || f.sync || f.master || f.loop || f.end_warning || f.phase_shown);
     TEST_ASSERT_EQUAL(0, f.beat);
-    TEST_ASSERT_EQUAL_FLOAT(0, f.progress);
-    TEST_ASSERT_EQUAL_FLOAT(0, f.level);
+    TEST_ASSERT_EQUAL(0, f.progress_px);
+    TEST_ASSERT_EQUAL(0, f.level_px);
 }
 
 void test_a_loaded_deck_shows_its_title_and_artist() {
@@ -108,13 +108,18 @@ void test_with_no_known_length_remaining_is_blank() {
     TEST_ASSERT_EQUAL_STRING("1:35", deck_core::face(v).elapsed);
 }
 
-void test_the_progress_bar_is_clamped_to_0_1() {
+// The bar is 704 px; its fill in whole pixels, so a change too small to move a pixel is no change.
+void test_the_progress_fill_is_whole_pixels_of_the_704_px_bar() {
     DeckView v = loaded_deck();
-    TEST_ASSERT_EQUAL_FLOAT(0.3125f, deck_core::face(v).progress);
+    TEST_ASSERT_EQUAL(220, deck_core::face(v).progress_px);  // 0.3125 of 704
     v.progress = 1.5f;
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).progress);
+    TEST_ASSERT_EQUAL(704, deck_core::face(v).progress_px);
     v.progress = -0.2f;
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, deck_core::face(v).progress);
+    TEST_ASSERT_EQUAL(0, deck_core::face(v).progress_px);
+    v.progress = 0.0007f;  // 0.49 px
+    TEST_ASSERT_EQUAL(0, deck_core::face(v).progress_px);
+    v.progress = 0.0010f;  // 0.70 px
+    TEST_ASSERT_EQUAL(1, deck_core::face(v).progress_px);
 }
 
 // The warning: the last 30 seconds, as DJ players flash it. Not with no known length (remaining 0).
@@ -169,25 +174,27 @@ void test_the_loop_length_shows_whole_beats_or_fractions() {
 void test_the_phase_marker_hides_while_unknown_and_stays_on_the_bar() {
     DeckView v = loaded_deck();
     Face f = deck_core::face(v);
+    // The 10 px marker's left edge on the 704 px bar: 0-694 px, 347 in phase.
     TEST_ASSERT_TRUE(f.phase_shown);
-    TEST_ASSERT_EQUAL_FLOAT(0.5f, f.phase);
+    TEST_ASSERT_EQUAL(347, f.phase_px);
     v.phase = 0.2f;
-    TEST_ASSERT_EQUAL_FLOAT(0.2f, deck_core::face(v).phase);
+    TEST_ASSERT_EQUAL(139, deck_core::face(v).phase_px);  // 138.8
     v.phase = 1.3f;
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).phase);
+    TEST_ASSERT_EQUAL(694, deck_core::face(v).phase_px);
     v.phase = -1;
     TEST_ASSERT_FALSE(deck_core::face(v).phase_shown);
     v.phase = -0.5f;  // any value below 0 is unknown
     TEST_ASSERT_FALSE(deck_core::face(v).phase_shown);
 }
 
-void test_the_level_meter_is_clamped_to_0_1() {
+// The meter is 310 px tall, from the key row to the lamps' bottom.
+void test_the_level_fill_is_whole_pixels_of_the_310_px_meter() {
     DeckView v = loaded_deck();
-    TEST_ASSERT_EQUAL_FLOAT(0.75f, deck_core::face(v).level);
+    TEST_ASSERT_EQUAL(233, deck_core::face(v).level_px);  // 232.5, half away from zero
     v.level = 2;
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, deck_core::face(v).level);
+    TEST_ASSERT_EQUAL(310, deck_core::face(v).level_px);
     v.level = -1;
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, deck_core::face(v).level);
+    TEST_ASSERT_EQUAL(0, deck_core::face(v).level_px);
 }
 
 int main(int, char**) {
@@ -199,12 +206,12 @@ int main(int, char**) {
     RUN_TEST(test_times_show_as_minutes_and_seconds_remaining_with_a_minus);
     RUN_TEST(test_past_an_hour_times_show_hours);
     RUN_TEST(test_with_no_known_length_remaining_is_blank);
-    RUN_TEST(test_the_progress_bar_is_clamped_to_0_1);
+    RUN_TEST(test_the_progress_fill_is_whole_pixels_of_the_704_px_bar);
     RUN_TEST(test_the_bar_warns_in_the_last_30_seconds);
     RUN_TEST(test_the_beat_lights_its_block_and_none_outside_1_to_4);
     RUN_TEST(test_the_lamps_follow_play_cue_sync_master_and_loop);
     RUN_TEST(test_the_loop_length_shows_whole_beats_or_fractions);
     RUN_TEST(test_the_phase_marker_hides_while_unknown_and_stays_on_the_bar);
-    RUN_TEST(test_the_level_meter_is_clamped_to_0_1);
+    RUN_TEST(test_the_level_fill_is_whole_pixels_of_the_310_px_meter);
     return UNITY_END();
 }

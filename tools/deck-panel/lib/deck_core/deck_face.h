@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "deck_core.h"
+#include "deck_layout.h"
 
 namespace deck_core {
 
@@ -21,14 +22,14 @@ struct Face {
     char tempo[32] = "";
     char elapsed[32] = "";
     char remaining[32] = "";
-    float progress = 0;  ///< the bar's fill, 0-1
+    int32_t progress_px = 0;  ///< the bar's fill, 0 to layout::kWidth
     bool end_warning = false;  ///< the bar in the warning color
     int beat = 0;  ///< the lit block, 1-4; 0 none
     bool playing = false, cue = false, sync = false, master = false, loop = false;  ///< the lamps
     char loop_length[24] = "";
     bool phase_shown = false;
-    float phase = 0.5f;  ///< the phase marker's place, 0-1, 0.5 in the middle
-    float level = 0;  ///< the meter's fill, 0-1
+    int32_t phase_px = layout::kPhaseTravel / 2;  ///< the marker's left edge, 0 to layout::kPhaseTravel
+    int32_t level_px = 0;  ///< the meter's fill from the bottom, 0 to layout::kMeterH
 };
 
 /// The progress bar warns for the track's last this many seconds.
