@@ -58,6 +58,15 @@ bool time_left(uint32_t until_us) { return static_cast<int32_t>(until_us - now_u
 
 frame_clock::Clock g_clock(display_frame_us(), kGuardUs);
 
+// The loop's step, for the perf build's copy line (#663); nothing in the others.
+#ifdef PANEL_PERF_LOG
+#define MARK(step) display_mark(perf_line::Mark::step)
+#else
+#define MARK(step) \
+    do {           \
+    } while (0)
+#endif
+
 #ifndef DECK_PANEL_TEST_SCREEN
 // Static, not loop() locals: the drain's 512-byte buffer and the view's text stay off the loop task's 8 KB stack.
 deck_core::DeckCore g_core;
@@ -99,6 +108,7 @@ class PanelBoard : public frame_clock::Board {
     bool wait_latch(uint32_t& count, uint32_t& us) override {
         // Two scan-outs: only a stopped panel misses it, and then the chores still run.
         DisplayLatch latch;
+        MARK(wait);
         if (!display_wait_latch(2 * display_frame_us() / 1000, latch)) {
             us = now_us();
             return false;
@@ -109,6 +119,7 @@ class PanelBoard : public frame_clock::Board {
     }
 
     void read_feed() override {
+        MARK(read);
 #ifndef DECK_PANEL_TEST_SCREEN
         // At the frame's start (the vsync after the latch, by default): until the socket is empty, within the
         // drain's time budget (#636).
@@ -117,6 +128,7 @@ class PanelBoard : public frame_clock::Board {
     }
 
     void render() override {
+        MARK(render);
 #ifdef DECK_PANEL_TEST_SCREEN
         test_screen::show_touch();
 #else
@@ -125,26 +137,36 @@ class PanelBoard : public frame_clock::Board {
 #endif
     }
 
-    void refresh() override { display_refresh(); }
+    void refresh() override {
+        MARK(refresh);
+        display_refresh();
+    }
 
     void chores(uint32_t until_us) override {
 #ifdef DECK_PANEL_TEST_SCREEN
         (void)until_us;
+        MARK(touch);
         touch_poll();
+        MARK(lvgl);
         lv_timer_handler();
 #else
         const uint32_t now = millis();
         // Every frame: these can't wait, and the first can't be bounded (setup's web server, a join, a scan).
+        MARK(wifi);
         wifi_link::poll(now);
         g_core.set_network(wifi_link::state(), wifi_link::ip());
+        MARK(udp);
         g_udp.poll(wifi_link::state() == deck_core::Network::connected, wifi_link::joins(), now);
         // Touch only off the deck: the waiting, joining and setup screens, where the hold reset lives. On the deck
         // touch_pressed() keeps the last waiting-screen state, which only ever stops a hold (HoldReset), and the
         // first poll back on the waiting screen comes before the hold sees it.
+        MARK(touch);
         if (g_core.waiting() && time_left(until_us)) touch_poll();
         if (g_hold.update(touch_pressed(), g_core.waiting(), now)) wifi_link::forget_and_restart();
         // LVGL's other timers: the touch's input device, animations. Its refresh timer is gone (display_init).
+        MARK(lvgl);
         lv_timer_handler();
+        MARK(perf);
         // Serial last, and only with time left; what waits prints at a later frame.
         const bool may_print = time_left(until_us);
         perf_log::tick(now, g_read, g_drain.too_big(), may_print, g_clock);

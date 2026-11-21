@@ -107,6 +107,10 @@ const uint32_t g_chunk_ns = bounce_budget::chunk_ns(TIMING, PANEL_BOUNCE_PX);  /
 volatile bool g_drawing = false;  // set by the loop around its LVGL refresh, read by the copy
 uint32_t g_copy_late_drawing = 0;
 uint32_t g_copy_late_turn = 0;
+// The copy line (#663), under g_copy_lock: every timed copy by eighth after the latch and by the loop's step.
+volatile uint8_t g_mark = static_cast<uint8_t>(perf_line::Mark::other);
+const uint32_t g_period_us = frame_pacing::frame_us(TIMING);
+perf_line::CopySpread g_spread;
 #endif
 
 lv_display_t* g_disp = nullptr;
@@ -457,6 +461,18 @@ bounce_budget::Report display_take_copy(DisplayCopyLate* where) {
 #endif
 }
 
+#ifdef PANEL_PERF_LOG
+void display_mark(perf_line::Mark step) { g_mark = static_cast<uint8_t>(step); }
+
+perf_line::CopySpread display_take_copy_spread() {
+    portENTER_CRITICAL(&g_copy_lock);
+    const perf_line::CopySpread c = g_spread;
+    g_spread = {};
+    portEXIT_CRITICAL(&g_copy_lock);
+    return c;
+}
+#endif
+
 DisplayPerf display_take_perf() {
     const uint32_t vsyncs = g_vsyncs;
     const uint32_t timeouts = g_gate.timeouts();
@@ -489,10 +505,24 @@ extern "C" IRAM_ATTR void* __wrap_memcpy(void* to, const void* from, size_t n) {
     // Late as the meter counts it: longer than the chunk's deadline. The latch time is one aligned word.
     const bool late = static_cast<uint64_t>(took_us) * 1000u > g_chunk_ns;
     const bool turn = late && static_cast<uint32_t>(esp_timer_get_time()) - g_latch_us < kTurnUs;
+    const bool in_isr = xPortInIsrContext();
+    const int phase = perf_line::phase(static_cast<uint32_t>(esp_timer_get_time()) - g_latch_us, g_period_us);
+    const uint8_t mark = g_mark;
     portENTER_CRITICAL_SAFE(&g_copy_lock);
     g_copy.copied(took_us);
     if (late && g_drawing) ++g_copy_late_drawing;
     if (turn) ++g_copy_late_turn;
+    if (!in_isr) {
+        ++g_spread.outside_isr;
+        if (late) ++g_spread.late_outside_isr;
+    } else {
+        ++g_spread.copies_by_phase[phase];
+        if (mark < perf_line::kMarks) ++g_spread.copies_by_mark[mark];
+        if (late) {
+            ++g_spread.late_by_phase[phase];
+            if (mark < perf_line::kMarks) ++g_spread.late_by_mark[mark];
+        }
+    }
     portEXIT_CRITICAL_SAFE(&g_copy_lock);
     return result;
 }

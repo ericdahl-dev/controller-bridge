@@ -115,11 +115,13 @@ void tick(uint32_t now_ms, int datagrams, uint32_t too_big, bool may_print, fram
     w.copy_budget_us = display_copy_budget_us();
     DisplayCopyLate where = {};
     w.copy = display_take_copy(&where);
+    const perf_line::CopySpread spread = display_take_copy_spread();
     w.copy_late_drawing = where.drawing;
     w.copy_late_turn = where.turn;
     w.ledger = g_ledger.take();
     w.clock = clock.take();
     Serial.println(perf_line::format(w).c_str());
+    Serial.println(perf_line::format_copy(spread).c_str());
 
     g_frames = 0;
     g_frame_us = 0;

@@ -16,6 +16,9 @@
 #include <lvgl.h>
 
 #include "bounce_budget.h"
+#ifdef PANEL_PERF_LOG
+#include "perf_line.h"
+#endif
 #include "scan_watch.h"
 
 #include "board_pins.h"
@@ -54,6 +57,14 @@ struct DisplayCopyLate {
     uint32_t turn;
 };
 bounce_budget::Report display_take_copy(DisplayCopyLate* where = nullptr);
+
+#ifdef PANEL_PERF_LOG
+// The loop's step, for the copy line (#663), perf build only: the bounce copy files itself under the step its
+// interrupt broke into. Loop task only.
+void display_mark(perf_line::Mark step);
+// The bounce copies since the last call, by eighth of the scan-out after the latch and by loop step.
+perf_line::CopySpread display_take_copy_spread();
+#endif
 
 // Latches so far, where the panel takes the next frame's buffer (frame end in bounce mode, vsync without), and the
 // last one's time in esp_timer microseconds (low 32 bits). The frame clock's boundary (#663) and the frame ledger's
