@@ -31,6 +31,8 @@ public enum Refusal: Error, Sendable, Equatable {
     case fileMismatch(String)
     /// A file name that would land outside the release's folder.
     case unsafeFileName(String)
+    /// Checked and sound, but no newer than the firmware the app already carries.
+    case notNewer
 }
 
 public struct FetchOutcome: Sendable {
@@ -53,7 +55,7 @@ public struct ReleaseFetcher: Sendable {
 
     public func fetch(over builtIn: Catalog) async -> FetchOutcome {
         do {
-            return FetchOutcome(catalog: try await fetched())
+            return FetchOutcome(catalog: try await fetched(over: builtIn))
         } catch let refusal as Refusal {
             return FetchOutcome(catalog: builtIn, refusal: refusal)
         } catch {
@@ -61,7 +63,7 @@ public struct ReleaseFetcher: Sendable {
         }
     }
 
-    private func fetched() async throws -> Catalog {
+    private func fetched(over builtIn: Catalog) async throws -> Catalog {
         let published = try await feed.latest()
         // Nothing in the manifest is used before its signature checks out, except the name of the key to check it with.
         guard let claimed = try? JSONDecoder().decode(KeyName.self, from: published.manifest).key else {
@@ -88,7 +90,11 @@ public struct ReleaseFetcher: Sendable {
             try data.write(to: target)
         }
         try Manifest.catalogJSON(in: published.manifest).write(to: folder.appending(path: "catalog.json"))
-        return try Catalog(directory: folder)
+        let catalog = try Catalog(directory: folder)
+        // Newer means a newer panel image than the app carries; LC6000 patch sets ride along with it.
+        guard let offered = catalog.newestPanel()?.version,
+              builtIn.newestPanel().map({ $0.version < offered }) ?? true else { throw Refusal.notNewer }
+        return catalog
     }
 
     private struct KeyName: Decodable { let key: String }

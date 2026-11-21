@@ -94,3 +94,13 @@ func aFileNamedOutsideTheReleaseFolderIsRefusedAndNotWritten(name: String) async
     #expect(outcome.refusal == .unsafeFileName(name))
     #expect(!FileManager.default.fileExists(atPath: cache.appending(path: "escaped.bin").path(percentEncoded: false)))
 }
+
+@Test(arguments: ["1.0.0", "0.9.0"])
+func aReleaseNotNewerThanTheBuiltInIsNotUsed(version: String) async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: version, sha: "ddddddd", signedBy: primary, lowestAllowed: "0.1.0")
+    let builtIn = try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa")
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder()).fetch(over: builtIn)
+    #expect(outcome.refusal == .notNewer)
+    #expect(outcome.catalog.newestPanel()?.sha == "aaaaaaa")
+}
