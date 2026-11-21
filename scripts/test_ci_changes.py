@@ -79,6 +79,11 @@ class NeedsDeckPanelTests(unittest.TestCase):
         self.assertFalse(ci_changes.needs_deck_panel(["App/BridgeModel.swift", "website/index.html", "README.md"]))
         self.assertFalse(ci_changes.needs_deck_panel(["tools/lc6000-display-fw/src/dfw.c"]))
 
+    def test_the_icon_svg_the_logo_is_made_from_runs_it(self):
+        # the panel's logo (#651) is generated from it, and test_deck_logo.py fails when they drift (#669)
+        self.assertTrue(ci_changes.needs_deck_panel(["design/icon/icon-1-deck-ring.svg"]))
+        self.assertFalse(ci_changes.needs_deck_panel(["design/icon/menubar-deck-ring-16.svg"]))
+
     def test_a_change_to_the_ci_workflow_runs_it(self):
         self.assertTrue(ci_changes.needs_deck_panel([".github/workflows/ci.yml"]))
 
