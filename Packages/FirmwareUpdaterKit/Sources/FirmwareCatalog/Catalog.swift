@@ -59,6 +59,12 @@ public struct Catalog: Sendable {
         }
     }
 
+    /// The SHA of every panel build the catalog lists, carried or not.
+    public var listedPanelSHAs: [String] { panel.map(\.sha) }
+
+    /// The stock firmware pairs the catalog has an LC6000 patch set for.
+    public var patchSetFirmwares: [LC6000Firmware] { lc6000.map(\.firmware) }
+
     /// The highest panel version whose image the app carries, or nil if it carries none. Entries without their
     /// image are builds shipped before: they still tell an older panel from an unknown one.
     public func newestPanel() -> PanelFirmware? {

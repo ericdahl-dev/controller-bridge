@@ -165,3 +165,22 @@ func aReleaseNotNewerThanTheBuiltInIsNotUsed(version: String) async throws {
         .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
     #expect(outcome.refusal == .unreachable)
 }
+
+/// A used release replaces the built-in catalog, so it must carry everything the built-in one does: an LC6000 patch
+/// set, and the panel builds shipped before (which tell an older panel from an unknown one).
+@Test func aReleaseThatDropsABuiltInPatchSetIsRefused() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary)
+    let builtIn = try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa", withPatchSet: true)
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder()).fetch(over: builtIn)
+    #expect(outcome.refusal == .dropsBuiltIn)
+    #expect(outcome.catalog.patchSet(for: LC6000Firmware(wd: "00.50", tp: "00.31")) != nil)
+}
+
+@Test func aReleaseThatDropsABuiltInPanelBuildIsRefused() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary, history: [])  // lists only its own build
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .dropsBuiltIn)
+}

@@ -12,7 +12,8 @@ func releaseFolder(panelVersion: String, sha: String) throws -> URL {
     try panelImage(panelVersion).write(to: folder.appending(path: image))
     try Data("# test\n0x0800BDA4 0f28 1028\n".utf8).write(to: folder.appending(path: "wd.patch"))
     let json = #"""
-    { "panel": [{ "version": "\#(panelVersion)", "sha": "\#(sha)", "image": "\#(image)" }],
+    { "panel": [{ "version": "1.0.0", "sha": "aaaaaaa", "image": "deck-panel-1.0.0-aaaaaaa.bin" },
+                { "version": "\#(panelVersion)", "sha": "\#(sha)", "image": "\#(image)" }],
       "lc6000": [{ "wd": "00.50", "tp": "00.31", "entries": [{ "kind": "patch", "chip": "wd", "file": "wd.patch" }] }] }
     """#
     try Data(json.utf8).write(to: folder.appending(path: "catalog.json"))

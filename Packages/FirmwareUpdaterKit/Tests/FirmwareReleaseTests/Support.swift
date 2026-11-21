@@ -41,9 +41,11 @@ func sha256Hex(_ data: Data) -> String { SHA256.hash(data: data).map { String(fo
 
 func panelImage(_ tag: String) -> Data { Data([0xE9]) + Data("deck panel image \(tag)".utf8) }
 
-/// A release as the maintainer's signing step writes it: one panel image, listed in the catalog and in the files.
+/// A release as the maintainer's signing step writes it: one panel image, listed in the catalog and in the files, after
+/// the builds shipped before it (`history`, listed without images, as the repo's catalog.json keeps them).
 func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAllowed: String = "1.0.0",
-             name: String? = nil, wdPatch: Data? = nil, catalog: [String: Any]? = nil) -> FakeFeed {
+             name: String? = nil, wdPatch: Data? = nil, catalog: [String: Any]? = nil,
+             history: [(version: String, sha: String)] = [("1.0.0", "aaaaaaa")]) -> FakeFeed {
     let name = name ?? "panel/deck-panel-\(panelVersion)-\(sha).bin"
     let image = panelImage(panelVersion)
     var files: [String: Data] = [name: image]
@@ -60,7 +62,8 @@ func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAll
         "format": 1,
         "key": key.id,
         "lowest_allowed": ["deck-panel": lowestAllowed],
-        "catalog": catalog ?? ["panel": [["version": panelVersion, "sha": sha, "image": name]], "lc6000": lc6000],
+        "catalog": catalog ?? ["panel": history.map { ["version": $0.version, "sha": $0.sha, "image": "deck-panel-\($0.version)-\($0.sha).bin"] }
+                                   + [["version": panelVersion, "sha": sha, "image": name]], "lc6000": lc6000],
         "files": listed,
     ]
     let bytes = try! JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys])
@@ -68,11 +71,16 @@ func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAll
 }
 
 /// The built-in catalog of an app that carries one panel image, in a fresh temporary folder.
-func builtIn(panelVersion: String, sha: String) throws -> Catalog {
+func builtIn(panelVersion: String, sha: String, withPatchSet: Bool = false) throws -> Catalog {
     let folder = temporaryFolder()
     let name = "deck-panel-\(panelVersion)-\(sha).bin"
     try panelImage("built-in").write(to: folder.appending(path: name))
-    let json = #"{ "panel": [{ "version": "\#(panelVersion)", "sha": "\#(sha)", "image": "\#(name)" }], "lc6000": [] }"#
+    var lc6000 = ""
+    if withPatchSet {
+        try Data("0x0800BDA4 0f28 1028\n".utf8).write(to: folder.appending(path: "wd.patch"))
+        lc6000 = #"{ "wd": "00.50", "tp": "00.31", "entries": [{ "kind": "patch", "chip": "wd", "file": "wd.patch" }] }"#
+    }
+    let json = #"{ "panel": [{ "version": "\#(panelVersion)", "sha": "\#(sha)", "image": "\#(name)" }], "lc6000": [\#(lc6000)] }"#
     try Data(json.utf8).write(to: folder.appending(path: "catalog.json"))
     return try Catalog(directory: folder)
 }

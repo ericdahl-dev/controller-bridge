@@ -42,6 +42,8 @@ public enum Refusal: Error, Sendable, Equatable {
     case unreadableCatalog
     /// The release couldn't be written to the app's cache folder.
     case couldNotStore
+    /// It would drop something the built-in catalog carries: an LC6000 patch set, or a panel build shipped before.
+    case dropsBuiltIn
 }
 
 public struct FetchOutcome: Sendable {
@@ -109,6 +111,8 @@ public struct ReleaseFetcher: Sendable {
         // Newer means a newer panel image than the app carries; LC6000 patch sets ride along with it.
         guard let offered = catalog.newestPanel()?.version,
               builtIn.newestPanel().map({ $0.version < offered }) ?? true else { throw Refusal.notNewer }
+        guard Set(builtIn.listedPanelSHAs).isSubset(of: catalog.listedPanelSHAs),
+              Set(builtIn.patchSetFirmwares).isSubset(of: catalog.patchSetFirmwares) else { throw Refusal.dropsBuiltIn }
         return (catalog, manifest.lowestAllowed["deck-panel"].flatMap(FirmwareVersion.init))
     }
 
