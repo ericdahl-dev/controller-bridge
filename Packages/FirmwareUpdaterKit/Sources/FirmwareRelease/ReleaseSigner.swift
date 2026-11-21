@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import FirmwareCatalog
 import FirmwareModel
 
 /// A release signing key (ADR 0012). Only the maintainer's signing step holds one; the app holds `TrustedKey`s.
@@ -20,6 +21,7 @@ public enum ReleaseSigner {
     /// The manifest's bytes, to sign as they are: the catalog, then each file present with its device, version, size and
     /// SHA-256. A panel build listed without its image is history and gets no file entry.
     public static func manifest(for folder: URL, keyID: String, lowestAllowedPanel: FirmwareVersion) throws -> Data {
+        _ = try Catalog(directory: folder)
         let catalog = try JSONSerialization.jsonObject(with: Data(contentsOf: folder.appending(path: "catalog.json"))) as? [String: Any] ?? [:]
         var files: [[String: Any]] = []
         func add(_ name: String, device: String, version: String) throws {

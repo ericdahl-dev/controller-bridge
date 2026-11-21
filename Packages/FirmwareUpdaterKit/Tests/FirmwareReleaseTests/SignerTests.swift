@@ -42,3 +42,13 @@ func feed(serving folder: URL, manifest: Data, signature: Data) throws -> FakeFe
     #expect(outcome.catalog.patchSet(for: LC6000Firmware(wd: "00.50", tp: "00.31")) != nil)
     #expect(outcome.lowestAllowedPanel == FirmwareVersion("1.0.0"))
 }
+
+/// The signing step checks the release with the app's own rules before signing, so the maintainer can't sign a
+/// release the app would refuse (an LC6000 file that isn't a patch description, a file the catalog doesn't name).
+@Test func theSigningStepRefusesAFolderTheAppWouldNotLoad() throws {
+    let folder = try releaseFolder(panelVersion: "1.1.0", sha: "ddddddd")
+    try Data(repeating: 0, count: 4096).write(to: folder.appending(path: "lc6000/stray.bin"))
+    #expect(throws: CatalogError.unnamedFile("lc6000/stray.bin")) {
+        try ReleaseSigner.manifest(for: folder, keyID: "primary", lowestAllowedPanel: FirmwareVersion("1.0.0")!)
+    }
+}
