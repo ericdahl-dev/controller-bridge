@@ -15,3 +15,14 @@ func hex(_ text: String) -> Data {
     #expect(key.signed(Data(), signature))
     #expect(!key.signed(Data([0]), signature))
 }
+
+/// The vector shared with the panel (#690): a randomized CryptoKit signature, which libsodium must accept too.
+@Test func theSharedCryptoKitVectorVerifiesAndAnAlteredOneDoesNot() throws {
+    let url = try #require(Bundle.module.url(forResource: "cryptokit-ed25519", withExtension: "json", subdirectory: "Fixtures"))
+    let vector = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: url))
+    let key = try TrustedKey(id: "shared-vector", publicKey: hex(vector["public_key"]!))
+    var signature = hex(vector["signature"]!)
+    #expect(key.signed(hex(vector["message"]!), signature))
+    signature[signature.startIndex] ^= 1
+    #expect(!key.signed(hex(vector["message"]!), signature))
+}
