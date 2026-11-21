@@ -184,3 +184,12 @@ func aReleaseNotNewerThanTheBuiltInIsNotUsed(version: String) async throws {
         .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
     #expect(outcome.refusal == .dropsBuiltIn)
 }
+
+/// A manifest in a later format than this app reads is refused, not half-read: the app must be updated first.
+@Test func aManifestInAFormatThisAppDoesNotKnowIsRefused() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary, format: 2)
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .unknownFormat(2))
+}

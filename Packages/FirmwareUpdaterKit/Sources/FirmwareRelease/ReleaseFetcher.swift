@@ -44,6 +44,8 @@ public enum Refusal: Error, Sendable, Equatable {
     case couldNotStore
     /// It would drop something the built-in catalog carries: an LC6000 patch set, or a panel build shipped before.
     case dropsBuiltIn
+    /// A manifest format this app doesn't read; a newer app is needed.
+    case unknownFormat(Int)
 }
 
 public struct FetchOutcome: Sendable {
@@ -88,6 +90,7 @@ public struct ReleaseFetcher: Sendable {
         guard let manifest = try? JSONDecoder().decode(Manifest.self, from: published.manifest) else {
             throw Refusal.unreadableManifest
         }
+        guard manifest.format == 1 else { throw Refusal.unknownFormat(manifest.format) }
         if let unsafe = manifest.files.map(\.name).first(where: { !Catalog.staysInside($0) }) {
             throw Refusal.unsafeFileName(unsafe)
         }

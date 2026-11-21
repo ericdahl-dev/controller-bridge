@@ -45,7 +45,7 @@ func panelImage(_ tag: String) -> Data { Data([0xE9]) + Data("deck panel image \
 /// the builds shipped before it (`history`, listed without images, as the repo's catalog.json keeps them).
 func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAllowed: String = "1.0.0",
              name: String? = nil, wdPatch: Data? = nil, catalog: [String: Any]? = nil,
-             history: [(version: String, sha: String)] = [("1.0.0", "aaaaaaa")]) -> FakeFeed {
+             history: [(version: String, sha: String)] = [("1.0.0", "aaaaaaa")], format: Int = 1) -> FakeFeed {
     let name = name ?? "panel/deck-panel-\(panelVersion)-\(sha).bin"
     let image = panelImage(panelVersion)
     var files: [String: Data] = [name: image]
@@ -59,7 +59,7 @@ func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAll
         lc6000 = [["wd": "00.50", "tp": "00.31", "entries": [["kind": "patch", "chip": "wd", "file": patch]]]]
     }
     let manifest: [String: Any] = [
-        "format": 1,
+        "format": format,
         "key": key.id,
         "lowest_allowed": ["deck-panel": lowestAllowed],
         "catalog": catalog ?? ["panel": history.map { ["version": $0.version, "sha": $0.sha, "image": "deck-panel-\($0.version)-\($0.sha).bin"] }
