@@ -235,6 +235,7 @@ void DeckCore::render(Screen& screen, uint32_t now_ms) {
 
 WaitingView DeckCore::waiting_view() const {
     WaitingView view;
+    view.logo = true;  // every waiting screen: the logo, the reason and the address beneath (#651)
     switch (network_) {
         case Network::not_set:
             std::snprintf(view.headline, sizeof view.headline, "Wi-Fi isn't set");

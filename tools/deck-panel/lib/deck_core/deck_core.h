@@ -59,9 +59,11 @@ enum class Network {
 struct WaitingView {
     char headline[48] = "";
     char detail[96] = "";
+    bool logo = false;  ///< the DeckBridge logo above the lines (#651)
 
     bool operator==(const WaitingView& other) const {
-        return std::strcmp(headline, other.headline) == 0 && std::strcmp(detail, other.detail) == 0;
+        return std::strcmp(headline, other.headline) == 0 && std::strcmp(detail, other.detail) == 0 &&
+               logo == other.logo;
     }
 };
 

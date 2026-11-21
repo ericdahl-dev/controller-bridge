@@ -648,6 +648,22 @@ void test_the_core_says_what_it_holds() {
     TEST_ASSERT_EQUAL_STRING("Night Drive", core.view().title);
 }
 
+// #651: every waiting screen shows the DeckBridge logo, with its reason and address beneath.
+void test_every_waiting_screen_shows_the_logo() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    const deck_core::Network states[] = {deck_core::Network::not_set, deck_core::Network::joining,
+                                         deck_core::Network::connected};
+    for (deck_core::Network state : states) {
+        core.set_network(state, "192.168.1.40");
+        core.render(screen, 0);
+        TEST_ASSERT_TRUE(screen.last().waiting);
+        TEST_ASSERT_TRUE(screen.last().logo);
+        TEST_ASSERT_TRUE(screen.last().headline.size() > 0);
+    }
+    TEST_ASSERT_EQUAL_STRING("192.168.1.40  port 9100", screen.last().detail.c_str());
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -706,6 +722,7 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_every_waiting_screen_shows_the_logo);
     RUN_TEST(test_a_bundle_applies_all_its_messages_as_one_arrival);
     RUN_TEST(test_the_core_says_what_it_holds);
     RUN_TEST(test_a_bad_element_does_not_lose_the_good_ones);

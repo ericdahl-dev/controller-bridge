@@ -15,6 +15,7 @@ struct ScreenStub : deck_core::Screen {
         std::string artist;
         std::string headline;  ///< the waiting screen's
         std::string detail;
+        bool logo = false;  ///< the waiting screen's DeckBridge logo
         deck_core::DeckView view;  ///< the whole deck view, as shown
     };
     std::vector<Shown> shown;
@@ -23,6 +24,7 @@ struct ScreenStub : deck_core::Screen {
         Shown s;
         s.headline = view.headline;
         s.detail = view.detail;
+        s.logo = view.logo;
         shown.push_back(s);
     }
     void show_deck(const deck_core::DeckView& view) override {
