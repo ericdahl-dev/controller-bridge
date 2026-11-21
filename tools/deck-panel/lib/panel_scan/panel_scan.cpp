@@ -22,14 +22,19 @@ bool Scan::present(bool last_area) {
     // A release left from a timed-out wait would free this swap before its latch: dropped before the gate is armed.
     panel_.drop(Signal::release);
     gate_.swapped();
+    defer_ = true;
     return false;
 }
 
-bool Scan::wait_release(uint32_t timeout_ms) {
-    if (!gate_.must_wait()) return true;
+Wait Scan::wait_release(uint32_t timeout_ms) {
+    if (!gate_.must_wait()) return Wait::released;
+    if (defer_) {
+        defer_ = false;
+        return Wait::deferred;
+    }
     const bool got = panel_.take(Signal::release, timeout_ms);
     gate_.waited(got);
-    return got;
+    return got ? Wait::released : Wait::timed_out;
 }
 
 void Scan::latch(uint64_t) {

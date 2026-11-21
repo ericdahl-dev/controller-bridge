@@ -10,6 +10,7 @@ void tearDown() {}
 
 using panel_scan::Config;
 using panel_scan::Scan;
+using panel_scan::Wait;
 
 // The owner's panel: 800x480 at 12.3 MHz, porches 8/4/8 both ways, bounce chunks of 8000 px.
 static Config owners(uint32_t bounce_px = 8000, uint32_t pclk_hz = 12300000) {
@@ -80,7 +81,8 @@ void test_with_bounce_buffers_the_frame_end_releases_a_swap_not_the_vsync() {
     scan.start(owners());
     panel.script = {{1000, Irq::vsync}, {20000, Irq::frame_complete}};
     scan.present(true);
-    TEST_ASSERT_TRUE(scan.wait_release(60));
+    TEST_ASSERT_EQUAL(Wait::deferred, scan.wait_release(60));  // the one right after the swap
+    TEST_ASSERT_EQUAL(Wait::released, scan.wait_release(60));
     TEST_ASSERT_EQUAL(20000, panel.now_us);  // not 1000
 }
 
@@ -92,7 +94,8 @@ void test_without_bounce_buffers_the_vsync_releases_a_swap() {
     scan.start(owners(0));
     panel.script = {{1000, Irq::vsync}};
     scan.present(true);
-    TEST_ASSERT_TRUE(scan.wait_release(60));
+    TEST_ASSERT_EQUAL(Wait::deferred, scan.wait_release(60));
+    TEST_ASSERT_EQUAL(Wait::released, scan.wait_release(60));
     TEST_ASSERT_EQUAL(1000, panel.now_us);
 }
 
@@ -103,7 +106,7 @@ void test_with_no_swap_out_the_wait_returns_at_once() {
     panel.scan = &scan;
     scan.start(owners());
     panel.script = {{20000, Irq::frame_complete}};
-    TEST_ASSERT_TRUE(scan.wait_release(60));
+    TEST_ASSERT_EQUAL(Wait::released, scan.wait_release(60));
     TEST_ASSERT_EQUAL(0, panel.now_us);
 }
 
@@ -115,7 +118,8 @@ void test_a_release_that_never_comes_times_out() {
     panel.scan = &scan;
     scan.start(owners());
     scan.present(true);
-    TEST_ASSERT_FALSE(scan.wait_release(60));
+    scan.wait_release(60);
+    TEST_ASSERT_EQUAL(Wait::timed_out, scan.wait_release(60));
     TEST_ASSERT_EQUAL(60000, panel.now_us);
 }
 
@@ -129,10 +133,32 @@ void test_a_late_latch_never_releases_the_next_swap() {
     scan.start(owners());
     panel.script = {{60000, Irq::frame_complete}, {93333, Irq::frame_complete}};
     scan.present(true);
-    TEST_ASSERT_FALSE(scan.wait_release(60));  // gives up at 60 ms, as the latch comes
+    scan.wait_release(60);
+    TEST_ASSERT_EQUAL(Wait::timed_out, scan.wait_release(60));  // gives up at 60 ms, as the latch comes
     scan.present(true);
-    TEST_ASSERT_TRUE(scan.wait_release(60));
+    scan.wait_release(60);
+    TEST_ASSERT_EQUAL(Wait::released, scan.wait_release(60));
     TEST_ASSERT_EQUAL(93333, panel.now_us);  // its own latch, not the stale one
+}
+
+
+// #663: LVGL waits once more right after the swap, in the same refresh. Blocking there would hold the loop to the next
+// latch and starve the chores, so that wait returns at once with the swap still out. The next frame's first wait,
+// before anything is drawn into the buffer that may be on glass, takes the release; it came at the latch the frame
+// woke on, so that wait doesn't block.
+void test_the_wait_right_after_the_swap_is_deferred_to_the_next_frame() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{33333, Irq::frame_complete}};
+    panel.run_until(5000);
+    scan.present(true);
+    TEST_ASSERT_EQUAL(Wait::deferred, scan.wait_release(60));
+    TEST_ASSERT_EQUAL(5000, panel.now_us);  // no time spent
+    panel.run_until(34000);                 // the chores, then the next frame wakes after the latch
+    TEST_ASSERT_EQUAL(Wait::released, scan.wait_release(60));
+    TEST_ASSERT_EQUAL(34000, panel.now_us);  // already given: no wait
 }
 
 int main(int, char**) {
@@ -147,5 +173,6 @@ int main(int, char**) {
     RUN_TEST(test_with_no_swap_out_the_wait_returns_at_once);
     RUN_TEST(test_a_release_that_never_comes_times_out);
     RUN_TEST(test_a_late_latch_never_releases_the_next_swap);
+    RUN_TEST(test_the_wait_right_after_the_swap_is_deferred_to_the_next_frame);
     return UNITY_END();
 }

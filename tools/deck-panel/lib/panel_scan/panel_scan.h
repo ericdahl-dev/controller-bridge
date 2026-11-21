@@ -21,6 +21,10 @@ struct Config {
 /// The two things the loop waits on: a swap's release, and a frame boundary (a latch or a vsync).
 enum class Signal { release = 0, frame = 1 };
 
+/// How LVGL's flush wait ended. released and timed_out: call lv_display_flush_ready (a timeout is counted).
+/// deferred: don't; the swap is still out, and the next frame's first wait collects it.
+enum class Wait { released, deferred, timed_out };
+
 /// The panel under the scan: esp_lcd and two binary semaphores on the board, a timeline in the tests.
 struct Panel {
     virtual ~Panel() = default;
@@ -51,9 +55,10 @@ class Scan {
     /// LVGL's flush, one area drawn. True: release it at once (lv_display_flush_ready). False: it was the frame's last,
     /// now handed to the panel, out until its release.
     bool present(bool last_area);
-    /// LVGL's flush wait: blocks until the swap out is released, at most `timeout_ms` (false then, counted). True at
-    /// once with no swap out.
-    bool wait_release(uint32_t timeout_ms);
+    /// LVGL's flush wait. The first one after a swap, in the same refresh (#663), is deferred: blocking there would hold
+    /// the loop to the next latch and starve the chores. The next blocks until the release, at most `timeout_ms`. With
+    /// no swap out, released at once.
+    Wait wait_release(uint32_t timeout_ms);
 
     /// The panel's interrupts: stamp and count only.
     void vsync(uint64_t now_us);
@@ -65,6 +70,7 @@ class Scan {
 
     Panel& panel_;
     swap_gate::Gate gate_;
+    bool defer_ = false;  ///< set by a swap: its first wait returns at once
     Config config_{};
     uint32_t frame_us_ = 0;
     uint32_t copy_budget_us_ = 0;
