@@ -23,8 +23,15 @@ struct Board {
 
 class Clock {
   public:
+    /// `period_us`: one scan-out. `guard_us`: how long before the next latch the chores must be done.
+    Clock(uint32_t period_us, uint32_t guard_us) : period_us_(period_us), guard_us_(guard_us) {}
+
     /// One frame: waits for a latch, then reads, renders, refreshes, and runs the chores.
     void step(Board& board);
+
+  private:
+    uint32_t period_us_;
+    uint32_t guard_us_;
 };
 
 }  // namespace frame_clock

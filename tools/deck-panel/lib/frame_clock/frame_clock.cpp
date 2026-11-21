@@ -9,7 +9,7 @@ void Clock::step(Board& board) {
     board.read_feed();
     board.render();
     board.refresh();
-    board.chores(0);
+    board.chores(us + period_us_ - guard_us_);
 }
 
 }  // namespace frame_clock
