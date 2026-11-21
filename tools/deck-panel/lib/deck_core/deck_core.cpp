@@ -185,18 +185,18 @@ void DeckCore::feed(const uint8_t* bytes, size_t length, uint32_t now_ms) {
                                   uint32_t(bytes[at + 2]) << 8 | uint32_t(bytes[at + 3]);
             at += 4;
             if (size == 0 || size % 4 != 0 || size > length - at) break;  // the framing can't be trusted past here
-            alive = apply(bytes + at, size) || alive;
+            alive = apply(bytes + at, size, now_ms) || alive;
             at += size;
         }
     } else {
-        alive = apply(bytes, length);
+        alive = apply(bytes, length, now_ms);
     }
     if (!alive) return;
     heard_ = true;
     last_heard_ms_ = now_ms;
 }
 
-bool DeckCore::apply(const uint8_t* bytes, size_t length) {
+bool DeckCore::apply(const uint8_t* bytes, size_t length, uint32_t now_ms) {
     Message message;
     if (!parse(bytes, length, message)) return false;
     // An address this panel doesn't know is a newer DeckBridge's (ADR 0011): ignored, but the feed is alive.
@@ -205,6 +205,8 @@ bool DeckCore::apply(const uint8_t* bytes, size_t length) {
         if (std::strcmp(row.name, message.name) != 0) continue;
         alive = row.type == message.type && row.apply(view_, message);
     }
+    // The master clock's beat also sets the panel's beat clock (#660), at the time it arrived.
+    if (alive && std::strcmp(message.name, "beat") == 0) clock_.edge(view_.beat, now_ms);
     return alive;
 }
 
@@ -234,10 +236,15 @@ void DeckCore::render(Screen& screen, uint32_t now_ms) {
         drawn_waiting_ = true;
         screen.show_waiting(shown_waiting_view_, changes);
     } else {
-        // Every frame: the view compare is the cheap way out; the face is built only when the view changed.
-        if (shown_ && !shown_waiting_ && view_ == shown_view_) return;
+        // The beat as the panel's clock has it at this frame's time (#660); everything else as received.
+        const int beat = clock_.beat_at(now_ms);
+        // Every frame: the view compare is the cheap way out; the face is built only when the view or beat changed.
+        if (shown_ && !shown_waiting_ && view_ == shown_view_ && beat == shown_beat_) return;
         shown_view_ = view_;
-        const Face now = face(view_);
+        shown_beat_ = beat;
+        DeckView timed = view_;
+        timed.beat = beat;
+        const Face now = face(timed);
         const Changes changes = drawn_ ? changed(shown_face_, now) : Changes::all();
         // Back from waiting with nothing changed, the page needs showing even so: the board shows it on any call.
         if (drawn_ && !changes.any() && !shown_waiting_) return;

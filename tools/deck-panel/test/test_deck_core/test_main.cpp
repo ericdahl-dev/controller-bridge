@@ -772,6 +772,21 @@ void test_the_waiting_texts_come_fitted_to_the_fonts() {
     TEST_ASSERT_EQUAL_STRING("?  port 9100", screen.last().detail.c_str());
 }
 
+
+// #660: the beat box lights when its beat is due, from the panel's clock, before the message for it arrives.
+void test_the_next_beat_box_lights_when_due_before_its_message() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, int_message(prefix + "deck", 1), 1000);
+    feed(core, int_message(prefix + "beat", 1), 1000);
+    feed(core, int_message(prefix + "beat", 2), 1469);
+    core.render(screen, 1937);
+    TEST_ASSERT_EQUAL_HEX32(0x262626, screen.last().face.beat_color[2]);
+    core.render(screen, 1938);
+    TEST_ASSERT_NOT_EQUAL(0x262626, screen.last().face.beat_color[2]);  // beat 3, lit
+    TEST_ASSERT_EQUAL_HEX32(0x262626, screen.last().face.beat_color[1]);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -810,6 +825,7 @@ int main(int, char**) {
     RUN_TEST(test_a_booted_panel_given_a_clipped_stream_never_says_no_track_loaded);
     RUN_TEST(test_coming_back_from_waiting_keeps_the_deck_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
+    RUN_TEST(test_the_next_beat_box_lights_when_due_before_its_message);
     RUN_TEST(test_the_waiting_screen_is_told_only_what_changed);
     RUN_TEST(test_the_waiting_texts_come_fitted_to_the_fonts);
     RUN_TEST(test_the_first_deck_is_every_part_then_only_what_changed);
