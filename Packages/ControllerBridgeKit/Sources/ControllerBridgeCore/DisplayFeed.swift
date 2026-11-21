@@ -93,8 +93,14 @@ final class DisplayFeed {
     /// each (#617): a change inside it waits, and the next
     /// update after it sends the value then, so the latest wins and nothing queues. A snapshot sends them at once.
     static let fastAddresses: Set<String> = [
-        prefix + "bpm", prefix + "tempo", prefix + "progress", prefix + "phase", prefix + "level",
+        prefix + "bpm", prefix + "tempo", prefix + "progress", prefix + "phase", prefix + "level", prefix + "clockBpm",
     ]
+    /// clockBpm coming from 0, the clock starting, goes at once (#674): with the clock's first beat, so a display
+    /// times its first beat right, not a slot later.
+    static func waitsForSlot(_ message: OSCMessage, after sent: [OSCArgument]?) -> Bool {
+        guard fastAddresses.contains(message.address) else { return false }
+        return !(message.address == prefix + "clockBpm" && (sent == nil || sent == [.float(0)]))
+    }
     static let fastInterval = 1.0 / 30
     /// When the fast fields may next go out: one slot every `fastInterval` that they all share (#636), so a playing
     /// deck sends one bundle of them per slot, about 30 a second, not one per field drifting onto every tick. Kept on
@@ -262,7 +268,7 @@ final class DisplayFeed {
         let fastOpen = snapshot || fastDue.map { now >= $0 - 1e-9 } ?? true
         var fastSent = false
         for message in deck.messages where sent[message.address] != message.arguments {
-            if Self.fastAddresses.contains(message.address) {
+            if Self.waitsForSlot(message, after: sent[message.address]) {
                 guard fastOpen else { continue }
                 fastSent = true
             }

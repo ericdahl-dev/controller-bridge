@@ -536,6 +536,37 @@ struct DisplayFeedCoordinatorTests {
         #expect(clock() == [Self.message("clockBpm", Float(0))])
     }
 
+    @Test("A second of the master BPM changing every 10 ms sends clockBpm about 30 times, the last where it ended; the clock starting sends it with that first beat, not a slot later (#674)")
+    func clockBpmIsLimited() throws {
+        let (rig, feed) = try Self.rig()
+        rig.coordinator.start()
+        Self.load(rig)
+        Self.turnOn(rig)
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/BPM", [.float(128)]))
+        // The deck's own BPM takes two slots in a row, so the next is 1/30 s away when the clock's first beat comes.
+        rig.clock.now = 0.5
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(130)]))
+        rig.clock.now = 0.52
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Deck/1/BPM", [.float(131)]))
+        #expect(feed.sent.last == Self.message("tempo", Float(2.34)))
+        feed.bundles.removeAll()
+        rig.clock.now = 0.53
+        rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(1)]))
+        #expect(feed.bundles == [[Self.message("beat", Int32(1)), Self.message("clockBpm", Float(128))]])
+        feed.sent.removeAll()
+        for step in 1...100 {
+            rig.clock.now = 0.53 + Double(step) * 0.01
+            rig.coordinator.feedback(OSCMessage("/Syndicate/Header/BPM", [.float(128 + Float(step) / 10)]))
+            if step % 40 == 0 { rig.coordinator.feedback(OSCMessage("/Syndicate/Header/Clock", [.int(2)])) }
+            rig.coordinator.tick()
+        }
+        rig.clock.now = 1.6
+        rig.coordinator.tick()
+        let clocks = feed.sent.filter { $0.address.hasSuffix("/clockBpm") }
+        #expect((28...32).contains(clocks.count))
+        #expect(clocks.last == Self.message("clockBpm", Float(138)))
+    }
+
     @Test("An empty deck sends beat 0 and clockBpm 0 whatever the clock")
     func emptyDeckBeat() throws {
         let (rig, feed) = try Self.rig()
