@@ -1,5 +1,7 @@
 #include "beat_clock.h"
 
+#include <cmath>
+
 namespace deck_core {
 
 namespace {
@@ -15,19 +17,39 @@ void BeatClock::edge(int beat, uint32_t at_ms) {
         return;
     }
     if (beat == beat_) return;  // a keepalive
-    if (beat_ != 0 && beat == next(beat_)) {
-        const uint32_t interval = at_ms - edge_ms_;  // unsigned: the clock wrapping is no jump
-        if (interval >= kShortestBeatMs && interval <= kLongestBeatMs) period_ms_ = interval;
+    if (beat_ == 0 || beat != next(beat_)) {
+        // A first beat, or not the next one: a new run starts here.
+        beat_ = beat;
+        edge_ms_ = first_ms_ = at_ms;
+        edges_ = 0;
+        period_ms_ = 0;
+        return;
     }
     beat_ = beat;
-    edge_ms_ = at_ms;
+    ++edges_;
+    // Unsigned differences: the clock wrapping is no jump.
+    const float since_last = static_cast<float>(at_ms - edge_ms_);
+    if (period_ms_ == 0) {
+        if (since_last >= kShortestBeatMs && since_last <= kLongestBeatMs) period_ms_ = since_last;
+        edge_ms_ = at_ms;
+        return;
+    }
+    float error = since_last - period_ms_;
+    if (error > kMaxErrorMs) error = kMaxErrorMs;
+    if (error < -kMaxErrorMs) error = -kMaxErrorMs;
+    edge_ms_ += static_cast<uint32_t>(static_cast<int32_t>(std::lround(period_ms_ + kPhaseGain * error)));
+    if (edges_ <= kAveragedEdges) {
+        period_ms_ = static_cast<float>(at_ms - first_ms_) / static_cast<float>(edges_);
+    } else {
+        period_ms_ += kTempoGain * error;
+    }
 }
 
 int BeatClock::beat_at(uint32_t now_ms) const {
     if (beat_ == 0 || period_ms_ == 0) return beat_;
     const int32_t since = static_cast<int32_t>(now_ms - edge_ms_);
     if (since <= 0) return beat_;
-    uint32_t ahead = static_cast<uint32_t>(since) / period_ms_;
+    uint32_t ahead = static_cast<uint32_t>(static_cast<float>(since) / period_ms_);
     if (ahead > static_cast<uint32_t>(kPredictBeats)) ahead = kPredictBeats;
     int beat = beat_;
     for (uint32_t i = 0; i < ahead; ++i) beat = next(beat);
