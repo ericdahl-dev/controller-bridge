@@ -49,6 +49,43 @@ void test_a_short_buffer_is_cut() {
     TEST_ASSERT_EQUAL('x', line[11]);
 }
 
+// The version question over serial (#695): the updater sends a line "version", and the panel answers without a reboot.
+static int asked(build_info::Question& q, const char* bytes) {
+    int n = 0;
+    for (const char* c = bytes; *c; ++c) n += q.feed(*c) ? 1 : 0;
+    return n;
+}
+
+void test_a_version_line_is_a_question() {
+    build_info::Question q;
+    TEST_ASSERT_EQUAL(1, asked(q, "version\n"));
+}
+
+void test_a_line_ends_at_cr_lf_or_both_and_counts_once() {
+    build_info::Question q;
+    TEST_ASSERT_EQUAL(3, asked(q, "version\rversion\r\nversion\n"));
+}
+
+void test_other_lines_and_a_line_split_across_reads_are_handled() {
+    build_info::Question q;
+    TEST_ASSERT_EQUAL(0, asked(q, "versions\nVERSION\n version\nhello\n"));
+    TEST_ASSERT_EQUAL(0, asked(q, "ver"));
+    TEST_ASSERT_EQUAL(1, asked(q, "sion\n"));
+}
+
+// A long line of noise (boot garbage at the wrong baud) is dropped whole: its tail isn't read as a question.
+void test_an_overlong_line_is_dropped_whole() {
+    build_info::Question q;
+    char noise[200];
+    for (int i = 0; i < 190; ++i) noise[i] = 'x';
+    noise[190] = 0;
+    TEST_ASSERT_EQUAL(0, asked(q, noise));
+    TEST_ASSERT_EQUAL(0, asked(q, "version\n"));
+    TEST_ASSERT_EQUAL(1, asked(q, "version\n"));
+    TEST_ASSERT_EQUAL(0, asked(q, "xxxxxxxxxxxxxxxxxversion\n"));  // a long line ending in the word
+    TEST_ASSERT_EQUAL(1, asked(q, "version\n"));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_the_boot_line_keeps_the_old_start_and_adds_the_version);
@@ -56,5 +93,9 @@ int main(int, char**) {
     RUN_TEST(test_the_answer_is_the_boot_line_without_boot);
     RUN_TEST(test_the_waiting_label_puts_the_sha_beside_the_version);
     RUN_TEST(test_a_short_buffer_is_cut);
+    RUN_TEST(test_a_version_line_is_a_question);
+    RUN_TEST(test_a_line_ends_at_cr_lf_or_both_and_counts_once);
+    RUN_TEST(test_other_lines_and_a_line_split_across_reads_are_handled);
+    RUN_TEST(test_an_overlong_line_is_dropped_whole);
     return UNITY_END();
 }
