@@ -43,18 +43,28 @@ func panelImage(_ tag: String) -> Data { Data([0xE9]) + Data("deck panel image \
 
 /// A release as the maintainer's signing step writes it: one panel image, listed in the catalog and in the files.
 func release(panelVersion: String, sha: String, signedBy key: TestKey, lowestAllowed: String = "1.0.0",
-             name: String? = nil) -> FakeFeed {
+             name: String? = nil, wdPatch: Data? = nil) -> FakeFeed {
     let name = name ?? "panel/deck-panel-\(panelVersion)-\(sha).bin"
     let image = panelImage(panelVersion)
+    var files: [String: Data] = [name: image]
+    var listed: [[String: Any]] = [["name": name, "device": "deck-panel", "version": panelVersion, "size": image.count,
+                                    "sha256": sha256Hex(image)]]
+    var lc6000: [[String: Any]] = []
+    if let wdPatch {
+        let patch = "lc6000/wd-00.50.patch"
+        files[patch] = wdPatch
+        listed.append(["name": patch, "device": "lc6000-wd", "version": "00.50", "size": wdPatch.count, "sha256": sha256Hex(wdPatch)])
+        lc6000 = [["wd": "00.50", "tp": "00.31", "entries": [["kind": "patch", "chip": "wd", "file": patch]]]]
+    }
     let manifest: [String: Any] = [
         "format": 1,
         "key": key.id,
         "lowest_allowed": ["deck-panel": lowestAllowed],
-        "catalog": ["panel": [["version": panelVersion, "sha": sha, "image": name]], "lc6000": []],
-        "files": [["name": name, "device": "deck-panel", "version": panelVersion, "size": image.count, "sha256": sha256Hex(image)]],
+        "catalog": ["panel": [["version": panelVersion, "sha": sha, "image": name]], "lc6000": lc6000],
+        "files": listed,
     ]
     let bytes = try! JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys])
-    return FakeFeed(manifest: bytes, signature: key.sign(bytes), files: [name: image])
+    return FakeFeed(manifest: bytes, signature: key.sign(bytes), files: files)
 }
 
 /// The built-in catalog of an app that carries one panel image, in a fresh temporary folder.

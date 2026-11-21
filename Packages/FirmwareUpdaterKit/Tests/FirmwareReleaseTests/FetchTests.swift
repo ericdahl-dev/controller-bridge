@@ -115,3 +115,23 @@ func aReleaseNotNewerThanTheBuiltInIsNotUsed(version: String) async throws {
     #expect(outcome.refusal == .unreachable)
     #expect(outcome.catalog.newestPanel()?.sha == "aaaaaaa")
 }
+
+/// A fetched release goes through the same guards as the built-in catalog (#686): validly signed or not, an LC6000
+/// entry bigger than a patch description is refused, so no image of Denon's can arrive this way.
+@Test func aFetchedLC6000EntryThatIsNotAPatchDescriptionIsRefused() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary, wdPatch: Data(repeating: 0xFF, count: 64 * 1024))
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == .notACatalog(.notAPatchDescription("lc6000/wd-00.50.patch")))
+    #expect(outcome.catalog.newestPanel()?.sha == "aaaaaaa")
+}
+
+@Test func aFetchedReleaseWithAPatchDescriptionCarriesItsPatchSet() async throws {
+    let primary = TestKey(id: "primary")
+    let feed = release(panelVersion: "1.1.0", sha: "ddddddd", signedBy: primary, wdPatch: Data("0x0800BDA4 0f28 1028\n".utf8))
+    let outcome = await ReleaseFetcher(feed: feed, trusting: [primary.trusted], cache: temporaryFolder())
+        .fetch(over: try builtIn(panelVersion: "1.0.0", sha: "aaaaaaa"))
+    #expect(outcome.refusal == nil)
+    #expect(outcome.catalog.patchSet(for: LC6000Firmware(wd: "00.50", tp: "00.31"))?.entries.count == 1)
+}

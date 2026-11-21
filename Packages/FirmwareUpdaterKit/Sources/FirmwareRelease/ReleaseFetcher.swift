@@ -35,6 +35,8 @@ public enum Refusal: Error, Sendable, Equatable {
     case notNewer
     /// The feed couldn't be reached, or a file couldn't be fetched.
     case unreachable
+    /// Signed and intact, but not a catalog the app accepts (an LC6000 entry that isn't a patch description, say).
+    case notACatalog(CatalogError)
 }
 
 public struct FetchOutcome: Sendable {
@@ -92,7 +94,8 @@ public struct ReleaseFetcher: Sendable {
             try data.write(to: target)
         }
         try Manifest.catalogJSON(in: published.manifest).write(to: folder.appending(path: "catalog.json"))
-        let catalog = try Catalog(directory: folder)
+        let catalog: Catalog
+        do { catalog = try Catalog(directory: folder) } catch let error as CatalogError { throw Refusal.notACatalog(error) }
         // Newer means a newer panel image than the app carries; LC6000 patch sets ride along with it.
         guard let offered = catalog.newestPanel()?.version,
               builtIn.newestPanel().map({ $0.version < offered }) ?? true else { throw Refusal.notNewer }
