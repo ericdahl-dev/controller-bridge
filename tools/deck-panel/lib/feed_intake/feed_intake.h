@@ -22,10 +22,13 @@ struct Drained {
 
 class Intake {
 public:
-    /// Queues a datagram that arrived at `at_us` (microseconds, esp_timer's clock). False if it wasn't kept.
+    /// Queues a datagram that arrived at `at_us` (microseconds, esp_timer's clock). False if it wasn't kept: the
+    /// queue was full, so the newcomer is dropped and counted, and what's queued stays.
     bool push(const uint8_t* bytes, size_t length, uint64_t at_us);
     /// Feeds the core every datagram queued, oldest first, each at its arrival (in ms, millis' clock).
     Drained drain(deck_core::DeckCore& core);
+    /// Since boot: datagrams dropped because the queue was full.
+    uint32_t dropped() const { return dropped_; }
 
 private:
     struct Slot {
@@ -36,6 +39,7 @@ private:
     Slot slots_[kSlots];
     size_t head_ = 0;  // the next to drain
     size_t tail_ = 0;  // the next to fill
+    uint32_t dropped_ = 0;
 };
 
 }  // namespace feed_intake

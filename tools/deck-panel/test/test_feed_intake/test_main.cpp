@@ -73,9 +73,31 @@ void test_a_frame_takes_everything_since_the_last_in_order_and_knows_the_newest(
     TEST_ASSERT_EQUAL(0, intake.drain(core).count);
 }
 
+// Full, the newcomer is dropped and counted; what's queued stays. The feed's 2 s snapshot heals a drop (ADR 0011).
+void test_a_full_queue_drops_the_newcomer_and_counts_it() {
+    feed_intake::Intake intake;
+    const auto two = deck_message(2), four = deck_message(4), one = deck_message(1);
+    for (size_t i = 0; i + 1 < feed_intake::kSlots; ++i) TEST_ASSERT_TRUE(intake.push(two.data(), two.size(), 1000));
+    TEST_ASSERT_TRUE(intake.push(four.data(), four.size(), 2000));
+    TEST_ASSERT_FALSE(intake.push(one.data(), one.size(), 3000));
+    TEST_ASSERT_FALSE(intake.push(one.data(), one.size(), 4000));
+    TEST_ASSERT_EQUAL_UINT32(2, intake.dropped());
+    deck_core::DeckCore core;
+    connect(core);
+    const feed_intake::Drained got = intake.drain(core);
+    TEST_ASSERT_EQUAL(int(feed_intake::kSlots), got.count);
+    TEST_ASSERT_EQUAL_UINT64(2000, got.newest_us);
+    Last screen;
+    core.render(screen, 10);
+    TEST_ASSERT_EQUAL(4, screen.deck);
+    // Drained, it has room again.
+    TEST_ASSERT_TRUE(intake.push(one.data(), one.size(), 5000));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_the_core_gets_each_datagram_at_its_arrival_not_its_read);
     RUN_TEST(test_a_frame_takes_everything_since_the_last_in_order_and_knows_the_newest);
+    RUN_TEST(test_a_full_queue_drops_the_newcomer_and_counts_it);
     return UNITY_END();
 }

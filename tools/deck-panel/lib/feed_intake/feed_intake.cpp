@@ -5,6 +5,10 @@
 namespace feed_intake {
 
 bool Intake::push(const uint8_t* bytes, size_t length, uint64_t at_us) {
+    if (tail_ - head_ == kSlots) {
+        ++dropped_;
+        return false;
+    }
     Slot& slot = slots_[tail_ % kSlots];
     std::memcpy(slot.bytes, bytes, length);
     slot.length = length;
