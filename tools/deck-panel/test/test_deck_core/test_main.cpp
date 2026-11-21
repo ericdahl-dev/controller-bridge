@@ -341,6 +341,7 @@ void test_each_shared_example_shows_its_deck_state() {
         TEST_ASSERT_EQUAL_MESSAGE(flag("master"), v.master, name);
         TEST_ASSERT_EQUAL_MESSAGE(flag("loop"), v.loop, name);
         TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("loopLength", 0)), v.loop_length, name);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(static_cast<float>(number("clockBpm", 0)), v.clock_bpm, name);  // #674
         TEST_ASSERT_EQUAL_MESSAGE(static_cast<int>(number("beat", 0)), v.beat, name);
         TEST_ASSERT_EQUAL_MESSAGE(static_cast<int32_t>(number("elapsed", 0)), v.elapsed, name);
         TEST_ASSERT_EQUAL_MESSAGE(static_cast<int32_t>(number("remaining", 0)), v.remaining, name);
