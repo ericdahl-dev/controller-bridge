@@ -1,0 +1,187 @@
+import DeviceFinder
+import FirmwareModel
+import Testing
+import UpdaterScreen
+
+/// The app shell (#685): two sections, deck panel and LC6000, saying what is connected. Driven by fake ports.
+@Suite("Updater: what is connected")
+struct UpdaterScreenTests {
+    @Test("With nothing plugged in, both sections say nothing is connected")
+    func nothingConnected() async {
+        let screen = await Rig().screen()
+        #expect(screen.panel.status == "Nothing connected")
+        #expect(screen.lc6000.status == "Nothing connected")
+    }
+
+    /// The CrowPanel's USB serial chip, a CH340K (tools/deck-panel/README.md).
+    static let ch340k = (vendor: UInt16(0x1A86), product: UInt16(0x7522))
+
+    @Test("A panel on USB with no serial port: found, and its driver is missing")
+    func panelWithoutDriver() async {
+        let rig = Rig()
+        rig.usb.plugged = [USBDevice(vendor: Self.ch340k.vendor, product: Self.ch340k.product, name: "USB Serial")]
+        let screen = await rig.screen()
+        #expect(screen.panel.status == "Deck panel found")
+        #expect(screen.panel.detail == "The USB driver for its chip is missing")
+        #expect(screen.lc6000.status == "Nothing connected")
+    }
+
+    static let port = "/dev/cu.wchusbserial210"
+
+    static func panel(_ rig: Rig, printing lines: [String]) {
+        rig.usb.plugged = [USBDevice(vendor: ch340k.vendor, product: ch340k.product, name: "USB Serial", serialPort: port)]
+        rig.serial.lines[port] = lines
+    }
+
+    @Test("A panel that boots while the app listens: found, with the build from its boot line")
+    func panelBuild() async {
+        let rig = Rig()
+        Self.panel(rig, printing: ["ESP-ROM:esp32s3-20210327", "deck panel: boot, build 1d0683f", "deck panel: waiting"])
+        let screen = await rig.screen()
+        #expect(screen.panel.status == "Deck panel found")
+        #expect(screen.panel.detail == "Build 1d0683f")
+    }
+
+    @Test("A panel that didn't boot while the app listened, or gave no real build: unplug and replug to read it",
+          arguments: [
+              [],
+              ["deck panel: waiting"],
+              ["deck panel: boot, build unknown"],
+              ["deck panel: boot, build 1d06"],
+              ["deck panel: boot, build 1D0683Z"],
+          ])
+    func panelBuildNotRead(lines: [String]) async {
+        let rig = Rig()
+        Self.panel(rig, printing: lines)
+        let screen = await rig.screen()
+        #expect(screen.panel.status == "Deck panel found")
+        #expect(screen.panel.detail == "Build not read: unplug the panel and plug it back in to read it")
+    }
+
+    @Test("A development build (uncommitted changes, tools/deck-panel/git_sha.py) shows as one, SHA as printed")
+    func panelDevelopmentBuild() async {
+        let rig = Rig()
+        Self.panel(rig, printing: ["deck panel: boot, build 1d0683f-dirty"])
+        let found = await rig.finder.find()
+        #expect(found.panel == .onSerial(build: PanelBuild(sha: "1d0683f-dirty")))
+        let screen = UpdaterScreen(found: found, lc6000WarningAccepted: true)
+        #expect(screen.panel.detail == "Build 1d0683f-dirty (a development build)")
+    }
+
+    @Test("#695's boot line: the build and its version, both read",
+          arguments: [
+              ("deck panel: boot, build 1d0683f", PanelBuild(sha: "1d0683f")),
+              ("deck panel: boot, build 1d0683f, version 1.2.0", PanelBuild(sha: "1d0683f", version: FirmwareVersion("1.2.0"))),
+              ("deck panel: boot, build 1d0683f, version 1.10", PanelBuild(sha: "1d0683f", version: FirmwareVersion("1.10"))),
+          ])
+    func panelVersion(line: String, build: PanelBuild) async {
+        let rig = Rig()
+        Self.panel(rig, printing: [line])
+        #expect(await rig.finder.find().panel == .onSerial(build: build))
+    }
+
+    @Test("A local or development build gives no version, so the SHA decides; the SHA reads as printed",
+          arguments: [
+              ("deck panel: boot, build 1d0683f, version 1.2.0 local", "1d0683f"),
+              ("deck panel: boot, build 1d0683f-dirty, version 1.2.0 local", "1d0683f-dirty"),
+              ("deck panel: boot, build 1d0683f-dirty, version 1.2.0", "1d0683f-dirty"),
+          ])
+    func panelLocalBuildHasNoVersion(line: String, sha: String) async {
+        let rig = Rig()
+        Self.panel(rig, printing: [line])
+        #expect(await rig.finder.find().panel == .onSerial(build: PanelBuild(sha: sha)))
+    }
+
+    @Test("A boot line whose version tail isn't dotted digits: build not read",
+          arguments: [
+              "deck panel: boot, build 1d0683f, version ",
+              "deck panel: boot, build 1d0683f, version 1.x",
+              "deck panel: boot, build 1d0683f, version +1.2",
+              "deck panel: boot, build 1d0683f, version 1..2",
+              "deck panel: boot, build 1d0683f, version 1.2.0 beta",
+              "deck panel: boot, build 1d0683f, 1.2.0",
+          ])
+    func panelBadVersion(line: String) async {
+        let rig = Rig()
+        Self.panel(rig, printing: [line])
+        #expect(await rig.finder.find().panel == .onSerial(build: nil))
+    }
+
+    @Test("An LC6000 on MIDI (DeckBridge's port names): found, firmware not checked yet")
+    func lc6000OnMIDI() async {
+        let rig = Rig()
+        rig.midi.ports = ["IAC Driver Bus 1", "LC6000 PRIME Controller", "LC6000 PRIME WD"]
+        let screen = await rig.screen()
+        #expect(screen.lc6000.status == "LC6000 found")
+        #expect(screen.lc6000.detail == "Firmware not checked yet")
+        #expect(screen.panel.status == "Nothing connected")
+    }
+
+    @Test("ST's ROM bootloader on USB (0483:DF11): a device in update mode, maybe an LC6000")
+    func deviceInUpdateMode() async {
+        let rig = Rig()
+        rig.usb.plugged = [USBDevice(vendor: 0x0483, product: 0xDF11, name: "STM32  BOOTLOADER")]
+        let screen = await rig.screen()
+        #expect(screen.lc6000.status == "A device in update mode, maybe an LC6000")
+        #expect(screen.lc6000.detail == nil)
+    }
+
+    @Test("Finding opens no serial port but the panel's own: another device's port is never touched, and opening resets some boards")
+    func opensOnlyThePanelsPort() async {
+        let rig = Rig()
+        rig.usb.plugged = [
+            USBDevice(vendor: 0x0403, product: 0x6001, name: "FT232R USB UART", serialPort: "/dev/cu.usbserial-A1"),
+            USBDevice(vendor: 0x10C4, product: 0xEA60, name: "CP2102", serialPort: "/dev/cu.SLAB_USBtoUART"),
+            USBDevice(vendor: 0x0483, product: 0xDF11, name: "STM32  BOOTLOADER"),
+        ]
+        rig.midi.ports = ["LC6000 PRIME Controller"]
+        _ = await rig.finder.find()
+        #expect(rig.serial.opened == [])
+
+        Self.panel(rig, printing: [])
+        rig.usb.plugged.append(USBDevice(vendor: 0x0403, product: 0x6001, name: "FT232R USB UART", serialPort: "/dev/cu.usbserial-A1"))
+        _ = await rig.finder.find()
+        #expect(rig.serial.opened == [Self.port])
+    }
+
+    @Test("The LC6000 section shows only its warning until the owner accepts it; the panel section isn't locked")
+    func lc6000BehindWarning() async throws {
+        let rig = Rig()
+        rig.midi.ports = ["LC6000 PRIME Controller"]
+        Self.panel(rig, printing: ["deck panel: boot, build 1d0683f"])
+        let locked = await rig.screen(lc6000WarningAccepted: false)
+        let warning = try #require(locked.lc6000.warning)
+        #expect(warning.contains("debug probe"))
+        #expect(locked.lc6000.status == "Read the warning first")
+        #expect(locked.lc6000.detail == nil)
+        #expect(locked.panel.detail == "Build 1d0683f")
+        #expect(locked.panel.warning == nil)
+
+        let open = await rig.screen(lc6000WarningAccepted: true)
+        #expect(open.lc6000.warning == nil)
+        #expect(open.lc6000.status == "LC6000 found")
+    }
+
+    @Test("The log says what was found, and leaves out serial numbers, MAC addresses and Wi-Fi details")
+    func logLeavesOutPrivateDetails() async {
+        let rig = Rig()
+        // A driver that names the port after the chip's serial number, as FTDI's and Apple's do.
+        let port = "/dev/cu.usbserial-AB12CD34"
+        rig.usb.plugged = [USBDevice(vendor: Self.ch340k.vendor, product: Self.ch340k.product, name: "USB Serial", serialPort: port)]
+        rig.serial.lines[port] = [
+            "deck panel: boot, build 1d0683f",
+            "wifi: joined \"HomeNet-5G\" password hunter22",
+            "wifi: mac 24:6F:28:AA:BB:CC, address 192.168.1.42",
+        ]
+        rig.midi.ports = ["LC6000 PRIME Controller"]
+        _ = await rig.finder.find()
+        let log = rig.log.text
+        #expect(log.contains("deck panel"))
+        #expect(log.contains("1A86:7522"))
+        #expect(log.contains("build 1d0683f"))
+        #expect(log.contains("LC6000"))
+        for secret in ["AB12CD34", "HomeNet", "hunter22", "24:6F:28", "AA:BB:CC", "192.168"] {
+            #expect(!log.contains(secret), "log has \(secret)")
+        }
+    }
+}
