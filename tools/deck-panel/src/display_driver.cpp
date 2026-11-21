@@ -263,8 +263,8 @@ extern "C" void* __real_memcpy(void* to, const void* from, size_t n);
 // can't happen then, reaches the Scan's and perf_line's flash code. Before the Scan starts (no budget yet) nothing
 // is timed.
 extern "C" IRAM_ATTR void* __wrap_memcpy(void* to, const void* from, size_t n) {
-    if (PANEL_BOUNCE_PX == 0 || n != PANEL_BOUNCE_PX * sizeof(uint16_t) || g_scan.copy_budget_us() == 0 ||
-        !esp_ptr_external_ram(from) || esp_ptr_external_ram(to)) {
+    if (PANEL_BOUNCE_PX == 0 || n != PANEL_BOUNCE_PX * sizeof(uint16_t) || !esp_ptr_external_ram(from) ||
+        esp_ptr_external_ram(to) || g_scan.copy_budget_us() == 0) {
         return __real_memcpy(to, from, n);
     }
     const uint32_t start = esp_cpu_get_cycle_count();

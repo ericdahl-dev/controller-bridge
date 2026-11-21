@@ -26,9 +26,8 @@ int index(Signal s) { return static_cast<int>(s); }
 // ends, the driver's vsync restart included.
 bool IRAM_ATTR BoardPanel::on_vsync(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void* ctx) {
     BoardPanel* self = static_cast<BoardPanel*>(ctx);
-    self->woken_ = pdFALSE;
     self->scan_->vsync(static_cast<uint64_t>(esp_timer_get_time()));
-    return self->woken_ == pdTRUE;
+    return self->take_woken();
 }
 
 // With bounce buffers the driver picks the next frame's buffer here, when it has copied the last of this one, not at
@@ -36,9 +35,8 @@ bool IRAM_ATTR BoardPanel::on_vsync(esp_lcd_panel_handle_t, const esp_lcd_rgb_pa
 bool IRAM_ATTR BoardPanel::on_frame_buf_complete(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*,
                                                  void* ctx) {
     BoardPanel* self = static_cast<BoardPanel*>(ctx);
-    self->woken_ = pdFALSE;
     self->scan_->frame_complete(static_cast<uint64_t>(esp_timer_get_time()));
-    return self->woken_ == pdTRUE;
+    return self->take_woken();
 }
 
 void IRAM_ATTR BoardPanel::give(Signal signal) {

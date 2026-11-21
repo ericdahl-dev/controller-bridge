@@ -101,6 +101,11 @@ class BoardPanel : public panel_scan::Panel {
     // The esp_lcd callbacks, in IRAM, on PANEL_ISR_CORE: stamp, call the Scan, return whether a give woke a task.
     static bool on_vsync(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void* ctx);
     static bool on_frame_buf_complete(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void* ctx);
+    bool take_woken() {
+        const bool woke = woken_ == pdTRUE;
+        woken_ = pdFALSE;
+        return woke;
+    }
     static void init_task(void* arg);
     bool init();
     bool init_on_core();
@@ -112,7 +117,10 @@ class BoardPanel : public panel_scan::Panel {
     StaticSemaphore_t sem_store_[3] = {};
     SemaphoreHandle_t sem_[3] = {nullptr, nullptr, nullptr};
     portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
-    // Set by give() inside one callback, read by it on return. Both callbacks run in the one panel interrupt.
+    // Set by give()'s FromISR calls, read and cleared by the callback on its way out. The vsync callback comes from
+    // the LCD interrupt and the frame end from the GDMA's (the bounce fill), which may nest: only ever set inside,
+    // and cleared on exit, so a nested callback's exit can't drop the outer one's wake (the outer's yield is then
+    // already asked for by the inner).
     BaseType_t woken_ = pdFALSE;
     volatile uint32_t latch_us_ = 0;
     volatile uint32_t release_us_ = 0;

@@ -53,7 +53,8 @@ scan_watch::Report display_take_scan();
 // A bounce chunk's deadline, and (perf build only) the copies timed against it since the last call; no chunks
 // otherwise.
 uint32_t display_copy_budget_us();
-// Of the late copies (#663): those during display_refresh(), and those within 3 ms after a latch (the frame turn).
+// Of the late copies (#663): those during display_refresh(), and of the rest those that started within 3 ms after a
+// latch (the frame turn). One or the other, never both (#666).
 struct DisplayCopyLate {
     uint32_t drawing;
     uint32_t turn;
