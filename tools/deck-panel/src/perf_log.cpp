@@ -32,8 +32,6 @@ uint32_t g_too_big = 0;
 frame_ledger::Ledger g_ledger;
 // The panel's latches already replayed into the ledger.
 uint32_t g_latches_seen = 0;
-// A tick() ran since the last feed hook: the loop has rendered and run LVGL since the last drain's reads.
-bool g_after_tick = true;
 
 // Every latch since the last call is one boundary to the ledger: vsync() only marks what waits, so several count
 // as one, at the last one's time.
@@ -48,19 +46,6 @@ void replay_latches() {
     replay_latches(l.count, l.us);
 }
 
-// Before the first feed event of a drain, or in tick() when the drain had none. The refresh timer pauses after each
-// refresh and resumes only when something is invalidated, so paused here means the reads before the last tick(),
-// rendered since, changed nothing: no refresh comes for them and no REFR_READY tells the ledger. Left waiting, the
-// next frame drawn (by a touch, say) would carry them, counted skipped with a stale lag.
-void settle_before_drain() {
-    if (!g_after_tick) return;
-    g_after_tick = false;
-    lv_display_t* disp = display_lvgl();
-    if (disp == nullptr) return;
-    lv_timer_t* refr = lv_display_get_refr_timer(disp);
-    if (refr != nullptr && lv_timer_get_paused(refr)) g_ledger.nothing_drawn();
-}
-
 void on_event(lv_event_t* e) {
     switch (lv_event_get_code(e)) {
         case LV_EVENT_REFR_START:
@@ -73,7 +58,9 @@ void on_event(lv_event_t* e) {
             break;
         }
         case LV_EVENT_REFR_READY: {
-            if (g_refresh_px == 0) {  // nothing drawn: not a frame, and what was read waits for none
+            // Nothing drawn: not a frame, and what this frame read waits for none. Every frame refreshes once
+            // (#663), right after its reads, so this is the settle step: no reliance on LVGL's timer state.
+            if (g_refresh_px == 0) {
                 g_ledger.nothing_drawn();
                 break;
             }
@@ -105,12 +92,10 @@ void begin() {
     Serial.println("perf: on, a line every 5 s");
 }
 
-void tick(uint32_t now_ms, int datagrams, uint32_t too_big) {
-    settle_before_drain();  // done already if this drain read anything
-    g_after_tick = true;
+void tick(uint32_t now_ms, int datagrams, uint32_t too_big, bool may_print, frame_clock::Clock& clock) {
     if (datagrams > 0) g_datagrams += static_cast<uint32_t>(datagrams);
     g_too_big = too_big;
-    if (now_ms - g_window_start_ms < kWindowMs) return;
+    if (!may_print || now_ms - g_window_start_ms < kWindowMs) return;
 
     const DisplayPerf d = display_take_perf();
     perf_line::Window w;
@@ -130,6 +115,7 @@ void tick(uint32_t now_ms, int datagrams, uint32_t too_big) {
     w.copy_budget_us = display_copy_budget_us();
     w.copy = display_take_copy();
     w.ledger = g_ledger.take();
+    w.clock = clock.take();
     Serial.println(perf_line::format(w).c_str());
 
     g_frames = 0;
@@ -141,13 +127,11 @@ void tick(uint32_t now_ms, int datagrams, uint32_t too_big) {
 }
 
 void feed_seen(uint32_t us) {
-    settle_before_drain();
     replay_latches();
     g_ledger.arrived(us);
 }
 
 void feed_read(uint32_t us) {
-    settle_before_drain();
     replay_latches();
     g_ledger.read(us);
 }
@@ -165,7 +149,7 @@ void frame_on_glass(uint32_t release_us) { g_ledger.on_glass(release_us); }
 
 namespace perf_log {
 void begin() {}
-void tick(uint32_t, int, uint32_t) {}
+void tick(uint32_t, int, uint32_t, bool, frame_clock::Clock&) {}
 }  // namespace perf_log
 
 #endif

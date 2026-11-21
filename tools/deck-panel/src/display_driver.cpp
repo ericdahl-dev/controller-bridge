@@ -96,7 +96,11 @@ portMUX_TYPE g_copy_lock = portMUX_INITIALIZER_UNLOCKED;
 lv_display_t* g_disp = nullptr;
 esp_lcd_panel_handle_t g_panel = nullptr;
 SemaphoreHandle_t g_vsync_sem = nullptr;
+// Given at every latch, for the frame clock (#663). Binary: latches the loop missed count as one.
+SemaphoreHandle_t g_latch_sem = nullptr;
 swap_gate::Gate g_gate;
+// Set by the swap, in flush_cb: LVGL's wait right after it, in the same refresh, returns without waiting (#663).
+bool g_wait_deferred = false;
 // Fed by both panel interrupts (one core), read by the loop: the spinlock keeps a read whole.
 scan_watch::Watch g_scan;
 portMUX_TYPE g_scan_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -104,12 +108,11 @@ portMUX_TYPE g_scan_lock = portMUX_INITIALIZER_UNLOCKED;
 // Written only by the vsync interrupt; read without a reset, so no read-modify-write races it.
 volatile uint32_t g_vsyncs = 0;
 
-#ifdef PANEL_PERF_LOG
-// The frame ledger's stamps (#662), perf build only: written by release_swap() in the panel interrupt under
-// g_scan_lock, read by LVGL's task, which replays them into the ledger (perf_log). A latch is where the panel takes
-// the next frame's buffer: the frame-end callback in bounce mode, the vsync without; the ledger's frame boundary.
+// The latches (#662, #663): written by release_swap() in the panel interrupt under g_scan_lock, read by the loop. A
+// latch is where the panel takes the next frame's buffer: the frame-end callback in bounce mode, the vsync without.
 uint32_t g_latches = 0;     // running count
 uint32_t g_latch_us = 0;    // the last one
+#ifdef PANEL_PERF_LOG
 uint32_t g_release_us = 0;  // the last latch that released a swap: that frame's start of scan-out
 #endif
 
@@ -127,18 +130,20 @@ struct {
 bool IRAM_ATTR release_swap() {
     BaseType_t woke = pdFALSE;
     const bool released = g_gate.vsync();
-#ifdef PANEL_PERF_LOG
-    // Stamps only, before the give, so the waiter that takes it reads this release's time. Its own clock read, a
-    // fraction of a microsecond after the caller's, so the production callers stay as they are.
+    // Stamps only, before the gives, so a waiter that takes one reads this latch. Its own clock read, a fraction of a
+    // microsecond after the caller's.
     const uint32_t now_us = static_cast<uint32_t>(esp_timer_get_time());
     portENTER_CRITICAL_ISR(&g_scan_lock);
     ++g_latches;
     g_latch_us = now_us;
+#ifdef PANEL_PERF_LOG
     if (released) g_release_us = now_us;
-    portEXIT_CRITICAL_ISR(&g_scan_lock);
 #endif
+    portEXIT_CRITICAL_ISR(&g_scan_lock);
     if (released) xSemaphoreGiveFromISR(g_vsync_sem, &woke);
-    return woke == pdTRUE;
+    BaseType_t woke_loop = pdFALSE;
+    xSemaphoreGiveFromISR(g_latch_sem, &woke_loop);
+    return woke == pdTRUE || woke_loop == pdTRUE;
 }
 
 // Without bounce buffers the next frame reads the new buffer from this vsync on, so it releases the swap.
@@ -185,6 +190,7 @@ void flush_cb(lv_display_t* disp, const lv_area_t*, uint8_t* px_map) {
     // frame before its vsync. Nothing can give for this swap until swapped() arms the gate.
     xSemaphoreTake(g_vsync_sem, 0);
     g_gate.swapped();
+    g_wait_deferred = true;
 #ifdef PANEL_PERF_LOG
     perf_log::frame_swapped(latch.count, latch.us, swapped_us);
 #endif
@@ -192,10 +198,21 @@ void flush_cb(lv_display_t* disp, const lv_area_t*, uint8_t* px_map) {
 
 // With this set, LVGL calls it instead of spinning on flushing, before every flush and after every frame. Only a swap
 // waits; everything else returns at once.
+//
+// The frame clock (#663): LVGL waits once more right after the swap, in the same refresh (lv_refr.c, before it notes
+// the areas to copy over next time; nothing is drawn after it). Waiting there would hold the loop to the next latch
+// and leave the chores no time, so that one returns at once, the swap still outstanding. The next wait, before
+// anything is drawn or copied into the buffer the panel may still show, comes in the next frame, which starts on a
+// latch after the swap (display_wait_latch), so it finds the release already given and takes it at once; it still
+// blocks, up to the timeout, if it doesn't, so LVGL never draws into the buffer on glass.
 void flush_wait_cb(lv_display_t* disp) {
     if (!g_gate.must_wait()) {
         lv_display_flush_ready(disp);
         return;
+    }
+    if (g_wait_deferred) {
+        g_wait_deferred = false;
+        return;  // flushing stays set; with a flush-wait callback LVGL reads it nowhere else
     }
     const int64_t start = esp_timer_get_time();
     const bool got = xSemaphoreTake(g_vsync_sem, pdMS_TO_TICKS(SWAP_TIMEOUT_MS)) == pdTRUE;
@@ -313,8 +330,9 @@ bool panel_init_on_core() {
 bool display_init() {
     // Before the panel: its vsync interrupt starts with esp_lcd_panel_init and gives this.
     g_vsync_sem = xSemaphoreCreateBinary();
-    if (g_vsync_sem == nullptr) {
-        Serial.println("display: no memory for the vsync semaphore");
+    g_latch_sem = xSemaphoreCreateBinary();
+    if (g_vsync_sem == nullptr || g_latch_sem == nullptr) {
+        Serial.println("display: no memory for the vsync semaphores");
         return false;
     }
     if (!panel_init_on_core()) return false;
@@ -341,14 +359,14 @@ bool display_init() {
     const uint32_t fb_bytes = static_cast<uint32_t>(board::LCD_WIDTH) * board::LCD_HEIGHT * sizeof(uint16_t);
     lv_display_set_buffers(g_disp, fb1, fb0, fb_bytes, LV_DISPLAY_RENDER_MODE_DIRECT);
 
-    // Refresh once a frame, no faster: a second frame inside one scan-out would only wait on its vsync.
-    const uint32_t period_ms = frame_pacing::refresh_period_ms(TIMING);
-    lv_timer_set_period(lv_display_get_refr_timer(g_disp), period_ms);
+    // The frame clock refreshes (#663), never LVGL's timer: deleted, so neither lv_timer_handler() nor an invalidation
+    // (which resumes a paused one) can start a refresh off the latch.
+    lv_display_delete_refr_timer(g_disp);
 
-    Serial.printf("display: %dx%d up, pclk %u Hz, %u fps, refresh every %u ms, framebuffers %p %p in %s\n",
+    Serial.printf("display: %dx%d up, pclk %u Hz, %u fps, frame %u us, refresh on the latch, framebuffers %p %p in %s\n",
                   board::LCD_WIDTH, board::LCD_HEIGHT, static_cast<unsigned>(board::LCD_PCLK_HZ),
-                  static_cast<unsigned>(frame_pacing::frames_per_second(TIMING)), static_cast<unsigned>(period_ms),
-                  fb0, fb1, region(fb0));
+                  static_cast<unsigned>(frame_pacing::frames_per_second(TIMING)),
+                  static_cast<unsigned>(frame_pacing::frame_us(TIMING)), fb0, fb1, region(fb0));
     Serial.printf("display: bounce buffers %d px, panel interrupts on core %d, loop on core %d, clock edge %s\n",
                   PANEL_BOUNCE_PX, PANEL_ISR_CORE, xPortGetCoreID(), PANEL_PCLK_ACTIVE_NEG ? "falling" : "rising");
     if (esp_register_shutdown_handler(stopLcdOnRestart) != ESP_OK) {
@@ -366,14 +384,34 @@ scan_watch::Report display_take_scan() {
     return r;
 }
 
-#ifdef PANEL_PERF_LOG
 DisplayLatch display_latch() {
     portENTER_CRITICAL(&g_scan_lock);
     const DisplayLatch l = {g_latches, g_latch_us};
     portEXIT_CRITICAL(&g_scan_lock);
     return l;
 }
-#endif
+
+bool display_wait_latch(uint32_t timeout_ms, DisplayLatch& latch) {
+    const uint32_t entry = display_latch().count;
+    const TickType_t start = xTaskGetTickCount();
+    const TickType_t timeout = pdMS_TO_TICKS(timeout_ms);
+    for (;;) {
+        const TickType_t waited = xTaskGetTickCount() - start;
+        if (waited >= timeout) return false;
+        // A give from a latch before the entry returns at once; the count says it's old, and the loop waits again.
+        if (xSemaphoreTake(g_latch_sem, timeout - waited) != pdTRUE) return false;
+        latch = display_latch();
+        if (latch.count != entry) return true;
+    }
+}
+
+void display_refresh() {
+    // lv_refr_now() refreshes only through the display's refresh timer, deleted in display_init(); this is the same
+    // refresh, on the default display (the only one).
+    _lv_display_refr_timer(nullptr);
+}
+
+uint32_t display_frame_us() { return frame_pacing::frame_us(TIMING); }
 
 uint32_t display_copy_budget_us() { return bounce_budget::chunk_ns(TIMING, PANEL_BOUNCE_PX) / 1000u; }
 
