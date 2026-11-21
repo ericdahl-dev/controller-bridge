@@ -94,10 +94,24 @@ void test_a_full_queue_drops_the_newcomer_and_counts_it() {
     TEST_ASSERT_TRUE(intake.push(one.data(), one.size(), 5000));
 }
 
+// Bigger than a slot: counted and never queued, never cut and parsed. It takes no slot from the next datagram.
+void test_a_datagram_too_big_is_counted_and_never_queued() {
+    feed_intake::Intake intake;
+    std::vector<uint8_t> big(feed_intake::kMaxDatagram + 1, 0);
+    TEST_ASSERT_FALSE(intake.push(big.data(), big.size(), 1000));
+    TEST_ASSERT_EQUAL_UINT32(1, intake.too_big());
+    TEST_ASSERT_EQUAL_UINT32(0, intake.dropped());
+    std::vector<uint8_t> fits(feed_intake::kMaxDatagram, 0);
+    TEST_ASSERT_TRUE(intake.push(fits.data(), fits.size(), 2000));
+    deck_core::DeckCore core;
+    TEST_ASSERT_EQUAL(1, intake.drain(core).count);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_the_core_gets_each_datagram_at_its_arrival_not_its_read);
     RUN_TEST(test_a_frame_takes_everything_since_the_last_in_order_and_knows_the_newest);
     RUN_TEST(test_a_full_queue_drops_the_newcomer_and_counts_it);
+    RUN_TEST(test_a_datagram_too_big_is_counted_and_never_queued);
     return UNITY_END();
 }

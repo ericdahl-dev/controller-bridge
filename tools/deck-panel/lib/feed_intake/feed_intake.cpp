@@ -5,6 +5,10 @@
 namespace feed_intake {
 
 bool Intake::push(const uint8_t* bytes, size_t length, uint64_t at_us) {
+    if (length > kMaxDatagram) {
+        ++too_big_;
+        return false;
+    }
     if (tail_ - head_ == kSlots) {
         ++dropped_;
         return false;
