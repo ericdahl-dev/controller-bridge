@@ -30,3 +30,11 @@ import Testing
     #expect(file.range(of: key.secret.rawRepresentation) == nil)
     #expect(file.range(of: Data(key.secret.rawRepresentation.base64EncodedString().utf8)) == nil)
 }
+
+/// What the maintainer builds into the app: the key's id and public half, read without the passphrase.
+@Test func aKeyFilesPublicKeyIsReadWithoutThePassphrase() throws {
+    let key = SigningKey.generate(id: "backup")
+    let trusted = try KeyFile.publicKey(of: try KeyFile.seal(key, passphrase: "pass phrase"))
+    #expect(trusted.id == "backup")
+    #expect(trusted.publicKey == key.trusted.publicKey)
+}

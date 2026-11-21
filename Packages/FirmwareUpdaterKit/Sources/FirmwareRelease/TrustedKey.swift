@@ -5,6 +5,7 @@ import Foundation
 public struct TrustedKey: Sendable {
     public let id: String
     private let key: Curve25519.Signing.PublicKey
+    public var publicKey: Data { key.rawRepresentation }
 
     public init(id: String, publicKey: Data) throws {
         self.id = id

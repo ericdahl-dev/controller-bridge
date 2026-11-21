@@ -47,6 +47,12 @@ public enum KeyFile {
         return try encoder.encode(file)
     }
 
+    /// The id and public key a key file names, without the passphrase: to build into the app.
+    public static func publicKey(of data: Data) throws -> TrustedKey {
+        guard let file = try? JSONDecoder().decode(File.self, from: data), file.format == format else { throw KeyFileError.notAKeyFile }
+        return try TrustedKey(id: file.id, publicKey: file.publicKey)
+    }
+
     public static func open(_ data: Data, passphrase: String) throws -> SigningKey {
         guard let file = try? JSONDecoder().decode(File.self, from: data), file.format == format, file.kdf == "pbkdf2-sha256",
               file.rounds >= rounds, file.salt.count == 16 else { throw KeyFileError.notAKeyFile }
