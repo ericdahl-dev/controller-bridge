@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 
+#include "bounce_budget.h"
 #include "scan_watch.h"
 
 
@@ -24,6 +25,8 @@ struct Window {
     uint32_t too_big = 0;           // feed datagrams dropped for size
     uint32_t internal_free = 0;     // bytes
     scan_watch::Report scan;        // the scan-out's steadiness
+    uint32_t copy_budget_us = 0;    // a bounce chunk's deadline
+    bounce_budget::Report copy;     // the bounce copies against it; no chunks when the build can't time them
 };
 
 std::string format(const Window& w);

@@ -27,6 +27,11 @@ static perf_line::Window window() {
     w.scan.vsync_min_us = 25625;
     w.scan.vsync_max_us = 30000;
     w.scan.resyncs = 1;
+    w.copy_budget_us = 666;
+    w.copy.chunks = 7200;
+    w.copy.worst_us = 540;
+    w.copy.margin_us = 126;
+    w.copy.late = 0;
     return w;
 }
 
@@ -34,7 +39,7 @@ void test_the_line_has_every_number_in_one_fixed_order() {
     TEST_ASSERT_EQUAL_STRING(
         "perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, "
         "39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, vsync 25.6-30.0 ms, 1 resyncs, "
-        "feed 900 datagrams 1 too big, internal free 123456",
+        "copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, internal free 123456",
         perf_line::format(window()).c_str());
 }
 
@@ -48,7 +53,8 @@ void test_a_window_with_no_frames_says_so_without_dividing_by_zero() {
     w.draw_bitmap_us = 0;
     TEST_ASSERT_EQUAL_STRING(
         "perf: no frames (nothing changed), 39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, "
-        "vsync 25.6-30.0 ms, 1 resyncs, feed 900 datagrams 1 too big, internal free 123456",
+        "vsync 25.6-30.0 ms, 1 resyncs, copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, "
+        "internal free 123456",
         perf_line::format(w).c_str());
 }
 
@@ -64,10 +70,23 @@ void test_frames_per_second_comes_from_this_windows_own_length() {
     TEST_ASSERT_TRUE(line.find("39.2 vsyncs/s") != std::string::npos);
 }
 
+// An underrun reads as a negative margin and late chunks; a build that can't time the copy says so.
+void test_the_copy_numbers_show_an_underrun_and_their_absence() {
+    perf_line::Window w = window();
+    w.copy_budget_us = 512;
+    w.copy.worst_us = 530;
+    w.copy.margin_us = -18;
+    w.copy.late = 41;
+    TEST_ASSERT_TRUE(perf_line::format(w).find("copy worst 530 of 512 us (margin -18) 41 late") != std::string::npos);
+    w.copy = {};
+    TEST_ASSERT_TRUE(perf_line::format(w).find("copy not timed") != std::string::npos);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_line_has_every_number_in_one_fixed_order);
     RUN_TEST(test_a_window_with_no_frames_says_so_without_dividing_by_zero);
     RUN_TEST(test_frames_per_second_comes_from_this_windows_own_length);
+    RUN_TEST(test_the_copy_numbers_show_an_underrun_and_their_absence);
     return UNITY_END();
 }
