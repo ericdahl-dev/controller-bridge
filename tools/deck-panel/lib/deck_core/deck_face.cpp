@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "font_fallback.h"
 
@@ -105,10 +106,33 @@ Face face(const DeckView& view) {
     loop_text(length, view.loop_length);
     if (length[0]) std::snprintf(f.loop_label, sizeof f.loop_label, "LOOP %s", length);
     // Below 0 is unknown (-1): no marker, never one parked in the middle as if in phase.
-    f.phase_shown = view.phase >= 0;
-    if (f.phase_shown) f.phase_px = pixels(view.phase, layout::kPhaseTravel);
+    if (view.phase >= 0) f.phase_px = pixels(view.phase, layout::kPhaseTravel);
     f.level_px = pixels(view.level, layout::kMeterH);
     return f;
+}
+
+namespace {
+
+bool same(uint32_t a, uint32_t b) { return a == b; }
+bool same(int32_t a, int32_t b) { return a == b; }
+template <size_t N>
+bool same(const char (&a)[N], const char (&b)[N]) {
+    return std::strcmp(a, b) == 0;
+}
+
+}  // namespace
+
+Changes changed(const Face& was, const Face& now) {
+    Changes c;
+#define DECK_CHANGED_ONE(name) \
+    if (!same(was.name, now.name)) c.set(Part::name);
+#define DECK_CHANGED_MANY(name, n) \
+    for (int i = 0; i < (n); ++i)  \
+        if (!same(was.name[i], now.name[i])) c.set(Part::name, i);
+    DECK_FACE_FIELDS(DECK_CHANGED_ONE, DECK_CHANGED_MANY)
+#undef DECK_CHANGED_ONE
+#undef DECK_CHANGED_MANY
+    return c;
 }
 
 }  // namespace deck_core

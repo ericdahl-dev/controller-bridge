@@ -44,7 +44,7 @@ void test_an_empty_deck_shows_no_track_loaded_and_nothing_else() {
     for (const char* text : {f.artist, f.key, f.bpm, f.tempo, f.elapsed, f.remaining})
         TEST_ASSERT_EQUAL_STRING("", text);
     TEST_ASSERT_EQUAL_STRING("LOOP", f.loop_label);
-    TEST_ASSERT_FALSE(f.phase_shown);
+    TEST_ASSERT_EQUAL(deck_core::kPhaseHidden, f.phase_px);
     TEST_ASSERT_EQUAL_HEX32(0xE0E0E0, f.progress_color);
     for (uint32_t c : f.beat_color) TEST_ASSERT_EQUAL_HEX32(0x262626, c);
     for (uint32_t c : f.lamp_color) TEST_ASSERT_EQUAL_HEX32(0x262626, c);
@@ -204,16 +204,15 @@ void test_the_phase_marker_hides_while_unknown_and_stays_on_the_bar() {
     DeckView v = loaded_deck();
     Face f = deck_core::face(v);
     // The 10 px marker's left edge on the 704 px bar: 0-694 px, 347 in phase.
-    TEST_ASSERT_TRUE(f.phase_shown);
     TEST_ASSERT_EQUAL(347, f.phase_px);
     v.phase = 0.2f;
     TEST_ASSERT_EQUAL(139, deck_core::face(v).phase_px);  // 138.8
     v.phase = 1.3f;
     TEST_ASSERT_EQUAL(694, deck_core::face(v).phase_px);
     v.phase = -1;
-    TEST_ASSERT_FALSE(deck_core::face(v).phase_shown);
+    TEST_ASSERT_EQUAL(-1, deck_core::face(v).phase_px);
     v.phase = -0.5f;  // any value below 0 is unknown
-    TEST_ASSERT_FALSE(deck_core::face(v).phase_shown);
+    TEST_ASSERT_EQUAL(-1, deck_core::face(v).phase_px);
 }
 
 // The meter is 310 px tall, from the key row to the lamps' bottom.

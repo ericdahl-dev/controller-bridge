@@ -135,7 +135,7 @@ void DeckScreen::build() {
     // The phase bar: a track, a center mark, and the marker, hidden while the phase is unknown.
     lv_obj_t* phase = box(deck_page_, kLeft, kPhaseY, kWidth, kPhaseH, kTrack);
     box(phase, kWidth / 2 - 1, 0, 2, kPhaseH, kGray);
-    phase_px_ = shown_.phase_px;
+    phase_px_ = deck_core::layout::kPhaseTravel / 2;
     phase_marker_ = box(phase, phase_px_, 0, kMarkerW, kPhaseH, lv_color_white());
     lv_obj_add_flag(phase_marker_, LV_OBJ_FLAG_HIDDEN);
 
@@ -216,14 +216,12 @@ void DeckScreen::draw(const deck_core::Face& f) {
     for (int i = 0; i < 4; ++i) {
         if (f.beat_color[i] != shown_.beat_color[i]) lv_obj_set_style_bg_color(beats_[i], lv_color_hex(f.beat_color[i]), 0);
     }
-    if (f.phase_shown) {
-        const int32_t x = f.phase_px;
-        if (x != phase_px_) {
-            phase_px_ = x;
-            lv_obj_set_x(phase_marker_, x);
-        }
+    const bool marker = f.phase_px != deck_core::kPhaseHidden;
+    if (marker && f.phase_px != phase_px_) {
+        phase_px_ = f.phase_px;
+        lv_obj_set_x(phase_marker_, f.phase_px);
     }
-    set_hidden(phase_marker_, !f.phase_shown);
+    set_hidden(phase_marker_, !marker);
     const int32_t level = f.level_px;
     if (level != level_px_) {
         level_px_ = level;

@@ -353,7 +353,7 @@ void test_each_shared_example_shows_its_deck_state() {
             TEST_ASSERT_EQUAL_STRING_MESSAGE(deck_core::kNoTrack, f.title, name);
             TEST_ASSERT_EQUAL_STRING_MESSAGE("", f.elapsed, name);
             TEST_ASSERT_EQUAL_STRING_MESSAGE("", f.bpm, name);
-            TEST_ASSERT_FALSE_MESSAGE(f.phase_shown, name);
+            TEST_ASSERT_EQUAL_MESSAGE(deck_core::kPhaseHidden, f.phase_px, name);
         } else {
             TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), f.title, name);
         }
