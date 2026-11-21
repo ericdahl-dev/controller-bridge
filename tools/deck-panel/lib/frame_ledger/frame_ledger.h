@@ -20,9 +20,10 @@ class Ledger {
     // Lags kept per window for the median: a 5 s window at the panel's 39 frames/s is about 195.
     static constexpr int kCapacity = 256;
 
-    // A feed datagram arrived at `us`, stamped where it came in (#664); it may be told after later vsyncs.
+    // A feed datagram arrived at `us`, stamped where it came in (#664); it may be told after later vsyncs. Lag counts
+    // from the newest arrival since the last read, the skip from the oldest.
     void arrived(uint32_t us);
-    // A feed datagram was read and handed to the core. Its frame is skipped if it arrived before the latch ahead of
+    // A feed datagram was read and handed to the core. Its frame is skipped if the oldest arrival since the last read came before the latch ahead of
     // the one that woke this read: a frame went by that could have taken it. The waking latch must already have been
     // told (vsync), or the count is one short.
     void read(uint32_t us);
@@ -46,6 +47,7 @@ class Ledger {
     static constexpr int kLatches = 2;
     uint32_t latches_[kLatches] = {};
     int latches_told_ = 0;
+    uint32_t oldest_us_ = 0;  // the oldest of them
     // Read, waiting for a frame to be handed over.
     bool waiting_ = false;
     uint32_t waiting_us_ = 0;

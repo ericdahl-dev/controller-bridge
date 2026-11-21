@@ -97,6 +97,7 @@ void test_a_frame_takes_everything_since_the_last_in_order_and_knows_the_newest(
     const feed_intake::Drained got = intake.drain(core);
     TEST_ASSERT_EQUAL(2, got.count);
     TEST_ASSERT_EQUAL_UINT64(1010500, got.newest_us);
+    TEST_ASSERT_EQUAL_UINT64(1000000, got.oldest_us);  // for the ledger's skip
     Last screen;
     core.render(screen, 4009);
     TEST_ASSERT_EQUAL(3, screen.deck);

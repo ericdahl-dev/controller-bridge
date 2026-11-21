@@ -32,9 +32,11 @@ constexpr size_t kMaxDatagram = 1472;
 constexpr size_t kSlots = 16;
 static_assert((kSlots & (kSlots - 1)) == 0, "the indexes wrap cleanly only for a power of two");
 
-/// What a frame took: how many datagrams, and when the newest of them arrived (0 if none).
+/// What a frame took: how many datagrams, and when the oldest and the newest of them arrived (0 if none): the
+/// ledger's skip goes by the oldest, its lag by the newest (#662).
 struct Drained {
     int count = 0;
+    uint64_t oldest_us = 0;
     uint64_t newest_us = 0;
 };
 
@@ -91,6 +93,7 @@ Drained Intake::drain_into(Sink& sink) {
     for (; head != tail; ++head) {
         const Slot& slot = slots_[head % kSlots];
         sink.feed(slot.bytes, slot.length, static_cast<uint32_t>(slot.at_us / 1000));
+        if (got.count == 0) got.oldest_us = slot.at_us;
         got.newest_us = slot.at_us;
         ++got.count;
         head_.store(head + 1, std::memory_order_release);

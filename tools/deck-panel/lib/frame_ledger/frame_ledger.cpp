@@ -5,6 +5,7 @@
 namespace frame_ledger {
 
 void Ledger::arrived(uint32_t us) {
+    if (!arrived_) oldest_us_ = us;
     arrived_ = true;
     arrived_us_ = us;
 }
@@ -13,7 +14,7 @@ void Ledger::read(uint32_t us) {
     if (!waiting_) waiting_late_ = false;
     // The latch before the waking one came after the arrival: a frame went by that could have taken it. Signed, so a
     // wrapped clock compares right.
-    if (arrived_ && latches_told_ == kLatches && static_cast<int32_t>(latches_[1] - arrived_us_) > 0) {
+    if (arrived_ && latches_told_ == kLatches && static_cast<int32_t>(latches_[1] - oldest_us_) > 0) {
         waiting_late_ = true;
     }
     waiting_ = true;
