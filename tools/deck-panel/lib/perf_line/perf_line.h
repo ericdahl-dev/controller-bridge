@@ -60,6 +60,9 @@ struct CopySpread {
     // Not the panel interrupt's: in none of the above.
     uint32_t outside_isr = 0;
     uint32_t late_outside_isr = 0;
+    // While the UART still drains the last print: also in the steps above.
+    uint32_t while_printing = 0;
+    uint32_t late_while_printing = 0;
     LateCopy lates[kKept] = {};
     int kept = 0;
 };

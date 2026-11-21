@@ -75,6 +75,9 @@ std::string format_copy(const CopySpread& c) {
     snprintf(part, sizeof part, "; outside an interrupt %u/%u", static_cast<unsigned>(c.late_outside_isr),
              static_cast<unsigned>(c.outside_isr));
     line += part;
+    snprintf(part, sizeof part, "; while serial drains %u/%u", static_cast<unsigned>(c.late_while_printing),
+             static_cast<unsigned>(c.while_printing));
+    line += part;
     if (c.kept <= 0) return line + "; no late copies";
     line += "; late at";
     for (int i = 0; i < c.kept && i < CopySpread::kKept; ++i) {

@@ -158,7 +158,7 @@ void test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step() {
     TEST_ASSERT_EQUAL_STRING(
         "perf copy: late/copies by eighth after the latch 0/300 0/301 0/302 2/303 0/304 0/305 0/306 0/307; "
         "by loop step wait 1/6000 read 0/0 render 0/0 refresh 0/900 wifi 0/0 udp 0/0 touch 0/0 lvgl 0/0 perf 1/40 "
-        "other 0/0; outside an interrupt 0/0; no late copies",
+        "other 0/0; outside an interrupt 0/0; while serial drains 0/0; no late copies",
         perf_line::format_copy(c).c_str());
 }
 
@@ -178,10 +178,20 @@ void test_the_copy_line_lists_the_late_copies_it_kept() {
     c.kept = 2;
     c.lates[0] = {3120, 702, static_cast<uint8_t>(perf_line::Mark::read)};
     c.lates[1] = {15004, 851, static_cast<uint8_t>(perf_line::Mark::wait)};
-    TEST_ASSERT_TRUE(perf_line::format_copy(c).find("outside an interrupt 0/0; late at +3120 702 us read, "
+    TEST_ASSERT_TRUE(perf_line::format_copy(c).find("outside an interrupt 0/0; while serial drains 0/0; late at +3120 702 us read, "
                                                     "+15004 851 us wait") != std::string::npos);
     perf_line::CopySpread none;
-    TEST_ASSERT_TRUE(perf_line::format_copy(none).find("outside an interrupt 0/0; no late copies") !=
+    TEST_ASSERT_TRUE(perf_line::format_copy(none).find("outside an interrupt 0/0; while serial drains 0/0; no late copies") !=
+                     std::string::npos);
+}
+
+// Copies while the UART still drains the last print (#663): the loop's step has moved on by then, so they're counted
+// apart, beside the steps, not instead of them.
+void test_the_copy_line_counts_copies_while_serial_drains() {
+    perf_line::CopySpread c;
+    c.while_printing = 1100;
+    c.late_while_printing = 4;
+    TEST_ASSERT_TRUE(perf_line::format_copy(c).find("outside an interrupt 0/0; while serial drains 4/1100;") !=
                      std::string::npos);
 }
 
@@ -199,5 +209,6 @@ int main() {
     RUN_TEST(test_the_copy_line_has_late_and_all_copies_by_eighth_and_by_loop_step);
     RUN_TEST(test_the_copy_line_counts_copies_outside_an_interrupt_apart);
     RUN_TEST(test_the_copy_line_lists_the_late_copies_it_kept);
+    RUN_TEST(test_the_copy_line_counts_copies_while_serial_drains);
     return UNITY_END();
 }
