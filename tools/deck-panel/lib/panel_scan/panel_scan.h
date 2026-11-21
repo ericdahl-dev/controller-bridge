@@ -6,7 +6,9 @@
 
 #include <cstdint>
 
+#include "bounce_budget.h"
 #include "frame_pacing.h"
+#include "scan_watch.h"
 #include "swap_gate.h"
 
 namespace panel_scan {
@@ -27,6 +29,18 @@ struct Latches {
     uint32_t count = 0;
     uint64_t us = 0;
     uint64_t previous_us = 0;
+};
+
+/// The scan's health since the last look.
+struct Health {
+    uint32_t vsyncs = 0;         ///< frames the panel scanned out
+    uint32_t latches = 0;        ///< where it took the next buffer (frame ends with bounce buffers)
+    uint32_t swaps = 0;          ///< frames handed over
+    uint32_t swap_timeouts = 0;  ///< swaps whose release didn't come in time
+    scan_watch::Report scan;     ///< vsync-to-frame-end lag, vsync spread, resyncs
+    bounce_budget::Report copy;  ///< the copies timed (perf build): worst, margin, late
+    uint32_t copy_late_drawing = 0;  ///< of the late, those while the loop drew (#663)
+    uint32_t copy_late_turn = 0;     ///< of the late, the rest within kTurnUs after a latch
 };
 
 /// How LVGL's flush wait ended. released and timed_out: call lv_display_flush_ready (a timeout is counted).
@@ -78,10 +92,17 @@ class Scan {
     bool wait_vsync_after(const Latches& latch, uint32_t timeout_ms);
     /// The latch stamp, for any task.
     Latches latches() const;
+    /// The health since the last call, and a fresh window. Loop only.
+    Health take_health();
+
+    /// The frame turn (#663): a late copy this soon after a latch is counted there.
+    static constexpr uint32_t kTurnUs = 3000;
 
     /// The panel's interrupts: stamp and count only.
     void vsync(uint64_t now_us);
     void frame_complete(uint64_t now_us);
+    /// A bounce chunk copied in `took_us`, ending at `now_us`, `drawing` if the loop was in its refresh (perf build).
+    void copied(uint32_t took_us, uint64_t now_us, bool drawing);
 
   private:
     /// Where the panel takes the next frame's buffer: frame complete with bounce buffers, the vsync without.
@@ -93,9 +114,17 @@ class Scan {
     // Written by the interrupts, read by the tasks, under the Panel's lock.
     Latches latches_;
     uint64_t vsync_us_ = 0;
+    uint32_t vsyncs_ = 0;
+    scan_watch::Watch watch_;
+    bounce_budget::Meter meter_{0};
+    uint32_t copy_late_drawing_ = 0, copy_late_turn_ = 0;
+    // The loop's: swaps, and what the last look saw of the running counts.
+    uint32_t swaps_ = 0;
+    uint32_t seen_vsyncs_ = 0, seen_latches_ = 0, seen_timeouts_ = 0;
     Config config_{};
     uint32_t frame_us_ = 0;
     uint32_t copy_budget_us_ = 0;
+    uint32_t copy_budget_ns_ = 0;
 };
 
 }  // namespace panel_scan

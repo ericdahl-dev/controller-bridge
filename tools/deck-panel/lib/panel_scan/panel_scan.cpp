@@ -12,13 +12,17 @@ bool Scan::start(const Config& config) {
     if (!panel_.start(config)) return false;
     config_ = config;
     frame_us_ = frame_pacing::frame_us(config.timing);
-    copy_budget_us_ = config.bounce_px == 0 ? 0 : bounce_budget::chunk_ns(config.timing, config.bounce_px) / 1000;
+    const uint32_t budget_ns = config.bounce_px == 0 ? 0 : bounce_budget::chunk_ns(config.timing, config.bounce_px);
+    copy_budget_ns_ = budget_ns;
+    copy_budget_us_ = budget_ns / 1000;
+    meter_ = bounce_budget::Meter(budget_ns);
     return true;
 }
 
 bool Scan::present(bool last_area) {
     if (gate_.flush(last_area)) return true;
     panel_.hand_over();
+    ++swaps_;
     // A release left from a timed-out wait would free this swap before its latch: dropped before the gate is armed.
     panel_.drop(Signal::release);
     gate_.swapped();
@@ -54,6 +58,8 @@ void Scan::vsync(uint64_t now_us) {
     if (config_.bounce_px == 0) latch(now_us);
     panel_.lock();
     vsync_us_ = now_us;
+    ++vsyncs_;
+    watch_.vsync(static_cast<uint32_t>(now_us));
     panel_.unlock();
     panel_.give(Signal::vsync);
 }
@@ -92,7 +98,40 @@ bool Scan::wait_vsync_after(const Latches& latch, uint32_t timeout_ms) {
 }
 
 void Scan::frame_complete(uint64_t now_us) {
+    panel_.lock();
+    watch_.frame_complete(static_cast<uint32_t>(now_us));
+    panel_.unlock();
     if (config_.bounce_px != 0) latch(now_us);
+}
+
+void Scan::copied(uint32_t took_us, uint64_t now_us, bool drawing) {
+    panel_.lock();
+    meter_.copied(took_us);
+    if (static_cast<uint64_t>(took_us) * 1000 > copy_budget_ns_) {  // the deadline from start(), not per copy
+        if (drawing) ++copy_late_drawing_;
+        else if (now_us - latches_.us < kTurnUs) ++copy_late_turn_;
+    }
+    panel_.unlock();
+}
+
+Health Scan::take_health() {
+    Health h;
+    panel_.lock();
+    h.vsyncs = vsyncs_ - seen_vsyncs_;
+    h.latches = latches_.count - seen_latches_;
+    seen_vsyncs_ = vsyncs_;
+    seen_latches_ = latches_.count;
+    h.scan = watch_.take();
+    h.copy = meter_.take();
+    h.copy_late_drawing = copy_late_drawing_;
+    h.copy_late_turn = copy_late_turn_;
+    copy_late_drawing_ = copy_late_turn_ = 0;
+    panel_.unlock();
+    h.swaps = swaps_;
+    swaps_ = 0;
+    h.swap_timeouts = gate_.timeouts() - seen_timeouts_;
+    seen_timeouts_ = gate_.timeouts();
+    return h;
 }
 
 }  // namespace panel_scan

@@ -251,6 +251,71 @@ void test_the_vsync_after_a_latch() {
     TEST_ASSERT_EQUAL(33333, panel.now_us);
 }
 
+
+// The health since the last look, one report: what the panel scanned, what was swapped and timed out, the scan's
+// steadiness (scan_watch) and the copy's margin (bounce_budget). A look starts a new window.
+void test_health_reports_one_window_then_starts_another() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    // Frames 33333 us apart; the frame end 31400 us after each vsync (the copy finishing the last chunk).
+    panel.script = {{0, Irq::vsync},     {31400, Irq::frame_complete}, {33333, Irq::vsync},
+                    {64733, Irq::frame_complete}, {66666, Irq::vsync}, {98066, Irq::frame_complete}};
+    scan.present(true);
+    scan.wait_release(60);
+    scan.wait_release(60);  // released at 31400
+    scan.present(true);
+    scan.wait_release(60);
+    panel.run_until(100000);
+    scan.present(true);
+    scan.wait_release(60);
+    scan.wait_release(60);  // nothing more scripted: times out
+    const panel_scan::Health h = scan.take_health();
+    TEST_ASSERT_EQUAL(3, h.vsyncs);
+    TEST_ASSERT_EQUAL(3, h.swaps);
+    TEST_ASSERT_EQUAL(1, h.swap_timeouts);
+    TEST_ASSERT_EQUAL(3, h.latches);
+    TEST_ASSERT_EQUAL(31400, h.scan.lag_min_us);
+    TEST_ASSERT_EQUAL(31400, h.scan.lag_max_us);
+    TEST_ASSERT_EQUAL(33333, h.scan.vsync_min_us);
+    TEST_ASSERT_EQUAL(0, h.scan.resyncs);
+    const panel_scan::Health next = scan.take_health();
+    TEST_ASSERT_EQUAL(0, next.vsyncs + next.swaps + next.swap_timeouts + next.latches);
+}
+
+// A frame end that moves more than 500 us against its vsync is a resync: the panel lost its place.
+void test_a_frame_end_that_jumps_is_a_resync() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{0, Irq::vsync}, {31400, Irq::frame_complete}, {33333, Irq::vsync}, {65733, Irq::frame_complete}};
+    panel.run_until(70000);
+    TEST_ASSERT_EQUAL(1, scan.take_health().scan.resyncs);
+}
+
+// The copy (#635, #650): each chunk's time against its 666 us budget. A late one is counted where it fell (#663): while
+// the loop draws, or within 3 ms after a latch, the frame turn. Anywhere else it's late all the same.
+void test_late_copies_are_counted_where_they_fell() {
+    ScriptedPanel panel;
+    Scan scan(panel);
+    panel.scan = &scan;
+    scan.start(owners());
+    panel.script = {{31400, Irq::frame_complete}};
+    panel.run_until(31400);
+    scan.copied(500, 31900, false);   // in time
+    scan.copied(700, 32400, false);   // late, 1 ms after the latch: the turn
+    scan.copied(800, 40000, true);    // late, while drawing
+    scan.copied(670, 50000, false);   // late, neither
+    const panel_scan::Health h = scan.take_health();
+    TEST_ASSERT_EQUAL(4, h.copy.chunks);
+    TEST_ASSERT_EQUAL(800, h.copy.worst_us);
+    TEST_ASSERT_EQUAL(3, h.copy.late);
+    TEST_ASSERT_EQUAL(1, h.copy_late_turn);
+    TEST_ASSERT_EQUAL(1, h.copy_late_drawing);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_start_gives_the_panel_its_timing);
@@ -270,5 +335,8 @@ int main(int, char**) {
     RUN_TEST(test_latch_times_are_64_bit);
     RUN_TEST(test_no_latch_in_time_is_no_frame);
     RUN_TEST(test_the_vsync_after_a_latch);
+    RUN_TEST(test_health_reports_one_window_then_starts_another);
+    RUN_TEST(test_a_frame_end_that_jumps_is_a_resync);
+    RUN_TEST(test_late_copies_are_counted_where_they_fell);
     return UNITY_END();
 }
