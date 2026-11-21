@@ -123,17 +123,6 @@ void test_an_address_outside_the_prefix_is_ignored() {
     assert_ignored(int_message("/DeckBridge/Displayx/deck", 1));
 }
 
-void test_a_bundle_is_ignored() {
-    Bytes b;
-    put_string(b, "#bundle");
-    put_int(b, 0);
-    put_int(b, 1);
-    Bytes inner = int_message(prefix + "deck", 1);
-    put_int(b, static_cast<int32_t>(inner.size()));
-    b.insert(b.end(), inner.begin(), inner.end());
-    assert_ignored(b);
-}
-
 void test_text_that_is_not_utf8_is_ignored() {
     assert_ignored(string_message(prefix + "title", "Caf\xE9"));  // Latin-1, not UTF-8
     assert_ignored(string_message(prefix + "title", "\xC3"));  // a sequence cut short
@@ -313,9 +302,17 @@ void test_each_shared_example_shows_its_deck_state() {
     for (const json_mini::Value& example : file["cases"].array) {
         ++walked;
         const char* name = example["name"].string.c_str();
+        // Each case twice: as single messages (an older DeckBridge), and as one bundle (#636); both must show it.
+      for (int as_bundle = 0; as_bundle < 2; ++as_bundle) {
         deck_core::DeckCore core;
         ScreenStub screen;
-        for (const json_mini::Value& m : example["messages"].array) feed(core, example_message(m), 100);
+        std::vector<Bytes> messages;
+        for (const json_mini::Value& m : example["messages"].array) messages.push_back(example_message(m));
+        if (as_bundle) {
+            feed(core, bundle(messages), 100);
+        } else {
+            for (const Bytes& m : messages) feed(core, m, 100);
+        }
         core.render(screen, 100);
         // A key this walker doesn't know (a later field, #617) is left for its own test.
         const json_mini::Value& state = example["state"];
@@ -360,6 +357,7 @@ void test_each_shared_example_shows_its_deck_state() {
         } else {
             TEST_ASSERT_EQUAL_STRING_MESSAGE(title.c_str(), f.title, name);
         }
+      }
     }
     TEST_ASSERT_EQUAL(file["cases"].array.size(), walked);
     TEST_ASSERT_TRUE(walked >= 3);
@@ -501,6 +499,155 @@ void test_a_fast_field_change_is_one_redraw_and_the_same_value_none() {
     TEST_ASSERT_EQUAL(before + 6 + 9 + 1, screen.shown.size());
 }
 
+// #636: what a fresh panel shows from a clipped stream after boot (a playing deck's fast fields, a keepalive burst cut
+// to its first messages). "No track loaded" comes only from a received loaded 0, never from what's missing.
+void test_a_clipped_stream_after_boot_never_says_no_track_loaded() {
+    const Bytes fast[] = {
+        float_message(prefix + "level", 0.6f), float_message(prefix + "progress", 0.4f),
+        float_message(prefix + "phase", 0.5f), float_message(prefix + "bpm", 126.0f),
+        float_message(prefix + "tempo", 0.8f), int_message(prefix + "beat", 2),
+        int_message(prefix + "elapsed", 95), int_message(prefix + "remaining", 212),
+    };
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    for (const Bytes& m : fast) feed(core, m, 1000);
+    core.render(screen, 1000);
+    deck_core::Face f = deck_core::face(screen.last().view);
+    TEST_ASSERT_EQUAL_STRING("", f.deck);  // no deck yet
+    TEST_ASSERT_EQUAL_STRING("", f.title);
+    TEST_ASSERT_EQUAL_STRING("126.0", f.bpm);
+
+    feed(core, int_message(prefix + "deck", 1), 1010);
+    feed(core, int_message(prefix + "color", 0xFF0000), 1010);
+    core.render(screen, 1010);
+    f = deck_core::face(screen.last().view);
+    TEST_ASSERT_EQUAL_STRING("1", f.deck);
+    TEST_ASSERT_EQUAL_STRING("", f.title);
+
+    feed(core, int_message(prefix + "loaded", 1), 1020);
+    core.render(screen, 1020);
+    f = deck_core::face(screen.last().view);
+    TEST_ASSERT_EQUAL_STRING("", f.title);  // blank until a title arrives, not "No track loaded"
+
+    feed(core, int_message(prefix + "loaded", 0), 1030);
+    core.render(screen, 1030);
+    TEST_ASSERT_EQUAL_STRING(deck_core::kNoTrack, deck_core::face(screen.last().view).title);
+}
+
+// #636: the feed sends each update tick and each full snapshot as one bundle, so a burst is one datagram.
+void test_a_bundle_applies_all_its_messages_as_one_arrival() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, bundle({int_message(prefix + "deck", 3), string_message(prefix + "title", "Night Drive"),
+                       string_message(prefix + "artist", "Example Artist"), float_message(prefix + "bpm", 126.0f)}),
+         1000);
+    core.render(screen, 1000);
+    TEST_ASSERT_EQUAL(1, screen.shown.size());
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_EQUAL(3, screen.last().deck);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", screen.last().title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Example Artist", screen.last().artist.c_str());
+    TEST_ASSERT_EQUAL_FLOAT(126.0f, screen.last().view.bpm);
+    core.render(screen, 3999);
+    TEST_ASSERT_FALSE(screen.last().waiting);  // the bundle's arrival keeps it alive 3 s
+    core.render(screen, 4000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+}
+
+// A bad message in a bundle is skipped and the rest kept; a bad element size (past the end, not a multiple of 4)
+// stops the bundle there, since nothing after it can be found, keeping what came before.
+void test_a_bad_element_does_not_lose_the_good_ones() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    Bytes wrong_type = int_message(prefix + "title", 7);
+    feed(core, bundle({int_message(prefix + "deck", 2), wrong_type, string_message(prefix + "artist", "Kept")}), 100);
+    core.render(screen, 100);
+    TEST_ASSERT_EQUAL(2, screen.last().deck);
+    TEST_ASSERT_EQUAL_STRING("Kept", screen.last().artist.c_str());
+
+    Bytes cut = bundle({int_message(prefix + "deck", 3), string_message(prefix + "title", "Lost")});
+    cut.resize(cut.size() - 4);  // the last element's size now runs past the end
+    feed(core, cut, 200);
+    Bytes odd = bundle({int_message(prefix + "deck", 4)});
+    odd[16 + 3] = 30;  // a size that isn't a multiple of 4
+    feed(core, odd, 200);
+    core.render(screen, 200);
+    TEST_ASSERT_EQUAL(3, screen.last().deck);  // the cut bundle's first element counted
+    TEST_ASSERT_EQUAL_STRING("", screen.last().title.c_str());
+}
+
+// The feed never nests bundles: one inside is skipped, its messages unread; the bundle's own messages still count.
+void test_a_nested_bundle_is_skipped() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, bundle({bundle({int_message(prefix + "deck", 4)}), int_message(prefix + "deck", 2)}), 100);
+    core.render(screen, 100);
+    TEST_ASSERT_EQUAL(2, screen.last().deck);
+    deck_core::DeckCore only_nested;
+    feed(only_nested, bundle({bundle({int_message(prefix + "deck", 4)})}), 100);
+    only_nested.render(screen, 100);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+}
+
+// #636, the panel as it boots, not a fresh core: joining, joined with the waiting screen up, time passing, then a
+// clipped stream. Neither the network nor leaving the waiting screen resets the deck: "No track loaded" still comes
+// only from a received loaded 0.
+static std::string title_after_boot_then(std::initializer_list<Bytes> stream) {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 0);
+    core.render(screen, 2500);
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 3000);
+    core.render(screen, 20000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    for (const Bytes& m : stream) feed(core, m, 20500);
+    core.render(screen, 20500);
+    TEST_ASSERT_FALSE(screen.last().waiting);
+    TEST_ASSERT_TRUE(screen.last().view.loaded);
+    return deck_core::face(screen.last().view).title;
+}
+
+void test_a_booted_panel_given_a_clipped_stream_never_says_no_track_loaded() {
+    const Bytes level = float_message(prefix + "level", 0.6f), phase = float_message(prefix + "phase", 0.5f),
+                elapsed = int_message(prefix + "elapsed", 95);
+    const Bytes deck = int_message(prefix + "deck", 1), color = int_message(prefix + "color", 0xFF0000),
+                loaded = int_message(prefix + "loaded", 1);
+    TEST_ASSERT_EQUAL_STRING("", title_after_boot_then({level, phase, elapsed}).c_str());
+    TEST_ASSERT_EQUAL_STRING("", title_after_boot_then({deck, color, level, phase, elapsed}).c_str());
+    TEST_ASSERT_EQUAL_STRING("", title_after_boot_then({deck, color, loaded, level}).c_str());
+}
+
+// And a deck that went to the waiting screen comes back as it was, loaded included: waiting never empties it.
+void test_coming_back_from_waiting_keeps_the_deck_loaded() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    feed(core, bundle({int_message(prefix + "deck", 1), int_message(prefix + "loaded", 1),
+                       string_message(prefix + "title", "Night Drive")}), 1000);
+    core.render(screen, 1000);
+    core.set_network(deck_core::Network::joining, "");
+    core.render(screen, 2000);
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 9000);
+    TEST_ASSERT_TRUE(screen.last().waiting);
+    feed(core, float_message(prefix + "level", 0.5f), 9500);
+    core.render(screen, 9500);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", deck_core::face(screen.last().view).title);
+}
+
+// For the perf env's capture (#636): what the core holds now, read without a render.
+void test_the_core_says_what_it_holds() {
+    deck_core::DeckCore core;
+    TEST_ASSERT_TRUE(core.view().loaded);
+    feed(core, bundle({int_message(prefix + "deck", 2), int_message(prefix + "loaded", 0),
+                       string_message(prefix + "title", "")}), 100);
+    TEST_ASSERT_EQUAL(2, core.view().deck);
+    TEST_ASSERT_FALSE(core.view().loaded);
+    feed(core, string_message(prefix + "title", "Night Drive"), 110);
+    TEST_ASSERT_EQUAL_STRING("Night Drive", core.view().title);
+}
+
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
@@ -513,10 +660,12 @@ void test_reading_packets_and_rendering_use_no_heap() {
     Bytes title = string_message(prefix + "title", repeat("\xC3\xA9 long title ", 20));
     Bytes artist = string_message(prefix + "artist", "Example Artist with a name past the inline size");
     Bytes other_title = string_message(prefix + "title", "Night Drive, the extended mix of it");
+    Bytes snapshot = bundle({deck, title, artist, float_message(prefix + "phase", 0.5f)});
     deck_core::DeckCore core;
     QuietScreen screen;
     size_t before = allocations;
     for (uint32_t t = 0; t < 50; ++t) {
+        core.feed(snapshot.data(), snapshot.size(), t * 100);  // the title it sets is overwritten next
         core.feed(deck.data(), deck.size(), t * 100);
         const Bytes& this_title = t % 2 ? title : other_title;
         core.feed(this_title.data(), this_title.size(), t * 100);
@@ -541,7 +690,6 @@ int main(int, char**) {
     RUN_TEST(test_more_than_one_value_is_ignored);
     RUN_TEST(test_a_length_that_is_not_a_multiple_of_4_is_ignored);
     RUN_TEST(test_an_address_outside_the_prefix_is_ignored);
-    RUN_TEST(test_a_bundle_is_ignored);
     RUN_TEST(test_text_that_is_not_utf8_is_ignored);
     RUN_TEST(test_a_deck_outside_1_to_4_is_ignored);
     RUN_TEST(test_3_seconds_without_the_feed_is_the_waiting_screen);
@@ -558,6 +706,13 @@ int main(int, char**) {
     RUN_TEST(test_the_shared_examples_prefix_is_the_panels);
     RUN_TEST(test_each_shared_example_shows_its_deck_state);
     RUN_TEST(test_reading_packets_and_rendering_use_no_heap);
+    RUN_TEST(test_a_bundle_applies_all_its_messages_as_one_arrival);
+    RUN_TEST(test_the_core_says_what_it_holds);
+    RUN_TEST(test_a_bad_element_does_not_lose_the_good_ones);
+    RUN_TEST(test_a_nested_bundle_is_skipped);
+    RUN_TEST(test_a_clipped_stream_after_boot_never_says_no_track_loaded);
+    RUN_TEST(test_a_booted_panel_given_a_clipped_stream_never_says_no_track_loaded);
+    RUN_TEST(test_coming_back_from_waiting_keeps_the_deck_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
     RUN_TEST(test_flags_go_off_with_0_and_phase_takes_minus_1);
     RUN_TEST(test_a_fast_field_change_is_one_redraw_and_the_same_value_none);
