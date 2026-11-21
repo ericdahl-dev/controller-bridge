@@ -69,6 +69,29 @@ class ReleaseChecklist(unittest.TestCase):
         self.assertIn("https://github.com/ericdahl-dev/deckbridge/pull/300", site)
 
 
+class Changelog(unittest.TestCase):
+    def setUp(self):
+        changelog = read("CHANGELOG.md")
+        self.entry = changelog[changelog.index("## 1.1.0"):changelog.index("## 1.0.2")]
+
+    def test_lists_what_main_gained_since_1_0_2(self):
+        # #648: the audit on #647. Each user-facing change by its issue.
+        for issue in ["#609", "#616", "#617", "#618", "#590", "#530", "#531", "#532", "#533", "#475", "#476", "#477",
+                      "#478", "#479", "#540", "#470", "#420", "#552", "#422", "#429", "#604", "#456", "#625"]:
+            self.assertIn(issue, self.entry)
+
+    def test_owner_wording_for_firmware_and_the_feed(self):
+        # The owner's decisions (#648): the Firmware setting stays visible; the feed is off by default, unencrypted.
+        for phrase in ["leave it on Denon unless your unit runs custom firmware", "off by default", "unencrypted"]:
+            self.assertIn(phrase, self.entry)
+
+    def test_the_lab_is_never_offered(self):
+        # The deck panel and the drawn display need hardware or firmware testers don't have: labeled, not available.
+        lab = self.entry[self.entry.index("In the lab"):]
+        for phrase in ["deck panel", "isn't offered for download", "never includes or distributes Denon's firmware"]:
+            self.assertIn(phrase, lab)
+
+
 class WhatToTest(unittest.TestCase):
     def setUp(self):
         self.text = td.what_to_test(read("docs/TESTFLIGHT.md"))
