@@ -66,7 +66,10 @@ class ReleaseChecklist(unittest.TestCase):
     def test_site_step_links_the_held_pr(self):
         doc = read("docs/RELEASE-1.1.md")
         site = doc[doc.index("## 10. Site"):doc.index("## 11.")]
-        self.assertIn("https://github.com/ericdahl-dev/deckbridge/pull/300", site)
+        # #647: #652 replaced #300 and carries #634 (the network and privacy copy); both go live on release day.
+        self.assertIn("https://github.com/ericdahl-dev/deckbridge/pull/652", site)
+        self.assertIn("https://github.com/ericdahl-dev/deckbridge/pull/634", site)
+        self.assertNotIn("pull/300", site)
 
 
 class Changelog(unittest.TestCase):
