@@ -104,4 +104,22 @@ struct UpdaterScreenTests {
         _ = await rig.finder.find()
         #expect(rig.serial.opened == [Self.port])
     }
+
+    @Test("The LC6000 section shows only its warning until the owner accepts it; the panel section isn't locked")
+    func lc6000BehindWarning() async throws {
+        let rig = Rig()
+        rig.midi.ports = ["LC6000 PRIME Controller"]
+        Self.panel(rig, printing: ["deck panel: boot, build 1d0683f"])
+        let locked = await rig.screen(lc6000WarningAccepted: false)
+        let warning = try #require(locked.lc6000.warning)
+        #expect(warning.contains("debug probe"))
+        #expect(locked.lc6000.status == "Read the warning first")
+        #expect(locked.lc6000.detail == nil)
+        #expect(locked.panel.detail == "Build 1d0683f")
+        #expect(locked.panel.warning == nil)
+
+        let open = await rig.screen(lc6000WarningAccepted: true)
+        #expect(open.lc6000.warning == nil)
+        #expect(open.lc6000.status == "LC6000 found")
+    }
 }

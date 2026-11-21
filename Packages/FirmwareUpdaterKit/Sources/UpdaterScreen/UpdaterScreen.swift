@@ -4,10 +4,13 @@ import DeviceFinder
 public struct Section: Sendable, Equatable {
     public let status: String
     public let detail: String?
+    /// A warning the owner must accept before anything else in the section shows or can be used.
+    public let warning: String?
 
-    init(status: String, detail: String? = nil) {
+    init(status: String, detail: String? = nil, warning: String? = nil) {
         self.status = status
         self.detail = detail
+        self.warning = warning
     }
 }
 
@@ -15,6 +18,13 @@ public struct Section: Sendable, Equatable {
 public struct UpdaterScreen: Sendable, Equatable {
     public let panel: Section
     public let lc6000: Section
+
+    /// The LC6000 section's own warning (#685, spec #684 story 9), so someone who owns only a panel never starts on it.
+    public static let lc6000Warning = """
+        This section changes the firmware inside a Denon LC6000 PRIME. It is not made or supported by Denon. \
+        If a change goes wrong, the unit may stop working, and the worst case needs a hardware debug probe to \
+        recover. If you only have a deck panel, you don't need this section.
+        """
 
     public init(found: Found, lc6000WarningAccepted: Bool) {
         switch found.panel {
@@ -26,6 +36,10 @@ public struct UpdaterScreen: Sendable, Equatable {
         case .onSerial(nil):
             panel = Section(status: "Deck panel found",
                             detail: "Build not read: unplug the panel and plug it back in to read it")
+        }
+        guard lc6000WarningAccepted else {
+            lc6000 = Section(status: "Read the warning first", warning: Self.lc6000Warning)
+            return
         }
         switch found.lc6000 {
         case nil: lc6000 = Section(status: "Nothing connected")
