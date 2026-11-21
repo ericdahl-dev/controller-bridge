@@ -32,6 +32,10 @@ static perf_line::Window window() {
     w.copy.worst_us = 540;
     w.copy.margin_us = 126;
     w.copy.late = 0;
+    w.clock.frames = 150;
+    w.clock.late = 2;
+    w.clock.missed = 3;
+    w.clock.no_latch = 1;
     return w;
 }
 
@@ -40,7 +44,7 @@ void test_the_line_has_every_number_in_one_fixed_order() {
         "perf: 30.0 frames/s, frame avg 22.0 ms max 31.5 ms (swap wait 18.0), draw_bitmap 0.02 ms/frame, "
         "39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, vsync 25.6-30.0 ms, 1 resyncs, "
         "copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, no feed frames, "
-        "internal free 123456",
+        "clock 150 frames 2 late 3 missed 1 no latch, internal free 123456",
         perf_line::format(window()).c_str());
 }
 
@@ -55,7 +59,7 @@ void test_a_window_with_no_frames_says_so_without_dividing_by_zero() {
     TEST_ASSERT_EQUAL_STRING(
         "perf: no frames (nothing changed), 39.0 vsyncs/s, 0 swap timeouts, scan lag 20.0-20.8 ms, "
         "vsync 25.6-30.0 ms, 1 resyncs, copy worst 540 of 666 us (margin 126) 0 late, feed 900 datagrams 1 too big, "
-        "no feed frames, internal free 123456",
+        "no feed frames, clock 150 frames 2 late 3 missed 1 no latch, internal free 123456",
         perf_line::format(w).c_str());
 }
 
@@ -101,6 +105,22 @@ void test_a_window_with_no_feed_frames_says_so() {
     TEST_ASSERT_TRUE(perf_line::format(w).find("1 too big, no feed frames,") != std::string::npos);
 }
 
+// The frame clock's report (#663): frames run on a latch, those whose draw ran past the next one, the latches that
+// went by with no frame, and the waits no latch ended (a stopped panel).
+void test_the_frame_clock_counts_follow_the_feed_lag() {
+    perf_line::Window w = window();
+    w.ledger.frames = 150;
+    w.ledger.lag_typical_us = 21340;
+    w.ledger.lag_worst_us = 48020;
+    w.ledger.skipped = 2;
+    w.clock = {};
+    w.clock.frames = 149;
+    w.clock.late = 4;
+    w.clock.missed = 5;
+    TEST_ASSERT_TRUE(perf_line::format(w).find("2 of 150 frames skipped, clock 149 frames 4 late 5 missed 0 no latch, "
+                                               "internal free") != std::string::npos);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_line_has_every_number_in_one_fixed_order);
@@ -109,5 +129,6 @@ int main() {
     RUN_TEST(test_the_copy_numbers_show_an_underrun_and_their_absence);
     RUN_TEST(test_the_feed_lag_and_skipped_frames_follow_the_feed_counts);
     RUN_TEST(test_a_window_with_no_feed_frames_says_so);
+    RUN_TEST(test_the_frame_clock_counts_follow_the_feed_lag);
     return UNITY_END();
 }
