@@ -43,6 +43,15 @@ public final class DisplayFeedQueue: OSCSender {
     public var dropped: Int { state.withLock { $0.dropped } }
 
     public func send(_ message: OSCMessage) {
+        enqueue { [inner] in inner.send(message) }
+    }
+
+    /// A bundle is one job and one place in the backlog, dropped whole when the worker is behind (#636).
+    public func send(bundle messages: [OSCMessage]) {
+        enqueue { [inner] in inner.send(bundle: messages) }
+    }
+
+    private func enqueue(_ job: @escaping @Sendable () -> Void) {
         let (taken, line, trace) = state.withLock { state -> (Bool, String?, TraceSink?) in
             guard state.pending < backlog else {
                 state.dropped += 1
@@ -58,7 +67,7 @@ public final class DisplayFeedQueue: OSCSender {
         if let line { trace?(.displayFeed, line) }
         guard taken else { return }
         run { [self] in
-            inner.send(message)
+            job()
             state.withLock { $0.pending -= 1 }
         }
     }
