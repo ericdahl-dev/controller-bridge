@@ -97,7 +97,8 @@ void loop() {
     wifi_link::poll(now);
     g_core.set_network(wifi_link::state(), wifi_link::ip());
     g_udp.poll(wifi_link::state() == deck_core::Network::connected, wifi_link::joins(), now);
-    g_drain.run(g_udp, g_core, now);
+    // Until the socket is empty, within the drain's time budget (#636).
+    g_drain.run(g_udp, g_core, now, [] { return static_cast<uint32_t>(millis()); });
     if (g_drain.too_big() != g_too_big) {
         g_too_big = g_drain.too_big();
         Serial.printf("deck panel: %lu feed datagrams too big, dropped\n", static_cast<unsigned long>(g_too_big));
