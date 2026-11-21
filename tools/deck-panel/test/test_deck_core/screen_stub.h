@@ -18,11 +18,13 @@ struct ScreenStub : deck_core::Screen {
         std::string detail;
         deck_core::Face face;  ///< the whole face, as shown
         deck_core::Changes changes;  ///< the parts the core said changed
+        deck_core::WaitingChanges waiting_changes;
     };
     std::vector<Shown> shown;
 
-    void show_waiting(const deck_core::WaitingView& view) override {
+    void show_waiting(const deck_core::WaitingView& view, const deck_core::WaitingChanges& changes) override {
         Shown s;
+        s.waiting_changes = changes;
         s.headline = view.headline;
         s.detail = view.detail;
         shown.push_back(s);

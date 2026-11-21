@@ -654,7 +654,7 @@ void test_the_core_says_what_it_holds() {
 // A screen that keeps nothing, so the count is the core's own.
 struct QuietScreen : deck_core::Screen {
     int calls = 0;
-    void show_waiting(const deck_core::WaitingView&) override { ++calls; }
+    void show_waiting(const deck_core::WaitingView&, const deck_core::WaitingChanges&) override { ++calls; }
     void show_deck(const deck_core::Face&, const deck_core::Changes&) override { ++calls; }
 };
 
@@ -729,6 +729,30 @@ void test_back_from_waiting_only_what_changed_meanwhile_redraws() {
     TEST_ASSERT_TRUE(screen.last().changes.has(deck_core::Part::beat_color, 1));
 }
 
+
+// #665: the waiting screen is told what changed too: the first time both texts, then only the one that changed.
+void test_the_waiting_screen_is_told_only_what_changed() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "192.168.1.40");
+    core.render(screen, 0);
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.headline && screen.last().waiting_changes.detail);
+    core.set_network(deck_core::Network::connected, "192.168.1.41");
+    core.render(screen, 10);
+    TEST_ASSERT_FALSE(screen.last().waiting_changes.headline);
+    TEST_ASSERT_TRUE(screen.last().waiting_changes.detail);
+    TEST_ASSERT_EQUAL_STRING("192.168.1.41  port 9100", screen.last().detail.c_str());
+}
+
+// Its texts come fitted to the fonts, as the deck's do.
+void test_the_waiting_texts_come_fitted_to_the_fonts() {
+    deck_core::DeckCore core;
+    ScreenStub screen;
+    core.set_network(deck_core::Network::connected, "\xE6\x9D\xB1");  // 東, not in the fonts
+    core.render(screen, 0);
+    TEST_ASSERT_EQUAL_STRING("?  port 9100", screen.last().detail.c_str());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_heard_yet_is_the_waiting_screen);
@@ -766,6 +790,8 @@ int main(int, char**) {
     RUN_TEST(test_a_booted_panel_given_a_clipped_stream_never_says_no_track_loaded);
     RUN_TEST(test_coming_back_from_waiting_keeps_the_deck_loaded);
     RUN_TEST(test_every_field_of_the_feed_has_its_row);
+    RUN_TEST(test_the_waiting_screen_is_told_only_what_changed);
+    RUN_TEST(test_the_waiting_texts_come_fitted_to_the_fonts);
     RUN_TEST(test_the_first_deck_is_every_part_then_only_what_changed);
     RUN_TEST(test_a_change_that_moves_no_pixel_tells_the_screen_nothing);
     RUN_TEST(test_back_from_waiting_only_what_changed_meanwhile_redraws);

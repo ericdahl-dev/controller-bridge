@@ -15,7 +15,8 @@ namespace deck_core {
 /// The board layer draws what the core decides.
 struct Screen {
     virtual ~Screen() = default;
-    virtual void show_waiting(const WaitingView& view) = 0;
+    /// The waiting page shows `view`, the core's own until the next call; only `changes` differ from what it holds.
+    virtual void show_waiting(const WaitingView& view, const WaitingChanges& changes) = 0;
     /// The deck page shows `face`; only the parts in `changes` differ from what its objects hold. `face` is the core's
     /// own and stays as it is until the next call, so the board may point its objects' texts at it.
     virtual void show_deck(const Face& face, const Changes& changes) = 0;
@@ -59,6 +60,7 @@ private:
     Face shown_face_;
     bool drawn_ = false;
     WaitingView shown_waiting_view_;
+    bool drawn_waiting_ = false;
 };
 
 }  // namespace deck_core

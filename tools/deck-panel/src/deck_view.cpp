@@ -179,7 +179,7 @@ void DeckScreen::set_text(lv_obj_t* label, char (&shown)[N], const char* text) {
     lv_label_set_text_static(label, shown);
 }
 
-void DeckScreen::show_waiting(const deck_core::WaitingView& view) {
+void DeckScreen::show_waiting(const deck_core::WaitingView& view, const deck_core::WaitingChanges&) {
     set_text(headline_, headline_text_, view.headline);
     set_text(detail_, detail_text_, view.detail);
     set_hidden(deck_page_, true);

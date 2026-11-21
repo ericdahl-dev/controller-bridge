@@ -64,4 +64,21 @@ struct WaitingView {
     }
 };
 
+/// The waiting screen's parts that differ from what its objects hold.
+struct WaitingChanges {
+    bool headline = false;
+    bool detail = false;
+
+    bool any() const { return headline || detail; }
+    static WaitingChanges all() { return {true, true}; }
+};
+
+/// What changed between two waiting views: every field of WaitingView, as its == compares them.
+inline WaitingChanges changed(const WaitingView& was, const WaitingView& now) {
+    WaitingChanges c;
+    c.headline = std::strcmp(was.headline, now.headline) != 0;
+    c.detail = std::strcmp(was.detail, now.detail) != 0;
+    return c;
+}
+
 }  // namespace deck_core

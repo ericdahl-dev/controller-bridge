@@ -42,7 +42,7 @@ static std::vector<uint8_t> deck_message(uint8_t deck) {
 struct Last : deck_core::Screen {
     int deck = -1;
     bool waiting = false;
-    void show_waiting(const deck_core::WaitingView&) override { waiting = true; }
+    void show_waiting(const deck_core::WaitingView&, const deck_core::WaitingChanges&) override { waiting = true; }
     void show_deck(const deck_core::Face& f, const deck_core::Changes&) override {
         waiting = false;
         deck = std::atoi(f.deck);

@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "font_fallback.h"
+
 namespace deck_core {
 
 namespace {
@@ -222,8 +224,10 @@ void DeckCore::render(Screen& screen, uint32_t now_ms) {
     if (waiting) {
         const WaitingView view = waiting_view();
         if (shown_ && shown_waiting_ && view == shown_waiting_view_) return;
-        screen.show_waiting(view);
+        const WaitingChanges changes = drawn_waiting_ ? changed(shown_waiting_view_, view) : WaitingChanges::all();
         shown_waiting_view_ = view;
+        drawn_waiting_ = true;
+        screen.show_waiting(shown_waiting_view_, changes);
     } else {
         // Every frame: the view compare is the cheap way out; the face is built only when the view changed.
         if (shown_ && !shown_waiting_ && view_ == shown_view_) return;
@@ -257,7 +261,11 @@ WaitingView DeckCore::waiting_view() const {
             std::snprintf(view.detail, sizeof view.detail, "%s  port %u", ip_, unsigned(kFeedPort));
             break;
     }
-    return view;
+    // Fitted to the fonts, as the deck's texts are: the address and names come from outside.
+    WaitingView fitted;
+    font_fallback::fit(view.headline, fitted.headline, sizeof fitted.headline);
+    font_fallback::fit(view.detail, fitted.detail, sizeof fitted.detail);
+    return fitted;
 }
 
 }  // namespace deck_core

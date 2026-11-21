@@ -13,7 +13,7 @@ public:
     /// Builds both screens' objects on the active screen, both hidden. Call once, after display_init().
     void build();
 
-    void show_waiting(const deck_core::WaitingView& view) override;
+    void show_waiting(const deck_core::WaitingView& view, const deck_core::WaitingChanges& changes) override;
     void show_deck(const deck_core::Face& face, const deck_core::Changes& changes) override;
 
 private:
